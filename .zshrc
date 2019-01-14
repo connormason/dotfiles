@@ -55,6 +55,7 @@ plugins=(git git-extras python sublime sudo terminal app web-search)
 # Color definitions for pretty output
 CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
 NC='\033[0m'
 
 source $ZSH/oh-my-zsh.sh
@@ -63,6 +64,11 @@ source $HOME/.bash_profile
 source $HOME/.applerc > /dev/null 2>&1
 if [ $? -eq 0 ]; then
 	echo -e "${CYAN}Connor's Apple zshrc loaded${NC}"
+fi
+
+source $HOME/.personalrc > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+	echo -e "${GREEN}Connor's personal zshrc loaded${NC}"
 fi
 
 # Config aliases
