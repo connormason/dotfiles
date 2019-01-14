@@ -79,8 +79,6 @@ fi
 
 # Create symlinks
 echo -e "${CYAN}Creating symlinks...${NC}"
-ln -sfv "$DOTFILES_DIR/.bash_profile" ~
-
 ln -sfv "$DOTFILES_DIR/.gitignore_global" ~
 ln -sfv "$DOTFILES_DIR/.tmux.conf" ~
 
