@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Work dotfile repo location
-WORK_DOTFILES_REPO="https://gitlab.sd.apple.com/connor_a_mason/dotfiles.git"
+WORK_DOTFILES_REPO="git@github.pie.apple.com:connor-mason/dotfiles.git"
 
 # Color definitions
 NC="\033[0m"
@@ -156,7 +156,7 @@ echo -e "${CYAN}Symlinking .zshrc correctly...${NC}"
 rm ~/.zshrc
 rm ~/.zshrc.pre-oh-my-zsh 
 ln -sfv "$DOTFILES_DIR/.zshrc" ~
-source .zshrc
+source ~/.zshrc
 echo ""
 
 echo ""
