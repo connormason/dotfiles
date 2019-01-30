@@ -51,7 +51,7 @@ DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 echo -e "${YELLOW}Enter your password plz...${NC}"
 sudo -v
 
-# Keep-alive: update existing `sudo` time stamp until this script has finished
+# Keep-alive: update existing `sudo` timestamp until this script has finished
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # Update dotfiles repo
@@ -59,11 +59,11 @@ echo -e "${CYAN}Pulling latest dotfiles repo...${NC}"
 [ -d "$DOTFILES_DIR/.git" ] && git --work-tree="$DOTFILES_DIR" --git-dir="$DOTFILES_DIR/.git" pull origin master
 echo ""
 
-# Pull work dotfile repo if necessary
+# Pull work dotfile repo and run its install script if necessary
 if [ "$1" == "work" ]; then
 	echo -e "${CYAN}Pulling latest work dotfiles from repo...${NC}"
 
-	if [ ! -f $DOTFILES_DIR/work/.git ]; then
+	if [ ! -d $DOTFILES_DIR/work/.git ]; then
 		cd $DOTFILES_DIR
 		rm -rf work
 		git clone $WORK_DOTFILES_REPO
@@ -73,6 +73,13 @@ if [ "$1" == "work" ]; then
 		git pull
 		cd $DOTFILES_DIR
 	fi
+	echo ""
+
+	echo -e "${CYAN}Running work dotfiles install.sh...${NC}"
+	cd $DOTFILES_DIR/work
+	chmod u+x install.sh
+	./install.sh
+	cd $DOTFILES_DIR
 
 	echo ""
 fi
@@ -85,7 +92,7 @@ ln -sfv "$DOTFILES_DIR/.tmux.conf" ~
 if [ "$1" == "work" ]; then
 	ln -sfv "$DOTFILES_DIR/work/.applerc" ~
 	ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
-	ln -sfv "$DOTFILES_DIR/work/.fika_interact_config.py" ~
+	# ln -sfv "$DOTFILES_DIR/work/.fika_interact_config.py" ~
 	ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
 elif [ "$1" == "personal" ]; then
 	ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
@@ -105,7 +112,7 @@ echo ""
 # Install Homebrew and Homebrew packages
 echo -e "${CYAN}Installing and updating Homebrew...${NC}"
 
-ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+echo | ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 brew update 
 brew upgrade 
 echo ""
