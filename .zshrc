@@ -109,3 +109,6 @@ alias gDrive="~/'Google Drive'"
 alias tmn="tmux new -s"
 alias tma="tmux attach -t"
 alias tmls="tmux ls"
+
+# SSH aliases
+alias sshpi="ssh pi@192.168.1.69"
