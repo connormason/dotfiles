@@ -223,7 +223,8 @@ letterToAppMapping = {
     k = 'Keynote',
     u = 'Sublime Text',
     z = 'Spotify',
-    q = 'Quip'
+    q = 'Quip',
+    b = 'Numbers',
 }
 
 for letter, app in pairs(letterToAppMapping) do
