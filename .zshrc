@@ -105,6 +105,9 @@ alias googleDrive="~/'Google Drive'"
 alias gdrive="~/'Google Drive'"
 alias gDrive="~/'Google Drive'"
 
+# Python Aliases
+alias p="ipython"
+
 # Tmux Aliases
 alias tmn="tmux new -s"
 alias tma="tmux attach -t"
