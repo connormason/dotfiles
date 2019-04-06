@@ -139,6 +139,14 @@ echo -e "${CYAN}Installing applications...${NC}"
 install_apps
 echo ""
 
+echo -e "${CYAN}Installating python3...${NC}"
+brew install python3
+echo ""
+
+echo -e "${CYAN}Installating ipython...${NC}"
+python3 -m pip install ipython
+echo ""
+
 echo -e "${CYAN}Setting up iTerm to load preferences from dotfiles...${NC}"
 defaults write com.googlecode.iterm2.plist PrefsCustomFolder -string "~/$DOTFILES_DIR/iterm2"
 defaults write com.googlecode.iterm2.plist LoadPrefsFromCustomFolder -bool true
