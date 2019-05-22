@@ -53,23 +53,45 @@ ZSH_THEME="gallois"
 plugins=(git git-extras python sublime sudo terminal app web-search)
 
 # Color definitions for pretty output
-CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
-GREEN='\033[0;32m'
-NC='\033[0m'
+WHITE="\033[1;37m"
+CYAN="\033[0;36m"
+YELLOW="\033[1;33m"
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+NC="\033[0m"
 
 source $ZSH/oh-my-zsh.sh
 source $HOME/.bash_profile
 
+# Source .applerc if on work install
 source $HOME/.applerc > /dev/null 2>&1
+LOADED_TXT=""
 if [ $? -eq 0 ]; then
-	echo -e "${CYAN}Connor's Apple zshrc loaded${NC}"
+	LOADED_TXT="${WHITE}Connor's${NC} ${YELLOW}Apple${NC}${WHITE} zshrc loaded${NC}"
 fi
 
+# Source .personalrc if on personal install
 source $HOME/.personalrc > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-	echo -e "${GREEN}Connor's personal zshrc loaded${NC}"
+	LOADED_TXT="${WHITE}Connor's${NC} ${CYAN}Apple${NC}${WHITE} zshrc loaded${NC}"
 fi
+
+# Print out some funky stuff so everyone is aware that I am able to Google how to do dumb shit in bash
+echo ""
+echo -e "${RED} ▄████▄   ▒█████   ███▄    █  ███▄    █  ▒█████   ██▀███      ███▄ ▄███▓ ▄▄▄        ██████  ▒█████   ███▄    █ ${NC}"
+echo -e "${RED}▒██▀ ▀█  ▒██▒  ██▒ ██ ▀█   █  ██ ▀█   █ ▒██▒  ██▒▓██ ▒ ██▒   ▓██▒▀█▀ ██▒▒████▄    ▒██    ▒ ▒██▒  ██▒ ██ ▀█   █ ${NC}"
+echo -e "${RED}▒▓█    ▄ ▒██░  ██▒▓██  ▀█ ██▒▓██  ▀█ ██▒▒██░  ██▒▓██ ░▄█ ▒   ▓██    ▓██░▒██  ▀█▄  ░ ▓██▄   ▒██░  ██▒▓██  ▀█ ██▒${NC}"
+echo -e "${RED}▒▓▓▄ ▄██▒▒██   ██░▓██▒  ▐▌██▒▓██▒  ▐▌██▒▒██   ██░▒██▀▀█▄     ▒██    ▒██ ░██▄▄▄▄██   ▒   ██▒▒██   ██░▓██▒  ▐▌██▒${NC}"
+echo -e "${RED}▒ ▓███▀ ░░ ████▓▒░▒██░   ▓██░▒██░   ▓██░░ ████▓▒░░██▓ ▒██▒   ▒██▒   ░██▒ ▓█   ▓██▒▒██████▒▒░ ████▓▒░▒██░   ▓██░${NC}"
+echo -e "${RED}░ ░▒ ▒  ░░ ▒░▒░▒░ ░ ▒░   ▒ ▒ ░ ▒░   ▒ ▒ ░ ▒░▒░▒░ ░ ▒▓ ░▒▓░   ░ ▒░   ░  ░ ▒▒   ▓▒█░▒ ▒▓▒ ▒ ░░ ▒░▒░▒░ ░ ▒░   ▒ ▒ ${NC}"
+echo -e "${RED}  ░  ▒     ░ ▒ ▒░ ░ ░░   ░ ▒░░ ░░   ░ ▒░  ░ ▒ ▒░   ░▒ ░ ▒░   ░  ░      ░  ▒   ▒▒ ░░ ░▒  ░ ░  ░ ▒ ▒░ ░ ░░   ░ ▒░${NC}"
+echo -e "${RED}░        ░ ░ ░ ▒     ░   ░ ░    ░   ░ ░ ░ ░ ░ ▒    ░░   ░    ░      ░     ░   ▒   ░  ░  ░  ░ ░ ░ ▒     ░   ░ ░ ${NC}"
+echo -e "${RED}░ ░          ░ ░           ░          ░     ░ ░     ░               ░         ░  ░      ░      ░ ░           ░ ${NC}"
+echo -e "${RED}░                                         ${LOADED_TXT}                                                        ${NC}"
+echo -e ""
+
+# Let's get sourced!
+alias sourcerc="source ~/.zshrc"
 
 # Config aliases
 alias zshconfig="st ~/.zshrc"
