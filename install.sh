@@ -92,7 +92,6 @@ ln -sfv "$DOTFILES_DIR/.tmux.conf" ~
 if [ "$1" == "work" ]; then
 	ln -sfv "$DOTFILES_DIR/work/.applerc" ~
 	ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
-	# ln -sfv "$DOTFILES_DIR/work/.fika_interact_config.py" ~
 	ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
 elif [ "$1" == "personal" ]; then
 	ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
