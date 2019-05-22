@@ -225,6 +225,7 @@ letterToAppMapping = {
     z = 'Spotify',
     q = 'Quip',
     b = 'Numbers',
+    x = 'Microsoft Excel'
 }
 
 for letter, app in pairs(letterToAppMapping) do
