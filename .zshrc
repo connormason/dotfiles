@@ -65,33 +65,18 @@ source $HOME/.bash_profile
 
 # Source .applerc if on work install
 source $HOME/.applerc > /dev/null 2>&1
-LOADED_TXT=""
 if [ $? -eq 0 ]; then
-	LOADED_TXT="${WHITE}Connor's${NC} ${YELLOW}Apple${NC}${WHITE} zshrc loaded${NC}"
+	echo -e "${WHITE}Connor's${NC} ${YELLOW}Apple${NC}${WHITE} zshrc loaded${NC}"
 fi
 
 # Source .personalrc if on personal install
 source $HOME/.personalrc > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-	LOADED_TXT="${WHITE}Connor's${NC} ${CYAN}Apple${NC}${WHITE} zshrc loaded${NC}"
+	echo -e "${WHITE}Connor's${NC} ${CYAN}Apple${NC}${WHITE} zshrc loaded${NC}"
 fi
 
-# Print out some funky stuff so everyone is aware that I am able to Google how to do dumb shit in bash
-echo ""
-echo -e "${RED} ▄████▄   ▒█████   ███▄    █  ███▄    █  ▒█████   ██▀███      ███▄ ▄███▓ ▄▄▄        ██████  ▒█████   ███▄    █ ${NC}"
-echo -e "${RED}▒██▀ ▀█  ▒██▒  ██▒ ██ ▀█   █  ██ ▀█   █ ▒██▒  ██▒▓██ ▒ ██▒   ▓██▒▀█▀ ██▒▒████▄    ▒██    ▒ ▒██▒  ██▒ ██ ▀█   █ ${NC}"
-echo -e "${RED}▒▓█    ▄ ▒██░  ██▒▓██  ▀█ ██▒▓██  ▀█ ██▒▒██░  ██▒▓██ ░▄█ ▒   ▓██    ▓██░▒██  ▀█▄  ░ ▓██▄   ▒██░  ██▒▓██  ▀█ ██▒${NC}"
-echo -e "${RED}▒▓▓▄ ▄██▒▒██   ██░▓██▒  ▐▌██▒▓██▒  ▐▌██▒▒██   ██░▒██▀▀█▄     ▒██    ▒██ ░██▄▄▄▄██   ▒   ██▒▒██   ██░▓██▒  ▐▌██▒${NC}"
-echo -e "${RED}▒ ▓███▀ ░░ ████▓▒░▒██░   ▓██░▒██░   ▓██░░ ████▓▒░░██▓ ▒██▒   ▒██▒   ░██▒ ▓█   ▓██▒▒██████▒▒░ ████▓▒░▒██░   ▓██░${NC}"
-echo -e "${RED}░ ░▒ ▒  ░░ ▒░▒░▒░ ░ ▒░   ▒ ▒ ░ ▒░   ▒ ▒ ░ ▒░▒░▒░ ░ ▒▓ ░▒▓░   ░ ▒░   ░  ░ ▒▒   ▓▒█░▒ ▒▓▒ ▒ ░░ ▒░▒░▒░ ░ ▒░   ▒ ▒ ${NC}"
-echo -e "${RED}  ░  ▒     ░ ▒ ▒░ ░ ░░   ░ ▒░░ ░░   ░ ▒░  ░ ▒ ▒░   ░▒ ░ ▒░   ░  ░      ░  ▒   ▒▒ ░░ ░▒  ░ ░  ░ ▒ ▒░ ░ ░░   ░ ▒░${NC}"
-echo -e "${RED}░        ░ ░ ░ ▒     ░   ░ ░    ░   ░ ░ ░ ░ ░ ▒    ░░   ░    ░      ░     ░   ▒   ░  ░  ░  ░ ░ ░ ▒     ░   ░ ░ ${NC}"
-echo -e "${RED}░ ░          ░ ░           ░          ░     ░ ░     ░               ░         ░  ░      ░      ░ ░           ░ ${NC}"
-echo -e "${RED}░                                         ${LOADED_TXT}                                                        ${NC}"
-echo -e ""
-
 # Let's get sourced!
-alias sourcerc="source ~/.zshrc"
+alias src="source ~/.zshrc"
 
 # Config aliases
 alias zshconfig="st ~/.zshrc"
@@ -99,6 +84,9 @@ alias zshrc="st ~/.zshrc"
 alias ohmyzsh="~/.oh-my-zsh"
 alias bashconfig="st ~/.bash_profile"
 alias tmuxconf="st ~/.tmux.conf"
+
+# FZF
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # The Fuck
 eval "$(thefuck --alias)"
