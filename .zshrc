@@ -77,6 +77,7 @@ fi
 
 # Let's get sourced!
 alias src="source ~/.zshrc"
+alias sourcerc="source ~/.zshrc"
 
 # Config aliases
 alias zshconfig="st ~/.zshrc"
@@ -125,3 +126,9 @@ alias tmls="tmux ls"
 
 # SSH aliases
 alias sshpi="ssh pi@192.168.1.69"
+
+# Git aliases
+alias gsl="git stash list"
+alias gsp="git stash pop"
+alias gs="git stash"
+alias gsm="git stash push -m"
