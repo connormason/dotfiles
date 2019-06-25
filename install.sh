@@ -11,7 +11,7 @@ YELLOW="\033[1;33m"
 
 # Installs apps
 # TODO: turn into brewfile
-install_apps() {
+install_mac_apps() {
 	apps=(
 		google-chrome
 		iterm2
@@ -28,18 +28,29 @@ install_apps() {
 # Input error output function
 input_error() {
 	echo "usage: "
-	echo "  ./install.sh work 	--> installs on work computer"
-	echo "  ./install.sh personal --> installs on personal computer"
+	echo "  ./install.sh work 	         --> installs on work Mac machine"
+	echo "  ./install.sh personal mac    --> installs on personal Mac machine"
+	echo "  ./install.sh personal ubuntu --> installs on personal Ubuntu machine"
 }
 
-# Check for argument existance
+# Check for argument existance and validity
 if [ -z "$1" ]; then
 	input_error
 	exit 1
-fi
-
-# Check if argument is a valid option
-if !([ "$1" == "personal" ] || [ "$1" == "work" ]); then
+elif [ "$1" == "work" ]; then
+	echo -e "${GREEN}Running work dotfiles install${NC}"
+elif [ "$1" == "personal" ]; then
+	if [ -z "$2" ]; then
+		input_error
+		exit 1
+	elif [ "$2" == "mac" ]; then
+		echo -e "${GREEN}Running personal dotfiles install for Mac${NC}"
+	elif [ "$2" == "ubuntu" ]; then
+		echo -e "${GREEN}Running personal dotfiles install for Ubuntu${NC}"
+	else
+		input_error
+		exit 1
+else:
 	input_error
 	exit 1
 fi
@@ -135,7 +146,7 @@ brew install libmagic
 echo ""
 
 echo -e "${CYAN}Installing applications...${NC}"
-install_apps
+install_mac_apps
 echo ""
 
 echo -e "${CYAN}Installating python3...${NC}"
