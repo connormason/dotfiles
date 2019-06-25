@@ -5,44 +5,30 @@ WORK_DOTFILES_REPO="git@github.pie.apple.com:connor-mason/dotfiles.git"
 
 # Color definitions
 NC="\033[0m"
+RED="\033[0;31m"
 GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+MAGENTA="\033[0;35m"
 CYAN="\033[0;36m"
-YELLOW="\033[1;33m"
-
-# Installs apps
-# TODO: turn into brewfile
-install_mac_apps() {
-	apps=(
-		google-chrome
-		iterm2
-		hammerspoon
-		sublime-text
-		pycharm
-		franz
-	)
-
-	brew cask install "${apps[@]}"
-	brew cask cleanup
-}
 
 # Input error output function
 input_error() {
-	echo "usage: "
-	echo "  ./install.sh work 	         --> installs on work Mac machine"
-	echo "  ./install.sh personal mac    --> installs on personal Mac machine"
-	echo "  ./install.sh personal ubuntu --> installs on personal Ubuntu machine"
+    echo "usage: "
+    echo "  ./install.sh work            --> installs on work Mac machine"
+    echo "  ./install.sh personal mac    --> installs on personal Mac machine"
+    echo "  ./install.sh personal ubuntu --> installs on personal Ubuntu machine"
 }
 
 # Check for argument existance and validity
 if [ ! -z "$1" ] && [ "$1" == "work" ]; then
-	echo -e "${GREEN}Running work dotfiles install${NC}"
+    echo -e "${MAGENTA}Running work dotfiles install${NC}"
 elif [ ! -z "$1" ] && [ "$1" == "personal" ] && [ ! -z "$2" ] && [ "$2" == "mac" ]; then
-	echo -e "${GREEN}Running personal dotfiles install for Mac${NC}"
+    echo -e "${MAGENTA}Running personal dotfiles install for Mac${NC}"
 elif [ ! -z "$1" ] && [ "$1" == "personal" ] && [ ! -z "$2" ] && [ "$2" == "ubuntu" ]; then
-	echo -e "${GREEN}Running personal dotfiles install for Ubuntu${NC}"
+    echo -e "${MAGENTA}Running personal dotfiles install for Ubuntu${NC}"
 else
-	input_error
-	exit 1
+    input_error
+    exit 1
 fi
 
 # Get dotfiles directory location
@@ -60,30 +46,49 @@ echo -e "${CYAN}Pulling latest dotfiles repo...${NC}"
 [ -d "$DOTFILES_DIR/.git" ] && git --work-tree="$DOTFILES_DIR" --git-dir="$DOTFILES_DIR/.git" pull origin master
 echo ""
 
-# Pull work dotfile repo and run its install script if necessary
+# Setup/run auxillary install scripts
 if [ "$1" == "work" ]; then
-	echo -e "${CYAN}Pulling latest work dotfiles from repo...${NC}"
 
-	if [ ! -d $DOTFILES_DIR/work/.git ]; then
-		cd $DOTFILES_DIR
-		rm -rf work
-		git clone $WORK_DOTFILES_REPO
-		mv dotfiles work
-	else
-		cd $DOTFILES_DIR/work
-		git pull
-		cd $DOTFILES_DIR
-	fi
-	echo ""
+    # Pull latest work dotfiles
+    echo -e "${CYAN}Pulling latest work dotfiles from repo...${NC}"
 
-	echo -e "${CYAN}Running work dotfiles install.sh...${NC}"
-	cd $DOTFILES_DIR/work
-	chmod u+x install.sh
-	./install.sh
-	cd $DOTFILES_DIR
+    if [ ! -d $DOTFILES_DIR/work/.git ]; then
+        cd $DOTFILES_DIR
+        rm -rf work
+        git clone $WORK_DOTFILES_REPO
+        mv dotfiles work
+    else
+        cd $DOTFILES_DIR/work
+        git pull
+        cd $DOTFILES_DIR
+    fi
+    echo ""
 
-	echo ""
+    # Run work install script
+    echo -e "${CYAN}Running work dotfiles install.sh...${NC}"
+    cd $DOTFILES_DIR/work
+    chmod u+x install.sh
+    ./install.sh
+    cd $DOTFILES_DIR
+
+    echo ""
+
+elif [ "$1" == "personal" ]; then
+    if [ "$(uname)" == "Darwin" ]; then
+        echo -e "${MAGENTA}Running MacOS install script...${NC}"
+        cd $DOTFILES_DIR/mac
+        chmod u+x install_mac.sh
+        ./install_mac.sh
+    elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
+        # TODO: add this script/dir
+        echo "Do the thing"
+    else
+        echo -e "${RED}Only macOS and Ubuntu installs currently supported${NC}"
+        exit 1
+    fi
 fi
+
+cd $DOTFILES_DIR
 
 # Create symlinks
 echo -e "${CYAN}Creating symlinks...${NC}"
@@ -91,75 +96,15 @@ ln -sfv "$DOTFILES_DIR/.gitignore_global" ~
 ln -sfv "$DOTFILES_DIR/.tmux.conf" ~
 
 if [ "$1" == "work" ]; then
-	ln -sfv "$DOTFILES_DIR/work/.applerc" ~
-	ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
-	ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
+    ln -sfv "$DOTFILES_DIR/work/.applerc" ~
+    ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
+    ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
 elif [ "$1" == "personal" ]; then
-	ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
-	ln -sfv "$DOTFILES_DIR/personal/.gitconfig" ~
-	ln -sfv "$DOTFILES_DIR/personal/.personalrc" ~
+    ln -sfv "$DOTFILES_DIR/personal/.personalrc" ~
+    ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
+    ln -sfv "$DOTFILES_DIR/personal/.gitconfig" ~
 fi
 
-echo ""
-
-echo -e "${CYAN}Installing spaces plugin for Hammerspoon...${NC}"
-git clone https://github.com/asmagill/hs._asm.undocumented.spaces hammerspoon/spaces
-cd hammerspoon/spaces
-make install
-cd ../..
-echo ""
-
-# Install Homebrew and Homebrew packages
-echo -e "${CYAN}Installing and updating Homebrew...${NC}"
-
-echo | ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-brew update 
-brew upgrade 
-echo ""
-
-echo -e "${CYAN}Installing Caskroom...${NC}"
-brew tap caskroom/cask
-brew install brew-cask
-brew tap caskroom/versions
-echo ""
-
-echo -e "${CYAN}Installing thefuck...${NC}" 
-brew install thefuck
-echo ""
-
-echo -e "${CYAN}Installing tree...${NC}" 
-brew install tree
-echo ""
-
-echo -e "${CYAN}Installing libmagic...${NC}" 
-brew install libmagic
-echo ""
-
-echo -e "${CYAN}Installing applications...${NC}"
-install_mac_apps
-echo ""
-
-echo -e "${CYAN}Installating python3...${NC}"
-brew install python3
-echo ""
-
-echo -e "${CYAN}Installating ipython...${NC}"
-python3 -m pip install ipython
-echo ""
-
-echo -e "${CYAN}Setting up iTerm to load preferences from dotfiles...${NC}"
-defaults write com.googlecode.iterm2.plist PrefsCustomFolder -string "~/$DOTFILES_DIR/iterm2"
-defaults write com.googlecode.iterm2.plist LoadPrefsFromCustomFolder -bool true
-echo ""
-
-echo -e "${CYAN}Symlinking Hammerspoon init.lua...${NC}"
-ln -sfv "$DOTFILES_DIR/hammerspoon/init.lua" ~/.hammerspoon
-echo ""
-
-echo -e "${CYAN}Installing spaces plugin for Hammerspoon...${NC}"
-git clone https://github.com/asmagill/hs._asm.undocumented.spaces spaces
-cd spaces
-[HS_APPLICATION=/Applications] [PREFIX=~/.hammerspoon] make install
 echo ""
 
 # Download oh-my-zsh
@@ -175,4 +120,4 @@ source ~/.zshrc
 echo ""
 
 echo ""
-echo -e "${GREEN}Done.${NC}"
+echo -e "${GREEN}Installation finished.${NC}"
