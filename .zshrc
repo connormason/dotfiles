@@ -72,7 +72,7 @@ fi
 # Source .personalrc if on personal install
 source $HOME/.personalrc > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-	echo -e "${WHITE}Connor's${NC} ${CYAN}Apple${NC}${WHITE} zshrc loaded${NC}"
+	echo -e "${WHITE}Connor's${NC} ${CYAN}Personal${NC}${WHITE} zshrc loaded${NC}"
 fi
 
 # Let's get sourced!
