@@ -80,8 +80,10 @@ elif [ "$1" == "personal" ]; then
         chmod u+x install_mac.sh
         ./install_mac.sh
     elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
-        # TODO: add this script/dir
-        echo "Do the thing"
+        echo -e "${MAGENTA}Running MacOS install script...${NC}"
+        cd $DOTFILES_DIR/ubuntu
+        chmod u+x install_ubuntu.sh
+        ./install_ubuntu.sh
     else
         echo -e "${RED}Only macOS and Ubuntu installs currently supported${NC}"
         exit 1
