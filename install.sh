@@ -34,23 +34,13 @@ input_error() {
 }
 
 # Check for argument existance and validity
-if [ -z "$1" ]; then
-	input_error
-	exit 1
-elif [ "$1" == "work" ]; then
+if [ ! -z "$1" ] && [ "$1" == "work" ]; then
 	echo -e "${GREEN}Running work dotfiles install${NC}"
-elif [ "$1" == "personal" ]; then
-	if [ -z "$2" ]; then
-		input_error
-		exit 1
-	elif [ "$2" == "mac" ]; then
-		echo -e "${GREEN}Running personal dotfiles install for Mac${NC}"
-	elif [ "$2" == "ubuntu" ]; then
-		echo -e "${GREEN}Running personal dotfiles install for Ubuntu${NC}"
-	else
-		input_error
-		exit 1
-else:
+elif [ ! -z "$1" ] && [ "$1" == "personal" ] && [ ! -z "$2" ] && [ "$2" == "mac" ]; then
+	echo -e "${GREEN}Running personal dotfiles install for Mac${NC}"
+elif [ ! -z "$1" ] && [ "$1" == "personal" ] && [ ! -z "$2" ] && [ "$2" == "ubuntu" ]; then
+	echo -e "${GREEN}Running personal dotfiles install for Ubuntu${NC}"
+else
 	input_error
 	exit 1
 fi
