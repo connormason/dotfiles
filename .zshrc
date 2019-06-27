@@ -132,3 +132,6 @@ alias gsl="git stash list"
 alias gsp="git stash pop"
 alias gs="git stash"
 alias gsm="git stash push -m"
+
+# Personal aliases
+alias homeserver="ssh connor@192.168.1.133"
