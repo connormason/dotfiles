@@ -14,18 +14,18 @@ CYAN="\033[0;36m"
 # Input error output function
 input_error() {
     echo "usage: "
-    echo "  ./install.sh work            --> installs on work Mac machine"
-    echo "  ./install.sh personal mac    --> installs on personal Mac machine"
-    echo "  ./install.sh personal ubuntu --> installs on personal Ubuntu machine"
+    echo "  ./install.sh work   --> installs on work Mac machine"
+    echo "  ./install.sh mac    --> installs on personal Mac machine"
+    echo "  ./install.sh server --> installs on home server Ubuntu machine"
 }
 
 # Check for argument existance and validity
 if [ ! -z "$1" ] && [ "$1" == "work" ]; then
-    echo -e "${MAGENTA}Running work dotfiles install${NC}"
-elif [ ! -z "$1" ] && [ "$1" == "personal" ] && [ ! -z "$2" ] && [ "$2" == "mac" ]; then
-    echo -e "${MAGENTA}Running personal dotfiles install for Mac${NC}"
-elif [ ! -z "$1" ] && [ "$1" == "personal" ] && [ ! -z "$2" ] && [ "$2" == "ubuntu" ]; then
-    echo -e "${MAGENTA}Running personal dotfiles install for Ubuntu${NC}"
+    echo -e "${MAGENTA}Running work install on Mac${NC}"
+elif [ ! -z "$1" ] && [ "$1" == "mac" ]; then
+    echo -e "${MAGENTA}Running personal install on Mac${NC}"
+elif [ ! -z "$1" ] && [ "$1" == "server" ]; then
+    echo -e "${MAGENTA}Running home server install on Ubuntu${NC}"
 else
     input_error
     exit 1
@@ -73,21 +73,26 @@ if [ "$1" == "work" ]; then
 
     echo ""
 
-elif [ "$1" == "personal" ]; then
-    if [ "$(uname)" == "Darwin" ]; then
-        echo -e "${MAGENTA}Running MacOS install script...${NC}"
-        cd $DOTFILES_DIR/mac
-        chmod u+x install_mac.sh
-        ./install_mac.sh
-    elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
-        echo -e "${MAGENTA}Running MacOS install script...${NC}"
-        cd $DOTFILES_DIR/ubuntu
-        chmod u+x install_ubuntu.sh
-        ./install_ubuntu.sh
-    else
-        echo -e "${RED}Only macOS and Ubuntu installs currently supported${NC}"
+elif [ "$1" == "mac" ]; then
+    if [ "$(uname)" != "Darwin" ]; then
+        echo -e "${RED}Cannot perform Mac install on non-macOS device${NC}"
         exit 1
     fi
+
+    echo -e "${MAGENTA}Running MacOS install script...${NC}"
+    cd $DOTFILES_DIR/mac
+    chmod u+x install_mac.sh
+    ./install_mac.sh
+elif [ "$1" == "server" ]; then
+    if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
+        echo -e "${RED}Cannot perform home server (Ubuntu) install on non-Ubuntu device${NC}"
+        exit 1
+    fi
+
+    echo -e "${MAGENTA}Bootstrapping home server...${NC}"
+    cd $DOTFILES_DIR/ubuntu
+    chmod u+x bootstrap_home_server.sh
+    ./bootstrap_home_server.sh
 fi
 
 cd $DOTFILES_DIR

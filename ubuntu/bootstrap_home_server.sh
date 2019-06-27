@@ -53,3 +53,5 @@ echo -e "${CYAN}Adding user '${USER}' to Docker group...${NC}"
 sudo usermod -aG docker ${USER}
 echo ""
 
+# Setup environment variables for Docker
+# TODO....
