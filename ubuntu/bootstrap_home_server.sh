@@ -4,6 +4,8 @@ NC="\033[0m"
 YELLOW="\033[0;33m"
 CYAN="\033[0;36m"
 
+CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Ask for the administrator password upfront
 echo -e "${YELLOW}Enter your password plz...${NC}"
 sudo -v
@@ -53,5 +55,22 @@ echo -e "${CYAN}Adding user '${USER}' to Docker group...${NC}"
 sudo usermod -aG docker ${USER}
 echo ""
 
+# Install pip
+echo -e "${CYAN}Installing pip (for python3)...${NC}"
+sudo apt-get install -y python3-pip
+echo ""
+
+# Install required Python packages (TODO: maybe move to a requirements.txt)
+echo -e "${CYAN}Installing required Python packages...${NC}"
+python3 -m pip install tzlocal
+echo ""
+
 # Setup environment variables for Docker
-# TODO....
+echo -e "${CYAN}Setting up environment variables for Docker...${NC}"
+python3 $CUR_DIR/bootstrap_utils.py setup_environment
+echo ""
+
+# Install iPython3
+echo -e "${CYAN}Installing ipython (3)...${NC}"
+sudo apt-get install -y ipython3
+echo ""
