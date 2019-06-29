@@ -41,6 +41,23 @@ sudo -v
 # Keep-alive: update existing `sudo` timestamp until this script has finished
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
+# Create symlinks
+echo -e "${CYAN}Creating symlinks...${NC}"
+ln -sfv "$DOTFILES_DIR/.gitignore_global" ~
+ln -sfv "$DOTFILES_DIR/.tmux.conf" ~
+
+if [ "$1" == "work" ]; then
+    ln -sfv "$DOTFILES_DIR/work/.applerc" ~
+    ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
+    ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
+elif [ "$1" == "mac" ] || [ "$1" == "ubuntu" ]; then
+    ln -sfv "$DOTFILES_DIR/personal/.personalrc" ~
+    ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
+    ln -sfv "$DOTFILES_DIR/personal/.gitconfig" ~
+fi
+
+echo ""
+
 # Update dotfiles repo
 echo -e "${CYAN}Pulling latest dotfiles repo...${NC}"
 [ -d "$DOTFILES_DIR/.git" ] && git --work-tree="$DOTFILES_DIR" --git-dir="$DOTFILES_DIR/.git" pull origin master
@@ -96,23 +113,6 @@ elif [ "$1" == "server" ]; then
 fi
 
 cd $DOTFILES_DIR
-
-# Create symlinks
-echo -e "${CYAN}Creating symlinks...${NC}"
-ln -sfv "$DOTFILES_DIR/.gitignore_global" ~
-ln -sfv "$DOTFILES_DIR/.tmux.conf" ~
-
-if [ "$1" == "work" ]; then
-    ln -sfv "$DOTFILES_DIR/work/.applerc" ~
-    ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
-    ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
-elif [ "$1" == "mac" ] || [ "$1" == "ubuntu" ]; then
-    ln -sfv "$DOTFILES_DIR/personal/.personalrc" ~
-    ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
-    ln -sfv "$DOTFILES_DIR/personal/.gitconfig" ~
-fi
-
-echo ""
 
 # Download oh-my-zsh
 echo -e "${CYAN}Installing oh-my-zsh...${NC}"
