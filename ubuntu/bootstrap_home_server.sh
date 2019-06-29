@@ -5,7 +5,7 @@ YELLOW="\033[0;33m"
 CYAN="\033[0;36m"
 
 CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-HOMEASSISTANT_CONFIG_REPO="https://github.com/connormason/homeassistant.git"
+HOMEASSISTANT_CONFIG_REPO="git@github.com:connormason/homeassistant.git"
 
 # Ask for the administrator password upfront
 echo -e "${YELLOW}Enter your password plz...${NC}"
@@ -27,7 +27,7 @@ echo ""
 # Install Docker dependencies and add package repo
 echo -e "${CYAN}Installing Docker dependencies and package repo...${NC}"
 sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add –
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 
 # Using edge/test repos for now, since I'm not currently using a stable Lubuntu release
 # sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
