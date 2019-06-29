@@ -72,7 +72,7 @@ fi
 # Source .personalrc if on personal install
 source $HOME/.personalrc > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-	echo -e "${WHITE}Connor's${NC} ${CYAN}Apple${NC}${WHITE} zshrc loaded${NC}"
+	echo -e "${WHITE}Connor's${NC} ${CYAN}Personal${NC}${WHITE} zshrc loaded${NC}"
 fi
 
 # Let's get sourced!
@@ -132,3 +132,6 @@ alias gsl="git stash list"
 alias gsp="git stash pop"
 alias gs="git stash"
 alias gsm="git stash push -m"
+
+# Personal aliases
+alias homeserver="ssh connor@192.168.1.133"
