@@ -106,7 +106,7 @@ if [ "$1" == "work" ]; then
     ln -sfv "$DOTFILES_DIR/work/.applerc" ~
     ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
     ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
-elif [ "$1" == "personal" ]; then
+elif [ "$1" == "mac" ] || [ "$1" == "ubuntu" ]; then
     ln -sfv "$DOTFILES_DIR/personal/.personalrc" ~
     ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
     ln -sfv "$DOTFILES_DIR/personal/.gitconfig" ~
