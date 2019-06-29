@@ -5,6 +5,7 @@ YELLOW="\033[0;33m"
 CYAN="\033[0;36m"
 
 CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+HOMEASSISTANT_CONFIG_REPO="https://github.com/connormason/homeassistant.git"
 
 # Ask for the administrator password upfront
 echo -e "${YELLOW}Enter your password plz...${NC}"
@@ -55,22 +56,35 @@ echo -e "${CYAN}Adding user '${USER}' to Docker group...${NC}"
 sudo usermod -aG docker ${USER}
 echo ""
 
+echo -e "${CYAN}Creating ~/docker/ directory...${NC}"
+mkdir ~/docker
+sudo setfacl -Rdm g:docker:rwx ~/docker
+sudo chmod -R 775 ~/docker
+ln -sfv $CUR_DIR/docker-compose.yml ~/docker
+echo ""
+
+echo -e "${CYAN}Grabbing latest homeassistant configuration...${NC}"
+git clone $HOMEASSISTANT_CONFIG_REPO ~/docker
+echo ""
+
+# docker-compose -f ~/docker/docker-compose.yml up
+
 # Install pip
-echo -e "${CYAN}Installing pip (for python3)...${NC}"
-sudo apt-get install -y python3-pip
-echo ""
+# echo -e "${CYAN}Installing pip (for python3)...${NC}"
+# sudo apt-get install -y python3-pip
+# echo ""
 
-# Install required Python packages (TODO: maybe move to a requirements.txt)
-echo -e "${CYAN}Installing required Python packages...${NC}"
-python3 -m pip install tzlocal
-echo ""
+# # Install required Python packages (TODO: maybe move to a requirements.txt)
+# echo -e "${CYAN}Installing required Python packages...${NC}"
+# python3 -m pip install tzlocal
+# echo ""
 
-# Setup environment variables for Docker
-echo -e "${CYAN}Setting up environment variables for Docker...${NC}"
-python3 $CUR_DIR/bootstrap_utils.py setup_environment
-echo ""
+# # Setup environment variables for Docker
+# echo -e "${CYAN}Setting up environment variables for Docker...${NC}"
+# python3 $CUR_DIR/bootstrap_utils.py setup_environment
+# echo ""
 
-# Install iPython3
-echo -e "${CYAN}Installing ipython (3)...${NC}"
-sudo apt-get install -y ipython3
-echo ""
+# # Install iPython3
+# echo -e "${CYAN}Installing ipython (3)...${NC}"
+# sudo apt-get install -y ipython3
+# echo ""

@@ -1,0 +1,11 @@
+version: "3.7"
+services:
+  homeassistant:
+    container_name: home-assistant
+    image: homeassistant/home-assistant
+    restart: always
+    volumes:
+      - ~/docker/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - ~/docker/shared:/shared
+    network_mode: host
