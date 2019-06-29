@@ -9,3 +9,5 @@ These are my dotfiles. Yay.
     - Personal Ubuntu machine: `./install.sh personal ubuntu`
     - Personal Mac machine: `./install.sh personal mac`
     - Work: `./install.sh work`
+
+If running a home server install, make sure to reserve an IP address in the router configuration.

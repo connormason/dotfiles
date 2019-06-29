@@ -9,13 +9,6 @@ import sys
 import traceback
 import tzlocal
 from typing import Dict, List
-"""
-PUID=1000
-PGID=140
-TZ="America/New_York"
-USERDIR="/home/USER"
-MYSQL_ROOT_PASSWORD="passsword"
-"""
 
 
 def setup_environment() -> None:
