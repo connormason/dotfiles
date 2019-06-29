@@ -101,7 +101,7 @@ elif [ "$1" == "mac" ]; then
     chmod u+x install_mac.sh
     ./install_mac.sh
 elif [ "$1" == "server" ]; then
-    if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
+    if [ "$(expr substr $(uname -s) 1 5)" != "Linux" ]; then
         echo -e "${RED}Cannot perform home server (Ubuntu) install on non-Ubuntu device${NC}"
         exit 1
     fi
