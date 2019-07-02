@@ -32,10 +32,6 @@ brew install brew-cask
 brew tap caskroom/versions
 echo ""
 
-echo -e "${CYAN}Installing thefuck...${NC}" 
-brew install thefuck
-echo ""
-
 echo -e "${CYAN}Installing tree...${NC}" 
 brew install tree
 echo ""
@@ -46,6 +42,12 @@ echo ""
 
 echo -e "${CYAN}Installing applications...${NC}"
 install_mac_apps
+echo ""
+
+# TODO: might need to add --no-zsh here since we already have what we need in the .zshrc
+echo -e "${CYAN}Installing fzf...${NC}"
+brew install fzf
+$(brew --prefix)/opt/fzf/install
 echo ""
 
 echo -e "${CYAN}Installating python3...${NC}"
@@ -70,4 +72,9 @@ echo ""
 
 echo -e "${CYAN}Symlinking Hammerspoon init.lua...${NC}"
 ln -sfv "$DOTFILES_DIR/hammerspoon/init.lua" ~/.hammerspoon
+echo ""
+
+# Install zsh
+echo -e "${CYAN}Installing zsh...${NC}"
+brew install zsh zsh-completions
 echo ""
