@@ -3,6 +3,7 @@
 NC="\033[0m"
 YELLOW="\033[0;33m"
 CYAN="\033[0;36m"
+MAGENTA="\033[0;35m"
 
 CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 HOMEASSISTANT_CONFIG_REPO="git@github.com:connormason/homeassistant.git"
@@ -54,25 +55,39 @@ echo ""
 # Add user to Docker group
 echo -e "${CYAN}Adding user '${USER}' to Docker group...${NC}"
 sudo usermod -aG docker ${USER}
+echo "Done"
 echo ""
 
+# Create ~/docker directory (if it doesn't already exist)
 echo -e "${CYAN}Creating ~/docker/ directory...${NC}"
-mkdir ~/docker
-sudo setfacl -Rdm g:docker:rwx ~/docker
-sudo chmod -R 775 ~/docker
-ln -sfv $CUR_DIR/docker-compose.yml ~/docker
+if [ ! -d ~/docker ]; then
+	mkdir ~/docker
+	sudo setfacl -Rdm g:docker:rwx ~/docker
+	sudo chmod -R 775 ~/docker
+	ln -sfv $CUR_DIR/docker-compose.yml ~/docker
+else
+	echo -e "${MAEGNTA}~/docker/ directory already exists${NC}"
+
 echo ""
 
-echo -e "${CYAN}Grabbing latest homeassistant configuration...${NC}"
-git clone $HOMEASSISTANT_CONFIG_REPO ~/docker
+# Grab homeassistant config repo (or pull latest if we already have it)
+if [ ! -d ~/docker/homeassistant ]; then
+	echo -e "${CYAN}Cloning homeassistant configuration repo...${NC}"
+	cd ~/docker
+	git clone $HOMEASSISTANT_CONFIG_REPO
+else
+	echo -e "${CYAN}Pulling latest homeassistant configuration repo...${NC}"
+	cd ~/docker/homeassistant
+	git pull
+
 echo ""
 
 # docker-compose -f ~/docker/docker-compose.yml up
 
 # Install pip
-# echo -e "${CYAN}Installing pip (for python3)...${NC}"
-# sudo apt-get install -y python3-pip
-# echo ""
+echo -e "${CYAN}Installing pip (for python3)...${NC}"
+sudo apt-get install -y python3-pip
+echo ""
 
 # # Install required Python packages (TODO: maybe move to a requirements.txt)
 # echo -e "${CYAN}Installing required Python packages...${NC}"
@@ -84,7 +99,21 @@ echo ""
 # python3 $CUR_DIR/bootstrap_utils.py setup_environment
 # echo ""
 
-# # Install iPython3
-# echo -e "${CYAN}Installing ipython (3)...${NC}"
-# sudo apt-get install -y ipython3
-# echo ""
+# Install iPython3
+echo -e "${CYAN}Installing ipython (3)...${NC}"
+sudo apt-get install -y ipython3
+echo ""
+
+# Install tmux
+echo -e "${CYAN}Installing tmux...${NC}"
+sudo apt-get install tmux
+echo ""
+
+# Install zsh
+echo -e "${CYAN}Installing zsh...${NC}"
+sudo apt-get install zsh
+echo ""
+
+echo -e "${CYAN}Auto-removing extraneous packages...${NC}"
+sudo apt-get autoremove
+echo ""
