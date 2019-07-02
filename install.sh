@@ -122,7 +122,7 @@ echo -e "${CYAN}Installing oh-my-zsh...${NC}"
 cd ~
 curl -Lo install.sh https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh
 chmod u+x ~/install.sh
-./install.sh --unattended
+zsh install.sh --unattended
 rm -f ~/install.sh
 echo ""
 
