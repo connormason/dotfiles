@@ -75,6 +75,14 @@ if [ $? -eq 0 ]; then
 	echo -e "${WHITE}Connor's${NC} ${CYAN}Apple${NC}${WHITE} zshrc loaded${NC}"
 fi
 
+# Mac specific stuff
+if [ "$(uname)" != "Darwin" ]; then
+	alias o="open ."
+
+	# FZF
+	[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+fi
+
 # Let's get sourced!
 alias src="source ~/.zshrc"
 alias sourcerc="source ~/.zshrc"
@@ -86,15 +94,7 @@ alias ohmyzsh="~/.oh-my-zsh"
 alias bashconfig="st ~/.bash_profile"
 alias tmuxconf="st ~/.tmux.conf"
 
-# FZF
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-
-# The Fuck
-eval "$(thefuck --alias)"
-eval "$(thefuck --alias FUCK)"
-
 # Generic command aliases
-alias o="open ."
 alias clr="clear"
 
 # Generic folder aliases
