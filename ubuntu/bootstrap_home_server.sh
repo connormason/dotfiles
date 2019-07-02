@@ -60,6 +60,7 @@ if [ ! -d ~/docker ]; then
 	ln -sfv $CUR_DIR/docker-compose.yml ~/docker
 else
 	echo -e "${MAEGNTA}~/docker/ directory already exists${NC}"
+fi
 
 echo ""
 
@@ -72,6 +73,7 @@ else
 	echo -e "${CYAN}Pulling latest homeassistant configuration repo...${NC}"
 	cd ~/docker/homeassistant
 	git pull
+fi
 
 echo ""
 
@@ -99,19 +101,19 @@ echo ""
 
 # Install fzf
 echo -e "${CYAN}Installing fzf...${NC}"
-sudo apt-get install fzf
+sudo apt-get install -y fzf
 echo ""
 
 # Install tmux
 echo -e "${CYAN}Installing tmux...${NC}"
-sudo apt-get install tmux
+sudo apt-get install -y tmux
 echo ""
 
 # Install zsh
 echo -e "${CYAN}Installing zsh...${NC}"
-sudo apt-get install zsh
+sudo apt-get install -y zsh
 echo ""
 
 echo -e "${CYAN}Auto-removing extraneous packages...${NC}"
-sudo apt-get autoremove
+sudo apt-get autoremove -y
 echo ""
