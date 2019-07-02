@@ -8,13 +8,6 @@ MAGENTA="\033[0;35m"
 CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 HOMEASSISTANT_CONFIG_REPO="git@github.com:connormason/homeassistant.git"
 
-# Ask for the administrator password upfront
-echo -e "${YELLOW}Enter your password plz...${NC}"
-sudo -v
-
-# Keep-alive: update existing `sudo` timestamp until this script has finished
-while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
-
 # Install net-tools (gets us ifconfig, among other things)
 echo -e "${CYAN}Installing net-tools...${NC}"
 sudo apt-get install -y net-tools
