@@ -104,6 +104,11 @@ echo -e "${CYAN}Installing ipython (3)...${NC}"
 sudo apt-get install -y ipython3
 echo ""
 
+# Install fzf
+echo -e "${CYAN}Installing fzf...${NC}"
+sudo apt-get install fzf
+echo ""
+
 # Install tmux
 echo -e "${CYAN}Installing tmux...${NC}"
 sudo apt-get install tmux
