@@ -30,6 +30,7 @@ else
     input_error
     exit 1
 fi
+echo ""
 
 # Get dotfiles directory location
 DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -37,6 +38,7 @@ DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Ask for the administrator password upfront
 echo -e "${YELLOW}Enter your password plz...${NC}"
 sudo -v
+echo ""
 
 # Keep-alive: update existing `sudo` timestamp until this script has finished
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
@@ -117,8 +119,7 @@ cd $DOTFILES_DIR
 # Download/instsall oh-my-zsh (--unattended to prevent prompts)
 # TODO: can we somehow make zsh the default shell in this install script?
 echo -e "${CYAN}Installing oh-my-zsh...${NC}"
-curl -Lo install.sh https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh
-sh install.sh --unattended
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh --unattended)"
 echo ""
 
 echo -e "${CYAN}Symlinking .zshrc correctly...${NC}"
