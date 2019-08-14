@@ -62,18 +62,24 @@ echo ""
 # Pull work dotfile repo and run its install script if necessary
 if [ "$1" == "work" ]; then
 	echo -e "${CYAN}Pulling latest work dotfiles from repo...${NC}"
+    if [ ! -d $DOTFILES_DIR/work/.git ]; then
+        cd $DOTFILES_DIR
+        rm -rf work
 
-	if [ ! -d $DOTFILES_DIR/work/.git ]; then
-		cd $DOTFILES_DIR
-		rm -rf work
-		git clone $WORK_DOTFILES_REPO
-		mv dotfiles work
-	else
-		cd $DOTFILES_DIR/work
-		git pull
-		cd $DOTFILES_DIR
-	fi
-	echo ""
+        if [ ! $(git clone $WORK_DOTFILES_REPO) ]; then
+            echo -e "${RED}Failed to clone work dotfiles repo. Are you connected to AppleConnect?${NC}"
+            exit 1
+        fi
+        mv dotfiles work
+    else
+        cd $DOTFILES_DIR/work
+        if [ ! $(git pull) ]; then
+            echo -e "${RED}Failed to pull work dotfiles repo. Are you connected to AppleConnect?${NC}"
+            exit 1
+        fi
+        cd $DOTFILES_DIR
+    fi
+    echo ""
 
 	echo -e "${CYAN}Running work dotfiles install.sh...${NC}"
 	cd $DOTFILES_DIR/work
