@@ -77,22 +77,14 @@ fi
 
 echo ""
 
-# docker-compose -f ~/docker/docker-compose.yml up
+echo -e "${CYAN}Starting up docker with docker-compose...${NC}"
+docker-compose -f ~/docker/docker-compose.yml up -d
+echo ""
 
 # Install pip
 echo -e "${CYAN}Installing pip (for python3)...${NC}"
 sudo apt-get install -y python3-pip
 echo ""
-
-# # Install required Python packages (TODO: maybe move to a requirements.txt)
-# echo -e "${CYAN}Installing required Python packages...${NC}"
-# python3 -m pip install tzlocal
-# echo ""
-
-# # Setup environment variables for Docker
-# echo -e "${CYAN}Setting up environment variables for Docker...${NC}"
-# python3 $CUR_DIR/bootstrap_utils.py setup_environment
-# echo ""
 
 # Install iPython3
 echo -e "${CYAN}Installing ipython (3)...${NC}"
