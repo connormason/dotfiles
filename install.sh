@@ -66,7 +66,7 @@ echo -e "${CYAN}Pulling latest dotfiles repo...${NC}"
 echo ""
 
 # Setup/run platform-specific auxillary install scripts
-if [ "$1" == "mac" ]; then
+if [ "$1" == "mac" ] || [ "$1" == "work" ]; then
     if [ "$(uname)" != "Darwin" ]; then
         echo -e "${RED}Cannot perform Mac install on non-macOS device${NC}"
         exit 1
