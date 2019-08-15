@@ -85,6 +85,9 @@ if [ "$(uname)" != "Darwin" ]; then
 	[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 fi
 
+# Zsh completions
+fpath=(/usr/local/share/zsh-completions $fpath)
+
 # Let's get sourced!
 alias src="source ~/.zshrc"
 alias sourcerc="source ~/.zshrc"

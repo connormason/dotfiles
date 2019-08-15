@@ -46,7 +46,7 @@ echo ""
 # TODO: might need to add --no-zsh here since we already have what we need in the .zshrc
 echo -e "${CYAN}Installing fzf...${NC}"
 brew install fzf
-$(brew --prefix)/opt/fzf/install
+$(brew --prefix)/opt/fzf/install --all
 echo ""
 
 echo -e "${CYAN}Installating python3...${NC}"
