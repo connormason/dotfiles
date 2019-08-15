@@ -52,7 +52,7 @@ ZSH_THEME="gallois"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git git-extras python sublime sudo terminal app web-search)
+plugins=(git git-extras python sublime sudo web-search)
 
 # Color definitions for pretty output
 WHITE="\033[1;37m"
@@ -84,6 +84,9 @@ if [ "$(uname)" != "Darwin" ]; then
 	# FZF
 	[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 fi
+
+# Zsh completions
+fpath=(/usr/local/share/zsh-completions $fpath)
 
 # Let's get sourced!
 alias src="source ~/.zshrc"
