@@ -65,10 +65,32 @@ echo -e "${CYAN}Pulling latest dotfiles repo...${NC}"
 [ -d "$DOTFILES_DIR/.git" ] && git --work-tree="$DOTFILES_DIR" --git-dir="$DOTFILES_DIR/.git" pull origin master
 echo ""
 
-# Setup/run auxillary install scripts
-if [ "$1" == "work" ]; then
+# Setup/run platform-specific auxillary install scripts
+if [ "$1" == "mac" ]; then
+    if [ "$(uname)" != "Darwin" ]; then
+        echo -e "${RED}Cannot perform Mac install on non-macOS device${NC}"
+        exit 1
+    fi
 
-    # Pull latest work dotfiles
+    echo -e "${MAGENTA}Running MacOS install script...${NC}"
+    cd $DOTFILES_DIR/mac
+    chmod u+x install_mac.sh
+    ./install_mac.sh
+elif [ "$1" == "server" ]; then
+    if [ "$(expr substr $(uname -s) 1 5)" != "Linux" ]; then
+        echo -e "${RED}Cannot perform home server (Ubuntu) install on non-Ubuntu device${NC}"
+        exit 1
+    fi
+
+    echo -e "${MAGENTA}Bootstrapping home server...${NC}"
+    cd $DOTFILES_DIR/ubuntu
+    chmod u+x bootstrap_home_server.sh
+    ./bootstrap_home_server.sh
+fi
+
+
+# Setup/run work dotfiles install script
+if [ "$1" == "work" ]; then
     echo -e "${CYAN}Pulling latest work dotfiles from repo...${NC}"
 
     if [ ! -d $DOTFILES_DIR/work/.git ]; then
@@ -103,27 +125,6 @@ if [ "$1" == "work" ]; then
     cd $DOTFILES_DIR
 
     echo ""
-
-elif [ "$1" == "mac" ]; then
-    if [ "$(uname)" != "Darwin" ]; then
-        echo -e "${RED}Cannot perform Mac install on non-macOS device${NC}"
-        exit 1
-    fi
-
-    echo -e "${MAGENTA}Running MacOS install script...${NC}"
-    cd $DOTFILES_DIR/mac
-    chmod u+x install_mac.sh
-    ./install_mac.sh
-elif [ "$1" == "server" ]; then
-    if [ "$(expr substr $(uname -s) 1 5)" != "Linux" ]; then
-        echo -e "${RED}Cannot perform home server (Ubuntu) install on non-Ubuntu device${NC}"
-        exit 1
-    fi
-
-    echo -e "${MAGENTA}Bootstrapping home server...${NC}"
-    cd $DOTFILES_DIR/ubuntu
-    chmod u+x bootstrap_home_server.sh
-    ./bootstrap_home_server.sh
 fi
 
 cd $DOTFILES_DIR
