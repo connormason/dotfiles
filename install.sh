@@ -67,15 +67,20 @@ if [ "$1" == "work" ]; then
         cd $DOTFILES_DIR
         rm -rf work
 
-        if [ ! $(git clone $WORK_DOTFILES_REPO) ]; then
-            echo -e "${RED}Failed to clone work dotfiles repo. Are you connected to AppleConnect?${NC}"
+        git clone $WORK_DOTFILES_REPO
+        RET=$?
+        if [ $RET -ne 0 ]; then
+            echo -e "${RED}Failed to clone work dotfiles repo. Are you connected to AppleConnect? Have you given GitHub your SSH key?${NC}"
             exit 1
         fi
         mv dotfiles work
     else
         cd $DOTFILES_DIR/work
-        if [ ! $(git pull) ]; then
-            echo -e "${RED}Failed to pull work dotfiles repo. Are you connected to AppleConnect?${NC}"
+
+        git pull
+        RET=$?
+        if [ $RET -ne 0 ]; then
+            echo -e "${RED}Failed to pull work dotfiles repo. Are you connected to AppleConnect? Have you given GitHub your SSH key?${NC}"
             exit 1
         fi
         cd $DOTFILES_DIR
