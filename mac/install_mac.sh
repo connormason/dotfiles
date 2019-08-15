@@ -28,7 +28,6 @@ echo ""
 
 echo -e "${CYAN}Installing Caskroom...${NC}"
 brew tap caskroom/cask
-brew install brew-cask
 brew tap caskroom/versions
 echo ""
 
