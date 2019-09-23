@@ -1,5 +1,7 @@
 # Path to your oh-my-zsh installation.
-export ZSH=/Users/connormason/.oh-my-zsh
+export ZSH=~/.oh-my-zsh
+
+# TODO: don't do this if its alrady in there
 export PATH="/usr/local/sbin:$PATH"
 
 # Set name of the theme to load.
@@ -50,7 +52,7 @@ ZSH_THEME="gallois"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git git-extras python sublime sudo terminal app web-search)
+plugins=(git git-extras python sublime sudo web-search)
 
 # Color definitions for pretty output
 WHITE="\033[1;37m"
@@ -75,6 +77,17 @@ if [ $? -eq 0 ]; then
 	echo -e "${WHITE}Connor's${NC} ${CYAN}Personal${NC}${WHITE} zshrc loaded${NC}"
 fi
 
+# Mac specific stuff
+if [ "$(uname)" != "Darwin" ]; then
+	alias o="open ."
+
+	# FZF
+	[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+fi
+
+# Zsh completions
+fpath=(/usr/local/share/zsh-completions $fpath)
+
 # Let's get sourced!
 alias src="source ~/.zshrc"
 alias sourcerc="source ~/.zshrc"
@@ -86,15 +99,7 @@ alias ohmyzsh="~/.oh-my-zsh"
 alias bashconfig="st ~/.bash_profile"
 alias tmuxconf="st ~/.tmux.conf"
 
-# FZF
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-
-# The Fuck
-eval "$(thefuck --alias)"
-eval "$(thefuck --alias FUCK)"
-
 # Generic command aliases
-alias o="open ."
 alias clr="clear"
 
 # Generic folder aliases

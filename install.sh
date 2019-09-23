@@ -7,43 +7,30 @@ WORK_DOTFILES_REPO="git@github.pie.apple.com:connor-mason/dotfiles.git"
 NC="\033[0m"
 RED="\033[0;31m"
 GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+MAGENTA="\033[0;35m"
 CYAN="\033[0;36m"
-YELLOW="\033[1;33m"
-
-# Installs apps
-# TODO: turn into brewfile
-install_apps() {
-	apps=(
-		google-chrome
-		iterm2
-		hammerspoon
-		sublime-text
-		pycharm
-		franz
-	)
-
-	brew cask install "${apps[@]}"
-	brew cask cleanup
-}
 
 # Input error output function
 input_error() {
-	echo "usage: "
-	echo "  ./install.sh work 	--> installs on work computer"
-	echo "  ./install.sh personal --> installs on personal computer"
+    echo "usage: "
+    echo "  ./install.sh work   --> installs on work Mac machine"
+    echo "  ./install.sh mac    --> installs on personal Mac machine"
+    echo "  ./install.sh server --> installs on home server Ubuntu machine"
 }
 
-# Check for argument existance
-if [ -z "$1" ]; then
-	input_error
-	exit 1
+# Check for argument existance and validity
+if [ ! -z "$1" ] && [ "$1" == "work" ]; then
+    echo -e "${MAGENTA}Running work install on Mac${NC}"
+elif [ ! -z "$1" ] && [ "$1" == "mac" ]; then
+    echo -e "${MAGENTA}Running personal install on Mac${NC}"
+elif [ ! -z "$1" ] && [ "$1" == "server" ]; then
+    echo -e "${MAGENTA}Running home server install on Ubuntu${NC}"
+else
+    input_error
+    exit 1
 fi
-
-# Check if argument is a valid option
-if !([ "$1" == "personal" ] || [ "$1" == "work" ]); then
-	input_error
-	exit 1
-fi
+echo ""
 
 # Get dotfiles directory location
 DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -51,50 +38,10 @@ DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Ask for the administrator password upfront
 echo -e "${YELLOW}Enter your password plz...${NC}"
 sudo -v
+echo ""
 
 # Keep-alive: update existing `sudo` timestamp until this script has finished
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
-
-# Update dotfiles repo
-echo -e "${CYAN}Pulling latest dotfiles repo...${NC}"
-[ -d "$DOTFILES_DIR/.git" ] && git --work-tree="$DOTFILES_DIR" --git-dir="$DOTFILES_DIR/.git" pull origin master
-echo ""
-
-# Pull work dotfile repo and run its install script if necessary
-if [ "$1" == "work" ]; then
-	echo -e "${CYAN}Pulling latest work dotfiles from repo...${NC}"
-    if [ ! -d $DOTFILES_DIR/work/.git ]; then
-        cd $DOTFILES_DIR
-        rm -rf work
-
-        git clone $WORK_DOTFILES_REPO
-        RET=$?
-        if [ $RET -ne 0 ]; then
-            echo -e "${RED}Failed to clone work dotfiles repo. Are you connected to AppleConnect? Have you given GitHub your SSH key?${NC}"
-            exit 1
-        fi
-        mv dotfiles work
-    else
-        cd $DOTFILES_DIR/work
-
-        git pull
-        RET=$?
-        if [ $RET -ne 0 ]; then
-            echo -e "${RED}Failed to pull work dotfiles repo. Are you connected to AppleConnect? Have you given GitHub your SSH key?${NC}"
-            exit 1
-        fi
-        cd $DOTFILES_DIR
-    fi
-    echo ""
-
-	echo -e "${CYAN}Running work dotfiles install.sh...${NC}"
-	cd $DOTFILES_DIR/work
-	chmod u+x install.sh
-	./install.sh
-	cd $DOTFILES_DIR
-
-	echo ""
-fi
 
 # Create symlinks
 echo -e "${CYAN}Creating symlinks...${NC}"
@@ -102,88 +49,100 @@ ln -sfv "$DOTFILES_DIR/.gitignore_global" ~
 ln -sfv "$DOTFILES_DIR/.tmux.conf" ~
 
 if [ "$1" == "work" ]; then
-	ln -sfv "$DOTFILES_DIR/work/.applerc" ~
-	ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
-	ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
-elif [ "$1" == "personal" ]; then
-	ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
-	ln -sfv "$DOTFILES_DIR/personal/.gitconfig" ~
-	ln -sfv "$DOTFILES_DIR/personal/.personalrc" ~
+    ln -sfv "$DOTFILES_DIR/work/.applerc" ~
+    ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
+    ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
+elif [ "$1" == "mac" ] || [ "$1" == "server" ]; then
+    ln -sfv "$DOTFILES_DIR/personal/.personalrc" ~
+    ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
+    ln -sfv "$DOTFILES_DIR/personal/.gitconfig" ~
 fi
 
 echo ""
 
-echo -e "${CYAN}Installing spaces plugin for Hammerspoon...${NC}"
-git clone https://github.com/asmagill/hs._asm.undocumented.spaces hammerspoon/spaces
-cd hammerspoon/spaces
-make install
-cd ../..
+# Update dotfiles repo
+echo -e "${CYAN}Pulling latest dotfiles repo...${NC}"
+[ -d "$DOTFILES_DIR/.git" ] && git --work-tree="$DOTFILES_DIR" --git-dir="$DOTFILES_DIR/.git" pull origin master
 echo ""
 
-# Install Homebrew and Homebrew packages
-echo -e "${CYAN}Installing and updating Homebrew...${NC}"
+# Setup/run platform-specific auxillary install scripts
+if [ "$1" == "mac" ] || [ "$1" == "work" ]; then
+    if [ "$(uname)" != "Darwin" ]; then
+        echo -e "${RED}Cannot perform Mac install on non-macOS device${NC}"
+        exit 1
+    fi
 
-echo | ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-brew update 
-brew upgrade 
-echo ""
+    echo -e "${MAGENTA}Running MacOS install script...${NC}"
+    cd $DOTFILES_DIR/mac
+    chmod u+x install_mac.sh
+    ./install_mac.sh
+elif [ "$1" == "server" ]; then
+    if [ "$(expr substr $(uname -s) 1 5)" != "Linux" ]; then
+        echo -e "${RED}Cannot perform home server (Ubuntu) install on non-Ubuntu device${NC}"
+        exit 1
+    fi
 
-echo -e "${CYAN}Installing Caskroom...${NC}"
-brew tap caskroom/cask
-brew install brew-cask
-brew tap caskroom/versions
-echo ""
+    echo -e "${MAGENTA}Bootstrapping home server...${NC}"
+    cd $DOTFILES_DIR/ubuntu
+    chmod u+x bootstrap_home_server.sh
+    ./bootstrap_home_server.sh
+fi
 
-echo -e "${CYAN}Installing thefuck...${NC}" 
-brew install thefuck
-echo ""
 
-echo -e "${CYAN}Installing tree...${NC}" 
-brew install tree
-echo ""
+# Setup/run work dotfiles install script
+if [ "$1" == "work" ]; then
+    echo -e "${CYAN}Pulling latest work dotfiles from repo...${NC}"
 
-echo -e "${CYAN}Installing libmagic...${NC}" 
-brew install libmagic
-echo ""
+    if [ ! -d $DOTFILES_DIR/work/.git ]; then
+        cd $DOTFILES_DIR
+        rm -rf work
 
-echo -e "${CYAN}Installing applications...${NC}"
-install_apps
-echo ""
+        git clone $WORK_DOTFILES_REPO
+        RET=$?
+        if [ $RET -ne 0 ]; then
+            echo -e "${RED}Failed to clone work dotfiles repo. Are you connected to AppleConnect?${NC}"
+            exit 1
+        fi
+        mv dotfiles work
+    else
+        cd $DOTFILES_DIR/work
+        
+        git pull
+        RET=$?
+        if [ $RET -ne 0 ]; then
+            echo -e "${RED}Failed to pull work dotfiles repo. Are you connected to AppleConnect?${NC}"
+            exit 1
+        fi
+        cd $DOTFILES_DIR
+    fi
+    echo ""
 
-echo -e "${CYAN}Installating python3...${NC}"
-brew install python3
-echo ""
+    # Run work install script
+    echo -e "${CYAN}Running work dotfiles install.sh...${NC}"
+    cd $DOTFILES_DIR/work
+    chmod u+x install.sh
+    ./install.sh
+    cd $DOTFILES_DIR
 
-echo -e "${CYAN}Installating ipython...${NC}"
-python3 -m pip install ipython
-echo ""
+    echo ""
+fi
 
-echo -e "${CYAN}Setting up iTerm to load preferences from dotfiles...${NC}"
-defaults write com.googlecode.iterm2.plist PrefsCustomFolder -string "~/$DOTFILES_DIR/iterm2"
-defaults write com.googlecode.iterm2.plist LoadPrefsFromCustomFolder -bool true
-echo ""
+cd $DOTFILES_DIR
 
-echo -e "${CYAN}Symlinking Hammerspoon init.lua...${NC}"
-ln -sfv "$DOTFILES_DIR/hammerspoon/init.lua" ~/.hammerspoon
-echo ""
-
-echo -e "${CYAN}Installing spaces plugin for Hammerspoon...${NC}"
-git clone https://github.com/asmagill/hs._asm.undocumented.spaces spaces
-cd spaces
-[HS_APPLICATION=/Applications] [PREFIX=~/.hammerspoon] make install
-echo ""
-
-# Download oh-my-zsh
-echo -e "${CYAN}Installing oh-my-zsh...${NC}"
+# Download/instsall oh-my-zsh (--unattended to prevent prompts)
+# TODO: can we somehow make zsh the default shell in this install script?
+echo -e "${CYAN}Installing oh-my-zsh (this may require a password)...${NC}"
+cd ~
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+rm -f ~/install.sh
 echo ""
 
 echo -e "${CYAN}Symlinking .zshrc correctly...${NC}"
-rm ~/.zshrc
-rm ~/.zshrc.pre-oh-my-zsh 
+rm -f ~/.zshrc
+rm -f ~/.zshrc.pre-oh-my-zsh
 ln -sfv "$DOTFILES_DIR/.zshrc" ~
 source ~/.zshrc
 echo ""
 
 echo ""
-echo -e "${GREEN}Done.${NC}"
+echo -e "${GREEN}Installation finished.${NC}"
