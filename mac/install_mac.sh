@@ -70,7 +70,7 @@ cd ../..
 echo ""
 
 echo -e "${CYAN}Symlinking Hammerspoon init.lua...${NC}"
-ln -sfv "$DOTFILES_DIR/hammerspoon/init.lua" ~/.hammerspoon
+ln -sfv "$MAC_DOTFILES_DIR/hammerspoon/init.lua" ~/.hammerspoon
 echo ""
 
 # Install zsh
