@@ -11,6 +11,7 @@ install_mac_apps() {
 		hammerspoon
 		sublime-text
 		pycharm
+		slack
 	)
 
 	brew cask install "${apps[@]}"
@@ -63,15 +64,16 @@ defaults write com.googlecode.iterm2.plist PrefsCustomFolder -string "$MAC_DOTFI
 defaults write com.googlecode.iterm2.plist LoadPrefsFromCustomFolder -bool true
 echo ""
 
+echo -e "${CYAN}Creating .hammerspoon directory and symlinking init.lua..."
+mkdir ~/.hammerspoon
+ln -sfv "$MAC_DOTFILES_DIR/hammerspoon/init.lua" ~/.hammerspoon
+echo ""
+
 echo -e "${CYAN}Installing spaces plugin for Hammerspoon...${NC}"
 git clone https://github.com/asmagill/hs._asm.undocumented.spaces "$MAC_DOTFILES_DIR/hammerspoon/spaces"
 cd hammerspoon/spaces
-[HS_APPLICATION=/Applications] [PREFIX=~/.hammerspoon] make install
+make install
 cd ../..
-echo ""
-
-echo -e "${CYAN}Symlinking Hammerspoon init.lua...${NC}"
-ln -sfv "$MAC_DOTFILES_DIR/hammerspoon/init.lua" ~/.hammerspoon
 echo ""
 
 # Install zsh
