@@ -14,7 +14,6 @@ install_mac_apps() {
 	)
 
 	brew cask install "${apps[@]}"
-	brew cask cleanup
 }
 
 # Install Homebrew and Homebrew packages
@@ -48,7 +47,11 @@ brew install python3
 echo ""
 
 echo -e "${CYAN}Installating ipython...${NC}"
-python3 -m pip install ipython
+python3 -m pip install ipython --user
+echo ""
+
+echo -e "${CYAN}Running brew cleanup...${NC}"
+brew cleanup
 echo ""
 
 echo -e "${CYAN}Setting up iTerm to load preferences from dotfiles...${NC}"
