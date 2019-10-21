@@ -25,11 +25,6 @@ brew update
 brew upgrade 
 echo ""
 
-echo -e "${CYAN}Installing Caskroom...${NC}"
-brew tap caskroom/cask
-brew tap caskroom/versions
-echo ""
-
 echo -e "${CYAN}Installing tree...${NC}" 
 brew install tree
 echo ""
