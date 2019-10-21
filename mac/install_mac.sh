@@ -12,6 +12,11 @@ install_mac_apps() {
 		sublime-text
 		pycharm
 		slack
+		spotify
+		box-drive
+		microsoft-office
+		quip
+		adobe-acrobat-reader
 	)
 
 	brew cask install "${apps[@]}"
