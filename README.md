@@ -10,5 +10,6 @@ These are my dotfiles. Yay.
     - Personal Ubuntu machine: `./install.sh personal ubuntu`
     - Personal Mac machine: `./install.sh personal mac`
     - Work: `./install.sh work`
+6. Run `brew doctor` if on a Mac
 
 If running a home server install, make sure to reserve an IP address in the router configuration.
