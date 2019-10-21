@@ -11,7 +11,6 @@ install_mac_apps() {
 		hammerspoon
 		sublime-text
 		pycharm
-		franz
 	)
 
 	brew cask install "${apps[@]}"
