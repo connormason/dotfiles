@@ -88,6 +88,9 @@ fi
 # Zsh completions
 fpath=(/usr/local/share/zsh-completions $fpath)
 
+# gitignore.io
+function gi() { curl -sLw n https://www.gitignore.io/api/$@ ;}
+
 # Let's get sourced!
 alias src="source ~/.zshrc"
 alias sourcerc="source ~/.zshrc"
