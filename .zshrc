@@ -1,3 +1,30 @@
+# Color definitions for pretty output
+WHITE="\033[1;37m"
+CYAN="\033[0;36m"
+YELLOW="\033[1;33m"
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+NC="\033[0m"
+
+# Source .applerc if on work install
+source $HOME/.applerc > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+	echo -e "${WHITE}Connor's${NC} ${YELLOW}Apple${NC}${WHITE} zshrc loaded${NC}"
+fi
+
+# Source .personalrc if on personal install
+source $HOME/.personalrc > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+	echo -e "${WHITE}Connor's${NC} ${CYAN}Personal${NC}${WHITE} zshrc loaded${NC}"
+fi
+
+# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+# Initialization code that may require console input (password prompts, [y/n]
+# confirmations, etc.) must go above this block, everything else may go below.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
 # Path to your oh-my-zsh installation.
 export ZSH=~/.oh-my-zsh
 
@@ -54,28 +81,8 @@ ZSH_THEME=powerlevel10k/powerlevel10k
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git git-extras python sublime sudo web-search)
 
-# Color definitions for pretty output
-WHITE="\033[1;37m"
-CYAN="\033[0;36m"
-YELLOW="\033[1;33m"
-GREEN="\033[0;32m"
-RED="\033[0;31m"
-NC="\033[0m"
-
 source $ZSH/oh-my-zsh.sh
 source $HOME/.bash_profile
-
-# Source .applerc if on work install
-source $HOME/.applerc > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-	echo -e "${WHITE}Connor's${NC} ${YELLOW}Apple${NC}${WHITE} zshrc loaded${NC}"
-fi
-
-# Source .personalrc if on personal install
-source $HOME/.personalrc > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-	echo -e "${WHITE}Connor's${NC} ${CYAN}Personal${NC}${WHITE} zshrc loaded${NC}"
-fi
 
 # Mac specific stuff
 if [ "$(uname)" != "Darwin" ]; then
