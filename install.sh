@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# exit when any command fails
+set -e
+
 # Work dotfile repo location
 WORK_DOTFILES_REPO="git@github.pie.apple.com:connor-mason/dotfiles.git"
 
