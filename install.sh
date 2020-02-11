@@ -138,6 +138,12 @@ cd ~
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 echo ""
 
+# Install powerlevel10k ZSH theme
+echo -e "${CYAN}Installing powerlevel10k ZSH theme and symlinking configuration...${NC}"
+git clone --depth=1 https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
+ln -sfv "$DOTFILES_DIR/.p10k.zsh" ~
+echo ""
+
 # Symlink in our own zshrc, remove generated files
 echo -e "${CYAN}Symlinking .zshrc correctly...${NC}"
 rm -f ~/.zshrc
