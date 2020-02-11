@@ -100,7 +100,7 @@ if [ "$1" == "work" ]; then
         cd $DOTFILES_DIR
         rm -rf work
 
-        git clone $WORK_DOTFILES_REPO
+        yes | git clone $WORK_DOTFILES_REPO
         RET=$?
         if [ $RET -ne 0 ]; then
             echo -e "${RED}Failed to clone work dotfiles repo. Are you connected to AppleConnect?${NC}"
