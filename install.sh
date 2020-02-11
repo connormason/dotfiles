@@ -132,14 +132,13 @@ fi
 
 cd $DOTFILES_DIR
 
-# Download/instsall oh-my-zsh (--unattended to prevent prompts)
-# TODO: can we somehow make zsh the default shell in this install script?
+# Download/install oh-my-zsh (--unattended to prevent prompts)
 echo -e "${CYAN}Installing oh-my-zsh (this may require a password)...${NC}"
 cd ~
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
-rm -f ~/install.sh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 echo ""
 
+# Symlink in our own zshrc, remove generated files
 echo -e "${CYAN}Symlinking .zshrc correctly...${NC}"
 rm -f ~/.zshrc
 rm -f ~/.zshrc.pre-oh-my-zsh
@@ -149,3 +148,7 @@ echo ""
 
 echo ""
 echo -e "${GREEN}Installation finished.${NC}"
+
+# Launch zsh
+exec zsh -l
+
