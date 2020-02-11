@@ -52,7 +52,7 @@ brew install python3
 echo ""
 
 echo -e "${CYAN}Upgrading pip...${NC}"
-python3 -m pip install --upgrade pip
+python3 -m pip install --user --upgrade pip
 echo ""
 
 echo -e "${CYAN}Installating ipython...${NC}"
