@@ -2,26 +2,6 @@
 
 MAC_DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Installs apps
-# TODO: turn into brewfile
-install_mac_apps() {
-	apps=(
-		google-chrome
-		iterm2
-		hammerspoon
-		sublime-text
-		pycharm-ce
-		slack
-		spotify
-		box-drive
-		microsoft-office
-		quip
-		adobe-acrobat-reader
-	)
-
-	brew cask install "${apps[@]}"
-}
-
 # Install Homebrew and Homebrew packages
 echo -e "${CYAN}Installing and updating Homebrew...${NC}"
 
@@ -39,7 +19,9 @@ brew install libmagic
 echo ""
 
 echo -e "${CYAN}Installing applications...${NC}"
-install_mac_apps
+brew tap homebrew/bundle
+brew bundle
+rehash
 
 # Suppress the warning for downloaded applications
 xattr -d -r com.apple.quarantine ~/Applications
