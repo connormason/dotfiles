@@ -10,7 +10,7 @@ install_mac_apps() {
 		iterm2
 		hammerspoon
 		sublime-text
-		pycharm
+		pycharm-ce
 		slack
 		spotify
 		box-drive
@@ -40,6 +40,9 @@ echo ""
 
 echo -e "${CYAN}Installing applications...${NC}"
 install_mac_apps
+
+# Suppress the warning for downloaded applications
+xattr -d -r com.apple.quarantine ~/Applications
 echo ""
 
 echo -e "${CYAN}Installing fzf...${NC}"
@@ -78,6 +81,11 @@ git clone https://github.com/asmagill/hs._asm.undocumented.spaces "$MAC_DOTFILES
 cd hammerspoon/spaces
 make install
 cd ../..
+echo ""
+
+echo -e "${CYAN}Configuring macOS preferences...${NC}"
+chmod u+x install_mac.sh
+./setup_preferences.sh
 echo ""
 
 # Install zsh
