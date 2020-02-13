@@ -2,6 +2,9 @@
 
 MAC_DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# Exit when any command fails
+set -e
+
 # Install Homebrew and Homebrew packages
 echo -e "${CYAN}Installing and updating Homebrew...${NC}"
 
