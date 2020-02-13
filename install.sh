@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# exit when any command fails
+# Exit when any command fails
 set -e
 
 # Work dotfile repo location

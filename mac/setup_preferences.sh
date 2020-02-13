@@ -12,6 +12,9 @@ if [ "$EUID" -ne 0 ]; then
 	while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 fi
 
+# Exit when any command fails
+set -e
+
 # Close any open System Preferences panes, to prevent them from overriding settings we’re about to change
 echo "Closing System Preferences to prevent settings from being overridden..."
 osascript -e 'tell application "System Preferences" to quit'
@@ -187,8 +190,8 @@ defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebK
 # Update extensions automatically
 defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
 
-# Restart Safari
-killall Safari
+# Kill Safari
+killall Safari >> /dev/null 2>&1
 
 
 # *****************
@@ -202,8 +205,8 @@ defaults write com.apple.messageshelper.MessageController SOInputLineSettings -d
 # Disable continuous spell checking
 defaults write com.apple.messageshelper.MessageController SOInputLineSettings -dict-add "continuousSpellCheckingEnabled" -bool false
 
-# Restart messages
-killall Messages
+# Kill messages
+killall Messages >> /dev/null 2>&1
 
 
 # *************
@@ -214,8 +217,8 @@ echo "Setting up Mail..."
 # Copy email addresses as `foo@example.com` instead of `Foo Bar <foo@example.com>` in Mail.app
 defaults write com.apple.mail AddressesIncludeNameOnPasteboard -bool false
 
-# Restart Mail
-killall Mail
+# Kill Mail
+killall Mail >> /dev/null 2>&1
 
 
 # *************************
@@ -236,8 +239,8 @@ defaults write com.apple.ActivityMonitor ShowCategory -int 0
 defaults write com.apple.ActivityMonitor SortColumn -string "CPUUsage"
 defaults write com.apple.ActivityMonitor SortDirection -int 0
 
-# Restart Activity Monitor
-killall "Activity Monitor"
+# Kill Activity Monitor
+killall "Activity Monitor" >> /dev/null 2>&1
 
 
 # ******************
@@ -279,5 +282,5 @@ defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
 sudo defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
 
 # Restart system UI server
-killall SystemUIServer
-killall cfprefsd
+killall SystemUIServer >> /dev/null 2>&1
+killall cfprefsd >> /dev/null 2>&1
