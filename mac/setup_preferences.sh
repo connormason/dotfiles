@@ -134,6 +134,9 @@ defaults write com.apple.finder ShowHardDrivesOnDesktop -bool true
 defaults write com.apple.finder ShowMountedServersOnDesktop -bool true
 defaults write com.apple.finder ShowRemovableMediaOnDesktop -bool true
 
+# Don't show recent tags in Finder sidebar
+defaults write com.apple.finder ShowRecentTags -int 0
+
 # Disable finger window animations and Get Info animations
 defaults write com.apple.finder DisableAllAnimations -bool true
 
@@ -280,6 +283,12 @@ defaults write com.apple.menuextra.clock DateFormat -string "EEE d MMM h:mm:ss a
 
 # Customize items on right side of touch bar
 defaults write com.apple.controlstrip MiniCustomized '(com.apple.system.volume, com.apple.system.brightness, com.apple.system.airplay )'
+
+# Always show expanded options in print menu
+defaults write -g PMPrintingExpandedStateForPrint -bool TRUE
+
+# Change default screenshot storage location to ~/Desktop/Screenshots
+defaults write com.apple.screencapture location /Users/connormason/Desktop/Screenshots/
 
 # Don’t display the annoying prompt when quitting iTerm
 defaults write com.googlecode.iterm2 PromptOnQuit -bool false
