@@ -63,9 +63,6 @@ defaults write com.apple.dock wvous-bl-modifier -int 0
 defaults write com.apple.dock wvous-tr-corner -int 4
 defaults write com.apple.dock wvous-tr-modifier -int 0
 
-# Restart Dock
-killall Dock
-
 
 # ****************************
 # Input/output device settings
@@ -162,9 +159,6 @@ chflags nohidden ~/Library
 # Show the /Volumes folder
 sudo chflags nohidden /Volumes
 
-# Restart Finder
-killall Finder
-
 
 # ***************
 # Safari settings
@@ -188,9 +182,6 @@ defaults write com.apple.Safari com.apple.Safari.ContentPageGroupIdentifier.WebK
 # Update extensions automatically
 defaults write com.apple.Safari InstallExtensionUpdatesAutomatically -bool true
 
-# Kill Safari
-killall Safari >> /dev/null 2>&1
-
 
 # *****************
 # Messages settings
@@ -203,9 +194,6 @@ defaults write com.apple.messageshelper.MessageController SOInputLineSettings -d
 # Disable continuous spell checking
 defaults write com.apple.messageshelper.MessageController SOInputLineSettings -dict-add "continuousSpellCheckingEnabled" -bool false
 
-# Kill messages
-killall Messages >> /dev/null 2>&1
-
 
 # *************
 # Mail settings
@@ -214,9 +202,6 @@ echo "Setting up Mail..."
 
 # Copy email addresses as `foo@example.com` instead of `Foo Bar <foo@example.com>` in Mail.app
 defaults write com.apple.mail AddressesIncludeNameOnPasteboard -bool false
-
-# Kill Mail
-killall Mail >> /dev/null 2>&1
 
 
 # *************************
@@ -236,10 +221,6 @@ defaults write com.apple.ActivityMonitor ShowCategory -int 0
 # Sort Activity Monitor results by CPU usage
 defaults write com.apple.ActivityMonitor SortColumn -string "CPUUsage"
 defaults write com.apple.ActivityMonitor SortDirection -int 0
-
-# Kill Activity Monitor
-killall "Activity Monitor" >> /dev/null 2>&1
-
 
 # ******************
 # App Store settings
@@ -294,7 +275,17 @@ defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
 # Reveal IP address, hostname, OS version, etc. when clicking the clock in the login window
 sudo defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
 
-# Restart system UI server
-killall SystemUIServer >> /dev/null 2>&1
-killall cfprefsd >> /dev/null 2>&1
-killall ControlStrip >> /dev/null 2>&1
+
+# Kill/restart apps
+for app in "Activity Monitor" \
+	"Calendar" \
+	"cfprefsd" \
+	"ControlStrip" \
+	"Dock" \
+	"Finder" \
+	"Mail" \
+	"Messages" \
+	"Safari" \
+	"SystemUIServer" \
+	killall "${app}" &> /dev/null
+done
