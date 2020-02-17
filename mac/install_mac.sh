@@ -53,7 +53,9 @@ ln -sfv "$MAC_DOTFILES_DIR/hammerspoon/init.lua" /Users/connormason/.hammerspoon
 echo ""
 
 echo -e "${CYAN}Installing spaces plugin for Hammerspoon...${NC}"
-git clone https://github.com/asmagill/hs._asm.undocumented.spaces "$MAC_DOTFILES_DIR/hammerspoon/spaces"
+if [ ! -d "$MAC_DOTFILES_DIR/hammerspoon/spaces" ]; then
+	git clone https://github.com/asmagill/hs._asm.undocumented.spaces "$MAC_DOTFILES_DIR/hammerspoon/spaces"
+fi
 cd hammerspoon/spaces
 make install
 cd ../..
