@@ -276,7 +276,7 @@ defaults write NSGlobalDomain NSWindowResizeTime -float 0.001
 sudo defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
 
 
-# Kill/restart apps
+# Kill all apps we modified
 for app in "Activity Monitor" \
 	"Calendar" \
 	"cfprefsd" \
@@ -287,5 +287,5 @@ for app in "Activity Monitor" \
 	"Messages" \
 	"Safari" \
 	"SystemUIServer" \
-	killall "${app}" &> /dev/null
+	killall "${app}" >> /dev/null 2>&1
 done
