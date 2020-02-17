@@ -133,10 +133,12 @@ fi
 cd $DOTFILES_DIR
 
 # Download/install oh-my-zsh (--unattended to prevent prompts)
-echo -e "${CYAN}Installing oh-my-zsh (this may require a password)...${NC}"
-cd ~
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-echo ""
+if [! -d /Users/connormason/.oh-my-zsh ]; then
+    echo -e "${CYAN}Installing oh-my-zsh (this may require a password)...${NC}"
+    cd ~
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    echo ""
+fi
 
 # Install powerlevel10k ZSH theme
 echo -e "${CYAN}Installing powerlevel10k ZSH theme and symlinking configuration...${NC}"
