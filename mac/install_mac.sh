@@ -18,23 +18,6 @@ brew update
 brew upgrade 
 echo ""
 
-# TODO: work around these
-# Remove libmagic file that exists every time for some reason before installing it
-SILLY_LIBMAGIC_FILE="/usr/local/share/man/man3/libmagic.3"
-if [ -f $SILLY_LIBMAGIC_FILE ]; then
-	echo "Removing silly libmagic file that exists on fresh OS for some reason before we install it"
-	sudo rm $SILLY_LIBMAGIC_FILE
-	echo ""
-fi
-
-# Remove pcre file that exists every time for some reason before installing it
-SILLY_PCRE_FILE="/usr/local/bin/pcre-config"
-if [ -f $SILLY_PCRE_FILE ]; then
-	echo "Removing silly pcre file that exists on fresh OS for some reason before we install it"
-	sudo rm $SILLY_PCRE_FILE
-	echo ""
-fi
-
 echo -e "${CYAN}Installing packages and applications with homebrew...${NC}"
 brew tap homebrew/bundle
 brew bundle
