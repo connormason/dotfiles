@@ -1,7 +1,6 @@
 brew 'zsh'
 brew 'zsh-completions'
 brew 'python3'
-brew 'tmux'
 brew 'fzf'
 brew 'tree'
 brew 'libmagic'
