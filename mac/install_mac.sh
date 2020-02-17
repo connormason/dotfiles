@@ -27,7 +27,7 @@ echo ""
 SILLY_LIBMAGIC_FILE="/usr/local/share/man/man3/libmagic.3"
 if [ -f $SILLY_LIBMAGIC_FILE ]; then
 	echo "Removing silly libmagic file that exists on fresh OS for some reason before we install it"
-	rm $SILLY_LIBMAGIC_FILE
+	sudo rm $SILLY_LIBMAGIC_FILE
 	echo ""
 fi
 
