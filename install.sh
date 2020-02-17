@@ -140,7 +140,7 @@ echo ""
 
 # Install powerlevel10k ZSH theme
 echo -e "${CYAN}Installing powerlevel10k ZSH theme and symlinking configuration...${NC}"
-git clone --depth=1 https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
+git clone --depth=1 https://github.com/romkatv/powerlevel10k.git /Users/connormason/.oh-my-zsh/custom/themes/powerlevel10k
 ln -sfv "$DOTFILES_DIR/.p10k.zsh" ~
 echo ""
 
