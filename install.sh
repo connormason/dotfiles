@@ -133,7 +133,7 @@ fi
 cd $DOTFILES_DIR
 
 # Download/install oh-my-zsh (--unattended to prevent prompts)
-if [! -d /Users/connormason/.oh-my-zsh ]; then
+if [ ! -d /Users/connormason/.oh-my-zsh ]; then
     echo -e "${CYAN}Installing oh-my-zsh (this may require a password)...${NC}"
     cd ~
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
