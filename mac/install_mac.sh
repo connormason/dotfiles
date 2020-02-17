@@ -2,8 +2,14 @@
 
 MAC_DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+NC="\033[0m"
+CYAN="\033[0;36m"
+
 # Exit when any command fails
 set -e
+
+# Symlink SSH config
+ln -sfv "$MAC_DOTFILES_DIR/.ssh/config" ~/.ssh
 
 # Install Homebrew and Homebrew packages
 echo -e "${CYAN}Installing and updating Homebrew...${NC}"
