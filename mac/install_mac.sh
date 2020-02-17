@@ -46,7 +46,9 @@ defaults write com.googlecode.iterm2.plist LoadPrefsFromCustomFolder -bool true
 echo ""
 
 echo -e "${CYAN}Creating .hammerspoon directory and symlinking init.lua...${NC}"
-mkdir /Users/connormason/.hammerspoon
+if [ ! -d "/Users/connormason/.hammerspoon" ]; then
+	mkdir /Users/connormason/.hammerspoon
+fi
 ln -sfv "$MAC_DOTFILES_DIR/hammerspoon/init.lua" /Users/connormason/.hammerspoon
 echo ""
 
