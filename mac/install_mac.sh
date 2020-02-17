@@ -21,7 +21,6 @@ echo ""
 echo -e "${CYAN}Installing packages and applications with homebrew...${NC}"
 brew tap homebrew/bundle
 brew bundle
-rehash
 
 # Actually install fzf with its install script
 echo -e "${CYAN}Installing fzf...${NC}"
