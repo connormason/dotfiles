@@ -286,6 +286,6 @@ for app in "Activity Monitor" \
 	"Mail" \
 	"Messages" \
 	"Safari" \
-	"SystemUIServer" \
-	killall "${app}" >> /dev/null 2>&1
+	"SystemUIServer"; do
+	killall "${app}" &> /dev/null
 done
