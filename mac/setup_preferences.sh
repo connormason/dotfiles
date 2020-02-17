@@ -287,5 +287,5 @@ for app in "Activity Monitor" \
 	"Messages" \
 	"Safari" \
 	"SystemUIServer"; do
-	killall "${app}" &> /dev/null
+	killall "${app}" || true &> /dev/null
 done
