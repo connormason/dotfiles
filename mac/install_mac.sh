@@ -13,14 +13,9 @@ ln -sfv "$MAC_DOTFILES_DIR/.ssh/config" ~/.ssh
 
 # Install Homebrew and Homebrew packages
 echo -e "${CYAN}Installing and updating Homebrew...${NC}"
-
 echo | ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 brew update 
 brew upgrade 
-echo ""
-
-echo -e "${CYAN}Installing tree...${NC}" 
-brew install tree
 echo ""
 
 # Remove libmagic file that exists every time for some reason before installing it
@@ -31,26 +26,24 @@ if [ -f $SILLY_LIBMAGIC_FILE ]; then
 	echo ""
 fi
 
-echo -e "${CYAN}Installing libmagic...${NC}" 
-brew install libmagic
-echo ""
-
-echo -e "${CYAN}Installing applications...${NC}"
+echo -e "${CYAN}Installing packages and applications with homebrew...${NC}"
 brew tap homebrew/bundle
 brew bundle
 rehash
 
-# Suppress the warning for downloaded applications
-xattr -d -r com.apple.quarantine ~/Applications
-echo ""
-
+# Actually install fzf with its install script
 echo -e "${CYAN}Installing fzf...${NC}"
-brew install fzf
 $(brew --prefix)/opt/fzf/install --all --no-zsh
 echo ""
 
-echo -e "${CYAN}Installating python3...${NC}"
-brew install python3
+# Run brew cleanup
+echo -e "${CYAN}Running brew cleanup...${NC}"
+brew cleanup
+echo ""
+
+# Suppress the warning for downloaded applications
+echo -e "${CYAN}Suppressing downloaded application warning...${NC}"
+xattr -d -r com.apple.quarantine ~/Applications
 echo ""
 
 echo -e "${CYAN}Upgrading pip...${NC}"
@@ -59,10 +52,6 @@ echo ""
 
 echo -e "${CYAN}Installating ipython...${NC}"
 python3 -m pip install ipython --user
-echo ""
-
-echo -e "${CYAN}Running brew cleanup...${NC}"
-brew cleanup
 echo ""
 
 echo -e "${CYAN}Setting up iTerm to load preferences from dotfiles...${NC}"
@@ -85,9 +74,4 @@ echo ""
 echo -e "${CYAN}Configuring macOS preferences...${NC}"
 chmod u+x install_mac.sh
 ./setup_preferences.sh
-echo ""
-
-# Install zsh
-echo -e "${CYAN}Installing zsh...${NC}"
-brew install zsh zsh-completions
 echo ""
