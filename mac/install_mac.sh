@@ -34,7 +34,7 @@ echo ""
 
 # Suppress the warning for downloaded applications
 echo -e "${CYAN}Suppressing downloaded application warning...${NC}"
-xattr -d -r com.apple.quarantine /Users/connormason/Applications
+xattr -d -r com.apple.quarantine /Applications
 echo ""
 
 echo -e "${CYAN}Upgrading pip...${NC}"
