@@ -34,7 +34,7 @@ echo ""
 
 # Suppress the warning for downloaded applications
 echo -e "${CYAN}Suppressing downloaded application warning...${NC}"
-xattr -d -r com.apple.quarantine ~/Applications
+xattr -d -r com.apple.quarantine /Users/connormason/Applications
 echo ""
 
 echo -e "${CYAN}Upgrading pip...${NC}"
@@ -51,8 +51,8 @@ defaults write com.googlecode.iterm2.plist LoadPrefsFromCustomFolder -bool true
 echo ""
 
 echo -e "${CYAN}Creating .hammerspoon directory and symlinking init.lua..."
-mkdir ~/.hammerspoon
-ln -sfv "$MAC_DOTFILES_DIR/hammerspoon/init.lua" ~/.hammerspoon
+mkdir /Users/connormason/.hammerspoon
+ln -sfv "$MAC_DOTFILES_DIR/hammerspoon/init.lua" /Users/connormason/.hammerspoon
 echo ""
 
 echo -e "${CYAN}Installing spaces plugin for Hammerspoon...${NC}"
