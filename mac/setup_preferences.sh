@@ -275,6 +275,9 @@ defaults write com.apple.menuextra.battery ShowPercent -string "YES"
 # Show audio settings in menu bar
 defaults write com.apple.systemuiserver menuExtras -array-add "/System/Library/CoreServices/Menu Extras/Volume.menu"
 
+# Set menu bar date format
+defaults write com.apple.menuextra.clock DateFormat -string "EEE d MMM h:mm:ss a"
+
 # Don’t display the annoying prompt when quitting iTerm
 defaults write com.googlecode.iterm2 PromptOnQuit -bool false
 
