@@ -278,6 +278,9 @@ defaults write com.apple.systemuiserver menuExtras -array-add "/System/Library/C
 # Set menu bar date format
 defaults write com.apple.menuextra.clock DateFormat -string "EEE d MMM h:mm:ss a"
 
+# Customize items on right side of touch bar
+defaults write com.apple.controlstrip MiniCustomized '(com.apple.system.volume, com.apple.system.brightness, com.apple.system.airplay )'
+
 # Don’t display the annoying prompt when quitting iTerm
 defaults write com.googlecode.iterm2 PromptOnQuit -bool false
 
@@ -290,3 +293,4 @@ sudo defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo Hos
 # Restart system UI server
 killall SystemUIServer >> /dev/null 2>&1
 killall cfprefsd >> /dev/null 2>&1
+killall ControlStrip >> /dev/null 2>&1
