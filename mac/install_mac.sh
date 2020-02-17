@@ -23,6 +23,14 @@ echo -e "${CYAN}Installing tree...${NC}"
 brew install tree
 echo ""
 
+# Remove libmagic file that exists every time for some reason before installing it
+SILLY_LIBMAGIC_FILE="/usr/local/share/man/man3/libmagic.3"
+if [ -f $SILLY_LIBMAGIC_FILE ]; then
+	echo "Removing silly libmagic file that exists on fresh OS for some reason before we install it"
+	rm $SILLY_LIBMAGIC_FILE
+	echo ""
+fi
+
 echo -e "${CYAN}Installing libmagic...${NC}" 
 brew install libmagic
 echo ""
