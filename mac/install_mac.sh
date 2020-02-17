@@ -32,11 +32,6 @@ echo -e "${CYAN}Running brew cleanup...${NC}"
 brew cleanup
 echo ""
 
-# Suppress the warning for downloaded applications
-echo -e "${CYAN}Suppressing downloaded application warning...${NC}"
-sudo xattr -d -r com.apple.quarantine /Applications
-echo ""
-
 echo -e "${CYAN}Upgrading pip...${NC}"
 python3 -m pip install --user --upgrade pip
 echo ""
