@@ -139,7 +139,7 @@ alias gDrive="~/'Google Drive'"
 
 # Python Aliases
 alias p="python3 -m IPython"
-alias new_venv="python3 -m venv venv; source venv/bin/activate"
+alias new_venv="python3 -m venv venv; source venv/bin/activate; pip3 install --upgrade pip"
 
 # Tmux Aliases
 alias tmn="tmux new -s"
