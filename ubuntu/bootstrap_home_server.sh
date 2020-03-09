@@ -5,7 +5,7 @@ YELLOW="\033[0;33m"
 CYAN="\033[0;36m"
 MAGENTA="\033[0;35m"
 
-CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+LINUX_DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Exit when any command fails
 set -e
@@ -57,6 +57,30 @@ echo ""
 echo -e "${CYAN}Installing Sublime Text...${NC}"
 sudo apt install -y apt-transport-https
 sudo apt install -y sublime-text
+echo ""
+
+# Install Kinto (macOS bindings for Linux)
+echo -e "${CYAN}Installing dependencies and pulling latest version of Kinto...${NC}"
+sudo apt install -y xbindkeys xdotool
+if [ ! -d ~/kinto/.git ]; then
+	git clone https://github.com/rbreaves/kinto.git ~/kinto
+else
+	cd ~/kinto/
+	git pull
+fi
+echo ""
+
+# Create Kinto config symlink
+echo -e "${CYAN}Symlinking Kinto config...${NC}"
+if [ ! -d ~/.config/kinto ]; then
+	mkdir -p ~/.config/kinto
+fi
+ln -sfv "$LINUX_DOTFILES_DIR/.config/kinto/user_config.json" ~/.config/kinto
+echo ""
+
+echo -e "${CYAN}Running Kinto setup...${NC}"
+yes "n" | ./setup.py
+cd $LINUX_DOTFILES_DIR
 echo ""
 
 # Cleanup
