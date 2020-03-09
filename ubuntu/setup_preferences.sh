@@ -20,5 +20,9 @@ gsettings set org.gnome.desktop.privacy remove-old-temp-files true
 gsettings set org.gnome.desktop.privacy remove-old-trash-files true
 
 
+# Show hidden files in Files app and file chooser pane
+gsettings set io.elementary.files.preferences show-hiddenfiles true
+gsettings set org.gtk.Settings.FileChooser show-hidden true
+
 # Disable unsafe paste alert in terminal (warns when pasting code with `sudo` in it)
 gsettings set io.elementary.terminal.settings unsafe-paste-alert false
