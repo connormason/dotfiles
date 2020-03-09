@@ -1,0 +1,2 @@
+
+alias screenoff="xset dpms force off"

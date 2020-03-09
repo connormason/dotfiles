@@ -1,0 +1,6 @@
+
+# Source .ubunturc if on Linux
+ENV="$(./determine_environment.sh)"
+if [ "$ENV" = "Linux" ]; then
+	source $HOME/.ubunturc > /dev/null 2>&1
+fi
