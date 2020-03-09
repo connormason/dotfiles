@@ -12,8 +12,7 @@ gsettings set org.gnome.settings-daemon.plugins.color night-light-enabled true
 # System Settings
 ## Security & Privacy
 ### History
-gsettings set remember-app-usage
-gsetting
+gsettings set org.gnome.desktop.privacy remember-app-usage true
 
 ### Enable automatic deletion of temp/trash files
 gsettings set org.gnome.desktop.privacy remove-old-temp-files true
