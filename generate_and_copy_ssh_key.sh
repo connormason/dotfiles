@@ -65,11 +65,11 @@ fi
 # Copy SSH key to clipboard (running appropriate steps based on platform)
 ENV="$(./determine_environment.sh)"
 if [ "$ENV" = "Mac" ]; then
-	pbcopy < $FILENAME
+	pbcopy < "${FILENAME}.pub"
 elif [ "$ENV" = "Linux" ]; then
 	echo "Installing xclip..."
 	sudo apt install -y xclip
-	xclip -sel clip < $FILENAME
+	xclip -sel clip < "${FILENAME}.pub"
 	echo ""
 else
 	echo "Could not copy key to clipboard, functionality not implemented for ${ENV} machines"
