@@ -115,6 +115,11 @@ alias ohmyzsh="~/.oh-my-zsh"
 alias bashconfig="st ~/.bash_profile"
 alias tmuxconf="st ~/.tmux.conf"
 
+# Make some basic commands verbose
+alias rm="rm -v"
+alias cp="cp -v"
+alias mv="mv -v"
+
 # Generic command aliases
 alias clr="clear"
 
