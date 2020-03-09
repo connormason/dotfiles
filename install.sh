@@ -17,22 +17,30 @@ CYAN="\033[0;36m"
 # Input error output function
 input_error() {
     echo "usage: "
-    echo "  ./install.sh work   --> installs on work Mac machine"
-    echo "  ./install.sh mac    --> installs on personal Mac machine"
-    echo "  ./install.sh server --> installs on home server Ubuntu machine"
+    echo "  ./install.sh work     --> installs on work machine"
+    echo "  ./install.sh personal --> installs on a personal machine (home server)"
 }
 
-# Check for argument existance and validity
-if [ ! -z "$1" ] && [ "$1" == "work" ]; then
-    echo -e "${MAGENTA}Running work install on Mac${NC}"
-elif [ ! -z "$1" ] && [ "$1" == "mac" ]; then
-    echo -e "${MAGENTA}Running personal install on Mac${NC}"
-elif [ ! -z "$1" ] && [ "$1" == "server" ]; then
-    echo -e "${MAGENTA}Running home server install on Ubuntu${NC}"
-else
+# Require work/personal argument
+if [ -z "$1" ]; then
     input_error
     exit 1
 fi
+
+# Run install script for current environment (if implemented)
+ENV="$(./determine_environment.sh)"
+if [ "$ENV" = "Mac" ] && [ "$1" = "work" ]; then
+    echo -e "${MAGENTA}Running work install on Mac${NC}"
+elif [ "$ENV" = "Mac" ] && [ "$1" == "personal" ]; then
+    echo -e "${MAGENTA}Running personal install on Mac${NC}"
+elif [ "$ENV" = "Linux" ] && [ "$1" = "personal" ]; then
+    echo -e "${MAGENTA}Running home server install on Linux${NC}"
+elif [ "$ENV" = "Linux" ] && [ "$1" = "work" ]; then
+    echo -e "${RED}Work Linux install not implemented${NC}"
+    exit 1
+else
+    input_error
+    exit 1
 echo ""
 
 # Get dotfiles directory location
@@ -45,6 +53,11 @@ echo ""
 
 # Keep-alive: update existing `sudo` timestamp until this script has finished
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
+# Change dotfiles origin to use SSH instead of HTTPS
+echo -e "${MAGENTA}Changing dotfiles remote to use SSH...${NC}"
+git remote set-url origin git@github.com:connormason/dotfiles.git
+echo ""
 
 # Create symlinks
 echo -e "${CYAN}Creating symlinks...${NC}"
@@ -69,22 +82,12 @@ echo -e "${CYAN}Pulling latest dotfiles repo...${NC}"
 echo ""
 
 # Setup/run platform-specific auxillary install scripts
-if [ "$1" == "mac" ] || [ "$1" == "work" ]; then
-    if [ "$(uname)" != "Darwin" ]; then
-        echo -e "${RED}Cannot perform Mac install on non-macOS device${NC}"
-        exit 1
-    fi
-
+if [ "$ENV" = "Mac" ] ; then
     echo -e "${MAGENTA}Running MacOS install script...${NC}"
     cd $DOTFILES_DIR/mac
     chmod u+x install_mac.sh
     ./install_mac.sh
-elif [ "$1" == "server" ]; then
-    if [ "$(expr substr $(uname -s) 1 5)" != "Linux" ]; then
-        echo -e "${RED}Cannot perform home server (Ubuntu) install on non-Ubuntu device${NC}"
-        exit 1
-    fi
-
+elif [ "$ENV" = "Linux" ]; then
     echo -e "${MAGENTA}Bootstrapping home server...${NC}"
     cd $DOTFILES_DIR/ubuntu
     chmod u+x bootstrap_home_server.sh
