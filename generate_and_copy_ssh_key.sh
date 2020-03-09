@@ -67,8 +67,10 @@ ENV="$(./determine_environment.sh)"
 if [ "$ENV" = "Mac" ]; then
 	pbcopy < $FILENAME
 elif [ "$ENV" = "Linux" ]; then
+	echo "Installing xclip..."
 	sudo apt install -y xclip
 	xclip -sel clip < $FILENAME
+	echo ""
 else
 	echo "Could not copy key to clipboard, functionality not implemented for ${ENV} machines"
 	exit 1
