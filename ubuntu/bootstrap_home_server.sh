@@ -93,9 +93,10 @@ chmod u+x setup_preferences.sh
 ./setup_preferences.sh
 echo ""
 
-# Install zsh
-echo -e "${CYAN}Installing zsh...${NC}"
+# Install zsh and make it the default shell
+echo -e "${CYAN}Installing zsh and making it the default shell...${NC}"
 sudo apt install -y zsh
+sudo chsh -s $(which zsh) $(whoami)
 echo ""
 
 # TODO: reboot?
