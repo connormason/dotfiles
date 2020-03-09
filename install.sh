@@ -162,4 +162,3 @@ echo -e "${GREEN}Installation finished. Please log in/out for all settings to ta
 
 # Launch zsh
 exec zsh -l
-
