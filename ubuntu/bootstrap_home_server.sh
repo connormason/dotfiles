@@ -6,106 +6,71 @@ CYAN="\033[0;36m"
 MAGENTA="\033[0;35m"
 
 CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-HOMEASSISTANT_CONFIG_REPO="git@github.com:connormason/homeassistant.git"
 
-# Install net-tools (gets us ifconfig, among other things)
+# Exit when any command fails
+set -e
+
+# Ask for the administrator password upfront
+echo -e "${YELLOW}Enter your password plz...${NC}"
+sudo -v
+echo ""
+
+# Keep-alive: update existing `sudo` timestamp until this script has finished
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
+# Add GPG keys for repos
+echo -e "${CYAN}Adding GPG keys for repositories...${NC}"
+wget -qO - https://download.sublimetext.com/sublimehq-pub.gpg | sudo apt-key add -
+echo ""
+
+echo -e "${CYAN}Updating apt...${NC}"
+sudo apt update
+echo ""
+
+echo -e "${CYAN}Installing git...${NC}"
+sudo apt install -y git
+echo ""
+
+echo -e "${CYAN}Installing gdebi...${NC}"
+sudo apt install -y gdebi-core
+echo ""
+
+# Install net-tools (gives me ifconfig, among other things)
 echo -e "${CYAN}Installing net-tools...${NC}"
-sudo apt-get install -y net-tools
+sudo apt install -y net-tools
 echo ""
 
-# Install SSH server
+echo -e "${CYAN}Installing graphics drivers...${NC}"
+sudo ubuntu-drivers autoinstall
+echo ""
+
+echo -e "${CYAN}Installing Additional Drivers GUI...${NC}"
+sudo apt install software-properties-gtk software-properties-common
+echo ""
+
 echo -e "${CYAN}Installing SSH server...${NC}"
-sudo apt-get install -y openssh-server
+sudo apt install -y ssh-import-id
+sudo apt install -y openssh-server
 echo ""
 
-# Install Docker dependencies and add package repo
-echo -e "${CYAN}Installing Docker dependencies and package repo...${NC}"
-sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-
-# Using edge/test repos for now, since I'm not currently using a stable Lubuntu release
-# sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable edge test"
-sudo apt-get update
+# Install Sublime Text
+echo -e "${CYAN}Installing Sublime Text...${NC}"
+sudo apt install -y apt-transport-https
+sudo apt install -y sublime-text
 echo ""
 
-# TODO: validate output 
-apt-cache policy docker-ce
-echo ""
+# Cleanup
+sudo apt autoremove
 
-# Install Docker
-echo -e "${CYAN}Installing Docker...${NC}"
-sudo apt-get install -y docker-ce
-sudo systemctl status docker
-echo ""
-
-# Install Docker Compose
-echo -e "${CYAN}Installing Docker Compose...${NC}"
-sudo apt-get install -y docker-compose
-docker-compose --version
-echo ""
-
-# Add user to Docker group
-echo -e "${CYAN}Adding user '${USER}' to Docker group...${NC}"
-sudo usermod -aG docker ${USER}
-echo "Done"
-echo ""
-
-# Create ~/docker directory (if it doesn't already exist)
-echo -e "${CYAN}Creating ~/docker/ directory...${NC}"
-if [ ! -d ~/docker ]; then
-	mkdir ~/docker
-	sudo setfacl -Rdm g:docker:rwx ~/docker
-	sudo chmod -R 775 ~/docker
-	ln -sfv $CUR_DIR/docker-compose.yml ~/docker
-else
-	echo -e "${MAEGNTA}~/docker/ directory already exists${NC}"
-fi
-
-echo ""
-
-# Grab homeassistant config repo (or pull latest if we already have it)
-if [ ! -d ~/docker/homeassistant ]; then
-	echo -e "${CYAN}Cloning homeassistant configuration repo...${NC}"
-	cd ~/docker
-	git clone $HOMEASSISTANT_CONFIG_REPO
-else
-	echo -e "${CYAN}Pulling latest homeassistant configuration repo...${NC}"
-	cd ~/docker/homeassistant
-	git pull
-fi
-
-echo ""
-
-echo -e "${CYAN}Starting up docker with docker-compose...${NC}"
-docker-compose -f ~/docker/docker-compose.yml up -d
-echo ""
-
-# Install pip
-echo -e "${CYAN}Installing pip (for python3)...${NC}"
-sudo apt-get install -y python3-pip
-echo ""
-
-# Install iPython3
-echo -e "${CYAN}Installing ipython (3)...${NC}"
-sudo apt-get install -y ipython3
-echo ""
-
-# Install fzf
-echo -e "${CYAN}Installing fzf...${NC}"
-sudo apt-get install -y fzf
-echo ""
-
-# Install tmux
-echo -e "${CYAN}Installing tmux...${NC}"
-sudo apt-get install -y tmux
+# Configure settings
+echo -e "${CYAN}Configuring Gnome preferences...${NC}"
+chmod u+x setup_preferences.sh 
+./setup_preferences.sh
 echo ""
 
 # Install zsh
 echo -e "${CYAN}Installing zsh...${NC}"
-sudo apt-get install -y zsh
+sudo apt install -y zsh
 echo ""
 
-echo -e "${CYAN}Auto-removing extraneous packages...${NC}"
-sudo apt-get autoremove -y
-echo ""
+# TODO: reboot?
