@@ -61,6 +61,10 @@ make install
 cd ../..
 echo ""
 
+echo -e "${CYAN}Installing Amphetamine...${NC}"
+mas install 937984704
+echo ""
+
 echo -e "${CYAN}Configuring macOS preferences...${NC}"
 chmod u+x install_mac.sh
 ./setup_preferences.sh
