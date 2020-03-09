@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Code from: https://stackoverflow.com/questions/3466166/how-to-check-if-running-in-cygwin-mac-or-linux
 
 unameOut="$(uname -s)"
 case "${unameOut}" in
