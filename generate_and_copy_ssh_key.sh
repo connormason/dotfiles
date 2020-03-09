@@ -67,8 +67,14 @@ ENV="$(./determine_environment.sh)"
 if [ "$ENV" = "Mac" ]; then
 	pbcopy < "${FILENAME}.pub"
 elif [ "$ENV" = "Linux" ]; then
-	echo "Installing xclip..."
-	sudo apt install -y xclip
+
+	# Install xclip if not installed already
+	XCLIP=`which XCLIP`
+	if [ -z "$SSH_KEYGEN" ]; then
+		echo "Installing xclip..."
+		sudo apt install -y xclip
+	fi
+
 	xclip -sel clip < "${FILENAME}.pub"
 	echo ""
 else
