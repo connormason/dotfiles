@@ -90,7 +90,7 @@ if [ "$ENV" = "Mac" ]; then
     ./install_mac.sh
 elif [ "$ENV" = "Linux" ]; then
     echo -e "${MAGENTA}Bootstrapping home server...${NC}"
-    cd $DOTFILES_DIR/ubuntu
+    cd $DOTFILES_DIR/linux
     chmod u+x bootstrap_home_server.sh
     ./bootstrap_home_server.sh
 fi
