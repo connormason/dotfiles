@@ -18,9 +18,21 @@ echo ""
 # Keep-alive: update existing `sudo` timestamp until this script has finished
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
-# Install git
+# Add GPG keys for repos
+echo -e "${CYAN}Adding GPG keys for repositories...${NC}"
+wget -qO - https://download.sublimetext.com/sublimehq-pub.gpg | sudo apt-key add -
+echo ""
+
+echo -e "${CYAN}Updating apt...${NC}"
+sudo apt update
+echo ""
+
 echo -e "${CYAN}Installing git...${NC}"
 sudo apt install -y git
+echo ""
+
+echo -e "${CYAN}Installing gdebi...${NC}"
+sudo apt install -y gdebi-core
 echo ""
 
 # Install net-tools (gives me ifconfig, among other things)
@@ -43,10 +55,7 @@ echo ""
 
 # Install Sublime Text
 echo -e "${CYAN}Installing Sublime Text...${NC}"
-# TODO: considering adding GPG keys and update at beginning of script
-wget -qO - https://download.sublimetext.com/sublimehq-pub.gpg | sudo apt-key add -
 sudo apt install -y apt-transport-https
-sudo apt update
 sudo apt install -y sublime-text
 echo ""
 
@@ -57,6 +66,11 @@ sudo apt autoremove
 echo -e "${CYAN}Configuring Gnome preferences...${NC}"
 chmod u+x setup_preferences.sh 
 ./setup_preferences.sh
+echo ""
+
+# Install zsh
+echo -e "${CYAN}Installing zsh...${NC}"
+sudo apt install -y zsh
 echo ""
 
 # TODO: reboot?
