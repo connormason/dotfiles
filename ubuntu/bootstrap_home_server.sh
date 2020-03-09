@@ -45,7 +45,7 @@ sudo ubuntu-drivers autoinstall
 echo ""
 
 echo -e "${CYAN}Installing Additional Drivers GUI...${NC}"
-sudo apt install software-properties-gtk software-properties-common
+sudo apt install -y software-properties-gtk software-properties-common
 echo ""
 
 echo -e "${CYAN}Installing SSH server...${NC}"
@@ -60,7 +60,8 @@ sudo apt install -y sublime-text
 echo ""
 
 # Cleanup
-sudo apt autoremove
+sudo apt -y autoremove
+echo ""
 
 # Configure settings
 echo -e "${CYAN}Configuring Gnome preferences...${NC}"
