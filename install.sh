@@ -160,7 +160,7 @@ ln -sfv "$DOTFILES_DIR/.zshrc" ~
 echo ""
 
 echo ""
-echo -e "${GREEN}Installation finished. Please log in/out for all settings to take effect${NC}"
+echo -e "${GREEN}Installation finished. Please reboot for all settings to take effect${NC}"
 
 # Launch zsh
 exec zsh -l
