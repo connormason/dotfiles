@@ -117,7 +117,6 @@ else
 	cd ~/docker/homeassistant
 	git pull
 fi
-
 echo ""
 
 echo -e "${CYAN}Starting up docker with docker-compose...${NC}"
