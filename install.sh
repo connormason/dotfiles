@@ -41,6 +41,7 @@ elif [ "$ENV" = "Linux" ] && [ "$1" = "work" ]; then
 else
     input_error
     exit 1
+fi
 echo ""
 
 # Get dotfiles directory location
@@ -68,7 +69,7 @@ if [ "$1" == "work" ]; then
     ln -sfv "$DOTFILES_DIR/work/.applerc" ~
     ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
     ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
-elif [ "$1" == "mac" ] || [ "$1" == "server" ]; then
+elif [ "$1" == "personal" ]; then
     ln -sfv "$DOTFILES_DIR/personal/.personalrc" ~
     ln -sfv "$DOTFILES_DIR/personal/.bash_profile" ~
     ln -sfv "$DOTFILES_DIR/personal/.gitconfig" ~
@@ -82,14 +83,14 @@ echo -e "${CYAN}Pulling latest dotfiles repo...${NC}"
 echo ""
 
 # Setup/run platform-specific auxillary install scripts
-if [ "$ENV" = "Mac" ] ; then
+if [ "$ENV" = "Mac" ]; then
     echo -e "${MAGENTA}Running MacOS install script...${NC}"
     cd $DOTFILES_DIR/mac
     chmod u+x install_mac.sh
     ./install_mac.sh
 elif [ "$ENV" = "Linux" ]; then
     echo -e "${MAGENTA}Bootstrapping home server...${NC}"
-    cd $DOTFILES_DIR/ubuntu
+    cd $DOTFILES_DIR/linux
     chmod u+x bootstrap_home_server.sh
     ./bootstrap_home_server.sh
 fi
@@ -136,7 +137,7 @@ fi
 cd $DOTFILES_DIR
 
 # Download/install oh-my-zsh (--unattended to prevent prompts)
-if [ ! -d /Users/connormason/.oh-my-zsh ]; then
+if [ ! -d ~/.oh-my-zsh ]; then
     echo -e "${CYAN}Installing oh-my-zsh (this may require a password)...${NC}"
     cd ~
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
@@ -145,7 +146,9 @@ fi
 
 # Install powerlevel10k ZSH theme
 echo -e "${CYAN}Installing powerlevel10k ZSH theme and symlinking configuration...${NC}"
-git clone --depth=1 https://github.com/romkatv/powerlevel10k.git /Users/connormason/.oh-my-zsh/custom/themes/powerlevel10k
+if [ ! -d ~/.oh-my-zsh/custom/themes/powerlevel10k ]; then
+    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ~/.oh-my-zsh/custom/themes/powerlevel10k
+fi
 ln -sfv "$DOTFILES_DIR/.p10k.zsh" ~
 echo ""
 
@@ -154,12 +157,10 @@ echo -e "${CYAN}Symlinking .zshrc correctly...${NC}"
 rm -f ~/.zshrc
 rm -f ~/.zshrc.pre-oh-my-zsh
 ln -sfv "$DOTFILES_DIR/.zshrc" ~
-source ~/.zshrc
 echo ""
 
 echo ""
-echo -e "${GREEN}Installation finished. Please log in/out for all settings to take effect${NC}"
+echo -e "${GREEN}Installation finished. Please reboot for all settings to take effect${NC}"
 
 # Launch zsh
 exec zsh -l
-
