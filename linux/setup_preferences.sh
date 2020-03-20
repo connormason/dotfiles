@@ -3,6 +3,11 @@
 # Exit when any command fails
 set -e
 
+# Ask for the administrator password upfront
+echo -e "${YELLOW}Enter your password plz...${NC}"
+sudo -v
+echo ""
+
 # Enable location services
 gsettings set io.elementary.desktop.agent-geoclue2 location-enabled true
 
@@ -18,6 +23,11 @@ gsettings set org.gnome.desktop.privacy remember-app-usage true
 gsettings set org.gnome.desktop.privacy remove-old-temp-files true
 gsettings set org.gnome.desktop.privacy remove-old-trash-files true
 
+### Disable automatic suspend
+sudo su
+su - -s /bin/bash/ lightdm
+dbus-launch gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type nothing
+su - -s /usr/bin/zsh connormason
 
 # Show hidden files in Files app and file chooser pane
 gsettings set io.elementary.files.preferences show-hiddenfiles true
