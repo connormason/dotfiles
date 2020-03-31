@@ -163,4 +163,4 @@ alias gs="git stash"
 alias gsm="git stash push -m"
 
 # Personal aliases
-alias homeserver="ssh connor@192.168.1.133"
+alias homeserver="ssh connormason@192.168.1.133"
