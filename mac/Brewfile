@@ -5,6 +5,7 @@ brew 'fzf'
 brew 'tree'
 brew 'libmagic'
 brew 'mas'
+brew 'hub'
 
 cask 'google-chrome'
 cask 'iterm2'

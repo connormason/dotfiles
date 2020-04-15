@@ -38,6 +38,10 @@ echo -e "${CYAN}Installing git...${NC}"
 sudo apt install -y git
 echo ""
 
+echo -e "${CYAN}Installing hub...${NC}"
+sudo apt install -y hub
+echo ""
+
 echo -e "${CYAN}Installing gdebi...${NC}"
 sudo apt install -y gdebi-core
 echo ""
