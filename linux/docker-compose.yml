@@ -5,22 +5,23 @@ services:
     image: matteocollina/mosca
     ports:
       - 1883:1883
+    network_mode: host
 
   mqttbridge:
     container_name: mqtt-bridge
     image: stjohnjohnson/smartthings-mqtt-bridge
     volumes:
-      - ~/docker/mqtt-bridge:/config
+      - ~/.dotfiles/linux/mqtt-bridge:/config
     ports:
       - 8080:8080
-    links:
-      - mqtt
+    network_mode: host
 
   homeassistant:
     container_name: home-assistant
     image: homeassistant/home-assistant
     ports:
       - 80:80
+      - 8123:8123
     restart: always
     volumes:
       - ~/docker/homeassistant:/config

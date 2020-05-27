@@ -226,3 +226,5 @@ dmypy.json
 hammerspoon/spaces/
 spaces/
 work/
+linux/mqtt-bridge/*
+~linux/mqtt-bridge/config.yml
