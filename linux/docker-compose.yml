@@ -1,11 +1,29 @@
 version: "3.3"
 services:
+  mqtt:
+    image: matteocollina/mosca
+    ports:
+      - 1883:1883
+
+  mqttbridge:
+    image: stjohnjohnson/smartthings-mqtt-bridge
+    volumes:
+      - ~/docker/mqtt-bridge:/config
+    ports:
+      - 8080:8080
+    links:
+      - mqtt
+
   homeassistant:
     container_name: home-assistant
     image: homeassistant/home-assistant
+    ports:
+      - 80:80
     restart: always
     volumes:
       - ~/docker/homeassistant:/config
       - /etc/localtime:/etc/localtime:ro
       - ~/docker/shared:/shared
     network_mode: host
+    links:
+      - mqtt

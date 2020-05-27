@@ -108,7 +108,14 @@ if [ ! -d ~/docker ]; then
 else
 	echo -e "${MAEGNTA}~/docker/ directory already exists${NC}"
 fi
+echo ""
 
+# Symlink mqtt-bridge config
+echo -e "${CYAN}Symlinking mqtt-bridge config...${NC}"
+if [ ! -d ~/docker/mqtt-bridge ]; then
+	mkdir -p ~/docker/mqtt-bridge
+fi
+ln -sfv "$LINUX_DOTFILES_DIR/mqtt-bridge/config.yml" ~/docker/mqtt-bridge
 echo ""
 
 # Grab homeassistant config repo (or pull latest if we already have it)
