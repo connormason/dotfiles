@@ -1,11 +1,13 @@
 version: "3.3"
 services:
   mqtt:
+    container_name: mqtt-broker
     image: matteocollina/mosca
     ports:
       - 1883:1883
 
   mqttbridge:
+    container_name: mqtt-bridge
     image: stjohnjohnson/smartthings-mqtt-bridge
     volumes:
       - ~/docker/mqtt-bridge:/config
@@ -25,5 +27,3 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ~/docker/shared:/shared
     network_mode: host
-    links:
-      - mqtt
