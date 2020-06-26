@@ -59,6 +59,10 @@ echo -e "${CYAN}Installing Additional Drivers GUI...${NC}"
 sudo apt install -y software-properties-gtk software-properties-common
 echo ""
 
+echo -e "${CYAN}Installing Gnome disk utility GUI...${NC}"
+sudo apt install -y gnome-disk-utility
+echo ""
+
 echo -e "${CYAN}Installing SSH server...${NC}"
 sudo apt install -y ssh-import-id
 sudo apt install -y openssh-server
