@@ -17,6 +17,10 @@ HOME_DIR=$HOME
 STATES_DIR="$(pwd)/states"
 USERNAME=$(whoami)
 
+# Ask for the administrator password upfront
+echo -e "${YELLOW}Enter your password plz...${NC}"
+sudo -v
+echo ""
 
 # Add a `sudo` to the command if none provided
 USE_SUDO=''
