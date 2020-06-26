@@ -24,42 +24,6 @@ doKeyStroke = function(modifiers, character)
     event.newKeyEvent(modifiers, string.lower(character), false):post()
 end
 
--- binds a hyper + scroll event to the given callback
--- button options: {'scrollLeft', 'scrollRight', 'scrollUp', 'scrollDown', 'scrollClick'}
-bindScrollEvent = function(hyper, button, callback)
-    local axisProperty
-    local scrollDir = button:gsub('scroll', ''):lower()
-
-    if scrollDir == 'click' then
-        hs.eventtap.new({hs.eventtap.event.types.otherMouseDown}, function(e)
-            local buttonNum = e:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)
-            local eventModifiers = e:getFlags()
-
-            if ((hyper == nil) or (next(hyper) == nil) or eventModifiers:containExactly(hyper)) and (buttonNum == 2) then 
-                callback()
-            end
-        end):start()
-    else
-        hs.eventtap.new({hs.eventtap.event.types.scrollWheel}, function(e)
-            local verticalAxisValue = e:getProperty(hs.eventtap.event.properties.scrollWheelEventDeltaAxis1)
-            local horizontalAxisValue = e:getProperty(hs.eventtap.event.properties.scrollWheelEventDeltaAxis2)
-            local eventModifiers = e:getFlags()
-
-            if (hyper == nil) or (next(hyper) == nil) or eventModifiers:containExactly(hyper) then
-                if (scrollDir == 'left') and (horizontalAxisValue > 0) then
-                    callback()
-                elseif (scrollDir == 'right') and (horizontalAxisValue < 0) then
-                    callback()
-                elseif (scrollDir == 'up') and (verticalAxisValue > 0) then
-                    callback()
-                elseif (scrollDir == 'down') and (verticalAxisValue < 0) then
-                    callback()
-                end
-            end
-        end):start()
-    end
-end
-
 -- launches last focused window of app
 goToApp = function(appName)
     local windowFilter = hs.window.filter.new(appName)
@@ -139,30 +103,18 @@ windowManagementKeyMapping = {
         right = rightHalf,
         up = topHalf,
         down = bottomHalf,
-        scrollLeft = leftHalf,
-        scrollRight = rightHalf,
-        scrollUp = topHalf,
-        scrollDown = bottomHalf,
     },
     quarterScreen = {
         left = topLeftQuarter,
         right = bottomRightQuarter,
         up = topRightQuarter,
         down = bottomLeftQuarter,
-        scrollLeft = topLeftQuarter,
-        scrollRight = bottomRightQuarter,
-        scrollUp = topRightQuarter,
-        scrollDown = bottomLeftQuarter,
     },
     fullscreenMonitor = {
         left = moveFocusedLeftMonitor,
         right = moveFocusedRightMonitor,
         up = fullscreen,
         down = minimizeFocused,
-        scrollLeft = moveFocusedLeftMonitor,
-        scrollRight = moveFocusedRightMonitor,
-        scrollUp = fullscreen,
-        scrollClick = fullscreen,
     },
     numpad = {
         pad4 = leftHalf,
@@ -175,10 +127,6 @@ windowManagementKeyMapping = {
         pad3 = bottomRightQuarter,
         pad5 = fullscreen,
         pad0 = moveFocusedNextMonitor,
-    },
-    spaceMovement = {
-        scrollLeft = moveLeftSpace,
-        scrollRight = moveRightSpace,
     },
 }
 
@@ -203,9 +151,6 @@ for region_type, mapping in pairs(windowManagementKeyMapping) do
     end
 end
 
--- other bindings
-bindScrollEvent(nil, 'scrollClick', showMissionControl)
-
 -- application shortcuts
 appShortcutHyper = {'ctrl', 'shift'}
 letterToAppMapping = {
@@ -226,7 +171,8 @@ letterToAppMapping = {
     q = 'Quip',
     b = 'Numbers',
     x = 'Microsoft Excel',
-    l = 'Slack'
+    l = 'Slack',
+    w = 'Cisco Webex Meetings'
 }
 
 for letter, app in pairs(letterToAppMapping) do
