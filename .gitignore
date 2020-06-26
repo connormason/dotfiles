@@ -275,3 +275,4 @@ spaces/
 work/
 linux/mqtt-bridge/*
 ~linux/mqtt-bridge/config.yml
+grains
