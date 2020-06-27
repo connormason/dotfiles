@@ -1,4 +1,3 @@
-
 # Automatically load keys into ssh-agent and store passphrases in Keychain
 automatically_load_ssh_keys:
   file.prepend:
