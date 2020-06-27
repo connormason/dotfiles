@@ -25,21 +25,6 @@ osascript -e 'tell application "System Preferences" to quit'
 # *****************************
 echo "Setting up Dock/Mission Control..."
 
-# Dock on right side of the screen
-defaults write com.apple.dock orientation -string right
-
-# Auto-hide dock
-defaults write com.apple.dock autohide -integer 1
-
-# Set dock icon size
-defaults write com.apple.dock tilesize -integer 32
-
-# Enable magnification on hover
-defaults write com.apple.dock magnification -integer 1
-
-# Set magnification level
-defaults write com.apple.dock largesize -int 64
-
 # Don’t animate opening applications from the Dock
 defaults write com.apple.dock launchanim -bool false
 
