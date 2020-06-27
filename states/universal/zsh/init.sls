@@ -20,8 +20,6 @@ clone_oh_my_zsh:
     - name: https://github.com/robbyrussell/oh-my-zsh.git
     - rev: master
     - target: {{ grains.home }}/.oh-my-zsh
-    - unless: "test -d {{ grains.home }}/.oh-my-zsh"
-    - onlyif: "test -d {{ grains.home }}"
     - require:
       - pkg: zsh
 
@@ -33,6 +31,7 @@ install_powerlevel10k_theme:
     - target: {{ grains.home }}/.oh-my-zsh/themes/powerlevel10k
     - require:
       - pkg: zsh
+      - clone_oh_my_zsh
 
 # Symlink powerlevel10k theme config
 symlink_powerlevel10k_config:
@@ -43,6 +42,7 @@ symlink_powerlevel10k_config:
     - user: {{ grains.user }}
     - require:
       - pkg: zsh
+      - install_powerlevel10k_theme
 
 # Symlink .zshrc to home directory
 symlink_zsh_config:
@@ -53,3 +53,4 @@ symlink_zsh_config:
     - user: {{ grains.user }}
     - require:
       - pkg: zsh
+      - symlink_powerlevel10k_config  # It will still work without this probably, but it won't be in the desired state
