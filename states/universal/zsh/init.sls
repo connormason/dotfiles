@@ -19,7 +19,7 @@ clone_oh_my_zsh:
   git.latest:
     - name: https://github.com/robbyrussell/oh-my-zsh.git
     - rev: master
-    - target: "{{ grains.home }}/.oh-my-zsh"
+    - target: {{ grains.home }}/.oh-my-zsh
     - unless: "test -d {{ grains.home }}/.oh-my-zsh"
     - onlyif: "test -d {{ grains.home }}"
     - require:
