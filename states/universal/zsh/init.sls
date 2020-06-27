@@ -6,7 +6,7 @@ zsh:
 
 # Set zsh as the default shell
 set_zsh_as_default_shell:
-  module.run:
+  cmd.run:
     - name: user.chshell
     - m_name: {{ grains.user }}
     - shell: /usr/local/bin/zsh
