@@ -62,8 +62,6 @@ echo ""
 
 # Create symlinks
 echo -e "${CYAN}Creating symlinks...${NC}"
-ln -sfv "$DOTFILES_DIR/.gitignore_global" ~
-
 if [ "$1" == "work" ]; then
     ln -sfv "$DOTFILES_DIR/work/.applerc" ~
     ln -sfv "$DOTFILES_DIR/work/.bash_profile" ~
