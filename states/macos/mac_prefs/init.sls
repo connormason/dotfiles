@@ -12,4 +12,5 @@ include:
   - .io
   - .mail
   - .messages
+  - .other
   - .safari

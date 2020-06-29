@@ -26,3 +26,12 @@ setup_iterm_custom_config:
     - user:  {{ grains.user }}
     - require:
       - symlink_iterm_config
+
+# Don’t display the annoying prompt when quitting iTerm
+dont_display_quit_prompt:
+  macdefaults.write:
+    - domain: com.googlecode.iterm2
+    - name: PromptOnQuit
+    - value: false
+    - vtype: bool
+    - user: {{ grains.user }}
