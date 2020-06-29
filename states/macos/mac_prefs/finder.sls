@@ -215,9 +215,13 @@ show_library_directory:
   cmd.run:
     - name: chflags nohidden {{ grains.home }}/Library
     - runas: {{ grains.user }}
+    - require:
+      - close_system_prefs
 
 # Show the /Volumes directory
 show_volumes_directory:
   cmd.run:
     - name: sudo chflags nohidden /Volumes
     - runas: {{ grains.user }}
+    - require:
+      - close_system_prefs
