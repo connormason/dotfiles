@@ -1,4 +1,4 @@
-# Dock on right side of the screenst 
+# Dock on right side of the screen
 dock_right:
   macdefaults.write:
     - domain: com.apple.Dock
