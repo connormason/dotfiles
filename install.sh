@@ -47,14 +47,6 @@ echo ""
 # Get dotfiles directory location
 DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Ask for the administrator password upfront
-echo -e "${YELLOW}Enter your password plz...${NC}"
-sudo -v
-echo ""
-
-# Keep-alive: update existing `sudo` timestamp until this script has finished
-while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
-
 # Change dotfiles origin to use SSH instead of HTTPS
 echo -e "${MAGENTA}Changing dotfiles remote to use SSH...${NC}"
 git remote set-url origin git@github.com:connormason/dotfiles.git
