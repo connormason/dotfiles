@@ -6,6 +6,7 @@ close_system_prefs:
 
 include:
   - .activity_monitor
+  - .app_store
   - .dock
   - .finder
   - .io
