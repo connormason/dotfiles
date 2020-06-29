@@ -5,8 +5,10 @@ close_system_prefs:
     - runas: {{ grains.user }}
 
 include:
+  - .activity_monitor
   - .dock
   - .finder
   - .io
+  - .mail
   - .messages
   - .safari
