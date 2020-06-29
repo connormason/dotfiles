@@ -69,3 +69,5 @@ $USE_SUDO salt-call --config=./ grains.setvals "{\
     \"user\": \"$USERNAME\" \
 }"
 $USE_SUDO salt-call --config=./ --retcode-passthrough "$command" "$@"
+
+echo -e "${GREEN}Bootstrapping completed. Please restart so all changes take effect${NC}"
