@@ -3,69 +3,6 @@
 NC="\033[0m"
 YELLOW="\033[0;33m"
 
-# ***************
-# Finder settings
-# ***************
-echo "Setting up Finder..."
-
-# Show hidden files by default
-defaults write com.apple.finder AppleShowAllFiles -bool true
-
-# Show Finder status bar and path bar
-defaults write com.apple.finder ShowStatusBar -bool true
-defaults write com.apple.finder ShowPathbar -bool true
-
-# Display full POSIX path as Finder window title
-defaults write com.apple.finder _FXShowPosixPathInTitle -bool true
-
-# Disable the warning when changing a file extension
-defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
-
-# Enable spring loading for directories and disable delay
-defaults write NSGlobalDomain com.apple.springing.enabled -bool true
-defaults write NSGlobalDomain com.apple.springing.delay -float 0
-
-# Set Documents as the default location for new Finder windows
-defaults write com.apple.finder NewWindowTarget -string "PfLo"
-defaults write com.apple.finder NewWindowTargetPath -string "file://${HOME}/Documents/"
-
-# Use list view in all Finder windows by default
-defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv"
-
-# Show icons for hard drives, servers, and removable media on the desktop
-defaults write com.apple.finder ShowExternalHardDrivesOnDesktop -bool true
-defaults write com.apple.finder ShowHardDrivesOnDesktop -bool true
-defaults write com.apple.finder ShowMountedServersOnDesktop -bool true
-defaults write com.apple.finder ShowRemovableMediaOnDesktop -bool true
-
-# Don't show recent tags in Finder sidebar
-defaults write com.apple.finder ShowRecentTags -int 0
-
-# Disable finger window animations and Get Info animations
-defaults write com.apple.finder DisableAllAnimations -bool true
-
-# Expand the following File Info panes:
-# “General”, “Open with”, and “Sharing & Permissions”
-defaults write com.apple.finder FXInfoPanesExpanded -dict \
-	General -bool true \
-	OpenWith -bool true \
-	Privileges -bool true
-
-# Avoid creating .DS_Store files on network or USB volumes
-defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
-defaults write com.apple.desktopservices DSDontWriteUSBStores -bool true
-
-# Automatically open a new Finder window when a volume is mounted
-defaults write com.apple.frameworks.diskimages auto-open-ro-root -bool true
-defaults write com.apple.frameworks.diskimages auto-open-rw-root -bool true
-defaults write com.apple.finder OpenWindowForNewRemovableDisk -bool true
-
-# Show the ~/Library folder
-chflags nohidden ~/Library
-
-# Show the /Volumes folder
-sudo chflags nohidden /Volumes
-
 
 # ***************
 # Safari settings
