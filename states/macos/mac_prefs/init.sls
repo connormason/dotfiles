@@ -8,3 +8,5 @@ include:
   - .dock
   - .finder
   - .io
+  - .messages
+  - .safari
