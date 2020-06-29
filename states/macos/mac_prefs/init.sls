@@ -6,4 +6,5 @@ close_system_prefs:
 
 include:
   - .dock
+  - .finder
   - .io
