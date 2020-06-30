@@ -43,7 +43,7 @@ fi
 
 # Run installation process for current environment (if implemented)
 ENV="$(./determine_environment.sh)"
-if [[ ENV == "Mac" ]]; then
+if [[ $ENV == "Mac" ]]; then
     if [[ $1 == "work" ]]; then
         echo -e "${MAGENTA}Running work install on Mac${NC}"
     else
@@ -63,7 +63,7 @@ if [[ ENV == "Mac" ]]; then
     	echo -e "Installing SaltStack..."
         brew install saltstack
     fi
-elif [[ ENV == "Linux" ]] && [[ $1 == "personal" ]]; then
+elif [[ $ENV == "Linux" ]] && [[ $1 == "personal" ]]; then
     echo -e "${MAGENTA}Bootstrapping home server...${NC}"
     cd $DOTFILES_DIR/linux
     chmod u+x bootstrap_home_server.sh
@@ -79,19 +79,13 @@ echo ""
 
 # Run standalone minion to apply states
 echo  -e "${MAGENTA}Kicking off configuration with SaltStack...${NC}"
-command="$1"
-if [[ -n "$command" ]]; then
-    shift
-else
-    command=state.highstate
-fi
-
 $USE_SUDO salt-call --config=./ grains.setvals "{\
     \"dotfiles_dir\": \"$DOTFILES_DIR\", \
     \"home\": \"$HOME_DIR\", \
     \"states_dir\": \"$STATES_DIR\", \
-    \"user\": \"$USERNAME\" \
+    \"user\": \"$USERNAME\", \
+    \"install_type\": \"$1\" \
 }"
-$USE_SUDO salt-call --config=./ --retcode-passthrough "$command" "$@"
+$USE_SUDO salt-call --config=./ --retcode-passthrough state.highstate
 
 echo -e "${GREEN}Bootstrapping completed. Please restart so all changes take effect${NC}"
