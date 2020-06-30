@@ -5,5 +5,11 @@ symlink_personalrc:
     - target: {{ grains.states_dir }}/personal/personalrc
     - force: True
     - user: {{ grains.user }}
-    - require:
-      - pkg: zsh
+
+# Symlink .gitconfig
+symlink_gitconfig:
+    file.symlink:
+    - name: {{ grains.home }}/.gitconfig
+    - target: {{ grains.states_dir }}/personal/gitconfig
+    - force: True
+    - user: {{ grains.user }}
