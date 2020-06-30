@@ -57,9 +57,6 @@ echo -e "${CYAN}Creating symlinks...${NC}"
 if [ "$1" == "work" ]; then
     ln -sfv "$DOTFILES_DIR/work/.applerc" ~
     ln -sfv "$DOTFILES_DIR/work/.gitconfig" ~
-elif [ "$1" == "personal" ]; then
-    ln -sfv "$DOTFILES_DIR/personal/.personalrc" ~
-    ln -sfv "$DOTFILES_DIR/personal/.gitconfig" ~
 fi
 
 echo ""
