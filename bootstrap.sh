@@ -17,25 +17,45 @@ HOME_DIR=$HOME
 STATES_DIR="$(pwd)/states"
 USERNAME=$(whoami)
 
+# Input error output function
+input_error() {
+    echo "usage: "
+    echo "  ./install.sh personal --> installs on a personal machine"
+    echo "  ./install.sh work     --> installs on a work machine"
+}
+
+# Require work/personal argument
+if [[ -z $1 ]]; then
+    input_error
+    exit 1
+fi
+
 # Ask for the administrator password upfront
 echo -e "${YELLOW}Enter your password plz...${NC}"
 sudo -v
 echo ""
 
 # Add a `sudo` to the command if none provided
-USE_SUDO=''
-if [[ $(whoami) != 'root' ]]; then
-    USE_SUDO='sudo '
+USE_SUDO=""
+if [[ $(whoami) != "root" ]]; then
+    USE_SUDO="sudo "
 fi
 
-if [[ $(uname) == 'Darwin' ]]; then
+# Run installation process for current environment (if implemented)
+ENV="$(./determine_environment.sh)"
+if [[ ENV == "Mac" ]]; then
+    if [[ $1 == "work" ]]; then
+        echo -e "${MAGENTA}Running work install on Mac${NC}"
+    else
+        echo -e "${MAGENTA}Running personal install on Mac${NC}"
+    fi
 
 	# Install Homebrew
     if [[ ! $(command -v brew) ]]; then
         echo -e "Installing Homebrew..."
         ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
     else
-    	echo 'Homebrew already installed'
+    	echo "Homebrew already installed"
     fi
 
     # Install SaltStack
@@ -43,10 +63,14 @@ if [[ $(uname) == 'Darwin' ]]; then
     	echo -e "Installing SaltStack..."
         brew install saltstack
     fi
+elif [[ ENV == "Linux" ]] && [[ $1 == "personal" ]]; then
+    echo -e "${MAGENTA}Bootstrapping home server...${NC}"
+    cd $DOTFILES_DIR/linux
+    chmod u+x bootstrap_home_server.sh
+    ./bootstrap_home_server.sh
 else
     if [[ ! $(command -v salt-call) ]]; then
-        echo "Bootstrap script unsupported for $(uname)."
-        echo "Please manually install SaltStack with your system package manager, then try again."
+        echo "Bootstrapping unspported for $1 installation on $ENV."
         echo "Aborting..."
         exit 1
     fi
