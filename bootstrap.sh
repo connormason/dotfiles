@@ -54,8 +54,6 @@ if [[ $ENV == "Mac" ]]; then
     if [[ ! $(command -v brew) ]]; then
         echo -e "Installing Homebrew..."
         ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-    else
-    	echo "Homebrew already installed"
     fi
 
     # Install SaltStack
@@ -78,7 +76,7 @@ fi
 echo ""
 
 # Run standalone minion to apply states
-echo  -e "${MAGENTA}Kicking off configuration with SaltStack...${NC}"
+echo  -e "Kicking off configuration with SaltStack..."
 $USE_SUDO salt-call --config=./ grains.setvals "{\
     \"dotfiles_dir\": \"$DOTFILES_DIR\", \
     \"home\": \"$HOME_DIR\", \
