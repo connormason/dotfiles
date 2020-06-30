@@ -5,3 +5,5 @@ base:
     - macos
   # 'G@os:Ubuntu':
   #   - ubuntu
+  'G@install_type:personal':
+    - personal

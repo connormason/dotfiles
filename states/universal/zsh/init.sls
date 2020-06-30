@@ -44,6 +44,15 @@ symlink_powerlevel10k_config:
       - pkg: zsh
       - install_powerlevel10k_theme
 
+# Create ~/.rc_files directory to support environment-dependent shell configurations
+create_rc_files_dir:
+  file.directory:
+    - name: {{ grains.home }}/.rc_files
+    - dir_mode: 755
+    - user: {{ grains.user }}
+    - require:
+      - pkg: zsh
+
 # Symlink .zshrc to home directory
 symlink_zsh_config:
   file.symlink:
@@ -53,4 +62,5 @@ symlink_zsh_config:
     - user: {{ grains.user }}
     - require:
       - pkg: zsh
+      - create_rc_files_dir
       - symlink_powerlevel10k_config  # It will still work without this probably, but it won't be in the desired state
