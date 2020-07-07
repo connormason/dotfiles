@@ -9,7 +9,7 @@ NC="\033[0m"
 # Source all rc files exist in ~/.rc_files
 RC_DIR="$HOME/.rc_files"
 if [[ -d $RC_DIR ]]; then
-	for RC_FILE in $( find $RC_DIR -type f); do
+	for RC_FILE in $( find $RC_DIR -type l); do
 		source $RC_FILE > /dev/null 2>&1
 		echo -e "${YELLOW}$(basename $RC_FILE)${NC}${WHITE} loaded${NC}"
 	done
