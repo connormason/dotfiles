@@ -77,6 +77,7 @@ if [[ $ENV == "Mac" ]]; then
         if [[ ! -z $3 ]]; then
             echo -e "Checking out specified work dotfiles branch: ${CYAN}$3${NC}"
             git checkout $3
+            echo ""
         fi
     else
         echo -e "${MAGENTA}Running personal install on Mac${NC}"
@@ -109,6 +110,7 @@ fi
 echo ""
 
 # Run standalone minion to apply states
+cd $DOTFILES_DIR
 echo  -e "Kicking off configuration with SaltStack..."
 $USE_SUDO salt-call --config=./ grains.setvals "{\
     \"dotfiles_dir\": \"$DOTFILES_DIR\", \
