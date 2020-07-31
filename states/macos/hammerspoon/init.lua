@@ -1,5 +1,3 @@
-spaces = require("hs._asm.undocumented.spaces")
-
 -- remove animation
 hs.window.animationDuration = 0
 
