@@ -6,16 +6,13 @@ GREEN="\033[0;32m"
 RED="\033[0;31m"
 NC="\033[0m"
 
-# Source .applerc if on work install
-source $HOME/.applerc > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-	echo -e "${WHITE}Connor's${NC} ${YELLOW}Apple${NC}${WHITE} zshrc loaded${NC}"
-fi
-
-# Source .personalrc if on personal install
-source $HOME/.personalrc > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-	echo -e "${WHITE}Connor's${NC} ${CYAN}Personal${NC}${WHITE} zshrc loaded${NC}"
+# Source all rc files exist in ~/.rc_files
+RC_DIR="$HOME/.rc_files"
+if [[ -d $RC_DIR ]]; then
+	for RC_FILE in $( find $RC_DIR -type l); do
+		source $RC_FILE > /dev/null 2>&1
+		echo -e "${YELLOW}$(basename $RC_FILE)${NC}${WHITE} loaded${NC}"
+	done
 fi
 
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
@@ -85,10 +82,6 @@ ZSH_THEME=powerlevel10k/powerlevel10k
 plugins=(git git-extras python sublime sudo web-search)
 
 source $ZSH/oh-my-zsh.sh
-source $HOME/.bash_profile
-
-# Source 
-source $HOME/.applerc > /dev/null 2>&1
 
 # Mac specific stuff
 if [ "$(uname)" != "Darwin" ]; then

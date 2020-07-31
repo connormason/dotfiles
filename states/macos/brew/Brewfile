@@ -19,4 +19,5 @@ cask 'box-drive'
 cask 'microsoft-office'
 cask 'quip'
 cask 'adobe-acrobat-reader'
-cask 'virtualbox'
+
+mas 'Amphetamine', id: 937984704
