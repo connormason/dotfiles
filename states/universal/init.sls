@@ -1,4 +1,4 @@
 include:
-  - .python
+  - .pip
   - .zsh
 
