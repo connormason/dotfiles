@@ -21,8 +21,8 @@ USERNAME=$(whoami)
 # Input error output function
 input_error() {
     echo "usage: "
-    echo "  ./install.sh personal                    --> installs on a personal machine"
-    echo "  ./install.sh work <git_url> <git_branch> --> installs on a work machine, cloning work dotfiles from <git_url>"
+    echo "  ./bootstrap.sh personal                    --> installs on a personal machine"
+    echo "  ./bootstrap.sh work <git_url> <git_branch> --> installs on a work machine, cloning work dotfiles from <git_url>"
 }
 
 # Require work/personal argument
