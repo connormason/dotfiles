@@ -15,4 +15,4 @@ These are my dotfiles. Yay.
 If running a home server install, make sure to reserve an IP address in the router configuration.
 
 
-TODO: add IPython as a pip install
+TODO: add IPython as a pip install (and other pip packages)
