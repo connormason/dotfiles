@@ -13,6 +13,3 @@ These are my dotfiles. Yay.
 6. Run `brew doctor` if on a Mac
 
 If running a home server install, make sure to reserve an IP address in the router configuration.
-
-
-TODO: add IPython as a pip install (and other pip packages)

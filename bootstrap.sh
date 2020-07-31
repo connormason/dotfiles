@@ -92,7 +92,7 @@ if [[ $ENV == "Mac" ]]; then
     # Install SaltStack
     if [[ ! $(command -v salt-call) ]]; then
     	echo -e "Installing SaltStack..."
-        brew install saltstack
+        brew install saltstack || :
     fi
 
 elif [[ $ENV == "Linux" ]] && [[ $1 == "personal" ]]; then

@@ -65,7 +65,7 @@ fast_keyboard_repeat_rate:
   macdefaults.write:
     - domain: NSGlobalDomain
     - name: KeyRepeat
-    - value: 5
+    - value: 2
     - vtype: int
     - user: {{ grains.user }}
     - require:
