@@ -6,15 +6,6 @@ GREEN="\033[0;32m"
 RED="\033[0;31m"
 NC="\033[0m"
 
-# Source all rc files exist in ~/.rc_files
-RC_DIR="$HOME/.rc_files"
-if [[ -d $RC_DIR ]]; then
-	for RC_FILE in $( find $RC_DIR -type l); do
-		source $RC_FILE > /dev/null 2>&1
-		echo -e "${YELLOW}$(basename $RC_FILE)${NC}${WHITE} loaded${NC}"
-	done
-fi
-
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block, everything else may go below.
@@ -82,6 +73,15 @@ ZSH_THEME=powerlevel10k/powerlevel10k
 plugins=(git git-extras python sublime sudo web-search)
 
 source $ZSH/oh-my-zsh.sh
+
+# Source all rc files exist in ~/.rc_files
+RC_DIR="$HOME/.rc_files"
+if [[ -d $RC_DIR ]]; then
+	for RC_FILE in $( find $RC_DIR -type l); do
+		source $RC_FILE > /dev/null 2>&1
+		echo -e "${YELLOW}$(basename $RC_FILE)${NC}${WHITE} loaded${NC}"
+	done
+fi
 
 # Mac specific stuff
 if [ "$(uname)" != "Darwin" ]; then
