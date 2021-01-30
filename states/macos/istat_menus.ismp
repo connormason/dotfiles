@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>build</key>
-	<string>1117</string>
+	<string>1157</string>
 	<key>preferences</key>
 	<dict>
 		<key>Battery_DropdownOrderDisabled</key>
@@ -52,6 +52,8 @@
 		</array>
 		<key>InstalledHelpers-mas</key>
 		<true/>
+		<key>Menubar-DetectedColor</key>
+		<string>1.00 1.00 1.00 0.90</string>
 		<key>MenubarGraphOpacity-Dark</key>
 		<real>1</real>
 		<key>MenubarSkinColor-Dark</key>
@@ -59,6 +61,8 @@
 		<key>Migrated_6.0</key>
 		<true/>
 		<key>Migrated_6.22</key>
+		<true/>
+		<key>Migrated_6.5</key>
 		<true/>
 		<key>Notifications-Items</key>
 		<array>
@@ -139,6 +143,6 @@
 		</dict>
 	</dict>
 	<key>version</key>
-	<string>6.41</string>
+	<string>6.51</string>
 </dict>
 </plist>
