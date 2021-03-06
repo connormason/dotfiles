@@ -28,3 +28,17 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ~/docker/shared:/shared
     network_mode: host
+
+  plex:
+    image: linuxserver/plex
+    container_name: plex
+    network_mode: host
+    environment:
+      - PUID=1026
+      - PGID=100
+      - VERSION=docker
+    volumes:
+      - /mnt/media_drive/plex:/config
+      - /mnt/media_drive/tv:/tv
+      - /mnt/media_drive/movies:/movies
+    restart: unless-stopped
