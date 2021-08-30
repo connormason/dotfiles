@@ -114,7 +114,7 @@ alias mv="mv -v"
 alias clr="clear"
 
 # Generic folder aliases
-alias dotfiles="~/.dotfiles"
+alias dotfiles="~/dotfiles"
 
 alias docs="~/Documents"
 alias doc="~/Documents"

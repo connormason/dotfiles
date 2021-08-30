@@ -1,9 +1,7 @@
 brew 'zsh'
 brew 'zsh-completions'
-brew 'python3'
 brew 'fzf'
 brew 'tree'
-brew 'libmagic'
 brew 'mas'
 brew 'hub'
 
@@ -11,13 +9,12 @@ cask 'google-chrome'
 cask 'iterm2'
 cask 'hammerspoon'
 cask 'sublime-text'
-cask 'pycharm-ce'
-cask 'lastpass'
 cask 'spotify'
 cask 'microsoft-office'
 cask 'adobe-acrobat-reader'
 cask 'homebrew/cask-drivers/logitech-options'
 cask 'macdown'
+cask 'messenger'
 
 mas 'Amphetamine', id: 937984704
 mas 'iStat Menus', id: 1319778037

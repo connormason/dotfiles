@@ -62,8 +62,18 @@ if [ ! -f $FILENAME ]; then
     fi
 fi
 
+# Determine environment
+# Code from: https://stackoverflow.com/questions/3466166/how-to-check-if-running-in-cygwin-mac-or-linux
+unameOut="$(uname -s)"
+case "${unameOut}" in
+    Linux*)     ENV=Linux;;
+    Darwin*)    ENV=Mac;;
+    CYGWIN*)    ENV=Cygwin;;
+    MINGW*)     ENV=MinGw;;
+    *)          ENV="UNKNOWN:${unameOut}"
+esac
+
 # Copy SSH key to clipboard (running appropriate steps based on platform)
-ENV="$(./determine_environment.sh)"
 if [ "$ENV" = "Mac" ]; then
 	pbcopy < "${FILENAME}.pub"
 elif [ "$ENV" = "Linux" ]; then
