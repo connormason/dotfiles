@@ -1,0 +1,5 @@
+- name: Home NAS bootstrap
+  hosts: nas
+  tasks:
+    - include_role:
+        name: docker
