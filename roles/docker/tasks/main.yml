@@ -1,0 +1,15 @@
+- name: Get host IP address
+  set_fact:
+    ip_address: "{{ ansible_default_ipv4.address }}"
+
+- name: Setup mqtt-bridge
+  block:
+    - name: Ensure mqtt-bridge directory exists
+      file:
+        path: "{{ mqtt_bridge_dir }}"
+        state: directory
+
+    - name: Build and link mqtt-bridge config
+      template:
+        src: config.yml.j2
+        dest: "{{ mqtt_bridge_config }}"
