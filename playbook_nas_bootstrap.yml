@@ -1,6 +1,9 @@
 - name: Home NAS bootstrap
   hosts: nas
   tasks:
+    - name: Set ansible_become_pass
+      set_fact:
+        ansible_become_pass: "{{ admin_password }}"
     - include_role:
         name: docker
     - include_role:
