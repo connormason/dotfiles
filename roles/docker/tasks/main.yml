@@ -9,7 +9,7 @@
         path: "{{ mqtt_bridge_dir }}"
         state: directory
 
-    - name: Build and link mqtt-bridge config
+    - name: Build and copy mqtt-bridge config
       template:
         src: config.yml.j2
         dest: "{{ mqtt_bridge_config }}"

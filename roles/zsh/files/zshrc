@@ -50,7 +50,6 @@ alias p="python3 -m IPython"
 alias sourcevenv="source venv/bin/activate"
 
 # Git aliases
-# TODO: move to gitconfig
 alias gsl="git stash list"
 alias gsp="git stash pop"
 alias gs="git stash"
