@@ -11,3 +11,11 @@ These are my dotfiles. Yay.
 5. Run `brew doctor` if on a Mac
 
 If running a home server install, make sure to reserve an IP address in the router configuration.
+
+## NAS Bootstrapping
+
+Bootstrapping of my home NAS is done with ansible
+
+1. Install Ansible (ideally in a virtual environment)
+2. Create file `vault_password.txt` in the repo root and paste in the Ansible Vault password from my password manager
+3. Run `chmod u+x; nas_bootstrap.sh`

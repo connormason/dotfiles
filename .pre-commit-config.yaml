@@ -13,10 +13,7 @@ repos:
       - id: mixed-line-ending
         exclude: .gitignore
       - id: trailing-whitespace
-        exclude: |
-          (?x)(
-              ^.gitignore
-          )
+        exclude: .gitignore
 
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.29.0
