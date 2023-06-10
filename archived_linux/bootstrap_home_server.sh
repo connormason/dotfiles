@@ -164,7 +164,7 @@ echo ""
 
 # Configure settings
 echo -e "${CYAN}Configuring Gnome preferences...${NC}"
-chmod u+x setup_preferences.sh 
+chmod u+x setup_preferences.sh
 ./setup_preferences.sh
 echo ""
 
@@ -179,4 +179,4 @@ echo -e "${CYAN}Cleaning up...${NC}"
 sudo apt -y autoremove
 echo ""
 
-echo 
+echo
