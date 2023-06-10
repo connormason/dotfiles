@@ -11,5 +11,5 @@
 
     - name: Build and copy mqtt-bridge config
       template:
-        src: config.yml.j2
+        src: mqtt_bridge_config.yml.j2
         dest: "{{ mqtt_bridge_config }}"
