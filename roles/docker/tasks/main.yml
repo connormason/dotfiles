@@ -13,3 +13,9 @@
       template:
         src: mqtt_bridge_config.yml.j2
         dest: "{{ mqtt_bridge_config }}"
+
+- name: Copy docker-compose.yml
+  copy:
+    src: docker-compose.yml
+    dest: "{{ docker_dir }}/docker-compose.yml"
+    backup: yes
