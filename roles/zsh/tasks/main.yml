@@ -1,0 +1,54 @@
+- name: Install oh-my-zsh
+  block:
+    - name: Install oh-my-zsh dependencies
+      become: yes
+      ansible.builtin.package:
+        name:
+          - git
+          - zsh
+
+    - name: Clone oh-my-zsh
+      ansible.builtin.git:
+        repo: https://github.com/ohmyzsh/ohmyzsh.git
+        dest: "{{ ansible_user_dir }}/.oh-my-zsh"
+        clone: yes
+
+    - name: Set oh-my-zsh permissions
+      become: true
+      become_user: "{{ ansible_user }}"
+      ansible.builtin.file:
+        path: "{{ ansible_user_dir }}/.oh-my-zsh"
+        mode: "go-w"
+        recurse: yes
+
+- name: Set default shell
+  become: true
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    shell: "{{ oh_my_zsh_zsh_path }}"
+
+- name: Setup oh-my-zsh theme
+  block:
+    - name: Install powerlevel10k theme
+      git:
+        repo: https://github.com/romkatv/powerlevel10k.git
+        dest: "{{ ansible_user_dir }}/.oh-my-zsh/themes/powerlevel10k"
+        version: master
+        clone: yes
+        update: yes
+
+    - name: Copy powerlevel10k config
+      copy:
+        src: p10k.zsh
+        dest: "{{ ansible_user_dir }}/.p10k.zsh"
+
+- name: Copy .zshrc
+  copy:
+    src: zshrc
+    dest: "{{ ansible_user_dir }}/.zshrc"
+    backup: true
+
+- name: Copy .zprofile
+  copy:
+    src: zprofile
+    dest: "{{ ansible_user_dir }}/.zprofile"
