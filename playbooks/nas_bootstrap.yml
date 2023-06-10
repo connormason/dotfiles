@@ -5,10 +5,10 @@
       set_fact:
         ansible_become_pass: "{{ admin_password }}"
     - include_role:
-        name: docker
+        name: roles/docker
     - include_role:
-        name: git
+        name: roles/git
     - include_role:
-        name: ssh
+        name: roles/ssh
     - include_role:
-        name: zsh
+        name: roles/zsh
