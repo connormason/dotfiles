@@ -1,4 +1,0 @@
-include:
-  - .pip
-  - .zsh
-

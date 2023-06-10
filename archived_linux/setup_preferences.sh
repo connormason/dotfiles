@@ -43,7 +43,7 @@ gsettings set io.elementary.terminal.settings allow-bold true
 # Remember tabs on close
 gsettings set io.elementary.terminal.settings remember-tabs true
 
-# Disable event sounds 
+# Disable event sounds
 gsettings set org.gnome.desktop.sound event-sounds true
 
 # Disable Caps Lock
