@@ -4,7 +4,7 @@ services:
   plex:
     image: linuxserver/plex
     container_name: plex
-    network_mode: host
+    network_mode: host            # Temporary for docker/plex weirdness
     environment:
       - PUID=1001
       - PGID=1001
@@ -14,3 +14,76 @@ services:
       - /mnt/storage/media/tv:/tv
       - /mnt/storage/media/movies:/movies
     restart: unless-stopped
+
+  autoplex:
+    image: danielmmetz/autoplex
+    container_name: autoplex
+    volumes:
+      - /mnt/storage/media/downloads:/downloads
+      - /mnt/storage/media/tv:/tv
+      - /mnt/storage/media/movies:/movies
+    restart: unless-stopped
+    command: ["--host", "transmission", "--src", "/downloads/complete/tv", "--dest", "/tv", "--src", "/downloads/complete/movies", "--dest", "/movies"]
+
+  # TODO: periodically delete downloads once moved or point at downloads folder directly
+  transmission:
+    image: linuxserver/transmission
+    container_name: transmission
+    restart: unless-stopped
+    environment:
+      - PUID=1001
+      - PGID=1001
+    volumes:
+      - /mnt/storage/media/config/transmission:/config
+      - /mnt/storage/media/downloads:/downloads
+      - /mnt/storage/media/watch:/watch
+    ports:
+      - "9091:9091"
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr
+    container_name: flaresolverr
+    restart: unless-stopped
+    environment:
+      - PUID=1001
+      - PGID=1001
+
+  prowlarr:
+    image: linuxserver/prowlarr
+    container_name: prowlarr
+    restart: unless-stopped
+    environment:
+      - PUID=1001
+      - PGID=1001
+    volumes:
+      - /mnt/storage/media/config/prowlarr:/config
+    ports:
+      - "9696:9696"
+
+  radarr:
+    image: linuxserver/radarr
+    container_name: radarr
+    restart: unless-stopped
+    environment:
+      - PUID=1001
+      - PGID=1001
+    volumes:
+      - /mnt/storage/media/config/radarr:/config
+      - /mnt/storage/media/media/movies:/movies
+      - /mnt/storage/media/downloads:/downloads
+    ports:
+      - "7878:7878"
+
+  sonarr:
+    image: linuxserver/sonarr
+    container_name: sonarr
+    environment:
+      - PUID=1001
+      - PGID=1001
+    volumes:
+      - /mnt/storage/media/config/sonarr:/config
+      - /mnt/storage/media/media/tv:/tv
+      - /mnt/storage/media/downloads:/downloads
+    restart: unless-stopped
+    ports:
+      - "8989:8989"
