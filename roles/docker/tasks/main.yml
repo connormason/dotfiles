@@ -16,10 +16,20 @@
             url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
             dest: /usr/share/keyrings/docker.asc
 
+        - name: Get debian architecture
+          block:
+            - name: Print debian architecture
+              ansible.builtin.shell: "dpkg --print-architecture"
+              register: dpkg_print_architecture
+
+            - name: Set debian architecture fact
+              set_fact:
+                deb_architecture: "{{ dpkg_print_architecture.stdout }}"
+
         - name: Add Docker repository
           become: true
           ansible.builtin.apt_repository:
-            repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+            repo: "deb [arch={{ deb_architecture }} signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
             state: present
 
         - name: Update apt package index
@@ -27,15 +37,15 @@
           ansible.builtin.apt:
             update_cache: true
 
-- name: Install Docker engine
-  become: true
-  ansible.builtin.apt:
-    pkg:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-buildx-plugin
-      - docker-compose-plugin
+    - name: Install Docker engine
+      become: true
+      ansible.builtin.apt:
+        pkg:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
 
 - name: Setup mqtt-bridge
   block:

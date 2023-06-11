@@ -19,8 +19,10 @@ plugins=(git git-extras python sudo)
 
 source $ZSH/oh-my-zsh.sh
 
-# Zsh completions
+# Zsh completions/keybindings
 fpath=(/usr/local/share/zsh-completions $fpath)
+source /usr/share/doc/fzf/examples/key-bindings.zsh
+source /usr/share/doc/fzf/examples/completion.zsh
 
 autoload -Uz compinit
 zstyle ':completion:*' menu select

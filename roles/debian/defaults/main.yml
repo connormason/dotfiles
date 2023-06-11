@@ -1,5 +1,11 @@
 ---
+
+# Sleep/hibernate configuration
 systemd_allow_sleep: true
 systemd_allow_suspend: true
 systemd_allow_hibernate: true
 systemd_allow_hybrid_sleep: true
+
+# Packages
+apt_packages:
+  - fzf
