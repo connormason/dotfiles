@@ -1,3 +1,4 @@
+---
 - name: Generate SSH key pair
   community.crypto.openssh_keypair:
     path: "{{ ansible_user_dir }}/.ssh/id_ed25519"
