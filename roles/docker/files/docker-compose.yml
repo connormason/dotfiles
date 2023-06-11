@@ -1,4 +1,5 @@
 ---
+# TODO install ZFS, get drives configured
 version: "3.3"
 services:
   plex:
