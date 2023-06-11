@@ -1,0 +1,5 @@
+# Disable sleep/hibernate
+systemd_allow_sleep: false
+systemd_allow_suspend: false
+systemd_allow_hibernate: false
+systemd_allow_hybrid_sleep: false
