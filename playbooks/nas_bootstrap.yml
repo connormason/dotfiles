@@ -16,6 +16,9 @@
         name: roles/debian
 
     - include_role:
+        name: roles/zfs
+
+    - include_role:
         name: roles/docker
 
     - include_role:

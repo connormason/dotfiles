@@ -46,6 +46,13 @@
           - containerd.io
           - docker-buildx-plugin
           - docker-compose-plugin
+          - docker-compose
+
+- name: Ensure docker deamon is running
+  service:
+    name: docker
+    state: started
+  become: true
 
 - name: Setup mqtt-bridge
   block:
