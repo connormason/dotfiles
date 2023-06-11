@@ -18,3 +18,8 @@
     - name: "{{ 'Enable' if systemd_allow_hybrid_sleep else 'Disable' }} hybrid sleep"
       become: true
       ansible.builtin.command: "sudo systemctl {{ 'unmask' if systemd_allow_hybrid_sleep else 'mask' }} hybrid-sleep.target"
+
+- name: Install apt packages
+  become: true
+  ansible.builtin.apt:
+    name: "{{ apt_packages }}"
