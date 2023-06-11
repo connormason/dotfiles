@@ -4,4 +4,4 @@
 set -e
 
 # Run NAS bootstrap Ansible playbook
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory -vv

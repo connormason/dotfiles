@@ -1,10 +1,48 @@
 ---
-- name: Get host IP address
-  ansible.builtin.set_fact:
-    ip_address: "{{ ansible_default_ipv4.address }}"
+- name: Install Docker
+  block:
+    - name: Setup Docker repository
+      block:
+        - name: Install dependencies
+          become: true
+          ansible.builtin.apt:
+            pkg:
+              - ca-certificates
+              - curl
+              - gnupg
+
+        - name: Add Docker GPG signing key
+          ansible.builtin.get_url:
+            url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+            dest: /usr/share/keyrings/docker.asc
+
+        - name: Add Docker repository
+          become: true
+          ansible.builtin.apt_repository:
+            repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+            state: present
+
+        - name: Update apt package index
+          become: true
+          ansible.builtin.apt:
+            update_cache: true
+
+- name: Install Docker engine
+  become: true
+  ansible.builtin.apt:
+    pkg:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
 
 - name: Setup mqtt-bridge
   block:
+    - name: Get host IP address
+      ansible.builtin.set_fact:
+        ip_address: "{{ ansible_default_ipv4.address }}"
+
     - name: Ensure mqtt-bridge directory exists
       ansible.builtin.file:
         path: "{{ mqtt_bridge_dir }}"
