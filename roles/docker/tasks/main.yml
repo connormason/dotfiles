@@ -31,11 +31,13 @@
           ansible.builtin.apt_repository:
             repo: "deb [arch={{ deb_architecture }} signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
             state: present
+          register: docker_repo_add
 
         - name: Update apt package index
           become: true
           ansible.builtin.apt:
             update_cache: true
+          when: docker_repo_add.changed
 
     - name: Install Docker engine
       become: true
@@ -72,17 +74,33 @@
         src: env.j2
         dest: "{{ docker_dir }}/.env"
 
-- name: Setup mqtt-bridge
+- name: Setup homeassistant
   block:
-    - name: Ensure mqtt-bridge directory exists
-      ansible.builtin.file:
-        path: "{{ mqtt_bridge_dir }}"
-        state: directory
+    - name: Setup mqtt-bridge
+      block:
+        - name: Ensure mqtt-bridge directory exists
+          ansible.builtin.file:
+            path: "{{ mqtt_bridge_dir }}"
+            state: directory
 
-    - name: Build and copy mqtt-bridge config
+        - name: Build and copy mqtt-bridge config
+          ansible.builtin.template:
+            src: mqtt_bridge_config.yml.j2
+            dest: "{{ mqtt_bridge_config }}"
+
+    - name: Clone homeassistant config repo
+      ansible.builtin.git:
+        repo: "{{ homeassistant_repo_url }}"
+        dest: "{{ homeassistant_repo_dest }}"
+        version: "{{ homeassistant_repo_branch }}"
+        clone: true
+        update: true
+        accept_hostkey: true
+
+    - name: Build and copy homeassistant secrets file
       ansible.builtin.template:
-        src: mqtt_bridge_config.yml.j2
-        dest: "{{ mqtt_bridge_config }}"
+        src: ha_secrets.yaml.j2
+        dest: "{{ homeassistant_repo_dest }}/secrets.yaml"
 
 - name: Copy docker-compose.yml
   ansible.builtin.copy:
