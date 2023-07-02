@@ -17,14 +17,14 @@ services:
     restart: unless-stopped
 
   autoplex:
-    image: danielmmetz/autoplex
+    image: danielmmetz/autoplex:latest
     container_name: autoplex
     volumes:
       - /mnt/storage/media/downloads:/downloads
       - /mnt/storage/media/tv:/tv
       - /mnt/storage/media/movies:/movies
     restart: unless-stopped
-    command: ["--host", "transmission", "--src", "/downloads/complete/tv", "--dest", "/tv", "--src", "/downloads/complete/movies", "--dest", "/movies"]
+    command: ["--mode", "copy", "--host", "transmission", "--src", "/downloads/complete/tv", "--dest", "/tv", "--src", "/downloads/complete/movies", "--dest", "/movies"]
 
   # TODO: periodically delete downloads once moved or point at downloads folder directly
   transmission:
@@ -88,3 +88,20 @@ services:
     restart: unless-stopped
     ports:
       - "8989:8989"
+
+  caddy:
+    image: danielmmetz/caddy-dnsimple
+    container_name: caddy
+    environment:
+      - ACME_AGREE=true
+      - DNSIMPLE_OAUTH_TOKEN
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - caddy_data:/data
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    restart: unless-stopped
+
+volumes:
+  caddy_data: {}
