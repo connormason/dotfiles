@@ -89,6 +89,7 @@ services:
     ports:
       - "8989:8989"
 
+  # TODO: build this image without referencing metz's
   caddy:
     image: danielmmetz/caddy-dnsimple
     container_name: caddy
