@@ -1,7 +1,8 @@
 ---
-# TODO install ZFS, get drives configured
 version: "3.3"
 services:
+
+  # Plex
   plex:
     image: linuxserver/plex
     container_name: plex
@@ -16,6 +17,7 @@ services:
       - /mnt/storage/media/movies:/movies
     restart: unless-stopped
 
+  # Tool that automatically moves downloaded files from transmission to the right spot to get picked up by Plex
   autoplex:
     image: danielmmetz/autoplex:latest
     container_name: autoplex
@@ -26,6 +28,7 @@ services:
     restart: unless-stopped
     command: ["--mode", "copy", "--host", "transmission", "--src", "/downloads/complete/tv", "--dest", "/tv", "--src", "/downloads/complete/movies", "--dest", "/movies"]
 
+  # Transmission. Torrent client
   # TODO: periodically delete downloads once moved or point at downloads folder directly
   transmission:
     image: linuxserver/transmission
@@ -41,6 +44,7 @@ services:
     ports:
       - "9091:9091"
 
+  # Proxy to bypass Cloudflare protection
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr
     container_name: flaresolverr
@@ -49,6 +53,7 @@ services:
       - PUID=1000
       - PGID=1000
 
+  # prowlarr. Indexer for radarr/sonarr
   prowlarr:
     image: linuxserver/prowlarr
     container_name: prowlarr
@@ -61,6 +66,7 @@ services:
     ports:
       - "9696:9696"
 
+  # radarr. Tool to find movies
   radarr:
     image: linuxserver/radarr
     container_name: radarr
@@ -75,6 +81,7 @@ services:
     ports:
       - "7878:7878"
 
+  # sonarr. Tool to find TV shows
   sonarr:
     image: linuxserver/sonarr
     container_name: sonarr
@@ -90,6 +97,7 @@ services:
       - "8989:8989"
 
   # TODO: build this image without referencing metz's
+  # Caddy. Reverse proxy for xxxx.conmason.com -> sonarr/radarr/prowlarr/transmission/plex
   caddy:
     image: danielmmetz/caddy-dnsimple
     container_name: caddy
@@ -103,6 +111,38 @@ services:
       - caddy_data:/data
       - ./Caddyfile:/etc/caddy/Caddyfile
     restart: unless-stopped
+
+  # MQTT broker for talking to LED strips
+  mqtt:
+    container_name: mqtt-broker
+    image: matteocollina/mosca
+    ports:
+      - 1883:1883
+#    network_mode: host
+
+  # MQTT bridge for talking to LED strips
+  mqttbridge:
+    container_name: mqtt-bridge
+    image: stjohnjohnson/smartthings-mqtt-bridge
+    volumes:
+      - ./mqtt-bridge:/config
+    ports:
+      - 8080:8080
+#    network_mode: host
+
+  # Home Assistant
+  homeassistant:
+    container_name: home-assistant
+    image: homeassistant/home-assistant
+    ports:
+#      - 80:80
+      - 8123:8123
+    restart: always
+    volumes:
+      - ./homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - ./shared:/shared
+#    network_mode: host
 
 volumes:
   caddy_data: {}

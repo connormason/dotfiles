@@ -6,29 +6,29 @@
       ansible.builtin.set_fact:
         ansible_become_pass: "{{ admin_password }}"
 
-    - name: Update apt package index
-      become: true
-      ansible.builtin.apt:
-        update_cache: true
-        cache_valid_time: 86400   # One day
-
-    - include_role:
-        name: roles/debian
-
-    - include_role:
-        name: roles/zfs
+#    - name: Update apt package index
+#      become: true
+#      ansible.builtin.apt:
+#        update_cache: true
+#        cache_valid_time: 86400   # One day
+#
+#    - include_role:
+#        name: roles/debian
+#
+#    - include_role:
+#        name: roles/zfs
 
     - include_role:
         name: roles/docker
 
-    - include_role:
-        name: roles/git
-
-    - include_role:
-        name: roles/ssh
-
-    - include_role:
-        name: roles/tailscale
-
-    - include_role:
-        name: roles/zsh
+#    - include_role:
+#        name: roles/git
+#
+#    - include_role:
+#        name: roles/ssh
+#
+#    - include_role:
+#        name: roles/tailscale
+#
+#    - include_role:
+#        name: roles/zsh
