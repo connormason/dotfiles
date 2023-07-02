@@ -1,5 +1,5 @@
 ---
-- name: Install Docker
+- name: Setup Docker
   block:
     - name: Setup Docker repository
       block:
@@ -48,18 +48,32 @@
           - docker-compose-plugin
           - docker-compose
 
-- name: Ensure docker deamon is running
-  service:
-    name: docker
-    state: started
-  become: true
+    - name: Ensure docker daemon is running
+      service:
+        name: docker
+        state: started
+      become: true
+
+# ip_address var used by "Build and copy Caddyfile" and "Build and copy mqtt-bridge config" below
+- name: Get host IP address
+  ansible.builtin.set_fact:
+    ip_address: "{{ ansible_default_ipv4.address }}"
+
+- name: Setup caddy
+  block:
+    - name: Build and copy Caddyfile
+      ansible.builtin.template:
+        src: Caddyfile.j2
+        dest: "{{ docker_dir }}/Caddyfile"
+
+    # Contains DNSimple OAuth token (DNSIMPLE_OAUTH_TOKEN), used by Caddy
+    - name: Build and copy .env file
+      ansible.builtin.template:
+        src: env.j2
+        dest: "{{ docker_dir }}/.env"
 
 - name: Setup mqtt-bridge
   block:
-    - name: Get host IP address
-      ansible.builtin.set_fact:
-        ip_address: "{{ ansible_default_ipv4.address }}"
-
     - name: Ensure mqtt-bridge directory exists
       ansible.builtin.file:
         path: "{{ mqtt_bridge_dir }}"
@@ -75,3 +89,5 @@
     src: docker-compose.yml
     dest: "{{ docker_dir }}/docker-compose.yml"
     backup: true
+
+# TODO: docker-compose up?
