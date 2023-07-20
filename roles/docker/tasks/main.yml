@@ -81,6 +81,26 @@
       tags:
         - configfile
 
+- name: Setup autoplex
+  block:
+    - name: Clone autoplex repo
+      ansible.builtin.git:
+        repo: "{{ autoplex_repo_url }}"
+        dest: "{{ autoplex_repo_dest }}"
+        version: "{{ autoplex_repo_branch }}"
+        clone: true
+        update: true
+        accept_hostkey: true
+
+    - name: Build autoplex image
+      community.docker.docker_image:
+        build:
+          path: "{{ autoplex_repo_dest }}"
+        name: danielmmetz/autoplex
+        tag: latest
+        source: build
+      become: true
+
 - name: Setup homeassistant
   block:
     - name: Setup mqtt-bridge
