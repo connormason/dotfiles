@@ -5,6 +5,8 @@
     - name: Set ansible_become_pass
       ansible.builtin.set_fact:
         ansible_become_pass: "{{ admin_password }}"
+      tags:
+        - always
 
     - name: Update apt package index
       become: true
@@ -14,35 +16,56 @@
 
     - include_role:
         name: roles/debian
+        apply:
+          tags: debian
       tags:
+        - debian
         - configfile
 
     - include_role:
         name: roles/zfs
+        apply:
+          tags: zfs
       tags:
+        - zfs
         - configfile
 
     - include_role:
         name: roles/docker
+        apply:
+          tags: docker
       tags:
+        - docker
         - configfile
 
     - include_role:
         name: roles/git
+        apply:
+          tags: git
       tags:
+        - git
         - configfile
 
     - include_role:
         name: roles/ssh
+        apply:
+          tags: ssh
       tags:
+        - ssh
         - configfile
 
     - include_role:
         name: roles/tailscale
+        apply:
+          tags: tailscale
       tags:
+        - tailscale
         - configfile
 
     - include_role:
         name: roles/zsh
+        apply:
+          tags: zsh
       tags:
+        - zsh
         - configfile
