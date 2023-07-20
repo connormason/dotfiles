@@ -96,8 +96,7 @@ services:
     ports:
       - "8989:8989"
 
-  # TODO: build this image without referencing metz's
-  # Caddy. Reverse proxy for xxxx.conmason.com -> sonarr/radarr/prowlarr/transmission/plex
+  # Caddy. Reverse proxy for xxxx.my_domain.com -> sonarr/radarr/prowlarr/transmission/plex
   caddy:
     image: danielmmetz/caddy-dnsimple
     container_name: caddy
