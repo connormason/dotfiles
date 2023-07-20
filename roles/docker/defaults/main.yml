@@ -1,5 +1,9 @@
 docker_dir: "{{ ansible_user_dir }}/docker"
 
+autoplex_repo_dest: "{{ docker_dir }}/autoplex"
+autoplex_repo_url: https://github.com/danielmmetz/autoplex.git
+autoplex_repo_branch: master
+
 mqtt_bridge_dir: "{{ docker_dir }}/mqtt-bridge"
 mqtt_bridge_config: "{{ mqtt_bridge_dir }}/config.yml"
 mqtt_bridge_preface: smartthings

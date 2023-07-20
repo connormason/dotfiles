@@ -2,3 +2,5 @@
   copy:
     src: gitconfig
     dest: "{{ ansible_user_dir }}/.gitconfig"
+  tags:
+    - configfile

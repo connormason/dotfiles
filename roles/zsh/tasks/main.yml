@@ -42,14 +42,20 @@
       ansible.builtin.copy:
         src: p10k.zsh
         dest: "{{ ansible_user_dir }}/.p10k.zsh"
+      tags:
+        - configfile
 
 - name: Copy .zshrc
   ansible.builtin.copy:
     src: zshrc
     dest: "{{ ansible_user_dir }}/.zshrc"
     backup: true
+  tags:
+    - configfile
 
 - name: Copy .zprofile
   ansible.builtin.copy:
     src: zprofile
     dest: "{{ ansible_user_dir }}/.zprofile"
+  tags:
+    - configfile
