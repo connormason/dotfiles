@@ -63,9 +63,26 @@
   tags:
     - always
 
-# TODO: build caddy Dockerfile
 - name: Setup caddy
   block:
+    - name: Clone caddy-dnsimple repo
+      ansible.builtin.git:
+        repo: "{{ caddy_dnsimple_repo_url }}"
+        dest: "{{ caddy_dnsimple_repo_dest }}"
+        version: "{{ caddy_dnsimple_repo_branch }}"
+        clone: true
+        update: true
+        accept_hostkey: true
+
+    - name: Build caddy-dnsimple image
+      community.docker.docker_image:
+        build:
+          path: "{{ autoplex_repo_dest }}"
+        name: danielmmetz/caddy-dnsimple
+        tag: latest
+        source: build
+      become: true
+
     - name: Build and copy Caddyfile
       ansible.builtin.template:
         src: Caddyfile.j2
