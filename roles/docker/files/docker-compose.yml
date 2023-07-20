@@ -12,9 +12,9 @@ services:
       - PGID=1000
       - VERSION=docker
     volumes:
-      - /mnt/storage/media/config/plex:/config
-      - /mnt/storage/media/tv:/tv
-      - /mnt/storage/media/movies:/movies
+      - /storage/media/config/plex:/config
+      - /storage/media/tv:/tv
+      - /storage/media/movies:/movies
     restart: unless-stopped
 
   # Tool that automatically moves downloaded files from transmission to the right spot to get picked up by Plex
@@ -22,9 +22,9 @@ services:
     image: danielmmetz/autoplex:latest
     container_name: autoplex
     volumes:
-      - /mnt/storage/media/downloads:/downloads
-      - /mnt/storage/media/tv:/tv
-      - /mnt/storage/media/movies:/movies
+      - /storage/media/downloads:/downloads
+      - /storage/media/tv:/tv
+      - /storage/media/movies:/movies
     restart: unless-stopped
     command: ["--mode", "copy", "--host", "transmission", "--src", "/downloads/complete/tv", "--dest", "/tv", "--src", "/downloads/complete/movies", "--dest", "/movies"]
 
@@ -38,9 +38,9 @@ services:
       - PUID=1000
       - PGID=1000
     volumes:
-      - /mnt/storage/media/config/transmission:/config
-      - /mnt/storage/media/downloads:/downloads
-      - /mnt/storage/media/watch:/watch
+      - /storage/media/config/transmission:/config
+      - /storage/media/downloads:/downloads
+      - /storage/media/watch:/watch
     ports:
       - "9091:9091"
 
@@ -62,7 +62,7 @@ services:
       - PUID=1000
       - PGID=1000
     volumes:
-      - /mnt/storage/media/config/prowlarr:/config
+      - /storage/media/config/prowlarr:/config
     ports:
       - "9696:9696"
 
@@ -75,9 +75,9 @@ services:
       - PUID=1000
       - PGID=1000
     volumes:
-      - /mnt/storage/media/config/radarr:/config
-      - /mnt/storage/media/media/movies:/movies
-      - /mnt/storage/media/downloads:/downloads
+      - /storage/media/config/radarr:/config
+      - /storage/media/media/movies:/movies
+      - /storage/media/downloads:/downloads
     ports:
       - "7878:7878"
 
@@ -89,9 +89,9 @@ services:
       - PUID=1000
       - PGID=1000
     volumes:
-      - /mnt/storage/media/config/sonarr:/config
-      - /mnt/storage/media/media/tv:/tv
-      - /mnt/storage/media/downloads:/downloads
+      - /storage/media/config/sonarr:/config
+      - /storage/media/media/tv:/tv
+      - /storage/media/downloads:/downloads
     restart: unless-stopped
     ports:
       - "8989:8989"
@@ -105,7 +105,7 @@ services:
       - ACME_AGREE=true
       - DNSIMPLE_OAUTH_TOKEN
     ports:
-      - 80:80
+#      - 80:80
       - 443:443
     volumes:
       - caddy_data:/data
