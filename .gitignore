@@ -316,3 +316,6 @@ pyrightconfig.json
 
 # Ansible secrets
 vault_password.txt
+
+# Inventory repo
+inventory/
