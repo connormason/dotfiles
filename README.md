@@ -10,6 +10,7 @@ Bootstrapping of my home NAS/server is done with ansible
 2. `pip install -r requirements.txt`
 3. Create file `vault_password.txt` in the repo root and paste in the Ansible Vault password from password manager
 4. Run `chmod u+x; ./nas_bootstrap.sh`
+5. Point router DNS at NAS for PiHole
 
 ## Notes
 - Probably need to request a tailscale auth key from https://login.tailscale.com/admin/authkeys (expires after 90 days)
