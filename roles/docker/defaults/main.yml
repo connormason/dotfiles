@@ -15,4 +15,4 @@ mqtt_bridge_port: 8080
 
 homeassistant_repo_dest: "{{ docker_dir }}/homeassistant"
 homeassistant_repo_url: git@github.com:connormason/homeassistant.git
-homeassistant_repo_branch: master
+homeassistant_repo_branch: nas_bringup    # TODO: change to master after merge

@@ -136,6 +136,8 @@ services:
     ports:
 #      - 80:80
       - 8123:8123
+    environment:
+      - TZ='America/Los_Angeles'
     restart: always
     volumes:
       - ./homeassistant:/config
@@ -143,13 +145,14 @@ services:
       - ./shared:/shared
 #    network_mode: host
 
+  # PiHole
   pihole:
     container_name: pihole
     image: pihole/pihole:latest
     ports:
       - "53:53/tcp"
       - "53:53/udp"
-      - "67:67/udp" # Only required if you are using Pi-hole as your DHCP server
+      - "67:67/udp"     # Only required if you are using Pi-hole as your DHCP server
       - "80:80/tcp"
     environment:
       - TZ='America/Los_Angeles'
@@ -158,7 +161,7 @@ services:
       - './etc-pihole:/etc/pihole'
       - './etc-dnsmasq.d:/etc/dnsmasq.d'
     cap_add:
-      - NET_ADMIN # Required if you are using Pi-hole as your DHCP server, else not needed
+      - NET_ADMIN     # Required if you are using Pi-hole as your DHCP server, else not needed
     restart: unless-stopped
 
 volumes:
