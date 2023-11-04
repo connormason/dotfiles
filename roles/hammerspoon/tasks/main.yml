@@ -1,0 +1,26 @@
+---
+- name: Check for existing hammerspoon config
+  stat:
+    path: "{{hammerspoon_config_dest}}"
+  register: hs_stat
+
+- name: Backup existing hammerspoon config
+  command: "mv {{hammerspoon_config_dest}} {{hammerspoon_config_backup_loc}}"
+  args:
+    creates: "{{hammerspoon_config_backup_loc}}"
+  when: >
+    hs_stat.stat.exists and
+    (hs_stat.stat.isreg or (hs_stat.stat.islnk is defined)
+                            and hs_stat.stat.islnk
+                            and hs_stat.stat.lnk_target != hammerspoon_config_src)
+
+- name: Create hammerspoon configuration dir
+  file:
+    path: "{{hammerspoon_config_dir}}"
+    state: directory
+
+- name: Symlink hammerspoon config
+  file:
+    src: "{{hammerspoon_config_src}}"
+    dest: "{{hammerspoon_config_dest}}"
+    state: link

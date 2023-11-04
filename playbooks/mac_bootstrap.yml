@@ -26,3 +26,11 @@
           tags: git
       tags:
         - git
+
+    # Tasks for Hammerspoon configuration
+    - include_role:
+        name: roles/hammerspoon
+        apply:
+          tags: hammerspoon
+      tags:
+        - hammerspoon
