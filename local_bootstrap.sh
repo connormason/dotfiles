@@ -28,6 +28,6 @@ ansible-galaxy install -r roles/requirements.yml
 echo ""
 
 # Run NAS bootstrap Ansible playbook
-echo "Running Mac bootstrap Ansible playbook"
-ansible-playbook playbooks/mac_bootstrap.yml -i inventory -v
+echo "Running local bootstrap Ansible playbook"
+ansible-playbook playbooks/local_bootstrap.yml -i inventory -v
 echo ""
