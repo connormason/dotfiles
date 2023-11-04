@@ -1,0 +1,4 @@
+hammerspoon_config_dir: "{{user_home}}/.hammerspoon"
+hammerspoon_config_src: "{{dotfiles_home}}/roles/hammerspoon/files/init.lua"
+hammerspoon_config_dest: "{{hammerspoon_config_dir}}/init.lua"
+hammerspoon_config_backup_loc: "{{hammerspoon_config_dir}}/init.lua.bak"
