@@ -45,6 +45,7 @@
       tags:
         - configfile
 
+# TODO: symlink if local
 - name: Copy .zshrc
   ansible.builtin.copy:
     src: zshrc
@@ -53,6 +54,7 @@
   tags:
     - configfile
 
+# TODO: symlink if local
 - name: Copy .zprofile
   ansible.builtin.copy:
     src: zprofile

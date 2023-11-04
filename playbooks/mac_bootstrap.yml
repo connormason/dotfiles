@@ -26,6 +26,7 @@
           tags: git
       tags:
         - git
+        - configfile
 
     # Tasks for Hammerspoon configuration
     - include_role:
@@ -34,6 +35,7 @@
           tags: hammerspoon
       tags:
         - hammerspoon
+        - configfile
 
     # Tasks for iTerm2 configuration
     - include_role:
@@ -58,3 +60,13 @@
           tags: ssh
       tags:
         - ssh
+        - configfile
+
+    # Tasks for zsh configuration
+    - include_role:
+        name: roles/zsh
+        apply:
+          tags: zsh
+      tags:
+        - zsh
+        - configfile
