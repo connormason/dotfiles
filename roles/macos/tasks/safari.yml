@@ -1,0 +1,56 @@
+---
+- name: Show bookmarks bar by default in Safari
+  community.general.osx_defaults:
+    domain: com.apple.Safari
+    key: ShowFavoritesBar
+    type: bool
+    value: true
+    state: present
+
+- name: Enable Backspace key for previous page in Safari
+  community.general.osx_defaults:
+    domain: com.apple.Safari
+    key: com.apple.Safari.ContentPageGroupIdentifier.WebKit2BackspaceKeyNavigationEnabled
+    type: bool
+    value: true
+    state: present
+
+- name: Enable the debug menu in Safari
+  community.general.osx_defaults:
+    domain: com.apple.Safari
+    key: IncludeInternalDebugMenu
+    type: bool
+    value: true
+    state: present
+
+- name: Enable the develop menu in Safari
+  community.general.osx_defaults:
+    domain: com.apple.Safari
+    key: IncludeDevelopMenu
+    type: bool
+    value: true
+    state: present
+
+- name: Enable WebKit dev extras in Safari
+  community.general.osx_defaults:
+    domain: com.apple.Safari
+    key: WebKitDeveloperExtrasEnabledPreferenceKey
+    type: bool
+    value: true
+    state: present
+
+- name: Enable WebKit2 dev extras in Safari
+  community.general.osx_defaults:
+    domain: com.apple.Safari
+    key: com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled
+    type: bool
+    value: true
+    state: present
+
+- name: Update Safari extensions automatically
+  community.general.osx_defaults:
+    domain: com.apple.Safari
+    key: InstallExtensionUpdatesAutomatically
+    type: bool
+    value: true
+    state: present

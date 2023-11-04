@@ -42,3 +42,11 @@
           tags: iterm
       tags:
         - iterm
+
+    # Tasks for macOS setting configuration
+    - include_role:
+        name: roles/macos
+        apply:
+          tags: macos
+      tags:
+        - macos
