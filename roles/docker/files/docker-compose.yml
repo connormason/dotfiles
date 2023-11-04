@@ -117,7 +117,7 @@ services:
     image: matteocollina/mosca
     ports:
       - 1883:1883
-#    network_mode: host
+    network_mode: host
 
   # MQTT bridge for talking to LED strips
   mqttbridge:
@@ -127,7 +127,7 @@ services:
       - ./mqtt-bridge:/config
     ports:
       - 8080:8080
-#    network_mode: host
+    network_mode: host
 
   # Home Assistant
   homeassistant:
@@ -143,7 +143,7 @@ services:
       - ./homeassistant:/config
       - /etc/localtime:/etc/localtime:ro
       - ./shared:/shared
-#    network_mode: host
+    network_mode: host
 
   # PiHole
   pihole:
