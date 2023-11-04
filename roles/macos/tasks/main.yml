@@ -1,0 +1,38 @@
+---
+
+# Prevents System Preferences from overriding settings we are about to change
+- name: Close any open System Preferences pane
+  command: |
+    osascript -e 'tell application "System Preferences" to quit'
+
+- name: Activity Monitor preferences setup
+  include_tasks: activity_monitor.yml
+
+- name: App Store preferences setup
+  include_tasks: app_store.yml
+
+- name: Dock preferences setup
+  include_tasks: dock.yml
+
+- name: Finder preferences setup
+  include_tasks: finder.yml
+
+- name: Input/output preferences setup
+  include_tasks: io.yml
+
+- name: Messages preferences setup
+  include_tasks: messages.yml
+
+- name: Other (miscellaneous) preferences setup
+  include_tasks: other.yml
+
+- name: Safari preferences setup
+  include_tasks: safari.yaml
+
+- name: Prevent iTunes from auto-launching on device connection
+  community.general.osx_defaults:
+    domain: com.apple.iTunesHelper
+    key: ignore-devices
+    type: int
+    value: 1
+    state: present
