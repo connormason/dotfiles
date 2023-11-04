@@ -1,0 +1,24 @@
+---
+- name: Set iTerm custom preferences folder
+  community.general.osx_defaults:
+    domain: com.googlecode.iterm2
+    key: PrefsCustomFolder
+    type: string
+    value: "{{dotfiles_home}}/roles/iterm2/files/"
+    state: present
+
+- name: Configure iTerm to load preferences from custom folder
+  community.general.osx_defaults:
+    domain: com.googlecode.iterm2
+    key: LoadPrefsFromCustomFolder
+    type: bool
+    value: true
+    state: present
+
+- name: Disable iTerm quit prompt
+  community.general.osx_defaults:
+    domain: com.googlecode.iterm2
+    key: PromptOnQuit
+    type: bool
+    value: false
+    state: present
