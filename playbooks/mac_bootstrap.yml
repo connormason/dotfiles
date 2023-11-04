@@ -1,0 +1,18 @@
+---
+- name: Personal Mac bootstrap
+  hosts: local
+  tasks:
+
+    # Set become password so it can be used in any role
+    - name: Set ansible_become_pass
+      ansible.builtin.set_fact:
+        ansible_become_pass: "{{ admin_password }}"
+      tags:
+        - always
+
+    # Tasks for homebrew
+    - include_role:
+        name: roles/brew
+      tags:
+        - brew
+        - homebrew

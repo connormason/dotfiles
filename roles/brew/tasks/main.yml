@@ -1,0 +1,21 @@
+---
+- name: Update Homebrew
+  homebrew:
+    update_homebrew: true
+
+- name: Install Homebrew packages
+  homebrew:
+    name: "{{brew_packages}}"
+    state: present
+
+- name: Install Homebrew cask packages
+  homebrew_cask:
+    name: "{{brew_cask_packages}}"
+    state: present
+
+- name: Install Mac App Store packages
+  mas:
+    id: "{{item.id}}"
+    state: present
+    upgrade_all: "{{mas_upgrade_all_apps}}"
+  with_items: "{{mas_apps}}"
