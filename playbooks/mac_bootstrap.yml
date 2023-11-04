@@ -50,3 +50,11 @@
           tags: macos
       tags:
         - macos
+
+    # Tasks for SSH configuration
+    - include_role:
+        name: roles/ssh
+        apply:
+          tags: ssh
+      tags:
+        - ssh
