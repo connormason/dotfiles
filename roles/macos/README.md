@@ -1,0 +1,3 @@
+# macOS
+
+Configures macOS preferences
