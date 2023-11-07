@@ -76,7 +76,7 @@ services:
       - PGID=1000
     volumes:
       - /storage/media/config/radarr:/config
-      - /storage/media/media/movies:/movies
+      - /storage/media/movies:/movies
       - /storage/media/downloads:/downloads
     ports:
       - "7878:7878"
@@ -90,7 +90,7 @@ services:
       - PGID=1000
     volumes:
       - /storage/media/config/sonarr:/config
-      - /storage/media/media/tv:/tv
+      - /storage/media/tv:/tv
       - /storage/media/downloads:/downloads
     restart: unless-stopped
     ports:
