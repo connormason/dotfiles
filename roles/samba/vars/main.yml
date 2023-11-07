@@ -1,0 +1,7 @@
+---
+samba_configuration_dir: /etc/samba
+samba_configuration: "{{ samba_configuration_dir }}/smb.conf"
+
+samba_services:
+  - smbd
+  - nmbd
