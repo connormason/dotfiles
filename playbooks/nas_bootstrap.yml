@@ -35,6 +35,15 @@
         - zfs
         - configfile
 
+    # Tasks for Samba file sharing
+    - include_role:
+        name: roles/samba
+        apply:
+          tags: samba
+      tags:
+        - samba
+        - configfile
+
     # Tasks for Docker
     - include_role:
         name: roles/docker
