@@ -1,0 +1,56 @@
+---
+- name: Install Samba
+  become: true
+  ansible.builtin.apt:
+    pkg:
+      - samba
+      - smbclient
+
+- name: Register Samba version
+  become: true
+  ansible.builtin.shell: >
+    set -o nounset -o pipefail -o errexit &&
+    smbd --version | sed 's/Version //'
+  args:
+    executable: /bin/bash
+  register: samba_version
+  changed_when: false
+  tags:
+    - always
+
+# TODO: create Samba share directories
+
+- name: Build Samba configuration file
+  become: true
+  ansible.builtin.template:
+    dest: "{{ samba_configuration }}"
+    src: smb.conf.j2
+    validate: 'testparm -s %s'
+    mode: '0644'
+  notify:
+    - Restart Samba services
+  tags:
+    - configfile
+
+- name: Start Samba services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: "{{ samba_services }}"
+
+- name: Create Samba users if they don't exist yet
+  become: true
+  ansible.builtin.shell: >
+    set -o nounset -o pipefail -o errexit &&
+    (pdbedit --user={{ item.name }} 2>&1 > /dev/null) \
+    || (echo '{{ item.password }}'; echo '{{ item.password }}') \
+    | smbpasswd -s -a {{ item.name }}
+  args:
+    executable: /bin/bash
+  no_log: true
+  register: create_user_output
+  loop: "{{ samba_users }}"
+  when: samba_users is defined and samba_users | length > 0
+  changed_when: "'Added user' in create_user_output.stdout"
+  tags: samba
