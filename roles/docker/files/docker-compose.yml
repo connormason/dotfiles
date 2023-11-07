@@ -15,6 +15,7 @@ services:
       - /storage/media/config/plex:/config
       - /storage/media/tv:/tv
       - /storage/media/movies:/movies
+      - /storage/media/music:/music
     restart: unless-stopped
 
   # Tool that automatically moves downloaded files from transmission to the right spot to get picked up by Plex
