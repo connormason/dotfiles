@@ -1,0 +1,90 @@
+---
+- name: Home NAS bootstrap
+  hosts: nas
+  tasks:
+
+    # Set become password so it can be used in any role
+    - name: Set ansible_become_pass
+      ansible.builtin.set_fact:
+        ansible_become_pass: "{{ admin_password }}"
+      tags:
+        - always
+
+    # Update the apt package index
+    - name: Update apt package index
+      become: true
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 86400   # One day
+
+    # Tasks for Debian Linux
+    - include_role:
+        name: roles/debian
+        apply:
+          tags: debian
+      tags:
+        - debian
+        - configfile
+
+    # Tasks for ZFS filesystem
+    - include_role:
+        name: roles/zfs
+        apply:
+          tags: zfs
+      tags:
+        - zfs
+        - configfile
+
+    # Tasks for Samba file sharing
+    - include_role:
+        name: roles/samba
+        apply:
+          tags: samba
+      tags:
+        - samba
+        - configfile
+
+    # Tasks for Docker
+    - include_role:
+        name: roles/docker
+        apply:
+          tags: docker
+      tags:
+        - docker
+        - configfile
+
+    # Tasks for git configuration
+    - include_role:
+        name: roles/git
+        apply:
+          tags: git
+      tags:
+        - git
+        - configfile
+
+    # Tasks for SSH configuration
+    - include_role:
+        name: roles/ssh
+        apply:
+          tags: ssh
+      tags:
+        - ssh
+        - configfile
+
+    # Tasks for Tailscale configuration
+    - include_role:
+        name: roles/tailscale
+        apply:
+          tags: tailscale
+      tags:
+        - tailscale
+        - configfile
+
+    # Tasks for zsh configuration
+    - include_role:
+        name: roles/zsh
+        apply:
+          tags: zsh
+      tags:
+        - zsh
+        - configfile

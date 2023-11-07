@@ -1,0 +1,23 @@
+---
+samba_workgroup: "WORKGROUP"
+samba_server_string: 'Fileserver %m'
+samba_apple_extensions: true
+samba_security: 'user'
+samba_passdb_backend: 'tdbsam'
+samba_map_to_guest: 'Never'
+samba_shares_root: '/srv/shares'
+
+samba_wins_support: 'yes'
+samba_local_master: 'yes'
+samba_domain_master: 'yes'
+samba_preferred_master: 'yes'
+
+samba_shares:
+  - name: media
+    path: /mnt/storage/media
+    group: "{{ ansible_user }}"
+    write_list: "{{ ansible_user }}"
+
+samba_users:
+  - name: "{{ ansible_user }}"
+    password: "{{ admin_password }}"

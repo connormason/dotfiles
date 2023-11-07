@@ -1,0 +1,25 @@
+---
+
+# NOTE: Using commands here instead of `ansible.builtin.systemd` because for some reason masking was not working
+- name: Configure sleep/suspend/hibernate
+  block:
+    - name: "{{ 'Enable' if systemd_allow_sleep else 'Disable' }} sleep"
+      become: true
+      ansible.builtin.command: "sudo systemctl {{ 'unmask' if systemd_allow_sleep else 'mask' }} sleep.target"
+
+    - name: "{{ 'Enable' if systemd_allow_suspend else 'Disable' }} suspend"
+      become: true
+      ansible.builtin.command: "sudo systemctl {{ 'unmask' if systemd_allow_suspend else 'mask' }} suspend.target"
+
+    - name: "{{ 'Enable' if systemd_allow_hibernate else 'Disable' }} hibernate"
+      become: true
+      ansible.builtin.command: "sudo systemctl {{ 'unmask' if systemd_allow_hibernate else 'mask' }} hibernate.target"
+
+    - name: "{{ 'Enable' if systemd_allow_hybrid_sleep else 'Disable' }} hybrid sleep"
+      become: true
+      ansible.builtin.command: "sudo systemctl {{ 'unmask' if systemd_allow_hybrid_sleep else 'mask' }} hybrid-sleep.target"
+
+- name: Install apt packages
+  become: true
+  ansible.builtin.apt:
+    name: "{{ apt_packages }}"

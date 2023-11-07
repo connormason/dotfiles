@@ -1,0 +1,169 @@
+---
+version: "3.3"
+services:
+
+  # Plex
+  plex:
+    image: linuxserver/plex
+    container_name: plex
+    network_mode: host            # Temporary for docker/plex weirdness
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VERSION=docker
+    volumes:
+      - /storage/media/config/plex:/config
+      - /storage/media/tv:/tv
+      - /storage/media/movies:/movies
+      - /storage/media/music:/music
+    restart: unless-stopped
+
+  # Tool that automatically moves downloaded files from transmission to the right spot to get picked up by Plex
+  autoplex:
+    image: danielmmetz/autoplex:latest
+    container_name: autoplex
+    volumes:
+      - /storage/media/downloads:/downloads
+      - /storage/media/tv:/tv
+      - /storage/media/movies:/movies
+    restart: unless-stopped
+    command: ["--mode", "copy", "--host", "transmission", "--src", "/downloads/complete/tv", "--dest", "/tv", "--src", "/downloads/complete/movies", "--dest", "/movies"]
+
+  # Transmission. Torrent client
+  # TODO: periodically delete downloads once moved or point at downloads folder directly
+  transmission:
+    image: linuxserver/transmission
+    container_name: transmission
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /storage/media/config/transmission:/config
+      - /storage/media/downloads:/downloads
+      - /storage/media/watch:/watch
+    ports:
+      - "9091:9091"
+
+  # Proxy to bypass Cloudflare protection
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr
+    container_name: flaresolverr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+
+  # prowlarr. Indexer for radarr/sonarr
+  prowlarr:
+    image: linuxserver/prowlarr
+    container_name: prowlarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /storage/media/config/prowlarr:/config
+    ports:
+      - "9696:9696"
+
+  # radarr. Tool to find movies
+  radarr:
+    image: linuxserver/radarr
+    container_name: radarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /storage/media/config/radarr:/config
+      - /storage/media/movies:/movies
+      - /storage/media/downloads:/downloads
+    ports:
+      - "7878:7878"
+
+  # sonarr. Tool to find TV shows
+  sonarr:
+    image: linuxserver/sonarr
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /storage/media/config/sonarr:/config
+      - /storage/media/tv:/tv
+      - /storage/media/downloads:/downloads
+    restart: unless-stopped
+    ports:
+      - "8989:8989"
+
+  # Caddy. Reverse proxy for xxxx.my_domain.com -> sonarr/radarr/prowlarr/transmission/plex
+  caddy:
+    image: danielmmetz/caddy-dnsimple
+    container_name: caddy
+    environment:
+      - ACME_AGREE=true
+      - DNSIMPLE_OAUTH_TOKEN
+    ports:
+#      - 80:80
+      - 443:443
+    volumes:
+      - caddy_data:/data
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    restart: unless-stopped
+
+  # MQTT broker for talking to LED strips
+  mqtt:
+    container_name: mqtt-broker
+    image: matteocollina/mosca
+    ports:
+      - 1883:1883
+    network_mode: host
+
+  # MQTT bridge for talking to LED strips
+  mqttbridge:
+    container_name: mqtt-bridge
+    image: stjohnjohnson/smartthings-mqtt-bridge
+    volumes:
+      - ./mqtt-bridge:/config
+    ports:
+      - 8080:8080
+    network_mode: host
+
+  # Home Assistant
+  homeassistant:
+    container_name: home-assistant
+    image: homeassistant/home-assistant
+    ports:
+#      - 80:80
+      - 8123:8123
+    environment:
+      - TZ='America/Los_Angeles'
+    restart: always
+    volumes:
+      - ./homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - ./shared:/shared
+    network_mode: host
+
+  # PiHole
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"     # Only required if you are using Pi-hole as your DHCP server
+      - "80:80/tcp"
+    environment:
+      - TZ='America/Los_Angeles'
+      - WEBPASSWORD
+    volumes:
+      - './etc-pihole:/etc/pihole'
+      - './etc-dnsmasq.d:/etc/dnsmasq.d'
+    cap_add:
+      - NET_ADMIN     # Required if you are using Pi-hole as your DHCP server, else not needed
+    restart: unless-stopped
+
+volumes:
+  caddy_data: {}
