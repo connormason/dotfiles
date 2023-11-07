@@ -1,0 +1,164 @@
+---
+- name: Setup Docker
+  block:
+    - name: Setup Docker repository
+      block:
+        - name: Install dependencies
+          become: true
+          ansible.builtin.apt:
+            pkg:
+              - ca-certificates
+              - curl
+              - gnupg
+
+        - name: Add Docker GPG signing key
+          ansible.builtin.get_url:
+            url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+            dest: /usr/share/keyrings/docker.asc
+
+        - name: Get debian architecture
+          block:
+            - name: Print debian architecture
+              ansible.builtin.shell: "dpkg --print-architecture"
+              register: dpkg_print_architecture
+
+            - name: Set debian architecture fact
+              set_fact:
+                deb_architecture: "{{ dpkg_print_architecture.stdout }}"
+
+        - name: Add Docker repository
+          become: true
+          ansible.builtin.apt_repository:
+            repo: "deb [arch={{ deb_architecture }} signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+            state: present
+          register: docker_repo_add
+
+        - name: Update apt package index
+          become: true
+          ansible.builtin.apt:
+            update_cache: true
+          when: docker_repo_add.changed
+
+    - name: Install Docker engine
+      become: true
+      ansible.builtin.apt:
+        pkg:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+          - docker-compose
+
+    - name: Ensure docker daemon is running
+      service:
+        name: docker
+        state: started
+      become: true
+
+# ip_address var used by "Build and copy Caddyfile" and "Build and copy mqtt-bridge config" below
+- name: Get host IP address
+  ansible.builtin.set_fact:
+    ip_address: "{{ ansible_default_ipv4.address }}"
+  tags:
+    - always
+
+- name: Setup caddy
+  block:
+    - name: Clone caddy-dnsimple repo
+      ansible.builtin.git:
+        repo: "{{ caddy_dnsimple_repo_url }}"
+        dest: "{{ caddy_dnsimple_repo_dest }}"
+        version: "{{ caddy_dnsimple_repo_branch }}"
+        clone: true
+        update: true
+        accept_hostkey: true
+
+    - name: Build caddy-dnsimple image
+      community.docker.docker_image:
+        build:
+          path: "{{ autoplex_repo_dest }}"
+        name: danielmmetz/caddy-dnsimple
+        tag: latest
+        source: build
+      become: true
+
+    - name: Build and copy Caddyfile
+      ansible.builtin.template:
+        src: Caddyfile.j2
+        dest: "{{ docker_dir }}/Caddyfile"
+      tags:
+        - configfile
+
+    # Contains DNSimple OAuth token (DNSIMPLE_OAUTH_TOKEN), used by Caddy
+    - name: Build and copy .env file
+      ansible.builtin.template:
+        src: env.j2
+        dest: "{{ docker_dir }}/.env"
+      tags:
+        - configfile
+
+- name: Setup autoplex
+  block:
+    - name: Clone autoplex repo
+      ansible.builtin.git:
+        repo: "{{ autoplex_repo_url }}"
+        dest: "{{ autoplex_repo_dest }}"
+        version: "{{ autoplex_repo_branch }}"
+        clone: true
+        update: true
+        accept_hostkey: true
+
+    - name: Build autoplex image
+      community.docker.docker_image:
+        build:
+          path: "{{ autoplex_repo_dest }}"
+        name: danielmmetz/autoplex
+        tag: latest
+        source: build
+      become: true
+
+# TODO: split this into its own task, require that it run before docker-compose
+- name: Setup homeassistant
+  block:
+    - name: Setup mqtt-bridge
+      tags:
+        - configfile
+      block:
+        - name: Ensure mqtt-bridge directory exists
+          ansible.builtin.file:
+            path: "{{ mqtt_bridge_dir }}"
+            state: directory
+
+        - name: Build and copy mqtt-bridge config
+          ansible.builtin.template:
+            src: mqtt_bridge_config.yml.j2
+            dest: "{{ mqtt_bridge_config }}"
+
+    - name: Clone homeassistant config repo
+      ansible.builtin.git:
+        repo: "{{ homeassistant_repo_url }}"
+        dest: "{{ homeassistant_repo_dest }}"
+        version: "{{ homeassistant_repo_branch }}"
+        clone: true
+        update: true
+        accept_hostkey: true
+      tags:
+        - configfile
+
+    - name: Build and copy homeassistant secrets file
+      ansible.builtin.template:
+        src: ha_secrets.yaml.j2
+        dest: "{{ homeassistant_repo_dest }}/secrets.yaml"
+      tags:
+        - configfile
+
+- name: Copy docker-compose.yml
+  ansible.builtin.copy:
+    src: docker-compose.yml
+    dest: "{{ docker_dir }}/docker-compose.yml"
+    backup: true
+  tags:
+    - configfile
+
+# TODO: docker-compose up?

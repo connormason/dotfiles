@@ -1,6 +1,0 @@
-
-# Source .linuxrc if on Linux
-ENV="$(./determine_environment.sh)"
-if [ "$ENV" = "Linux" ]; then
-	source $HOME/.linuxrc > /dev/null 2>&1
-fi

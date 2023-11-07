@@ -1,0 +1,31 @@
+---
+- name: Install zfs
+  block:
+    - name: Add Debian contrib apt repository
+      become: true
+      ansible.builtin.command: "apt-add-repository contrib -y"
+
+    - name: Update apt package index
+      become: true
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Get debian architecture
+      block:
+        - name: Print debian architecture
+          ansible.builtin.shell: "dpkg --print-architecture"
+          register: dpkg_print_architecture
+
+        - name: Set debian architecture fact
+          set_fact:
+            deb_architecture: "{{ dpkg_print_architecture.stdout }}"
+
+    - name: Install zfs dependencies
+      become: true
+      ansible.builtin.apt:
+        pkg:
+          - "linux-headers-{{ deb_architecture }}"
+          - "linux-image-{{ deb_architecture }}"
+          - dpkg-dev
+          - zfs-dkms
+          - zfsutils-linux
