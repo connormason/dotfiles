@@ -1,5 +1,6 @@
 ---
 - name: Restart Samba services
+  become: true
   ansible.builtin.service:
     name: "{{ item }}"
     state: restarted
