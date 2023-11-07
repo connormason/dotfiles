@@ -153,6 +153,12 @@
       tags:
         - configfile
 
+    - name: Symlink HomeAssistant backup dir to cache SSD
+      ansible.builtin.file:
+        src: "{{ homeassistant_backup_dir }}"
+        dest: "{{ homeassistant_repo_dest }}/backups"
+        state: link
+
 - name: Copy docker-compose.yml
   ansible.builtin.copy:
     src: docker-compose.yml
