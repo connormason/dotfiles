@@ -116,8 +116,8 @@ services:
   mqtt:
     container_name: mqtt-broker
     image: matteocollina/mosca
-    ports:
-      - 1883:1883
+#    ports:
+#      - 1883:1883
     network_mode: host
 
   # MQTT bridge for talking to LED strips
@@ -126,17 +126,17 @@ services:
     image: stjohnjohnson/smartthings-mqtt-bridge
     volumes:
       - ./mqtt-bridge:/config
-    ports:
-      - 8080:8080
+#    ports:
+#      - 8080:8080
     network_mode: host
 
   # Home Assistant
   homeassistant:
     container_name: home-assistant
     image: homeassistant/home-assistant
-    ports:
+#    ports:
 #      - 80:80
-      - 8123:8123
+#      - 8123:8123
     environment:
       - TZ='America/Los_Angeles'
     restart: always
