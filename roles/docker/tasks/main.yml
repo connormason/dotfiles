@@ -120,6 +120,8 @@
 
 # TODO: split this into its own task, require that it run before docker-compose
 - name: Setup homeassistant
+  tags:
+    - homeassistant
   block:
     - name: Setup mqtt-bridge
       tags:
@@ -152,6 +154,29 @@
         dest: "{{ homeassistant_repo_dest }}/secrets.yaml"
       tags:
         - configfile
+
+    - name: Copy Lutron Caseta certifications/keys
+      block:
+        - name: Get path to group "all" inventory dir
+          ansible.builtin.set_fact:
+            ansible_group_all_inventory_dir: "{{ inventory_dir }}/group_vars/all"
+          tags:
+            - always
+
+        - name: Copy caseta.crt
+          ansible.builtin.copy:
+            src: "{{ ansible_group_all_inventory_dir }}/caseta.crt"
+            dest: "{{ homeassistant_repo_dest }}"
+
+        - name: Copy caseta.key
+          ansible.builtin.copy:
+            src: "{{ ansible_group_all_inventory_dir }}/caseta.key"
+            dest: "{{ homeassistant_repo_dest }}"
+
+        - name: Copy caseta-bridge.crt
+          ansible.builtin.copy:
+            src: "{{ ansible_group_all_inventory_dir }}/caseta-bridge.crt"
+            dest: "{{ homeassistant_repo_dest }}"
 
 - name: Copy docker-compose.yml
   ansible.builtin.copy:
