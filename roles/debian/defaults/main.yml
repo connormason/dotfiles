@@ -9,3 +9,4 @@ systemd_allow_hybrid_sleep: true
 # Packages
 apt_packages:
   - fzf
+  - exfat-fuse
