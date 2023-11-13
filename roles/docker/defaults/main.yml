@@ -8,11 +8,6 @@ caddy_dnsimple_repo_dest: "{{ docker_dir }}/caddy-dnsimple"
 caddy_dnsimple_repo_url: https://github.com/danielmmetz/caddy-dnsimple
 caddy_dnsimple_repo_branch: master
 
-mqtt_bridge_dir: "{{ docker_dir }}/mqtt-bridge"
-mqtt_bridge_config: "{{ mqtt_bridge_dir }}/config.yml"
-mqtt_bridge_preface: smartthings
-mqtt_bridge_port: 8080
-
 homeassistant_repo_dest: "{{ docker_dir }}/homeassistant"
 homeassistant_repo_url: git@github.com:connormason/homeassistant.git
 homeassistant_repo_branch: nas_bringup                                  # TODO: change to master after merge

@@ -123,20 +123,6 @@
   tags:
     - homeassistant
   block:
-    - name: Setup mqtt-bridge
-      tags:
-        - configfile
-      block:
-        - name: Ensure mqtt-bridge directory exists
-          ansible.builtin.file:
-            path: "{{ mqtt_bridge_dir }}"
-            state: directory
-
-        - name: Build and copy mqtt-bridge config
-          ansible.builtin.template:
-            src: mqtt_bridge_config.yml.j2
-            dest: "{{ mqtt_bridge_config }}"
-
     - name: Clone homeassistant config repo
       ansible.builtin.git:
         repo: "{{ homeassistant_repo_url }}"
