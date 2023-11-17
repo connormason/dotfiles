@@ -120,21 +120,9 @@
 
 # TODO: split this into its own task, require that it run before docker-compose
 - name: Setup homeassistant
+  tags:
+    - homeassistant
   block:
-    - name: Setup mqtt-bridge
-      tags:
-        - configfile
-      block:
-        - name: Ensure mqtt-bridge directory exists
-          ansible.builtin.file:
-            path: "{{ mqtt_bridge_dir }}"
-            state: directory
-
-        - name: Build and copy mqtt-bridge config
-          ansible.builtin.template:
-            src: mqtt_bridge_config.yml.j2
-            dest: "{{ mqtt_bridge_config }}"
-
     - name: Clone homeassistant config repo
       ansible.builtin.git:
         repo: "{{ homeassistant_repo_url }}"
@@ -152,6 +140,29 @@
         dest: "{{ homeassistant_repo_dest }}/secrets.yaml"
       tags:
         - configfile
+
+    - name: Copy Lutron Caseta certifications/keys
+      block:
+        - name: Get path to group "all" inventory dir
+          ansible.builtin.set_fact:
+            ansible_group_all_inventory_dir: "{{ inventory_dir }}/group_vars/all"
+          tags:
+            - always
+
+        - name: Copy caseta.crt
+          ansible.builtin.copy:
+            src: "{{ ansible_group_all_inventory_dir }}/caseta.crt"
+            dest: "{{ homeassistant_repo_dest }}"
+
+        - name: Copy caseta.key
+          ansible.builtin.copy:
+            src: "{{ ansible_group_all_inventory_dir }}/caseta.key"
+            dest: "{{ homeassistant_repo_dest }}"
+
+        - name: Copy caseta-bridge.crt
+          ansible.builtin.copy:
+            src: "{{ ansible_group_all_inventory_dir }}/caseta-bridge.crt"
+            dest: "{{ homeassistant_repo_dest }}"
 
 - name: Copy docker-compose.yml
   ansible.builtin.copy:

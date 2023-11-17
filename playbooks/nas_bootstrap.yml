@@ -52,6 +52,7 @@
       tags:
         - docker
         - configfile
+        - homeassistant
 
     # Tasks for git configuration
     - include_role:

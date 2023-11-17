@@ -14,7 +14,7 @@ samba_preferred_master: 'yes'
 
 samba_shares:
   - name: media
-    path: /mnt/storage/media
+    path: /storage
     group: "{{ ansible_user }}"
     write_list: "{{ ansible_user }}"
 
