@@ -1,4 +1,14 @@
 ---
+- name: Install Homebrew
+  block:
+    - name: Download Homebrew installation script
+      get_url:
+        url: https://raw.githubusercontent.com/Homebrew/install/master/install
+        dest: /tmp/brew_install
+
+    - name: Install Homebrew
+      shell: /usr/bin/ruby /tmp/install < /dev/null
+
 - name: Update Homebrew
   homebrew:
     update_homebrew: true
