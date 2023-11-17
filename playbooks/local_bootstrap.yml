@@ -1,6 +1,6 @@
 ---
 - name: Personal Mac bootstrap
-  hosts: local
+  hosts: localhost
   tasks:
 
     # Set become password so it can be used in any role
