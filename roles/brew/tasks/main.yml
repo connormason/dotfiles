@@ -1,13 +1,14 @@
 ---
 - name: Install Homebrew
   block:
-    - name: Download Homebrew installation script
-      get_url:
-        url: https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
-        dest: /tmp/brew_install
+    - name: Check if Homebrew is already installed
+      stat:
+        path: /usr/local/bin/brew
+      register: brew_stat
 
     - name: Install Homebrew
-      shell: /usr/bin/ruby /tmp/brew_install < /dev/null
+      script: install_homebrew.sh
+      when: not brew_stat.stat.exists
 
 - name: Update Homebrew
   homebrew:
