@@ -1,16 +1,6 @@
 ---
-- name: Install Homebrew
-  block:
-    # TODO: fix location?
-#    - name: Check if Homebrew is already installed
-#      stat:
-#        path: /usr/local/bin/brew
-#      register: brew_stat
-
-    - name: Install Homebrew
-      become: true
-      script: install_homebrew.sh
-#      when: not brew_stat.stat.exists
+# TODO: figure out how to install brew with ansible
+#- name: Install Homebrew
 
 - name: Update Homebrew
   homebrew:
