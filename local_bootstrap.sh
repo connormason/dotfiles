@@ -27,7 +27,7 @@ echo ""
 echo "Installing homebrew"
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 (echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> /Users/connormason/.zprofile
-eval "$/opt/homebrew/bin/brew/ shellenv"
+eval "$(/opt/homebrew/bin/brew/ shellenv)"
 echo ""
 
 # Install Ansible requirements
@@ -37,5 +37,5 @@ echo ""
 
 # Run NAS bootstrap Ansible playbook
 echo "Running local bootstrap Ansible playbook"
-ansible-playbook playbooks/local_bootstrap.yml -i inventory -v
+ansible-playbook playbooks/local_bootstrap.yml -i inventory -v --ask-pass
 echo ""
