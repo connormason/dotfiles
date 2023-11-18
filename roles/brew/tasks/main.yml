@@ -7,7 +7,7 @@
         dest: /tmp/brew_install
 
     - name: Install Homebrew
-      shell: /usr/bin/ruby /tmp/install < /dev/null
+      shell: /usr/bin/ruby /tmp/brew_install < /dev/null
 
 - name: Update Homebrew
   homebrew:
