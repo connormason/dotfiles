@@ -23,7 +23,13 @@ fi
 echo ""
 
 # Install homebrew and add to path
-# TODO: don't install if already installed
+#if ! [ -f /opt/homebrew/bin/brew/ ]; then
+#  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+#  (echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> /Users/connormason/.zprofile
+#  eval "$(/opt/homebrew/bin/brew/ shellenv)"
+#  echo ""
+#fi
+
 echo "Installing homebrew"
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 (echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> /Users/connormason/.zprofile
