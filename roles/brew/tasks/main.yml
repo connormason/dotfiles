@@ -3,7 +3,7 @@
   block:
     - name: Download Homebrew installation script
       get_url:
-        url: https://raw.githubusercontent.com/Homebrew/install/master/install
+        url: https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
         dest: /tmp/brew_install
 
     - name: Install Homebrew
