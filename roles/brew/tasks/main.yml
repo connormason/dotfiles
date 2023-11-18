@@ -1,14 +1,15 @@
 ---
 - name: Install Homebrew
   block:
-    - name: Check if Homebrew is already installed
-      stat:
-        path: /usr/local/bin/brew
-      register: brew_stat
+    # TODO: fix location?
+#    - name: Check if Homebrew is already installed
+#      stat:
+#        path: /usr/local/bin/brew
+#      register: brew_stat
 
     - name: Install Homebrew
       script: install_homebrew.sh
-      when: not brew_stat.stat.exists
+#      when: not brew_stat.stat.exists
 
 - name: Update Homebrew
   homebrew:
