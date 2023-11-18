@@ -6,7 +6,7 @@ brew_packages:
   - mas
   - hub
 
-brew_cask_packages:
+  # These are historically brew cask packages
   - google-chrome
   - iterm2
   - hammerspoon

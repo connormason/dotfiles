@@ -11,11 +11,6 @@
     name: "{{brew_packages}}"
     state: present
 
-- name: Install Homebrew cask packages
-  homebrew_cask:
-    name: "{{brew_cask_packages}}"
-    state: present
-
 - name: Install Mac App Store packages
   mas:
     id: "{{item.id}}"
