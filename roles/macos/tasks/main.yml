@@ -32,8 +32,8 @@
     - name: Other (miscellaneous) preferences setup
       include_tasks: other.yml
 
-    - name: Safari preferences setup
-      include_tasks: safari.yml
+#    - name: Safari preferences setup
+#      include_tasks: safari.yml
 
     - name: Prevent iTunes from auto-launching on device connection
       community.general.osx_defaults:
