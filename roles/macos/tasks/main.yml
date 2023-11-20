@@ -1,6 +1,7 @@
 ---
 - name: Install macOS command-line tools
-  include_role: elliotweiser.osx-command-line-tools
+  include_role:
+    name: elliotweiser.osx-command-line-tools
 
 - name: Configure macOS settings
   block:
