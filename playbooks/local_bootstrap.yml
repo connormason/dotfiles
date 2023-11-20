@@ -11,11 +11,11 @@
         - always
 
     # Debug
-    - name: Display all variables/facts
-      debug:
-        var: hostvars[inventory_hostname]
-      tags:
-        - always
+#    - name: Display all variables/facts
+#      debug:
+#        var: hostvars[inventory_hostname]
+#      tags:
+#        - always
 
     # Tasks for macOS setting configuration
     - include_role:
