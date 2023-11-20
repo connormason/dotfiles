@@ -51,6 +51,9 @@ dock_persist:
   - name: "Music"
     path: "/Applications/Music.app/"
     pos: 12
+  - name: "1Password 7"
+    path: "/Applications/1Password 7.app/"
+    pos: 13
   - name: "System Settings"
     path: "/Applications/System Settings.app/"
-    pos: 13
+    pos: 14

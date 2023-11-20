@@ -135,14 +135,14 @@
         value: 0
         state: present
 
+# TODO: add applications folder to first dock group
+# TODO: might need to write custom role wrapping dockutil
 - name: Set Dock items
   include_role:
     name: geerlingguy.mac.dock
   vars:
     dockitems_remove: "{{ dock_remove }}"
     dockitems_persist: "{{ dock_persist }}"
-
-  # TODO: add applications folder to first dock group
 
 - debug:
     msg: 'Killing Finder to load new settings'
