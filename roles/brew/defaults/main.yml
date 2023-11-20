@@ -28,7 +28,6 @@ brew_cask_packages:
   - sublime-text
   - pycharm-ce
   - spotify
-#  - homebrew/cask-drivers/logitech-options
   - messenger
   - signal
 

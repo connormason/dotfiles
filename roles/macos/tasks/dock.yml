@@ -1,137 +1,143 @@
 ---
-- name: Display dock on left side of the screen
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: orientation
-    type: string
-    value: left
-    state: present
+- name: Set Dock preferences
+  block:
+    - name: Display dock on left side of the screen
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: orientation
+        type: string
+        value: left
+        state: present
 
-- name: Auto-hide dock
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: autohide
-    type: int
-    value: 1
-    state: present
+    - name: Auto-hide dock
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: autohide
+        type: int
+        value: 1
+        state: present
 
-- name: Set dock icon size (clear)
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: tilesize
-    state: absent
-- name: Set dock icon size
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: tilesize
-    type: int
-    value: 64
-    state: present
+    - name: Set dock icon size (clear)
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: tilesize
+        state: absent
+    - name: Set dock icon size
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: tilesize
+        type: int
+        value: 64
+        state: present
 
-- name: Enable dock magnification on hover (clear)
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: magnification
-    state: absent
-- name: Enable dock magnification on hover
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: magnification
-    type: int
-    value: 1
-    state: present
+    - name: Enable dock magnification on hover (clear)
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: magnification
+        state: absent
+    - name: Enable dock magnification on hover
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: magnification
+        type: int
+        value: 1
+        state: present
 
-- name: Set dock magnification clear
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: largesize
-    state: absent
-- name: Set dock magnification level
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: largesize
-    type: float
-    value: 64
-    state: present
+    - name: Set dock magnification clear
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: largesize
+        state: absent
+    - name: Set dock magnification level
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: largesize
+        type: float
+        value: 64
+        state: present
 
-- name: Disable animations when opening apps from the dock (clear)
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: launchanim
-    state: absent
-- name: Disable animations when opening apps from the dock
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: launchanim
-    type: int
-    value: 1
-    state: present
+    - name: Disable animations when opening apps from the dock (clear)
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: launchanim
+        state: absent
+    - name: Disable animations when opening apps from the dock
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: launchanim
+        type: int
+        value: 1
+        state: present
 
-- name: Speed up Mission Control animations (clear)
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: expose-animation-duration
-    state: absent
-- name: Speed up Mission Control animations
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: expose-animation-duration
-    type: float
-    value: 0.1
-    state: present
+    - name: Speed up Mission Control animations (clear)
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: expose-animation-duration
+        state: absent
+    - name: Speed up Mission Control animations
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: expose-animation-duration
+        type: float
+        value: 0.1
+        state: present
 
-- name: Disable automatic rearranging of spaces by most recent
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: mru-spaces
-    type: bool
-    value: false
-    state: present
+    - name: Disable automatic rearranging of spaces by most recent
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: mru-spaces
+        type: bool
+        value: false
+        state: present
 
-- name: Make dock icons of hidden applications translucent (clear)
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: showhidden
-    state: absent
-- name: Make dock icons of hidden applications translucent
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: showhidden
-    type: string
-    value: true
-    state: present
+    - name: Make dock icons of hidden applications translucent (clear)
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: showhidden
+        state: absent
+    - name: Make dock icons of hidden applications translucent
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: showhidden
+        type: string
+        value: true
+        state: present
 
-- name: Set bottom left screen hot corner to sleep display (corner)
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: wvous-bl-corner
-    type: int
-    value: 10
-    state: present
+    - name: Set bottom left screen hot corner to sleep display (corner)
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: wvous-bl-corner
+        type: int
+        value: 10
+        state: present
 
-- name: Set bottom left screen hot corner to sleep display (modifier)
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: wvous-bl-modifier
-    type: int
-    value: 0
-    state: present
+    - name: Set bottom left screen hot corner to sleep display (modifier)
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: wvous-bl-modifier
+        type: int
+        value: 0
+        state: present
 
-- name: Set top right screen hot corner to show desktop (corner)
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: wvous-tr-corner
-    type: int
-    value: 4
-    state: present
+    - name: Set top right screen hot corner to show desktop (corner)
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: wvous-tr-corner
+        type: int
+        value: 4
+        state: present
 
-- name: Set top right screen hot corner to show desktop (modifier)
-  community.general.osx_defaults:
-    domain: com.apple.Dock
-    key: wvous-tr-modifier
-    type: int
-    value: 0
-    state: present
+    - name: Set top right screen hot corner to show desktop (modifier)
+      community.general.osx_defaults:
+        domain: com.apple.Dock
+        key: wvous-tr-modifier
+        type: int
+        value: 0
+        state: present
+
+- name: Set Dock items
+  include_role:
+    name: geerlingguy.mac.homebrew
 
 - debug:
     msg: 'Killing Finder to load new settings'
