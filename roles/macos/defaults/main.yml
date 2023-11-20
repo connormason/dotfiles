@@ -1,7 +1,5 @@
 ---
 brew_packages:
-  - zsh
-  - zsh-completions
   - fzf
   - tree
   - mas
