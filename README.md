@@ -4,7 +4,6 @@ These are my dotfiles. Yay.
 
 ## Personal Mac Bootstrapping
 
-- Run a git command from terminal, install developer tools when prompted
 - Download password manager from the Mac App Store
 - Login to github.com from browser
 - Setup SSH keys with Github
