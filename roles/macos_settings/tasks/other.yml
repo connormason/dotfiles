@@ -26,7 +26,7 @@
     domain: com.apple.screencapture
     key: location
     type: string
-    value: "{{user_home}}/Desktop/Screenshots/"
+    value: "{{ ansible_user_dir }}/Desktop/Screenshots/"
     state: present
 
 - name: Increase window resize speed for Cocoa applications (clear)
