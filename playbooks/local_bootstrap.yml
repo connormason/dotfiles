@@ -17,9 +17,17 @@
 #      tags:
 #        - always
 
-    # Tasks for macOS setting configuration
+    # Tasks for macOS app/tool installation
     - include_role:
         name: roles/macos
+        apply:
+          tags: macos
+      tags:
+        - macos
+
+    # Tasks for macOS settings configuration
+    - include_role:
+        name: roles/macos_settings
         apply:
           tags: macos
       tags:
