@@ -1,3 +1,3 @@
 # macOS
 
-Configures macOS preferences
+macOS installation tasks
