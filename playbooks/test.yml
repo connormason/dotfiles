@@ -1,8 +1,0 @@
----
-- name: Testtttt
-  hosts: all
-  tasks:
-
-    # Tasks for homebrew
-    - include_role:
-        name: roles/test
