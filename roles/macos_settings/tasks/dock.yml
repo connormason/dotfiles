@@ -138,6 +138,9 @@
 - name: Set Dock items
   include_role:
     name: geerlingguy.mac.dock
+  vars:
+    dockitems_remove: "{{ dock_remove }}"
+    dockitems_persist: "{{ dock_persist }}"
 
 - debug:
     msg: 'Killing Finder to load new settings'
