@@ -137,7 +137,7 @@
 
 - name: Set Dock items
   include_role:
-    name: geerlingguy.mac.homebrew
+    name: geerlingguy.mac.dock
 
 - debug:
     msg: 'Killing Finder to load new settings'
