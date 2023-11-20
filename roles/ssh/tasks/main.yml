@@ -42,7 +42,7 @@
           Host *
             AddKeysToAgent yes
             UseKeychain yes
-            IdentityFile ~/.ssh/id_rsa
+            IdentityFile ~/.ssh/id_ed25519
         create: yes
         insertbefore: BOF
       when: not ssh_config_stat.stat.exists
