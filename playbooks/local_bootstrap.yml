@@ -33,15 +33,6 @@
       tags:
         - macos
 
-    # Tasks for homebrew
-    - include_role:
-        name: roles/brew
-        apply:
-          tags: brew
-      tags:
-        - brew
-        - homebrew
-
     # Tasks for git configuration
     - include_role:
         name: roles/git
