@@ -6,42 +6,8 @@
     homebrew_installed_packages: "{{ brew_packages }}"
     homebrew_cask_apps: "{{ brew_cask_packages }}"
 
-# TODO: mas apps
-
-#- name: Update Homebrew
-#  homebrew:
-#    update_homebrew: true
-#
-#- name: Install Homebrew packages
-#  homebrew:
-#    name: "{{ brew_packages }}"
-#    state: present
-#
-## TODO: get actual path of all of these
-##- name: Check the list of installed apps
-##  stat: path=/Applications/{{item.path}}
-##  with_items:
-##    - { path: "GoLand.app", name: "goland" }
-##    - { path: "pgAdmin 4.app", name: "pgadmin4" }
-##    - { path: "Google Chrome.app", name: "google-chrome" }
-##    - { path: "Postman.app", name: "postman" }
-##    - { path: "Slack.app", name: "slack" }
-##    - { path: "Visual Studio Code.app", name: "visual-studio-code" }
-##  register: apps_install_status
-##
-##- name: Install Apps not in the applications folder
-##  homebrew_cask: name={{ item.item.name }} state=present
-##  with_items: "{{ apps_install_status.results }}"
-##  when: not item.stat.exists
-#
-#- name: Install Homebrew cask packages
-#  homebrew_cask:
-#    name: "{{brew_cask_packages}}"
-#    state: present
-#
-#- name: Install Mac App Store packages
-#  mas:
-#    id: "{{ item.id }}"
-#    state: present
-#    upgrade_all: "{{ mas_upgrade_all_apps }}"
-#  with_items: "{{ mas_apps }}"
+- name: Install Mac App Store apps
+  include_role:
+    name: geerlingguy.mac.mas
+  vars:
+    mas_installed_apps: "{{ mas_apps }}"
