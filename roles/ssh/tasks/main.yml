@@ -1,6 +1,6 @@
 ---
 - name: Authorize SSH for GitHub
-  when: ansible_distribution != 'MacOSX'      # TODO: run if not running on localhost
+  when: inventory_hostname != 'localhost'
   block:
     - name: Generate SSH key pair
       community.crypto.openssh_keypair:
@@ -19,7 +19,7 @@
         pubkey: '{{ ssh_pub_key.stdout }}'
 
 - name: Automatically load SSH keys into ssh-agent
-  when: ansible_distribution == 'MacOSX'
+  when: inventory_hostname == 'localhost'
   block:
     - name: Create ~/.ssh directory if it does not exist
       file:
