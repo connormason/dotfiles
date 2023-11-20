@@ -1,7 +1,23 @@
 ---
 - name: Install oh-my-zsh
   block:
-    - name: Install oh-my-zsh dependencies
+    - name: Install oh-my-zsh dependencies (macOS)
+      when: ansible_distribution == 'MacOSX'
+      block:
+        - name: Install macOS command-line tools
+          include_role:
+            name: elliotweiser.osx-command-line-tools
+
+        - name: Install dependencies with brew
+          include_role:
+            name: geerlingguy.mac.homebrew
+          vars:
+            homebrew_installed_packages:
+              - zsh
+              - zsh-completions
+
+    - name: Install oh-my-zsh dependencies (non-macOS)
+      when: ansible_distribution != 'MacOSX'
       become: true
       ansible.builtin.package:
         name:
@@ -28,36 +44,58 @@
     name: "{{ ansible_user }}"
     shell: "{{ oh_my_zsh_zsh_path }}"
 
-- name: Setup oh-my-zsh theme
+- name: Install powerlevel10k zsh theme
+  ansible.builtin.git:
+    repo: https://github.com/romkatv/powerlevel10k.git
+    dest: "{{ ansible_user_dir }}/.oh-my-zsh/themes/powerlevel10k"
+    version: master
+    clone: true
+    update: true
+
+- name: Setup zsh configuration files
   block:
-    - name: Install powerlevel10k theme
-      ansible.builtin.git:
-        repo: https://github.com/romkatv/powerlevel10k.git
-        dest: "{{ ansible_user_dir }}/.oh-my-zsh/themes/powerlevel10k"
-        version: master
-        clone: true
-        update: true
+    - name: Setup zsh configuration files (remote)
+      when: inventory_hostname != 'localhost'
+      block:
+        - name: Copy .zshrc
+          ansible.builtin.copy:
+            src: zshrc
+            dest: "{{ ansible_user_dir }}/.zshrc"
+            backup: true
+          tags:
+            - configfile
 
-    - name: Copy powerlevel10k config
-      ansible.builtin.copy:
-        src: p10k.zsh
-        dest: "{{ ansible_user_dir }}/.p10k.zsh"
-      tags:
-        - configfile
+        - name: Copy .zprofile
+          ansible.builtin.copy:
+            src: zprofile
+            dest: "{{ ansible_user_dir }}/.zprofile"
+          tags:
+            - configfile
 
-# TODO: symlink if local
-- name: Copy .zshrc
-  ansible.builtin.copy:
-    src: zshrc
-    dest: "{{ ansible_user_dir }}/.zshrc"
-    backup: true
-  tags:
-    - configfile
+        - name: Copy powerlevel10k config
+          ansible.builtin.copy:
+            src: p10k.zsh
+            dest: "{{ ansible_user_dir }}/.p10k.zsh"
+          tags:
+            - configfile
 
-# TODO: symlink if local
-- name: Copy .zprofile
-  ansible.builtin.copy:
-    src: zprofile
-    dest: "{{ ansible_user_dir }}/.zprofile"
-  tags:
-    - configfile
+    - name: Setup zsh configuration files (local)
+      when: inventory_hostname == 'localhost'
+      block:
+        - name: Symlink .zshrc
+          ansible.builtin.file:
+            src: "{{ dotfiles_home }}/roles/git/files/zshrc"
+            dest: "{{ ansible_user_dir }}/.zshrc"
+            state: link
+
+        - name: Symlink .zprofile
+          ansible.builtin.file:
+            src: "{{ dotfiles_home }}/roles/git/files/zprofile"
+            dest: "{{ ansible_user_dir }}/.zprofile"
+            state: link
+
+        - name: Symlink powerlevel10k config
+          ansible.builtin.file:
+            src: "{{ dotfiles_home }}/roles/git/files/p10k.zsh"
+            dest: "{{ ansible_user_dir }}/.p10k.zsh"
+            state: link
