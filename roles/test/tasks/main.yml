@@ -1,9 +1,0 @@
----
-- debug:
-    msg: "{{ansible_host}}"
-
-- name: Checky check
-  when: ansible_host == '127.0.0.1'
-  block:
-    - debug:
-        msg: 'running on localhost'
