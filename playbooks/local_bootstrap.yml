@@ -10,6 +10,14 @@
       tags:
         - always
 
+    # Tasks for macOS setting configuration
+    - include_role:
+        name: roles/macos
+        apply:
+          tags: macos
+      tags:
+        - macos
+
     # Tasks for homebrew
     - include_role:
         name: roles/brew
@@ -44,14 +52,6 @@
           tags: iterm
       tags:
         - iterm
-
-    # Tasks for macOS setting configuration
-    - include_role:
-        name: roles/macos
-        apply:
-          tags: macos
-      tags:
-        - macos
 
     # Tasks for SSH configuration
     - include_role:
