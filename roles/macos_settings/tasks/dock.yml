@@ -142,6 +142,8 @@
     dockitems_remove: "{{ dock_remove }}"
     dockitems_persist: "{{ dock_persist }}"
 
+  # TODO: add applications folder to first dock group
+
 - debug:
     msg: 'Killing Finder to load new settings'
 

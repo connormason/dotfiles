@@ -16,6 +16,7 @@ brew_cask_packages:
   - spotify
   - messenger
   - signal
+  - serato-dj
 
 mas_apps:
   - name: Amphetamine
