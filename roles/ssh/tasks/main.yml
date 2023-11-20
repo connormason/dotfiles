@@ -23,12 +23,12 @@
   block:
     - name: Create ~/.ssh directory if it does not exist
       file:
-        path: "{{user_home}}/.ssh"
+        path: "{{ ansible_user_dir }}/.ssh"
         state: directory
 
     - name: Determine if SSH config exists
       stat:
-        path: "{{user_home}}/.ssh/config"
+        path: "{{ ansible_user_dir }}/.ssh/config"
       register: ssh_config_stat
 
     - debug:
@@ -37,7 +37,7 @@
 
     - name: Ensure SSH keys are automatically loaded into ssh-agent
       blockinfile:
-        path: "{{user_home}}/.ssh/config"
+        path: "{{ ansible_user_dir }}/.ssh/config"
         block: |
           Host *
             AddKeysToAgent yes

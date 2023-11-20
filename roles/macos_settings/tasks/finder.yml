@@ -240,7 +240,7 @@
     state: present
 
 - name: Show the ~/Library directory
-  command: "chflags nohidden {{ user_home }}/Library"
+  command: "chflags nohidden {{ ansible_user_dir }}/Library"
 
 - name: Show the /Volumes directory
   command: "chflags nohidden /Volumes"
