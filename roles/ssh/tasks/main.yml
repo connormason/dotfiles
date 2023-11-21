@@ -22,7 +22,7 @@
   when: inventory_hostname == 'localhost'
   block:
     - name: Create ~/.ssh directory if it does not exist
-      file:
+      ansible.builtin.file:
         path: "{{ ansible_user_dir }}/.ssh"
         state: directory
 
