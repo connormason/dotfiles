@@ -1,0 +1,22 @@
+---
+brew_packages:
+  - fzf
+  - tree
+  - mas
+  - hub
+
+brew_cask_packages:
+  - google-chrome
+  - iterm2
+  - hammerspoon
+  - sublime-text
+  - pycharm-ce
+  - spotify
+  - messenger
+  - signal
+
+mas_apps:
+  - name: Amphetamine
+    id: 937984704
+
+mas_upgrade_all_apps: false
