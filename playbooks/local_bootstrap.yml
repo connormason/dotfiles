@@ -1,0 +1,78 @@
+---
+- name: Personal Mac bootstrap
+  hosts: localhost
+  tasks:
+
+    # Set become password so it can be used in any role
+    - name: Set ansible_become_pass
+      ansible.builtin.set_fact:
+        ansible_become_pass: "{{ admin_password }}"
+      tags:
+        - always
+
+    # Debug
+#    - name: Display all variables/facts
+#      debug:
+#        var: hostvars[inventory_hostname]
+#      tags:
+#        - always
+
+    # Tasks for macOS app/tool installation
+    - include_role:
+        name: roles/macos
+        apply:
+          tags: macos
+      tags:
+        - macos
+
+    # Tasks for macOS settings configuration
+    - include_role:
+        name: roles/macos_settings
+        apply:
+          tags: macos
+      tags:
+        - macos
+
+    # Tasks for git configuration
+    - include_role:
+        name: roles/git
+        apply:
+          tags: git
+      tags:
+        - git
+        - configfile
+
+    # Tasks for Hammerspoon configuration
+    - include_role:
+        name: roles/hammerspoon
+        apply:
+          tags: hammerspoon
+      tags:
+        - hammerspoon
+        - configfile
+
+    # Tasks for iTerm2 configuration
+    - include_role:
+        name: roles/iterm
+        apply:
+          tags: iterm
+      tags:
+        - iterm
+
+    # Tasks for SSH configuration
+    - include_role:
+        name: roles/ssh
+        apply:
+          tags: ssh
+      tags:
+        - ssh
+        - configfile
+
+    # Tasks for zsh configuration
+    - include_role:
+        name: roles/zsh
+        apply:
+          tags: zsh
+      tags:
+        - zsh
+        - configfile

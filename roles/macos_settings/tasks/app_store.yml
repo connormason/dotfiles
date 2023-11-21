@@ -1,0 +1,24 @@
+---
+- name: Enable automatic software update check
+  community.general.osx_defaults:
+    domain: com.apple.SoftwareUpdate
+    key: AutomaticCheckEnabled
+    type: bool
+    value: true
+    state: present
+
+- name: Install system data files & security updates
+  community.general.osx_defaults:
+    domain: com.apple.SoftwareUpdate
+    key: CriticalUpdateInstall
+    type: int
+    value: 1
+    state: present
+
+- name: Turn on app auto-update
+  community.general.osx_defaults:
+    domain: com.apple.commerce
+    key: AutoUpdate
+    type: bool
+    value: true
+    state: present

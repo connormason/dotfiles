@@ -1,0 +1,47 @@
+---
+- name: Show battery percentage in menu bar
+  community.general.osx_defaults:
+    domain: com.apple.menuextra.battery
+    key: ShowPercent
+    type: string
+    value: "YES"
+    state: present
+
+- name: Show audio settings in menu bar
+  command: "defaults write com.apple.systemuiserver menuExtras -array-add '/System/Library/CoreServices/Menu Extras/Volume.menu'"
+
+- name: Set menu bar date format
+  community.general.osx_defaults:
+    domain: com.apple.menuextra.clock
+    key: DateFormat
+    type: string
+    value: "EEE d MMM h:mm:ss a"
+    state: present
+
+- name: Always show expanded options in print menu
+  command: defaults write -g PMPrintingExpandedStateForPrint -bool TRUE
+
+- name: Change default screenshot storage location to ~/Desktop/Screenshots
+  community.general.osx_defaults:
+    domain: com.apple.screencapture
+    key: location
+    type: string
+    value: "{{ ansible_user_dir }}/Desktop/Screenshots/"
+    state: present
+
+- name: Increase window resize speed for Cocoa applications (clear)
+  community.general.osx_defaults:
+    domain: NSGlobalDomain
+    key: NSWindowResizeTime
+    state: absent
+- name: Increase window resize speed for Cocoa applications
+  community.general.osx_defaults:
+    domain: NSGlobalDomain
+    key: NSWindowResizeTime
+    type: float
+    value: 0.001
+    state: present
+
+- name: Reveal IP address, hostname, OS version (etc) when clicking the clock in login window
+  command: defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
+  become: yes
