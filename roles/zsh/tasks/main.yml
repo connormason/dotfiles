@@ -84,18 +84,18 @@
       block:
         - name: Symlink .zshrc
           ansible.builtin.file:
-            src: "{{ dotfiles_home }}/roles/git/files/zshrc"
+            src: "{{ dotfiles_home }}/roles/zsh/files/zshrc"
             dest: "{{ ansible_user_dir }}/.zshrc"
             state: link
 
         - name: Symlink .zprofile
           ansible.builtin.file:
-            src: "{{ dotfiles_home }}/roles/git/files/zprofile"
+            src: "{{ dotfiles_home }}/roles/zsh/files/zprofile"
             dest: "{{ ansible_user_dir }}/.zprofile"
             state: link
 
         - name: Symlink powerlevel10k config
           ansible.builtin.file:
-            src: "{{ dotfiles_home }}/roles/git/files/p10k.zsh"
+            src: "{{ dotfiles_home }}/roles/zsh/files/p10k.zsh"
             dest: "{{ ansible_user_dir }}/.p10k.zsh"
             state: link
