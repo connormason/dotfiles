@@ -9,6 +9,7 @@
   vars:
     homebrew_installed_packages: "{{ brew_packages }}"
     homebrew_cask_apps: "{{ brew_cask_packages }}"
+    homebrew_cask_accept_external_apps: true
 
 - name: Install Mac App Store apps
   include_role:
