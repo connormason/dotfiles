@@ -17,70 +17,85 @@
         value: 1
         state: present
 
-    - name: Set dock icon size (clear)
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: tilesize
-        state: absent
     - name: Set dock icon size
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: tilesize
-        type: int
-        value: 64
-        state: present
+      block:
+        - name: Clear existing value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: tilesize
+            state: absent
 
-    - name: Enable dock magnification on hover (clear)
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: magnification
-        state: absent
+        - name: Set value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: tilesize
+            type: int
+            value: 64
+            state: present
+
     - name: Enable dock magnification on hover
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: magnification
-        type: int
-        value: 1
-        state: present
+      block:
+        - name: Clear existing value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: magnification
+            state: absent
 
-    - name: Set dock magnification clear
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: largesize
-        state: absent
-    - name: Set dock magnification level
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: largesize
-        type: float
-        value: 64
-        state: present
+        - name: Set value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: magnification
+            type: int
+            value: 1
+            state: present
 
-    - name: Disable animations when opening apps from the dock (clear)
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: launchanim
-        state: absent
+    - name: Set dock magnification
+      block:
+        - name: Clear existing value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: largesize
+            state: absent
+
+        - name: Set value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: largesize
+            type: float
+            value: 64
+            state: present
+
     - name: Disable animations when opening apps from the dock
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: launchanim
-        type: int
-        value: 1
-        state: present
+      block:
+        - name: Clear existing value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: launchanim
+            state: absent
 
-    - name: Speed up Mission Control animations (clear)
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: expose-animation-duration
-        state: absent
+        - name: Set value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: launchanim
+            type: int
+            value: 1
+            state: present
+
     - name: Speed up Mission Control animations
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: expose-animation-duration
-        type: float
-        value: 0.1
-        state: present
+      block:
+        - name: Clear existing value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: expose-animation-duration
+            state: absent
+
+        - name: Set value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: expose-animation-duration
+            type: float
+            value: 0.1
+            state: present
 
     - name: Disable automatic rearranging of spaces by most recent
       community.general.osx_defaults:
@@ -90,18 +105,21 @@
         value: false
         state: present
 
-    - name: Make dock icons of hidden applications translucent (clear)
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: showhidden
-        state: absent
     - name: Make dock icons of hidden applications translucent
-      community.general.osx_defaults:
-        domain: com.apple.Dock
-        key: showhidden
-        type: string
-        value: true
-        state: present
+      block:
+        - name: Clear existing value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: showhidden
+            state: absent
+
+        - name: Set value
+          community.general.osx_defaults:
+            domain: com.apple.Dock
+            key: showhidden
+            type: string
+            value: true
+            state: present
 
     - name: Set bottom left screen hot corner to sleep display (corner)
       community.general.osx_defaults:

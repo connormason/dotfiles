@@ -29,18 +29,21 @@
     value: "{{ ansible_user_dir }}/Desktop/Screenshots/"
     state: present
 
-- name: Increase window resize speed for Cocoa applications (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSWindowResizeTime
-    state: absent
 - name: Increase window resize speed for Cocoa applications
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSWindowResizeTime
-    type: float
-    value: 0.001
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSWindowResizeTime
+        state: absent
+
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSWindowResizeTime
+        type: float
+        value: 0.001
+        state: present
 
 - name: Reveal IP address, hostname, OS version (etc) when clicking the clock in login window
   command: defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
