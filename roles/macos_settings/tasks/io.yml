@@ -150,3 +150,7 @@
         type: int
         value: 3
         state: present
+
+- name: Remap Caps Lock to Control
+  ansible.builtin.command: |
+    hidutil property --set '{"UserKeyMapping":[{"HIDKeyboardModifierMappingSrc": 0x700000039, "HIDKeyboardModifierMappingDst": 0x7000000E0}]}'
