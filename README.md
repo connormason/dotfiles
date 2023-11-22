@@ -13,22 +13,17 @@ These are my dotfiles. Yay.
   - Copy SSH key to clipboard: `pbcopy < ~/.ssh/id_ed25519.pub`
   - Add SSH key to github.com account
 - Clone dotfiles repo: `git clone git@github.com:connormason/dotfiles.git`
-- Create and activate python virtual environment
-  - `python3 -m venv venv`
-  - `source venv/bin/activate`
-- Install python requirements for bootstrapping: `pip install -r requirements.txt`
 - Create `vault_password.txt` file in dotfiles repo and paste in Ansible Vault password from password manager
 - Run bootstrapping script
   - `chmod u+x local_bootstrap.sh`
   - `./local_bootstrap.sh`
-  - NOTE: will need to enter a password for brew install, hit Enter, then enter password for `ansible-playbook` command
 
 ## NAS Bootstrapping
 
-- Create python virtual environment to install dependencies into
-- `pip install -r requirements.txt`
 - Create file `vault_password.txt` in the repo root and paste in the Ansible Vault password from password manager
-- Run `chmod u+x nas_bootstrap.sh; ./nas_bootstrap.sh`
+- Run bootstrapping script
+  - `chmod u+x nas_bootstrap.sh`
+  - `./nas_bootstrap.sh`
 - Point router DNS at NAS for PiHole
 
 ## Notes

@@ -22,6 +22,22 @@ else
 fi
 echo ""
 
+# Create/enter python virtual environment for installation
+if [ ! -d "$SCRIPT_DIR/venv" ]; then
+  echo "Creating/entering python virtual environment"
+  python3 -m venv venv/
+  echo ""
+fi
+
+echo "Entering python virtual environment"
+source venv/bin/activate
+echo ""
+
+# Install python packages required for installation
+echo "Installing Python requirements"
+pip install -r requirements.txt
+echo ""
+
 # Install Ansible requirements
 echo "Installing Ansible requirements"
 ansible-galaxy install -r roles/requirements.yml
