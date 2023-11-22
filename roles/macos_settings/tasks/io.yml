@@ -77,7 +77,7 @@
     value: false
     state: present
 
-- name: Set keyboard repeat rate to super fast
+- name: Set keyboard repeat rate
   community.general.osx_defaults:
     domain: NSGlobalDomain
     key: KeyRepeat
@@ -85,17 +85,17 @@
     value: 2
     state: present
 
-- name: Set initial keyboard repeat rate to super fast (clear)
+- name: Set initial keyboard repeat rate (clear)
   community.general.osx_defaults:
     domain: NSGlobalDomain
     key: InitialKeyRepeat
     state: absent
-- name: Set initial keyboard repeat rate to super fast
+- name: Set initial keyboard repeat rate
   community.general.osx_defaults:
     domain: NSGlobalDomain
     key: InitialKeyRepeat
     type: int
-    value: 7
+    value: 10
     state: present
 
 - name: Enable trackpad tap-to-click (clear)
