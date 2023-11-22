@@ -1,0 +1,18 @@
+---
+- name: Disable screensaver
+  community.general.osx_defaults:
+    host: currentHost
+    domain: com.apple.screensaver
+    key: idleTime
+    type: int
+    value: 0
+    state: present
+
+- name: Set display idle timeouts
+  osx_pmset:
+    on_battery:
+      sleep: 30
+      displaysleep: 30
+    on_charger:
+      sleep: 60
+      displaysleep: 60
