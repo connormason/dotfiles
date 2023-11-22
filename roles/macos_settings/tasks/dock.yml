@@ -19,13 +19,13 @@
 
     - name: Set dock icon size
       block:
-        - name: Clear existing value
+        - name: Set dock icon size (clear)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: tilesize
             state: absent
 
-        - name: Set value
+        - name: Set dock icon size (set)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: tilesize
@@ -35,13 +35,13 @@
 
     - name: Enable dock magnification on hover
       block:
-        - name: Clear existing value
+        - name: Enable dock magnification on hover (clear)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: magnification
             state: absent
 
-        - name: Set value
+        - name: Enable dock magnification on hover (set)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: magnification
@@ -51,13 +51,13 @@
 
     - name: Set dock magnification
       block:
-        - name: Clear existing value
+        - name: Set dock magnification (clear)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: largesize
             state: absent
 
-        - name: Set value
+        - name: Set dock magnification (set)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: largesize
@@ -67,13 +67,13 @@
 
     - name: Disable animations when opening apps from the dock
       block:
-        - name: Clear existing value
+        - name: Disable animations when opening apps from the dock (clear)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: launchanim
             state: absent
 
-        - name: Set value
+        - name: Disable animations when opening apps from the dock (set)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: launchanim
@@ -83,13 +83,13 @@
 
     - name: Speed up Mission Control animations
       block:
-        - name: Clear existing value
+        - name: Speed up Mission Control animations (clear)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: expose-animation-duration
             state: absent
 
-        - name: Set value
+        - name: Speed up Mission Control animations (set)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: expose-animation-duration
@@ -107,13 +107,13 @@
 
     - name: Make dock icons of hidden applications translucent
       block:
-        - name: Clear existing value
+        - name: Make dock icons of hidden applications translucent (clear)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: showhidden
             state: absent
 
-        - name: Set value
+        - name: Make dock icons of hidden applications translucent (set)
           community.general.osx_defaults:
             domain: com.apple.Dock
             key: showhidden
