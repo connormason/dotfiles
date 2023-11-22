@@ -76,3 +76,11 @@
       tags:
         - zsh
         - configfile
+
+    # Tasks for python configuration
+    - include_role:
+        name: roles/python
+        apply:
+          tags: python
+        tags:
+          - python

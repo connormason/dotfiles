@@ -1,0 +1,6 @@
+---
+- name: Install global python packages
+  ansible.builtin.pip:
+    name: "{{ item }}"
+    executable: /usr/bin/python3
+  with_items: "{{ global_python_packages }}"
