@@ -22,6 +22,9 @@
 - name: Messages preferences setup
   include_tasks: messages.yml
 
+- name: Display preferences setup
+  include_tasks: power.yml
+
 - name: Other (miscellaneous) preferences setup
   include_tasks: other.yml
 
