@@ -1,81 +1,99 @@
 ---
-- name: Disable auto-correct (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticSpellingCorrectionEnabled
-    state: absent
 - name: Disable auto-correct
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticSpellingCorrectionEnabled
-    type: bool
-    value: false
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticSpellingCorrectionEnabled
+        state: absent
 
-- name: Disable auto-capitalization (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticCapitalizationEnabled
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticSpellingCorrectionEnabled
+        type: bool
+        value: false
+        state: present
+
 - name: Disable auto-capitalization
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticCapitalizationEnabled
-    type: bool
-    value: false
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticCapitalizationEnabled
+        state: absent
 
-- name: Disable smart dashes (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticDashSubstitutionEnabled
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticCapitalizationEnabled
+        type: bool
+        value: false
+        state: present
+
 - name: Disable smart dashes
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticDashSubstitutionEnabled
-    type: bool
-    value: false
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticDashSubstitutionEnabled
+        state: absent
 
-- name: Disable smart quotes (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticQuoteSubstitutionEnabled
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticDashSubstitutionEnabled
+        type: bool
+        value: false
+        state: present
+
 - name: Disable smart quotes
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticQuoteSubstitutionEnabled
-    type: bool
-    value: false
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticQuoteSubstitutionEnabled
+        state: absent
 
-- name: Disable auto period substitution (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticPeriodSubstitutionEnabled
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticQuoteSubstitutionEnabled
+        type: bool
+        value: false
+        state: present
+
 - name: Disable auto period substitution
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: NSAutomaticPeriodSubstitutionEnabled
-    type: bool
-    value: false
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticPeriodSubstitutionEnabled
+        state: absent
 
-- name: Disable "natural" (Lion-style) scrolling (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: com.apple.swipescrolldirection
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticPeriodSubstitutionEnabled
+        type: bool
+        value: false
+        state: present
+
 - name: Disable "natural" (Lion-style) scrolling
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: com.apple.swipescrolldirection
-    type: bool
-    value: false
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: com.apple.swipescrolldirection
+        state: absent
+
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: com.apple.swipescrolldirection
+        type: bool
+        value: false
+        state: present
 
 - name: Set keyboard repeat rate
   community.general.osx_defaults:
@@ -85,41 +103,50 @@
     value: 2
     state: present
 
-- name: Set initial keyboard repeat rate (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: InitialKeyRepeat
-    state: absent
 - name: Set initial keyboard repeat rate
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: InitialKeyRepeat
-    type: int
-    value: 10
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: InitialKeyRepeat
+        state: absent
 
-- name: Enable trackpad tap-to-click (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: com.apple.mouse.tapBehavior
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: InitialKeyRepeat
+        type: int
+        value: 10
+        state: present
+
 - name: Enable trackpad tap-to-click
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: com.apple.mouse.tapBehavior
-    type: int
-    value: 1
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: com.apple.mouse.tapBehavior
+        state: absent
 
-- name: Enable full keyboard access for all controls (clear)
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: AppleKeyboardUIMode
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: com.apple.mouse.tapBehavior
+        type: int
+        value: 1
+        state: present
+
 - name: Enable full keyboard access for all controls
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: AppleKeyboardUIMode
-    type: int
-    value: 3
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: AppleKeyboardUIMode
+        state: absent
+
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: AppleKeyboardUIMode
+        type: int
+        value: 3
+        state: present

@@ -1,68 +1,83 @@
 ---
-- name: Show hidden files in Finder (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: AppleShowAllFiles
-    state: absent
 - name: Show hidden files in Finder
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: AppleShowAllFiles
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: AppleShowAllFiles
+        state: absent
 
-- name: Show status bar in Finder (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowStatusBar
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: AppleShowAllFiles
+        type: bool
+        value: true
+        state: present
+
 - name: Show status bar in Finder
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowStatusBar
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowStatusBar
+        state: absent
 
-- name: Show path bar in Finder (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowPathbar
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowStatusBar
+        type: bool
+        value: true
+        state: present
+
 - name: Show path bar in Finder
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowPathbar
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowPathbar
+        state: absent
 
-- name: Display full POSIX path in Finder window title (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: _FXShowPosixPathInTitle
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowPathbar
+        type: bool
+        value: true
+        state: present
+
 - name: Display full POSIX path in Finder window title
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: _FXShowPosixPathInTitle
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: _FXShowPosixPathInTitle
+        state: absent
 
-- name: Disable warning when changing a file extension (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: FXEnableExtensionChangeWarning
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: _FXShowPosixPathInTitle
+        type: bool
+        value: true
+        state: present
+
 - name: Disable warning when changing a file extension
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: FXEnableExtensionChangeWarning
-    type: bool
-    value: false
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: FXEnableExtensionChangeWarning
+        state: absent
+
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: FXEnableExtensionChangeWarning
+        type: bool
+        value: false
+        state: present
 
 - name: Enable spring loading for directories and disable delay
   community.general.osx_defaults:
@@ -96,148 +111,181 @@
     value: Nlsv
     state: present
 
-- name: Show icons for external hard drives on desktop (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowExternalHardDrivesOnDesktop
-    state: absent
 - name: Show icons for external hard drives on desktop
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowExternalHardDrivesOnDesktop
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowExternalHardDrivesOnDesktop
+        state: absent
 
-- name: Show icons for internal hard drives on desktop (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowHardDrivesOnDesktop
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowExternalHardDrivesOnDesktop
+        type: bool
+        value: true
+        state: present
+
 - name: Show icons for internal hard drives on desktop
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowHardDrivesOnDesktop
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowHardDrivesOnDesktop
+        state: absent
 
-- name: Show icons for mounted servers on desktop (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowMountedServersOnDesktop
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowHardDrivesOnDesktop
+        type: bool
+        value: true
+        state: present
+
 - name: Show icons for mounted servers on desktop
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowMountedServersOnDesktop
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowMountedServersOnDesktop
+        state: absent
 
-- name: Show icons for removable media on desktop (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowRemovableMediaOnDesktop
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowMountedServersOnDesktop
+        type: bool
+        value: true
+        state: present
+
 - name: Show icons for removable media on desktop
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowRemovableMediaOnDesktop
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowRemovableMediaOnDesktop
+        state: absent
 
-- name: Disable recent tags display in Finder sidebar (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowRecentTags
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowRemovableMediaOnDesktop
+        type: bool
+        value: true
+        state: present
+
 - name: Disable recent tags display in Finder sidebar
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: ShowRecentTags
-    type: int
-    value: 0
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowRecentTags
+        state: absent
 
-- name: Disable window and Get Info animations (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: DisableAllAnimations
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowRecentTags
+        type: int
+        value: 0
+        state: present
+
 - name: Disable window and Get Info animations
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: DisableAllAnimations
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: DisableAllAnimations
+        state: absent
 
-- name: Disable creating .DS_Store files on network volumes (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: DSDontWriteNetworkStores
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: DisableAllAnimations
+        type: bool
+        value: true
+        state: present
+
 - name: Disable creating .DS_Store files on network volumes
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: DSDontWriteNetworkStores
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: DSDontWriteNetworkStores
+        state: absent
 
-- name: Disable creating .DS_Store files on USB volumes (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: DSDontWriteUSBStores
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: DSDontWriteNetworkStores
+        type: bool
+        value: true
+        state: present
+
 - name: Disable creating .DS_Store files on USB volumes
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: DSDontWriteUSBStores
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: DSDontWriteUSBStores
+        state: absent
 
-- name: Automatically open new Finder window when a read-only volume is mounted (clear)
-  community.general.osx_defaults:
-    domain: com.apple.frameworks.diskimages
-    key: auto-open-ro-root
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: DSDontWriteUSBStores
+        type: bool
+        value: true
+        state: present
+
 - name: Automatically open new Finder window when a read-only volume is mounted
-  community.general.osx_defaults:
-    domain: com.apple.frameworks.diskimages
-    key: auto-open-ro-root
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.frameworks.diskimages
+        key: auto-open-ro-root
+        state: absent
 
-- name: Automatically open new Finder window when a read/write volume is mounted (clear)
-  community.general.osx_defaults:
-    domain: com.apple.frameworks.diskimages
-    key: auto-open-rw-root
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.frameworks.diskimages
+        key: auto-open-ro-root
+        type: bool
+        value: true
+        state: present
+
 - name: Automatically open new Finder window when a read/write volume is mounted
-  community.general.osx_defaults:
-    domain: com.apple.frameworks.diskimages
-    key: auto-open-rw-root
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.frameworks.diskimages
+        key: auto-open-rw-root
+        state: absent
 
-- name: Automatically open new Finder window when a removable disk is mounted (clear)
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: OpenWindowForNewRemovableDisk
-    state: absent
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.frameworks.diskimages
+        key: auto-open-rw-root
+        type: bool
+        value: true
+        state: present
+
 - name: Automatically open new Finder window when a removable disk is mounted
-  community.general.osx_defaults:
-    domain: com.apple.finder
-    key: OpenWindowForNewRemovableDisk
-    type: bool
-    value: true
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: OpenWindowForNewRemovableDisk
+        state: absent
+
+    - name: Set value
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: OpenWindowForNewRemovableDisk
+        type: bool
+        value: true
+        state: present
 
 - name: Show the ~/Library directory
   command: "chflags nohidden {{ ansible_user_dir }}/Library"
