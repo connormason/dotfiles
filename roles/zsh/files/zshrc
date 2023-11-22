@@ -34,8 +34,9 @@ fpath+=~/.zfunc
 # FZF
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-# Poetry
-export PATH="/Users/connormason/.local/bin:$PATH"
+# Poetry/brew path additions
+export PATH="$HOME/.local/bin:$PATH"
+export PATH="/opt/homebrew/Homebrew/bin:$PATH"
 
 # Let's get sourced!
 alias src="source ~/.zshrc"
