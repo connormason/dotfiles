@@ -1,5 +1,7 @@
 #!/usr/bin/python
 from __future__ import annotations
+
+import re
 from typing import Any
 
 ANSIBLE_METADATA = {
@@ -28,27 +30,31 @@ options:
 
 EXAMPLES = r""" # """
 
+RETURN = r""" # """
+
 from ansible.module_utils.basic import AnsibleModule
+
+
+PMSET_SECTION_REGEX = re.compile(r'^(?P<section>.+):$')
+PMSET_KEY_VAL_REGEX = re.compile(r'^ (?P<key>\w+)\s+(?P<val>.+)$')
 
 
 def parse_pmset_output(output: str) -> dict[str, dict[str, Any]]:
     """
-    Parses `pmset -g custom` into a 2-level dict
+    Parses `pmset -g custom`
     """
-    r: dict[str, dict[str, Any]] = {}
-    section_name: str | None = None
+    data: dict[str, dict[str, Any]] = {}
+
+    cur_section: str | None = None
     for line in output.splitlines():
-        if line == '':
-            continue
+        if (line.strip() == '') or ('Sleep On Power Button' in line):
+            pass
+        elif m := PMSET_SECTION_REGEX.match(line):
+            cur_section = m.group('section')
+        elif cur_section and (m := PMSET_KEY_VAL_REGEX.match(line)):
+            data.setdefault(cur_section, {})[m.group('key')] = m.group('val')
 
-        if (line[0] != ' ') and (line[-1] == ':'):
-            section_name = line[:-1]
-            r[section_name] = {}
-        else:
-            k, v = line.split()
-            r[section_name][k] = v
-
-    return r
+    return data
 
 
 def run_module() -> None:
