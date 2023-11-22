@@ -1,0 +1,4 @@
+---
+global_python_packages:
+  - pew
+  - iPython
