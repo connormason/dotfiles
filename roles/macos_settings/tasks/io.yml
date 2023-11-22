@@ -96,12 +96,20 @@
         state: present
 
 - name: Set keyboard repeat rate
-  community.general.osx_defaults:
-    domain: NSGlobalDomain
-    key: KeyRepeat
-    type: int
-    value: 2
-    state: present
+  block:
+    - name: Clear existing value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: KeyRepeat
+        state: absent
+
+    - name: Set value
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: KeyRepeat
+        type: int
+        value: 2
+        state: present
 
 - name: Set initial keyboard repeat rate
   block:
