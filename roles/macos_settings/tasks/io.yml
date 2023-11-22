@@ -1,13 +1,13 @@
 ---
 - name: Disable auto-correct
   block:
-    - name: Clear existing value
+    - name: Disable auto-correct (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticSpellingCorrectionEnabled
         state: absent
 
-    - name: Set value
+    - name: Disable auto-correct (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticSpellingCorrectionEnabled
@@ -17,13 +17,13 @@
 
 - name: Disable auto-capitalization
   block:
-    - name: Clear existing value
+    - name: Disable auto-capitalization (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticCapitalizationEnabled
         state: absent
 
-    - name: Set value
+    - name: Disable auto-capitalization (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticCapitalizationEnabled
@@ -33,13 +33,13 @@
 
 - name: Disable smart dashes
   block:
-    - name: Clear existing value
+    - name: Disable smart dashes (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticDashSubstitutionEnabled
         state: absent
 
-    - name: Set value
+    - name: Disable smart dashes (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticDashSubstitutionEnabled
@@ -49,13 +49,13 @@
 
 - name: Disable smart quotes
   block:
-    - name: Clear existing value
+    - name: Disable smart quotes (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticQuoteSubstitutionEnabled
         state: absent
 
-    - name: Set value
+    - name: Disable smart quotes (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticQuoteSubstitutionEnabled
@@ -65,13 +65,13 @@
 
 - name: Disable auto period substitution
   block:
-    - name: Clear existing value
+    - name: Disable auto period substitution (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticPeriodSubstitutionEnabled
         state: absent
 
-    - name: Set value
+    - name: Disable auto period substitution (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: NSAutomaticPeriodSubstitutionEnabled
@@ -81,13 +81,13 @@
 
 - name: Disable "natural" (Lion-style) scrolling
   block:
-    - name: Clear existing value
+    - name: Disable "natural" (Lion-style) scrolling (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: com.apple.swipescrolldirection
         state: absent
 
-    - name: Set value
+    - name: Disable "natural" (Lion-style) scrolling (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: com.apple.swipescrolldirection
@@ -97,13 +97,13 @@
 
 - name: Set keyboard repeat rate
   block:
-    - name: Clear existing value
+    - name: Set keyboard repeat rate (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: KeyRepeat
         state: absent
 
-    - name: Set value
+    - name: Set keyboard repeat rate (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: KeyRepeat
@@ -113,13 +113,13 @@
 
 - name: Set initial keyboard repeat rate
   block:
-    - name: Clear existing value
+    - name: Set initial keyboard repeat rate (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: InitialKeyRepeat
         state: absent
 
-    - name: Set value
+    - name: Set initial keyboard repeat rate (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: InitialKeyRepeat
@@ -129,13 +129,13 @@
 
 - name: Enable trackpad tap-to-click
   block:
-    - name: Clear existing value
+    - name: Enable trackpad tap-to-click (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: com.apple.mouse.tapBehavior
         state: absent
 
-    - name: Set value
+    - name: Enable trackpad tap-to-click (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: com.apple.mouse.tapBehavior
@@ -145,13 +145,13 @@
 
 - name: Enable full keyboard access for all controls
   block:
-    - name: Clear existing value
+    - name: Enable full keyboard access for all controls (clear)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: AppleKeyboardUIMode
         state: absent
 
-    - name: Set value
+    - name: Enable full keyboard access for all controls (set)
       community.general.osx_defaults:
         domain: NSGlobalDomain
         key: AppleKeyboardUIMode

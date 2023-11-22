@@ -1,13 +1,13 @@
 ---
 - name: Show hidden files in Finder
   block:
-    - name: Clear existing value
+    - name: Show hidden files in Finder (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: AppleShowAllFiles
         state: absent
 
-    - name: Set value
+    - name: Show hidden files in Finder (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: AppleShowAllFiles
@@ -17,13 +17,13 @@
 
 - name: Show status bar in Finder
   block:
-    - name: Clear existing value
+    - name: Show status bar in Finder (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowStatusBar
         state: absent
 
-    - name: Set value
+    - name: Show status bar in Finder (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowStatusBar
@@ -33,13 +33,13 @@
 
 - name: Show path bar in Finder
   block:
-    - name: Clear existing value
+    - name: Show path bar in Finder (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowPathbar
         state: absent
 
-    - name: Set value
+    - name: Show path bar in Finder (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowPathbar
@@ -49,13 +49,13 @@
 
 - name: Display full POSIX path in Finder window title
   block:
-    - name: Clear existing value
+    - name: Display full POSIX path in Finder window title (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: _FXShowPosixPathInTitle
         state: absent
 
-    - name: Set value
+    - name: Display full POSIX path in Finder window title (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: _FXShowPosixPathInTitle
@@ -65,13 +65,13 @@
 
 - name: Disable warning when changing a file extension
   block:
-    - name: Clear existing value
+    - name: Disable warning when changing a file extension (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: FXEnableExtensionChangeWarning
         state: absent
 
-    - name: Set value
+    - name: Disable warning when changing a file extension (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: FXEnableExtensionChangeWarning
@@ -113,13 +113,13 @@
 
 - name: Show icons for external hard drives on desktop
   block:
-    - name: Clear existing value
+    - name: Show icons for external hard drives on desktop (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowExternalHardDrivesOnDesktop
         state: absent
 
-    - name: Set value
+    - name: Show icons for external hard drives on desktop (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowExternalHardDrivesOnDesktop
@@ -129,13 +129,13 @@
 
 - name: Show icons for internal hard drives on desktop
   block:
-    - name: Clear existing value
+    - name: Show icons for internal hard drives on desktop (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowHardDrivesOnDesktop
         state: absent
 
-    - name: Set value
+    - name: Show icons for internal hard drives on desktop (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowHardDrivesOnDesktop
@@ -145,13 +145,13 @@
 
 - name: Show icons for mounted servers on desktop
   block:
-    - name: Clear existing value
+    - name: Show icons for mounted servers on desktop (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowMountedServersOnDesktop
         state: absent
 
-    - name: Set value
+    - name: Show icons for mounted servers on desktop (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowMountedServersOnDesktop
@@ -161,13 +161,13 @@
 
 - name: Show icons for removable media on desktop
   block:
-    - name: Clear existing value
+    - name: Show icons for removable media on desktop (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowRemovableMediaOnDesktop
         state: absent
 
-    - name: Set value
+    - name: Show icons for removable media on desktop (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowRemovableMediaOnDesktop
@@ -177,13 +177,13 @@
 
 - name: Disable recent tags display in Finder sidebar
   block:
-    - name: Clear existing value
+    - name: Disable recent tags display in Finder sidebar (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowRecentTags
         state: absent
 
-    - name: Set value
+    - name: Disable recent tags display in Finder sidebar (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: ShowRecentTags
@@ -193,13 +193,13 @@
 
 - name: Disable window and Get Info animations
   block:
-    - name: Clear existing value
+    - name: Disable window and Get Info animations (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: DisableAllAnimations
         state: absent
 
-    - name: Set value
+    - name: Disable window and Get Info animations (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: DisableAllAnimations
@@ -209,13 +209,13 @@
 
 - name: Disable creating .DS_Store files on network volumes
   block:
-    - name: Clear existing value
+    - name: Disable creating .DS_Store files on network volumes (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: DSDontWriteNetworkStores
         state: absent
 
-    - name: Set value
+    - name: Disable creating .DS_Store files on network volumes (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: DSDontWriteNetworkStores
@@ -225,13 +225,13 @@
 
 - name: Disable creating .DS_Store files on USB volumes
   block:
-    - name: Clear existing value
+    - name: Disable creating .DS_Store files on USB volumes (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: DSDontWriteUSBStores
         state: absent
 
-    - name: Set value
+    - name: Disable creating .DS_Store files on USB volumes (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: DSDontWriteUSBStores
@@ -241,13 +241,13 @@
 
 - name: Automatically open new Finder window when a read-only volume is mounted
   block:
-    - name: Clear existing value
+    - name: Automatically open new Finder window when a read-only volume is mounted (clear)
       community.general.osx_defaults:
         domain: com.apple.frameworks.diskimages
         key: auto-open-ro-root
         state: absent
 
-    - name: Set value
+    - name: Automatically open new Finder window when a read-only volume is mounted (set)
       community.general.osx_defaults:
         domain: com.apple.frameworks.diskimages
         key: auto-open-ro-root
@@ -257,13 +257,13 @@
 
 - name: Automatically open new Finder window when a read/write volume is mounted
   block:
-    - name: Clear existing value
+    - name: Automatically open new Finder window when a read/write volume is mounted (clear)
       community.general.osx_defaults:
         domain: com.apple.frameworks.diskimages
         key: auto-open-rw-root
         state: absent
 
-    - name: Set value
+    - name: Automatically open new Finder window when a read/write volume is mounted (set)
       community.general.osx_defaults:
         domain: com.apple.frameworks.diskimages
         key: auto-open-rw-root
@@ -273,13 +273,13 @@
 
 - name: Automatically open new Finder window when a removable disk is mounted
   block:
-    - name: Clear existing value
+    - name: Automatically open new Finder window when a removable disk is mounted (clear)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: OpenWindowForNewRemovableDisk
         state: absent
 
-    - name: Set value
+    - name: Automatically open new Finder window when a removable disk is mounted (set)
       community.general.osx_defaults:
         domain: com.apple.finder
         key: OpenWindowForNewRemovableDisk

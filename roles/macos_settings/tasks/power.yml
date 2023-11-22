@@ -9,6 +9,7 @@
     state: present
 
 - name: Set display idle timeouts
+  become: true
   osx_pmset:
     on_battery:
       sleep: 30
