@@ -82,5 +82,5 @@
         name: roles/python
         apply:
           tags: python
-        tags:
-          - python
+      tags:
+        - python
