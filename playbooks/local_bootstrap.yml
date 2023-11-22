@@ -17,6 +17,15 @@
 #      tags:
 #        - always
 
+    # Tasks for zsh configuration
+    - include_role:
+        name: roles/zsh
+        apply:
+          tags: zsh
+      tags:
+        - zsh
+        - configfile
+
     # Tasks for macOS app/tool installation
     - include_role:
         name: roles/macos
@@ -66,15 +75,6 @@
           tags: ssh
       tags:
         - ssh
-        - configfile
-
-    # Tasks for zsh configuration
-    - include_role:
-        name: roles/zsh
-        apply:
-          tags: zsh
-      tags:
-        - zsh
         - configfile
 
     # Tasks for python configuration
