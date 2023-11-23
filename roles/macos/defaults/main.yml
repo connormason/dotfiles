@@ -4,6 +4,7 @@ brew_packages:
   - tree
   - mas
   - hub
+  - pipx
 
 brew_cask_packages:
   - google-chrome
