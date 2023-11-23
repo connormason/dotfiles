@@ -4,7 +4,7 @@
 dockutil_homebrew_cask: hpedrorodrigues/tools/dockutil
 
 # Ordering of tiles in macOS dock
-macos_dock_tiles:
+macos_dock_persistent_apps:
   - name: "Google Chrome"
     path: "/Applications/Google Chrome.app/"
   - name: "Safari"
@@ -33,3 +33,9 @@ macos_dock_tiles:
     path: "/Applications/1Password 7.app/"
   - name: "System Settings"
     path: "/Applications/System Settings.app/"
+
+macos_dock_persistent_other:
+  - name: "Applications"
+    path: "/Applications/"
+  - name: "Downloads"
+    path: "~/Downloads/"
