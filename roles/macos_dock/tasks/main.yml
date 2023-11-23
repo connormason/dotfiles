@@ -1,0 +1,52 @@
+---
+- name: Get user info
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ ansible_user }}"
+  tags:
+    - dock
+
+- name: Install dockutil
+  community.general.homebrew_cask:
+    name: "{{ dockutil_homebrew_cask }}"
+    state: present
+  notify:
+    - Clear homebrew cache
+  tags:
+    - dock
+
+# TODO: remove
+- ansible.builtin.debug:
+    var: ansible_facts.getent_passwd
+
+- name: Remove all items from Dock
+  ansible.builtin.command:
+    cmd: "dockutil --remove all"
+  tags:
+    - dock
+
+- name: Pause for 7 seconds for Dock changes to take effect
+  ansible.builtin.pause:
+    seconds: 7
+  tags:
+    - dock
+
+# TODO: add applications folder to first dock group
+- name: Add Dock icons
+  ansible.builtin.command:
+    cmd: "dockutil --add '{{ item.path }}' --label '{{ item.name }}' --no-restart"
+  with_items: "{{ macos_dock_tiles }}"
+  tags:
+    - dock
+
+- name: Pause for 7 seconds for Dock changes to take effect
+  ansible.builtin.pause:
+    seconds: 7
+  tags:
+    - dock
+
+- name: Restart Dock
+  ansible.builtin.command:
+    cmd: "/bin/launchctl kickstart -k gui/{{ getent_passwd[ansible_user].1 }}/com.apple.Dock.agent"
+  tags:
+    - dock

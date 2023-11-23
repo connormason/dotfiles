@@ -1,3 +1,3 @@
-# macOS
+# macos
 
 macOS installation tasks
