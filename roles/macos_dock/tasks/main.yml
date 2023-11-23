@@ -1,11 +1,4 @@
 ---
-- name: Get user info
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ ansible_user }}"
-  tags:
-    - dock
-
 - name: Install dockutil
   community.general.homebrew_cask:
     name: "{{ dockutil_homebrew_cask }}"
@@ -47,6 +40,6 @@
 
 - name: Restart Dock
   ansible.builtin.command:
-    cmd: "/bin/launchctl kickstart -k gui/{{ getent_passwd[ansible_user].1 }}/com.apple.Dock.agent"
+    cmd: "/bin/launchctl kickstart -k gui/{{ ansible_facts.user_uid }}/com.apple.Dock.agent"
   tags:
     - dock
