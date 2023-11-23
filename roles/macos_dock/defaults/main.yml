@@ -34,8 +34,12 @@ macos_dock_persistent_apps:
   - name: "System Settings"
     path: "/Applications/System Settings.app/"
 
-macos_dock_persistent_other:
+macos_dock_persistent_others:
   - name: "Applications"
     path: "/Applications/"
+    sort: "name"
+    display: "stack"
   - name: "Downloads"
     path: "~/Downloads/"
+    sort: "datemodified"
+    display: "stack"
