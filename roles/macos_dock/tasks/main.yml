@@ -27,6 +27,7 @@
   tags:
     - dock
 
+# TODO: set folder/stack type for downloads/applications
 - name: Add Dock icons in persistent-others section
   ansible.builtin.command:
     cmd: "dockutil --add '{{ item.path }}' --label '{{ item.name }}' --no-restart --section others"
