@@ -1,5 +1,9 @@
 ---
+# Packages to install to global python site-packages
 global_python_packages:
   - pew
-  - poetry
   - iPython
+
+# Packages to install with pipx
+pipx_packages:
+  - poetry

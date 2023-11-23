@@ -28,8 +28,13 @@ export WORKON_HOME=$HOME/.virtualenvs
 fpath=(/usr/local/share/zsh-completions $fpath)
 
 autoload -Uz compinit
+bashcompinit
+
 zstyle ':completion:*' menu select
 fpath+=~/.zfunc
+
+# pipx completion
+eval "$(register-python-argcomplete pipx)"
 
 # FZF
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
