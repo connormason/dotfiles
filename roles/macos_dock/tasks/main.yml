@@ -8,10 +8,6 @@
   tags:
     - dock
 
-# TODO: remove
-- ansible.builtin.debug:
-    var: ansible_facts.getent_passwd
-
 - name: Remove all items from Dock
   ansible.builtin.command:
     cmd: "dockutil --remove all"
@@ -24,11 +20,17 @@
   tags:
     - dock
 
-# TODO: add applications folder to first dock group
-- name: Add Dock icons
+- name: Add Dock icons in persistent-apps section
   ansible.builtin.command:
-    cmd: "dockutil --add '{{ item.path }}' --label '{{ item.name }}' --no-restart"
-  with_items: "{{ macos_dock_tiles }}"
+    cmd: "dockutil --add '{{ item.path }}' --label '{{ item.name }}' --no-restart --section apps"
+  with_items: "{{ macos_dock_persistent_apps }}"
+  tags:
+    - dock
+
+- name: Add Dock icons in persistent-others section
+  ansible.builtin.command:
+    cmd: "dockutil --add '{{ item.path }}' --label '{{ item.name }}' --no-restart --section others"
+  with_items: "{{ macos_dock_persistent_other }}"
   tags:
     - dock
 
