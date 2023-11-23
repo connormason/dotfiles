@@ -42,6 +42,16 @@
           tags: macos
       tags:
         - macos
+        - dock
+
+    # Tasks for macOS dock configuration
+    - include_role:
+        name: roles/macos_dock
+        apply:
+          tags: macos
+      tags:
+        - macos
+        - dock
 
     # Tasks for git configuration
     - include_role:

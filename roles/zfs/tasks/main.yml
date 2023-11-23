@@ -17,7 +17,7 @@
           register: dpkg_print_architecture
 
         - name: Set debian architecture fact
-          set_fact:
+          ansible.builtin.set_fact:
             deb_architecture: "{{ dpkg_print_architecture.stdout }}"
 
     - name: Install zfs dependencies
