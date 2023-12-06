@@ -19,5 +19,7 @@ brew_cask_packages:
 mas_apps:
   - name: Amphetamine
     id: 937984704
+  - name: Tailscale
+    id: 1475387142
 
 mas_upgrade_all_apps: false
