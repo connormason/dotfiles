@@ -1,4 +1,8 @@
 ---
+
+# Homebrew dir prefix
+homebrew_prefix: "{{ (ansible_machine == 'arm64') | ternary('/opt/homebrew', '/usr/local') }}"
+
 # Packages to install to global python site-packages
 global_python_packages:
   - pew

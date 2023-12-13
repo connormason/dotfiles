@@ -48,6 +48,7 @@ pathadd() {
 
 pathadd "$HOME/.local/bin"
 pathadd "/opt/homebrew/bin"
+pathadd "/usr/local/bin"
 
 # Let's get sourced!
 alias src="source ~/.zshrc"
