@@ -74,13 +74,13 @@
         - configfile
 
     # Tasks for Tailscale configuration
-    - include_role:
-        name: roles/tailscale
-        apply:
-          tags: tailscale
-      tags:
-        - tailscale
-        - configfile
+#    - include_role:
+#        name: roles/tailscale
+#        apply:
+#          tags: tailscale
+#      tags:
+#        - tailscale
+#        - configfile
 
     # Tasks for zsh configuration
     - include_role:
