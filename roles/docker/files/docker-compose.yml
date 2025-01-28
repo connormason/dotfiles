@@ -29,6 +29,17 @@ services:
     restart: unless-stopped
     command: ["--mode", "copy", "--host", "transmission", "--src", "/downloads/complete/tv", "--dest", "/tv", "--src", "/downloads/complete/movies", "--dest", "/movies"]
 
+  # Tool that automatically moves downloaded files from transmission to the right spot to get picked up by Plex
+  pyautoplex:
+    image: connormason/pyautoplex:latest
+    container_name: pyautoplex
+    volumes:
+      - /storage/media/downloads:/downloads
+      - /storage/media/tv:/tv
+      - /storage/media/movies:/movies
+    restart: unless-stopped
+    command: ["--mode", "copy", "--src", "/downloads/complete/movies", "--dest", "/movies", '--src', "/downloads/complete/tv", "--dest", "/tv", "--print-tracebacks"]
+
   # Transmission. Torrent client
   # TODO: periodically delete downloads once moved or point at downloads folder directly
   transmission:

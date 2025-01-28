@@ -118,6 +118,26 @@
         source: build
       become: true
 
+- name: Setup pyautoplex
+  block:
+    - name: Clone pyautoplex repo
+      ansible.builtin.git:
+        repo: "{{ pyautoplex_repo_url }}"
+        dest: "{{ pyautoplex_repo_dest }}"
+        version: "{{ pyautoplex_repo_branch }}"
+        clone: true
+        update: true
+        accept_hostkey: true
+
+    - name: Build pyautoplex image
+      community.docker.docker_image:
+        build:
+          path: "{{ pyautoplex_repo_dest }}"
+        name: connormason/pyautoplex
+        tag: latest
+        source: build
+      become: true
+
 # TODO: split this into its own task, require that it run before docker-compose
 - name: Setup homeassistant
   tags:
