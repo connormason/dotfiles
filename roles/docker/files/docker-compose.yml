@@ -18,6 +18,22 @@ services:
       - /storage/media/music:/music
     restart: unless-stopped
 
+  # Transmission. Torrent client
+  # TODO: periodically delete downloads once moved or point at downloads folder directly
+  transmission:
+    image: linuxserver/transmission
+    container_name: transmission
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /storage/media/config/transmission:/config
+      - /storage/media/downloads:/downloads
+      - /storage/media/watch:/watch
+    ports:
+      - "9091:9091"
+
   # Tool that automatically moves downloaded files from transmission to the right spot to get picked up by Plex
   autoplex:
     image: danielmmetz/autoplex:latest
@@ -39,22 +55,6 @@ services:
       - /storage/media/movies:/movies
     restart: unless-stopped
     command: ["--mode", "copy", "--src", "/downloads/complete/movies", "--dest", "/movies", '--src', "/downloads/complete/tv", "--dest", "/tv", "--print-tracebacks"]
-
-  # Transmission. Torrent client
-  # TODO: periodically delete downloads once moved or point at downloads folder directly
-  transmission:
-    image: linuxserver/transmission
-    container_name: transmission
-    restart: unless-stopped
-    environment:
-      - PUID=1000
-      - PGID=1000
-    volumes:
-      - /storage/media/config/transmission:/config
-      - /storage/media/downloads:/downloads
-      - /storage/media/watch:/watch
-    ports:
-      - "9091:9091"
 
   # Proxy to bypass Cloudflare protection
   flaresolverr:
