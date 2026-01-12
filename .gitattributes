@@ -1,0 +1,13 @@
+# Ansible Vault files - use ansible-vault for diffs and prevent merging
+**/vault.yml diff=ansible-vault merge=binary
+**/*vault*.yml diff=ansible-vault merge=binary
+**/vault_*.yml diff=ansible-vault merge=binary
+**/*.vault diff=ansible-vault merge=binary
+**/*.vault.yml diff=ansible-vault merge=binary
+
+# Ensure vault files are treated as text for line ending consistency
+**/vault.yml text
+**/*vault*.yml text
+**/vault_*.yml text
+**/*.vault text
+**/*.vault.yml text
