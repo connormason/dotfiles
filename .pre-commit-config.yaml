@@ -1,22 +1,82 @@
 ---
 repos:
+
+  # Basic/common checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.4.0
+    rev: v6.0.0
     hooks:
+      # Checks for accidentally-committed content
       - id: check-added-large-files
-      - id: check-ast
-      - id: check-executables-have-shebangs
-      - id: check-json
+        name: "[check] large files"
       - id: check-merge-conflict
-      - id: double-quote-string-fixer
+        name: "[check] merge conflicts"
+      - id: detect-private-key
+        name: "[check] private keys"
+
+      # Checks for filesystem safety
+      - id: check-case-conflict
+        name: "[check] filename case conflicts"
+      - id: check-symlinks
+        name: "[check] symlinks"
+      - id: destroyed-symlinks
+        name: "[check] destroyed symlinks"
+
+      # Checks for Python code
+      - id: check-ast
+        name: "[check] python ast"
+      - id: debug-statements
+        name: "[check] python debug statements"
+#      - id: name-tests-test
+#        name: "[check] unit test filenames"
+#        args: [ --pytest-test-first ]
+
+      # Checks for validity of non-code filetypes and references
+      - id: check-vcs-permalinks
+        name: "[check] vcs site permalinks"
+      - id: check-executables-have-shebangs
+        name: "[check] executable shebangs"
+      - id: check-json
+        name: "[check] json"
+      - id: check-toml
+        name: "[check] toml"
+      - id: check-xml
+        name: "[check] xml"
+      - id: check-yaml
+        name: "[check] yaml"
+
+      # Fixers for file whitespace and metadata
+      - id: fix-byte-order-marker
+        name: "[fix]   utf-8 byte order marker"
       - id: end-of-file-fixer
+        name: "[fix]   end-of-file"
       - id: mixed-line-ending
+        name: "[fix]   mixed line ending"
         exclude: .gitignore
       - id: trailing-whitespace
+        name: "[fix]   trailing whitespace"
         exclude: .gitignore
 
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.29.0
+    rev: v1.37.1
     hooks:
       - id: yamllint
-        exclude: archived_linux
+        name: "[lint]  yaml"
+        args: [-c, .config/.yamllint.yaml]
+        exclude: |
+          (?x)(
+              ^.pre-commit-config.yaml|
+              archived_linux
+          )
+
+#  - repo: https://github.com/ansible/ansible-lint.git
+#    rev: v25.6.1
+#    hooks:
+#      - id: ansible-lint
+#        name: "[lint] ansible"
+#        args: [--fix]
+
+#  - repo: https://github.com/koalaman/shellcheck-precommit
+#    rev: v0.11.0
+#    hooks:
+#      - id: shellcheck
+##        args: ["--severity=warning"]  # Optionally only show errors and warnings
