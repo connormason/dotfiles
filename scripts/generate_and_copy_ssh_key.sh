@@ -4,8 +4,8 @@
 # Defaults for the commandline-options
 KEYSIZE=4096
 PASSPHRASE=
-FILENAME=~/.ssh/id_rsa
-KEYTYPE=rsa
+FILENAME=~/.ssh/id_ed25519
+KEYTYPE=ed25519
 
 SSH_OPTS=""
 
