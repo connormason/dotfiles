@@ -25,6 +25,3 @@ These are my dotfiles. Yay.
   - `chmod u+x nas_bootstrap.sh`
   - `./nas_bootstrap.sh`
 - Point router DNS at NAS for PiHole
-
-## Notes
-- Probably need to request a tailscale auth key from https://login.tailscale.com/admin/authkeys (expires after 90 days)
