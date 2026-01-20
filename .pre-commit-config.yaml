@@ -72,7 +72,11 @@ repos:
         exclude: .gitignore
       - id: trailing-whitespace
         name: "[fix]   trailing whitespace"
-        exclude: .gitignore
+        exclude: |
+          (?x)(
+              ^.gitignore|
+              .config/istat_menus.ismp
+          )
 
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.37.1
