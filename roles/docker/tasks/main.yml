@@ -76,7 +76,7 @@
     - name: Build and copy Caddyfile
       ansible.builtin.template:
         src: Caddyfile.j2
-        dest: "{{ docker_dir }}/Caddyfile"
+        dest: "{{ docker_dir }}/caddy/Caddyfile"
       tags:
         - configfile
 

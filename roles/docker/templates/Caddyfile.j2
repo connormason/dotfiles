@@ -29,12 +29,12 @@ sonarr.local {
     reverse_proxy sonarr:8989
 }
 
-# Glance
+# Glance - Generic dashboard
 glance.local {
     reverse_proxy glance:8080
 }
 
-# Home Assistant
+# Home Assistant - Home automation orchestrator/dashboard
 # TODO: still on host network
 homeassistant.local {
     reverse_proxy {{ ip_address }}:8123
