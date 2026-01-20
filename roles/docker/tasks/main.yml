@@ -13,7 +13,7 @@
 
         - name: Add Docker GPG signing key
           ansible.builtin.get_url:
-            url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+            url: "https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}/gpg"
             dest: /usr/share/keyrings/docker.asc
 
         - name: Get debian architecture
@@ -29,7 +29,7 @@
         - name: Add Docker repository
           become: true
           ansible.builtin.apt_repository:
-            repo: "deb [arch={{ deb_architecture }} signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+            repo: "deb [arch={{ deb_architecture }} signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }} {{ ansible_facts['distribution_release'] }} stable"
             state: present
           register: docker_repo_add
 
@@ -59,7 +59,7 @@
 # ip_address var used by "Build and copy Caddyfile" and "Build and copy mqtt-bridge config" below
 - name: Get host IP address
   ansible.builtin.set_fact:
-    ip_address: "{{ ansible_default_ipv4.address }}"
+    ip_address: "{{ ansible_facts['default_ipv4']['address'] }}"
   tags:
     - always
 
