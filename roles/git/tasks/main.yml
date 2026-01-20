@@ -42,3 +42,16 @@
   vars:
     link_dotfile_src: "{{ dotfiles_home }}/roles/git/files/gitignore_global"
     link_dotfile_dst: "{{ user_home }}/.config/git/ignore"
+
+- name: Link gh config files
+  tags:
+    - configfile
+    - preferences
+  ansible.builtin.include_role:
+    name: roles/link_dotfile
+  vars:
+    link_dotfile_src: "{{ dotfiles_home }}/roles/tools/files/gh/{{ item }}"
+    link_dotfile_dst: "{{ user_home }}/.config/gh/{{ item }}"
+  loop:
+    - config.yml
+    - hosts.yml
