@@ -63,6 +63,14 @@
   tags:
     - always
 
+# Builds file containing environment variables used by Docker containers
+- name: Build and copy .env file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ docker_dir }}/.env"
+  tags:
+    - configfile
+
 - name: Setup caddy
   block:
     - name: Clone caddy-dnsimple repo
@@ -87,14 +95,6 @@
       ansible.builtin.template:
         src: Caddyfile.j2
         dest: "{{ docker_dir }}/Caddyfile"
-      tags:
-        - configfile
-
-    # Contains DNSimple OAuth token (DNSIMPLE_OAUTH_TOKEN), used by Caddy
-    - name: Build and copy .env file
-      ansible.builtin.template:
-        src: env.j2
-        dest: "{{ docker_dir }}/.env"
       tags:
         - configfile
 
