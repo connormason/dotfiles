@@ -1,5 +1,7 @@
 docker_dir: "{{ ansible_facts['user_dir'] }}/docker"
 
+caddyfile_dest: "{{ docker_dir }}/caddy/Caddyfile"
+
 autoplex_repo_dest: "{{ docker_dir }}/autoplex"
 autoplex_repo_url: https://github.com/danielmmetz/autoplex.git
 autoplex_repo_branch: master

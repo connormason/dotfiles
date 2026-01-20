@@ -73,10 +73,21 @@
 
 - name: Setup caddy
   block:
+    - name: Stat Caddyfile destination (follow symlinks = false)
+      ansible.builtin.stat:
+        path: "{{ caddyfile_dest }}"
+        follow: false
+      register: caddyfile_dest
+
+    - name: Ensure parent directory of Caddyfile destination exists
+      ansible.builtin.file:
+        path: "{{ caddyfile_dest | dirname }}"
+        state: directory
+
     - name: Build and copy Caddyfile
       ansible.builtin.template:
         src: Caddyfile.j2
-        dest: "{{ docker_dir }}/caddy/Caddyfile"
+        dest: "{{ caddyfile_dest }}"
       tags:
         - configfile
 
