@@ -1,0 +1,38 @@
+---
+- name: Install Starship
+  block:
+    - name: Check for Starship installation
+      ansible.builtin.shell: "{{ starship_install_directory }}/starship --version 2>&1"
+      failed_when: false
+      changed_when: false
+      check_mode: false
+      register: starship_version_check
+
+    - name: Check if Starship version has changed
+      when:
+        - starship_version_check.stdout_lines is defined
+        - starship_version not in starship_version_check.stdout_lines[0]
+      ansible.builtin.set_fact:
+        starship_version_changed: true
+
+    - name: Download Starship release binary
+      when:
+        - starship_version_changed
+      ansible.builtin.unarchive:
+        src: "{{ starship_download }}"
+        dest: "{{ starship_install_directory }}"
+        remote_src: true
+        owner: "{{ starship_owner }}"
+        group: "{{ starship_group }}"
+
+- name: Configure Starship
+  tags:
+    - configfile
+    - preferences
+  block:
+    - name: Link starship.toml config
+      ansible.builtin.include_role:
+        name: roles/link_dotfile
+      vars:
+        link_dotfile_src: "{{ dotfiles_home }}/roles/starship/files/starship.toml"
+        link_dotfile_dst: "{{ user_home }}/.config/starship.toml"

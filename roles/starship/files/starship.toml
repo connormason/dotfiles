@@ -1,0 +1,622 @@
+#######################################
+# Starship shell prompt configuration #
+# https://starship.rs/config          #
+#######################################
+"$schema" = "https://starship.rs/config-schema.json"
+
+# **********************************
+# Prompt-wide configuration options
+# **********************************
+
+# Format of the prompt (left side)
+format = """\
+[╭─](bold white) \
+$username\
+$hostname\
+$localip\
+$directory\
+$git_branch\
+$git_commit\
+$git_state\
+$git_metrics\
+$git_status\
+$package\
+$python\
+$conda\
+$swift\
+$c\
+$golang\
+$java\
+$lua\
+$nodejs\
+$ruby\
+$rust\
+$aws\
+$gcloud\
+$docker_context\
+\
+$fill\
+\
+$cmd_duration\
+$status\
+$jobs\
+$env_var\
+$custom\
+$line_break\
+[╰](bold white)$shlvl$character
+"""
+
+# Format of the prompt (right side)
+# https://starship.rs/advanced-config/#enable-right-prompt
+right_format = """\
+$direnv\
+$shell\
+$os\
+$sudo  \
+$time\
+$battery\
+"""
+
+# Timeout for starship to scan files (in milliseconds)
+scan_timeout = 30
+
+# Timeout for commands executed by starship (in milliseconds)
+command_timeout = 800
+
+# Inserts blank line between shell prompts
+add_newline = true
+
+# Sets which color palette from palettes (below) to use
+palette = "default"
+
+# Follows symlinks to check if they're directories; used in modules such as git
+# NOTE: if you have symlinks to networked filesystems, consider setting `follow_symlinks` to false
+follow_symlinks = true
+
+
+# *********************************************************************
+# Collection of color palettes that assign colors to user-defined names
+# Note that color palettes cannot reference their own color definitions
+#
+# Formatting docs: https://starship.rs/advanced-config/#style-strings
+# *********************************************************************
+
+# Default color palette
+[palettes.default]
+orange = '#ff9c26'
+
+
+# ****************************************************
+# Basic prompt formatting module configuration options
+# ****************************************************
+
+[character]
+disabled       = false
+error_symbol   = "[▶](bold white)"
+success_symbol = "[▶](bold white)"
+
+[fill]
+symbol = " "
+
+[line_break]
+disabled = false
+
+# TODO: move elsewhere?
+[shlvl]
+#
+# "SHLVL"
+# Shows the current SHLVL ("shell level") environment variable, if it is set to a number and meets or exceeds the
+# specified threshold
+#
+# https://starship.rs/config/#shlvl
+#
+disabled      = false
+threshold     = 2
+format        = "[$symbol]($style)"
+symbol        = "─▶"
+repeat        = true
+repeat_offset = 1
+style         = "bold yellow"
+
+
+# **********************************************************************
+# Core module configuration options
+#
+# Displayed in the first line of the left prompt
+# Listed in the order they appear in the prompt (when enabled/available)
+# **********************************************************************
+
+[username]
+#
+# "Username"
+# Shows active user's username
+# The module will be shown if any of the following conditions are met:
+#   - The current user is root/admin
+#   - The current user isn't the same as the one that is logged in
+#   - The user is currently connected as an SSH session
+#   - The variable `show_always` is set to true
+#   - The array `detect_env_vars` contains at least the name of one environment variable, that is set
+#
+# NOTE: SSH connection is detected by checking environment variables SSH_CONNECTION, SSH_CLIENT, and SSH_TTY.
+#       If your SSH host does not set up these variables, one workaround is to set one of them with a dummy value
+#
+# https://starship.rs/config/#username
+#
+disabled        = false
+style_root      = "bold red"
+style_user      = "bold yellow"
+detect_env_vars = []
+format          = "[$user]($style) in "
+show_always     = false
+aliases         = {}
+
+[hostname]
+#
+# "Hostname"
+# Shows the system hostname
+#
+# https://starship.rs/config/#hostname
+#
+disabled        = false
+ssh_only        = true
+ssh_symbol      = " "
+trim_at         = "."
+detect_env_vars = []
+format          = "[$ssh_symbol$hostname]($style) in "
+style           = "bold dimmed green"
+aliases         = {}
+
+[localip]
+#
+# "Local IP"
+# Shows the IPv4 address of the primary network interface
+#
+# https://starship.rs/config/#local-ip
+#
+disabled = true
+ssh_only = true
+format   = "[$localipv4]($style) "
+style    = "bold yellow"
+
+[directory]
+#
+# "Directory"
+# Shows the path to your current directory, truncated to three parent folders.
+# Your directory will also be truncated to the root of the git repo that you're currently in
+#
+# https://starship.rs/config/#directory
+#
+read_only         = " 󰌾"
+truncate_to_repo  = true
+truncation_length = 3
+truncation_symbol = ""
+
+[git_branch]
+#
+# "Git Branch"
+# Shows the active branch of the repo in your current directory
+#
+# https://starship.rs/config/#git-branch
+#
+disabled           = false
+always_show_remote = false
+format             = "on [$symbol$branch(:$remote_branch)]($style) "
+symbol             = " "
+style              = "bold purple"
+truncation_symbol  = "…"
+only_attached      = false
+ignore_branches    = []
+
+# TODO: not being shown, take a look
+[git_commit]
+#
+# "Git Commit"
+# Shows the current commit hash and also the tag (if any) of the repo in your current directory
+#
+# https://starship.rs/config/#git-commit
+#
+commit_hash_length = 7
+format             = '[\($hash$tag\)]($style) '
+style              = "dimmed bright-purple"
+only_detached      = false
+tag_disabled       = false
+tag_max_candidates = 0
+tag_symbol         = '  '
+
+# TODO:
+[git_state]
+#
+# "Git State"
+# Shown in directories which are part of a git repository, and where there is an operation in progress,
+# such as: REBASING, BISECTING, etc.
+# If there is progress information (e.g., REBASING 3/10), that information will be shown too
+#
+# https://starship.rs/config/#git-state
+#
+disabled = false
+
+# TODO:
+[git_metrics]
+#
+# "Git Metrics"
+# Shows the number of added and deleted lines in the current git repository
+#
+# https://starship.rs/config/#git-metrics
+#
+disabled           = true
+added_style        = "bold green"
+deleted_style      = "bold red"
+only_nonzero_diffs = true
+format             = "([+$added]($added_style) )([-$deleted]($deleted_style) )"
+ignore_submodules  = false
+
+# TODO:
+[git_status]
+#
+# "Git Status"
+# Shows symbols representing the state of the repo in your current directory
+#
+# https://starship.rs/config/#git-status
+#
+disabled = false
+
+# TODO: not displayed for hatch-based projects
+[package]
+#
+# "Package Version"
+# Shown when the current directory is the repository for a package, and shows its current version.
+# The module currently supports: npm, nimble, cargo, poetry, python, composer, gradle, julia, mix, helm, shards,
+# galaxy, daml and dart packages
+#
+# https://starship.rs/config/#package-version
+#
+disabled        = false
+format          = 'is [$symbol$version]($style) '
+symbol          = "󰏗 "
+version_format  = 'v${raw}'
+style           = 'bold 208'
+display_private = false
+
+# NOTE: actually displayed in second line of right prompt
+[direnv]
+#
+# "Direnv"
+# Shows the status of the current rc file if one is present.
+# The status includes the path to the rc file, whether it is loaded, and whether it has been allowed by direnv
+#
+# https://starship.rs/config/#direnv
+#
+disabled          = false
+format            = '[$symbol$loaded/$allowed]($style) '
+symbol            = "direnv "
+style             = "bright-blue"
+detect_extensions = []
+detect_files      = [".envrc"]
+detect_folders    = []
+detect_env_vars   = ["DIRENV_FILE"]
+allowed_msg       = "allowed"
+not_allowed_msg   = "not allowed"
+denied_msg        = "denied"
+loaded_msg        = "loaded"
+unloaded_msg      = "not loaded"
+
+
+# *****************************************************
+# Command execution status module configuration options
+#
+# Displayed in the first line of the right prompt
+# *****************************************************
+
+[cmd_duration]
+#
+# "Command Duration"
+# Shows how long the last command took to execute.
+# The module will be shown only if the command took longer than two seconds (or the `min_time` config value, if
+# it exists)
+#
+# https://starship.rs/config/#command-duration
+#
+disabled           = false
+format             = " [$duration]($style) "
+min_time           = 2_000
+min_time_to_notify = 45_000
+show_milliseconds  = false
+style              = "yellow"
+show_notifications = false
+
+[status]
+#
+# "Status"
+# Displays the exit code of the previous command. If `$success_symbol` is empty (default), the module will be shown
+# only if the exit code is not 0. The status code will cast to a signed 32-bit integer
+#
+# https://starship.rs/config/#status
+#
+disabled                  = false
+format                    = '[$common_meaning$signal_name$maybe_int $symbol]($style) '
+symbol                    = " "
+success_symbol            = " "
+not_executable_symbol     = " "
+not_found_symbol          = " "
+sigint_symbol             = " "
+signal_symbol             = "⚡ "
+style                     = ""
+success_style             = "bold green"
+failure_style             = "bold red"
+recognize_signal_code     = true
+map_symbol                = true
+pipestatus                = false
+pipestatus_separator      = "|"
+pipestatus_segment_format = '\[$pipestatus\] => [$symbol$common_meaning$signal_name$maybe_int]($style) '
+
+
+# ********************************************************************
+# Context/platform module configuration options
+#
+# Displayed in the first line of the left prompt, after "core" modules
+# ********************************************************************
+
+[aws]
+symbol = "  "
+
+[docker_context]
+format = 'via [$symbol$context]($style) '
+symbol = " "
+
+[gcloud]
+symbol = " "
+
+
+# ***********************************************
+# Language version module configuration options
+#
+# Displayed in the first line of the right prompt
+# ***********************************************
+
+[c]
+symbol = " "
+
+[conda]
+symbol = " "
+
+[golang]
+symbol = " "
+
+[java]
+symbol = " "
+
+[lua]
+symbol = " "
+
+[nodejs]
+symbol = " "
+
+# TODO: prioritize python3, but make sure we can see the virtualenv clearly another way
+[python]
+format             = 'via [${symbol}${pyenv_prefix}(${version} )(\($virtualenv\) )]($style)'
+version_format     = "v${raw}"
+symbol             = " "
+style              = "bold yellow"
+pyenv_version_name = false
+pyenv_prefix       = "pyenv"
+
+[ruby]
+symbol = " "
+
+[rust]
+symbol = "󱘗 "
+
+[swift]
+symbol = " "
+
+
+# ************************************************
+# System information module configuration options
+#
+# Displayed in the second line of the right prompt
+# ************************************************
+
+[battery]
+#
+# "Battery"
+# Shows how charged the device's battery is and its current charging status
+#
+# https://starship.rs/config/#battery
+#
+format             = "[$symbol $percentage]($style)"
+full_symbol        = "󰁹"
+empty_symbol       = "󱉞"
+charging_symbol    = "󰂉"
+discharging_symbol = "󰂎"
+unknown_symbol     = "󰂑"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 90% and 100%
+threshold          = 100
+style              = "bright-green"
+discharging_symbol = "󰁹"
+charging_symbol    = "󰂅"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 80% and 90%
+threshold          = 90
+style              = "green"
+discharging_symbol = "󰂂"
+charging_symbol    = "󰂋"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 70% and 80%
+threshold          = 80
+style              = "green"
+discharging_symbol = "󰂁"
+charging_symbol    = "󰂊"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 60% and 70%
+threshold          = 70
+style              = "green"
+discharging_symbol = "󰂀"
+charging_symbol    = "󰢞"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 50% and 60%
+threshold          = 60
+style              = "green"
+discharging_symbol = "󰁿"
+charging_symbol    = "󰂉"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 40% and 50%
+threshold          = 50
+style              = "green"
+discharging_symbol = "󰁾"
+charging_symbol    = "󰢝"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 30% and 40%
+threshold          = 40
+style              = "dimmed bright-yellow"
+discharging_symbol = "󰁽"
+charging_symbol    = "󰂈"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 20% and 30%
+threshold          = 30
+style              = "orange"
+discharging_symbol = "󰁼"
+charging_symbol    = "󰂇"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 10% and 20%
+threshold          = 20
+style              = "bright-red"
+discharging_symbol = "󰁻"
+charging_symbol    = "󰂆"
+
+[[battery.display]]                     # Battery/charging display settings when capacity between 80% and 10%
+threshold          = 10
+style              = "red"
+discharging_symbol = "󰁺"
+charging_symbol    = "󰢜"
+
+[time]
+#
+# "Time"
+# Shows the current local time. The format configuration value is used by the "chrono" crate to control how the time is
+# displayed. Take a look at the chrono strftime docs (https://docs.rs/chrono/0.4.7/chrono/format/strftime/index.html)
+# to see what options are available
+#
+# https://starship.rs/config/#time
+#
+disabled = false
+format   = "[ $time]($style) "
+style    = "dimmed white"
+
+
+# *****************************************************
+# Disabled or unconfigured module configuration options
+# *****************************************************
+
+[env_var]
+#
+# "Environment Variable"
+# Displays the current value of selected environment variable(s).
+# The module will be shown only if any of the following conditions are met:
+#   - The variable configuration option matches an existing environment variable
+#   - The variable configuration option is not defined, but the default configuration option is
+#
+# https://starship.rs/config/#environment-variable
+#
+disabled = false
+
+[jobs]
+#
+# "Jobs"
+# Shows the current number of jobs running,
+# The module will be shown only if there are background jobs running. The module will show the number of jobs running
+# if there are at least 2 jobs, or more than the `number_threshold` config value, if it exists. The module will show a
+# symbol if there is at least 1 job, or more than the symbol_threshold config value, if it exists. You can set both
+# values to 0 in order to always show the symbol and number of jobs, even if there are 0 jobs running
+#
+# https://starship.rs/config/#jobs
+#
+disabled = false
+
+[os]
+#
+# "OS"
+# Shows the current operating system. OS information is detected via the "os_info" crate
+# NOTE: custom OS symbols are defined at the bottom of this config file
+#
+# https://starship.rs/config/#os
+#
+disabled = true
+format   = '[$symbol]($style)'
+style    = "bold blue"
+
+[shell]
+#
+# "Shell"
+# Shows an indicator for currently used shell
+#
+# https://starship.rs/config/#shell
+#
+disabled = true
+format   = "[$indicator]($style)"
+style    = "bright-white"
+
+[sudo]
+#
+# "Sudo"
+# Displays if sudo credentials are currently cached
+# The module will only be shown if credentials are cached
+#
+# https://starship.rs/config/#sudo
+#
+disabled = true
+format   = "[sudo creds cached]($style) "
+style    = "dimmed orange"
+
+
+# ******************************
+# OS symbols
+# https://starship.rs/config/#os
+# ******************************
+
+[os.symbols]
+Alpaquita        = " "
+Alpine           = " "
+AlmaLinux        = " "
+Amazon           = " "
+Android          = " "
+Arch             = " "
+Artix            = " "
+CachyOS          = " "
+CentOS           = " "
+Debian           = " "
+DragonFly        = " "
+Emscripten       = " "
+EndeavourOS      = " "
+Fedora           = " "
+FreeBSD          = " "
+Garuda           = "󰛓 "
+Gentoo           = " "
+HardenedBSD      = "󰞌 "
+Illumos          = "󰈸 "
+Kali             = " "
+Linux            = " "
+Mabox            = " "
+Macos            = " "
+Manjaro          = " "
+Mariner          = " "
+MidnightBSD      = " "
+Mint             = " "
+NetBSD           = " "
+NixOS            = " "
+Nobara           = " "
+OpenBSD          = "󰈺 "
+openSUSE         = " "
+OracleLinux      = "󰌷 "
+Pop              = " "
+Raspbian         = " "
+Redhat           = " "
+RedHatEnterprise = " "
+RockyLinux       = " "
+Redox            = "󰀘 "
+Solus            = "󰠳 "
+SUSE             = " "
+Ubuntu           = " "
+Unknown          = " "
+Void             = " "
+Windows          = "󰍲 "

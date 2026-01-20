@@ -88,6 +88,15 @@
         - ssh
         - configfile
 
+    # Starship shell prompt
+    - name: Setup starship
+      ansible.builtin.include_role:
+        name: roles/starship
+        apply:
+          tags: starship
+      tags:
+        - starship
+
     # Tasks for python configuration
     - include_role:
         name: roles/python
