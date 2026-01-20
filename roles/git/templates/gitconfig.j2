@@ -1,0 +1,54 @@
+[user]
+	name = Connor Mason
+	email = connor@conmason.com
+
+[alias]
+
+	# Get name of current branch
+	branch-name = rev-parse --abbrev-ref HEAD
+
+	# Get default branch of repo
+	default-branch = !git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | cut -d\"/\" -f4 || git ls-remote --symref origin HEAD 2>/dev/null | head -n1 | cut -d\"/\" -f3 | cut -f1
+
+	# Push current local branch to remote (origin)
+	po = "!git push -u origin $(git branch-name)"
+
+	# Push current local branch to remote (origin) and open GitHub pull request in browser
+	pr = "!hub pull-request --push --copy --browse"
+
+	# Auto-generate .gitignore file with provided rules
+	ignore = "!gi() { curl -sL https://www.gitignore.io/api/$@ ;}; gi"
+
+[commit]
+	template = {{ user_home }}/.stCommitMsg
+
+[core]
+    pager = delta
+
+[delta]
+    navigate = true    # use n and N to move between diff sections
+    dark = true
+    line-numbers = true
+    side-by-side = true
+
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+
+[init]
+	defaultBranch = main
+	templateDir = {{ git_template_dir }}
+
+[interactive]
+    diffFilter = delta --color-only
+
+# [merge]
+#     conflictStyle = zdiff3
+
+[pull]
+	rebase = false
+
+[push]
+	default = simple

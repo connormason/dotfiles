@@ -1,0 +1,18 @@
+---
+# Git template directory configuration
+git_template_dir: "{{ user_home }}/.git-template"
+git_template_dir_mode: "755"
+git_hook_mode: "755"
+
+# Pre-commit hook configuration for git init.templateDir (hooks automatically included/run when repos are cloned)
+# Options:
+#   'warning' - Output warning when .pre-commit-config.yaml exists but `pre-commit install` not run
+#   'auto'    - Automatically install pre-commit hooks if available
+git_precommit_hook_type: "warning"
+
+# Python path for pre-commit (used when `git_precommit_hook_type="auto"` above)
+# Auto-detect common locations, or specify custom path
+git_precommit_python_path: ""
+
+# Git configuration
+git_config_mode: "644"
