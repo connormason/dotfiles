@@ -69,20 +69,20 @@
     src: env.j2
     dest: "{{ docker_dir }}/.env"
   tags:
+    - caddy
     - configfile
+    - pihole
 
 - name: Setup caddy
+  tags:
+    - caddy
   block:
-    - name: Stat Caddyfile destination (follow symlinks = false)
-      ansible.builtin.stat:
-        path: "{{ caddyfile_dest }}"
-        follow: false
-      register: caddyfile_dest
-
     - name: Ensure parent directory of Caddyfile destination exists
       ansible.builtin.file:
         path: "{{ caddyfile_dest | dirname }}"
         state: directory
+      tags:
+        - configfile
 
     - name: Build and copy Caddyfile
       ansible.builtin.template:
