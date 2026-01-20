@@ -18,7 +18,7 @@ services:
       - /storage/media/music:/music
     restart: unless-stopped
 
-  # Transmission. Torrent client
+  # Transmission (torrent client)
   # TODO: periodically delete downloads once moved or point at downloads folder directly
   transmission:
     image: linuxserver/transmission
@@ -38,22 +38,22 @@ services:
   autoplex:
     image: danielmmetz/autoplex:latest
     container_name: autoplex
+    restart: unless-stopped
     volumes:
       - /storage/media/downloads:/downloads
       - /storage/media/tv:/tv
       - /storage/media/movies:/movies
-    restart: unless-stopped
     command: ["--mode", "copy", "--host", "transmission", "--src", "/downloads/complete/tv", "--dest", "/tv", "--src", "/downloads/complete/movies", "--dest", "/movies"]
 
   # Tool that automatically moves downloaded files from transmission to the right spot to get picked up by Plex
   pyautoplex:
     image: connormason/pyautoplex:latest
     container_name: pyautoplex
+    restart: unless-stopped
     volumes:
       - /storage/media/downloads:/downloads
       - /storage/media/tv:/tv
       - /storage/media/movies:/movies
-    restart: unless-stopped
     command: ["--mode", "copy", "--src", "/downloads/complete/movies", "--dest", "/movies", '--src', "/downloads/complete/tv", "--dest", "/tv", "--print-tracebacks"]
 
   # Proxy to bypass Cloudflare protection
@@ -97,6 +97,7 @@ services:
   sonarr:
     image: linuxserver/sonarr
     container_name: sonarr
+    restart: unless-stopped
     environment:
       - PUID=1000
       - PGID=1000
@@ -104,7 +105,6 @@ services:
       - /storage/media/config/sonarr:/config
       - /storage/media/tv:/tv
       - /storage/media/downloads:/downloads
-    restart: unless-stopped
     ports:
       - "8989:8989"
 
@@ -112,6 +112,7 @@ services:
   caddy:
     image: danielmmetz/caddy-dnsimple
     container_name: caddy
+    restart: unless-stopped
     environment:
       - ACME_AGREE=true
       - DNSIMPLE_OAUTH_TOKEN
@@ -121,33 +122,35 @@ services:
     volumes:
       - caddy_data:/data
       - ./Caddyfile:/etc/caddy/Caddyfile
-    restart: unless-stopped
 
   # Home Assistant
   homeassistant:
     container_name: home-assistant
     image: homeassistant/home-assistant
+    network_mode: host
+    restart: always
 #    ports:
 #      - 80:80
 #      - 8123:8123
     environment:
       - TZ='America/Los_Angeles'
-    restart: always
     volumes:
       - ./homeassistant:/config
       - /etc/localtime:/etc/localtime:ro
       - ./shared:/shared
-    network_mode: host
 
   # PiHole
   pihole:
     container_name: pihole
     image: pihole/pihole:latest
+    restart: unless-stopped
     ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-      - "67:67/udp"     # Only required if you are using Pi-hole as your DHCP server
-      - "80:80/tcp"
+      - "53:53/tcp"     # DNS
+      - "53:53/udp"     # DNS
+      - "67:67/udp"     # Only required if using Pi-hole as DHCP server
+      - "80:80/tcp"     # Default HTTP Port
+#      - "443:443/tcp"  # Default HTTPs Port. FTL will generate a self-signed certificate
+                        # NOTE: commented out because port conflicts with caddy, not sure if that's problematic
     environment:
       - TZ='America/Los_Angeles'
       - WEBPASSWORD
@@ -156,7 +159,20 @@ services:
       - './etc-dnsmasq.d:/etc/dnsmasq.d'
     cap_add:
       - NET_ADMIN     # Required if you are using Pi-hole as your DHCP server, else not needed
+
+  # Glance
+  glance:
+    container_name: glance
+    image: glanceapp/glance
     restart: unless-stopped
+    volumes:
+      - ./glance/config:/app/config
+      - ./glance/assets:/app/assets
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro    # For Docker containers widget
+    ports:
+      - 8080:8080
+    env_file: .env
 
 volumes:
   caddy_data: {}

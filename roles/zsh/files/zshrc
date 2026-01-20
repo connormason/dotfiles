@@ -97,3 +97,10 @@ alias gsl="git stash list"
 alias gsp="git stash pop"
 alias gs="git stash"
 alias gsm="git stash push -m"
+
+# Docker Compose Aliases
+alias dc="docker-compose"
+alias sdc="sudo docker-compose"
+
+# Other tool aliases
+alias m="micro"

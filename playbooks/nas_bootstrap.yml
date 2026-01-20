@@ -55,6 +55,15 @@
         - configfile
         - homeassistant
 
+    # Tasks for Glance
+    - include_role:
+        name: roles/glance
+        apply:
+          tags: glance
+      tags:
+        - glance
+        - configfile
+
     # Tasks for git configuration
     - include_role:
         name: roles/git

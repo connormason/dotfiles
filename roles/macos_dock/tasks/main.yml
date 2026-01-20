@@ -44,6 +44,6 @@
 
 - name: Restart Dock
   ansible.builtin.command:
-    cmd: "/bin/launchctl kickstart -k gui/{{ ansible_facts.user_uid }}/com.apple.Dock.agent"
+    cmd: "/bin/launchctl kickstart -k gui/{{ ansible_facts['user_uid'] }}/com.apple.Dock.agent"
   tags:
     - dock
