@@ -171,7 +171,7 @@ services:
   homeassistant:
     container_name: home-assistant
     image: homeassistant/home-assistant
-    network_mode: host
+    network_mode: host                    # TODO: does this need to be host?
     restart: always
 #    ports:
 #      - 80:80

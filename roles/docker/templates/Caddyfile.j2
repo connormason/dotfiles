@@ -1,9 +1,41 @@
-# Plex
-plex.local {
-    reverse_proxy localhost:32400
+# Pi-hole Admin
+pihole.local {
+    reverse_proxy pihole:80
 }
 
-# Transmission
+# Plex
+# TODO: still needs host network for discovery
+plex.local {
+    reverse_proxy {{ ip_address }}:32400
+}
+
+# Transmission - Torrent client
 transmission.local {
-    reverse_proxy localhost:9091
+    reverse_proxy transmission:9091
+}
+
+# Prowlarr - Proxy to bypass Cloudflare protection
+prowlarr.local {
+    reverse_proxy prowlarr:9696
+}
+
+# Radarr - Tool for finding movie downloads
+radarr.local {
+    reverse_proxy radarr:7878
+}
+
+# Sonarr - Tool for finding TV show downloads
+sonarr.local {
+    reverse_proxy sonarr:8989
+}
+
+# Glance
+glance.local {
+    reverse_proxy glance:8080
+}
+
+# Home Assistant
+# TODO: still on host network
+homeassistant.local {
+    reverse_proxy {{ ip_address }}:8123
 }
