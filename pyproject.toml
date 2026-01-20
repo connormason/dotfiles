@@ -1,0 +1,109 @@
+# ####################
+# Tool configuration #
+# ####################
+
+
+# `ruff` configuration
+# ====================
+[tool.ruff]
+line-length    = 120
+indent-width   = 4
+target-version = "py39"
+extend-exclude = [
+    "docs/",
+]
+
+[tool.ruff.lint]
+extend-select = [
+    "ANN",      # flake8-annotations
+    "C4",       # flake8-comprehensions
+    "COM",      # flake8-commas
+    "EXE",      # flake8-executable
+    "FA",       # flake8-future-imports
+    "I",        # isort
+    "ICN",      # flake8-import-convetions
+    "INP",      # flake8-no-pep420
+    "ISC",      # flake8-implicit-str-concat
+    "LOG",      # flake8-logging
+    "PGH",      # pygrep-hooks
+    "PT",       # flake8-pytest-style
+    "PTH",      # flake8-use-pathlib
+    "Q",        # flake8-quotes
+    "RSE",      # flake8-raise
+    "RUF",      # ruff
+    "TC",       # flake8-type-checking
+    "TID",      # flake8-tidy-imports
+    "UP",       # pyupgrade
+    "W",        # pycodestyle warnings
+]
+ignore = [
+    "ANN401",   # Dynamically typed expressions (typing.Any) are disallowed in {name}
+    "C408",     # Unnecessary {kind}() call (rewrite as a literal)
+    "COM812",   # Trailing comma missing
+    "PT011",    # pytest.raises({exception}) is too broad, set the match parameter or use a more specific exception
+    "PT012",    # pytest.raises() block should contain a single simple statement
+    "PT017",    # Found assertion on exception {name} in except block, use pytest.raises() instead
+    "RUF022",   # `__all__` is not sorted
+]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+required-imports  = [
+    "from __future__ import annotations"
+]
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "single"
+
+[tool.ruff.lint.flake8-type-checking]
+exempt-modules                 = ["typing", "typing_extensions"]
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.format]
+quote-style           = "single"
+indent-style          = "space"
+docstring-code-format = true
+exclude               = [
+    ".gitignore",
+]
+
+
+# `mypy` configuration
+# ====================
+[tool.mypy]
+disallow_untyped_defs = true
+exclude_gitignore     = true
+warn_unused_configs   = true
+
+
+# `interrogate` configuration
+# ===========================
+[tool.interrogate]
+style                       = "sphinx"
+fail-under                  = 70
+ignore-init-method          = false
+ignore-init-module          = false
+ignore-magic                = true
+ignore-module               = true
+ignore-nested-functions     = true
+ignore-nested-classes       = false
+ignore-overloaded-functions = true
+ignore-private              = true
+ignore-property-decorators  = false
+ignore-semiprivate          = true
+ignore-setters              = true
+exclude = [
+    ".tmp",
+    "build",
+    "docs",
+    "tests",
+]
+
+
+# `pytest` configuration
+# ======================
+[tool.pytest.ini_options]
+testpaths = ["tests"]

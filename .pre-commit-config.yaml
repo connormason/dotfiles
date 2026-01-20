@@ -44,7 +44,25 @@ repos:
       - id: check-yaml
         name: "[check] yaml"
 
-      # Fixers for file whitespace and metadata
+  # Validate pyproject.toml
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
+        name: "[check] pyproject.toml"
+
+  # Docstring coverage
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+        name: "[check] docstring coverage"
+        pass_filenames: false
+
+  # Fixers for file whitespace and metadata
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
       - id: fix-byte-order-marker
         name: "[fix]   utf-8 byte order marker"
       - id: end-of-file-fixer
@@ -54,7 +72,11 @@ repos:
         exclude: .gitignore
       - id: trailing-whitespace
         name: "[fix]   trailing whitespace"
-        exclude: .gitignore
+        exclude: |
+          (?x)(
+              ^.gitignore|
+              .config/istat_menus.ismp
+          )
 
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.37.1
@@ -65,14 +87,32 @@ repos:
         exclude: |
           (?x)(
               ^.pre-commit-config.yaml|
-              archived_linux
+              ^.config/.ansible-lint.yaml|
+              archived_linux/
           )
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.10
+    hooks:
+      - id: ruff
+        name: "[lint]  ruff check --fix"
+        args: [--fix, --exit-non-zero-on-fix]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        name: "[lint]  mypy"
+        args: [--ignore-missing-imports]
+        exclude: tests
+        additional_dependencies:
+          - types-PyYAML
 
 #  - repo: https://github.com/ansible/ansible-lint.git
 #    rev: v25.6.1
 #    hooks:
 #      - id: ansible-lint
-#        name: "[lint] ansible"
+#        name: "[lint]  ansible"
 #        args: [--fix]
 
 #  - repo: https://github.com/koalaman/shellcheck-precommit

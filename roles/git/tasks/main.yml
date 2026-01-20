@@ -1,14 +1,57 @@
-- name: Copy .gitconfig
-  when: inventory_hostname != 'localhost'
-  copy:
-    src: gitconfig
-    dest: "{{ ansible_facts['user_dir'] }}/.gitconfig"
+---
+# Enables automatic installation of pre-commit hooks when new repos are cloned
+# https://pre-commit.com/#automatically-enabling-pre-commit-on-repositories
+- name: Setup git template directory
   tags:
     - configfile
+    - preferences
+  block:
+    - name: Create ~/.git-template directory
+      ansible.builtin.file:
+        path: "{{ git_template_dir }}"
+        state: directory
+        mode: "{{ git_template_dir_mode }}"
 
-- name: Symlink .gitconfig
-  when: inventory_hostname == 'localhost'
-  file:
-    src: "{{ dotfiles_home }}/roles/git/files/gitconfig"
+    - name: Create ~/.git-template/hooks directory
+      ansible.builtin.file:
+        path: "{{ git_template_dir }}/hooks"
+        state: directory
+        mode: "{{ git_template_dir_mode }}"
+
+    - name: Generate pre-commit hook from template
+      ansible.builtin.template:
+        src: "{{ dotfiles_home }}/roles/git/templates/pre-commit.j2"
+        dest: "{{ git_template_dir }}/hooks/pre-commit"
+        mode: "{{ git_hook_mode }}"
+
+- name: Generate and link global git config
+  tags:
+    - configfile
+    - preferences
+  ansible.builtin.template:
+    src: "{{ dotfiles_home }}/roles/git/templates/gitconfig.j2"
     dest: "{{ ansible_facts['user_dir'] }}/.gitconfig"
-    state: link
+    mode: "{{ git_config_mode }}"
+
+- name: Link global git ignore file
+  tags:
+    - configfile
+    - preferences
+  ansible.builtin.include_role:
+    name: roles/link_dotfile
+  vars:
+    link_dotfile_src: "{{ dotfiles_home }}/roles/git/files/gitignore_global"
+    link_dotfile_dst: "{{ user_home }}/.config/git/ignore"
+
+- name: Link gh config files
+  tags:
+    - configfile
+    - preferences
+  ansible.builtin.include_role:
+    name: roles/link_dotfile
+  vars:
+    link_dotfile_src: "{{ dotfiles_home }}/roles/tools/files/gh/{{ item }}"
+    link_dotfile_dst: "{{ user_home }}/.config/gh/{{ item }}"
+  loop:
+    - config.yml
+    - hosts.yml
