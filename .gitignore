@@ -387,8 +387,5 @@ tags
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,python,git,ansible,pycharm+all,vim,VisualStudioCode,sublimetext
 
-# Ansible secrets
 vault_password.txt
-
-# Inventory repo
 inventory/

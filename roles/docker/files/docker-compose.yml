@@ -149,7 +149,8 @@ services:
       - "53:53/udp"     # DNS
       - "67:67/udp"     # Only required if using Pi-hole as DHCP server
       - "80:80/tcp"     # Default HTTP Port
-      - "443:443/tcp"   # Default HTTPs Port. FTL will generate a self-signed certificate
+#      - "443:443/tcp"  # Default HTTPs Port. FTL will generate a self-signed certificate
+                        # NOTE: commented out because port conflicts with caddy, not sure if that's problematic
     environment:
       - TZ='America/Los_Angeles'
       - WEBPASSWORD
@@ -165,8 +166,8 @@ services:
     image: glanceapp/glance
     restart: unless-stopped
     volumes:
-      - ./config:/app/config
-      - ./assets:/app/assets
+      - ./glance/config:/app/config
+      - ./glance/assets:/app/assets
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro    # For Docker containers widget
     ports:

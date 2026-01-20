@@ -1,0 +1,18 @@
+---
+- name: Copy Glance assets/
+  ansible.builtin.synchronize:
+    src: assets/
+    dest: "{{ docker_dir }}/glance/assets/"
+    delete: true
+    recursive: true
+  tags:
+    - configfile
+
+- name: Copy Glance config/
+  ansible.builtin.synchronize:
+    src: config/
+    dest: "{{ docker_dir }}/glance/config/"
+    delete: true
+    recursive: true
+  tags:
+    - configfile
