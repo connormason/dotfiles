@@ -1,18 +1,24 @@
 #!/usr/bin/python
+"""
+Module for configuring power management settings exposed by `pmset`
+"""
 from __future__ import annotations
 
 import re
 from typing import Any
 
-ANSIBLE_METADATA = {
+""" Module metadata """
+
+
+ANSIBLE_METADATA: dict[str, Any] = {
     'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'community'
+    'status':           ['preview'],
+    'supported_by':     'community',
 }
 
 DOCUMENTATION = """
 ---
-module: oxs_pmset
+module: osx_pmset
 
 short_description: Manage power management configuration exposed by pmset
 
@@ -32,7 +38,10 @@ EXAMPLES = r""" # """
 
 RETURN = r""" # """
 
-from ansible.module_utils.basic import AnsibleModule
+
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+
+""" Parsing/regexes """
 
 
 PMSET_SECTION_REGEX = re.compile(r'^(?P<section>.+):$')
@@ -57,47 +66,73 @@ def parse_pmset_output(output: str) -> dict[str, dict[str, Any]]:
     return data
 
 
+"""
+Core module logic
+"""
+
+
+def build_module() -> AnsibleModule:
+    """
+    Build AnsibleModule with argument spec
+
+    :return: :class:`AnsibleModule` obj
+    """
+    return AnsibleModule(
+        argument_spec=dict(
+            on_battery=dict(
+                type='dict',
+                required=False,
+                default=dict()
+            ),
+            on_charger=dict(
+                type='dict',
+                required=False,
+                default=dict()
+            ),
+        ),
+        supports_check_mode=True,
+    )
+
+
 def run_module() -> None:
-    module_args = dict(
-        on_battery=dict(
-            type='dict',
-            required=False,
-            default=dict()
-        ),
-        on_charger=dict(
-            type='dict',
-            required=False,
-            default=dict()
-        ),
-    )
-    result = dict(
-        changed=False,
-        diff=dict(before='', after='')
-    )
-    module = AnsibleModule(argument_spec=module_args, supports_check_mode=True)
+    """
+    Run "osx_pmset" ansible module
+    """
+    module = build_module()
 
     _, stdout, _ = module.run_command(['pmset', '-g', 'custom'], check_rc=True)
-
-    commands = []
     output = parse_pmset_output(stdout)
+
+    commands: list[Any] = []
+    result:   dict[str, Any] = {
+        'changed': False,
+        'diff': {
+            'before': '',
+            'after':  '',
+        },
+    }
 
     def add_diff(block: str, param: str, old_value: Any, new_value: Any) -> None:
         result['diff']['before'] += f'{block}.{param}={old_value}\n'
         result['diff']['after'] += f'{block}.{param}={new_value}\n'
 
-    blocks = [
+    blocks: list[tuple[str, str, Any]] = [
         ('on_battery', '-b', output['Battery Power']),
         ('on_charger', '-c', output['AC Power']),
     ]
     for block, mode_flag, current_values in blocks:
         for param, value in module.params[block].items():
-            if value is None: continue
-            if param not in current_values:
+            if value is None:
+                continue
+            elif param not in current_values:
                 module.fail_json(
-                    msg=f'{param} is not present in pmset output. '
-                        f'Run `pmset -g custom` to see the list of valid parameters',
+                    msg=(
+                        f'{param} is not present in pmset output. '
+                        f'Run `pmset -g custom` to see the list of valid parameters'
+                    ),
                     **result,
                 )
+
             orig = current_values[param]
             if isinstance(value, int):
                 orig = int(orig)
