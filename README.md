@@ -16,18 +16,20 @@ Manages dotfiles, applications, system settings, and home infrastructure (NAS wi
    - Copy SSH key to clipboard: `pbcopy < ~/.ssh/id_ed25519.pub`
    - Add SSH key to github.com account
 4. Clone dotfiles repo: `git clone git@github.com:connormason/dotfiles-personal.git`
-5. Create `vault_password.txt` file in dotfiles repo and paste in Ansible Vault password from password manager
-6. Run bootstrapping script
+5. Pull inventory repository: `cd dotfiles-personal && python3 run.py update-inventory`
+6. Create `vault_password.txt` file in dotfiles repo and paste in Ansible Vault password from password manager
+7. Run bootstrapping script
    - `chmod u+x local_bootstrap.sh`
    - `./local_bootstrap.sh`
 
 ### NAS Bootstrapping
 
-1. Create file `vault_password.txt` in the repo root and paste in the Ansible Vault password from password manager
-2. Run bootstrapping script
+1. Pull inventory repository: `python3 run.py update-inventory`
+2. Create file `vault_password.txt` in the repo root and paste in the Ansible Vault password from password manager
+3. Run bootstrapping script
    - `chmod u+x nas_bootstrap.sh`
    - `./nas_bootstrap.sh`
-3. Point router DNS at NAS for PiHole
+4. Point router DNS at NAS for PiHole
 
 ## Architecture Overview
 
@@ -59,7 +61,7 @@ Configures home NAS server with:
 | **run.py** | Python CLI for repository management | [📖 docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md) |
 | **playbooks/** | Ansible playbooks and execution workflows | [📖 playbooks/README.md](playbooks/README.md) |
 | **roles/** | Ansible roles for system configuration | [📖 roles/README.md](roles/README.md) |
-| **inventory/** | Host definitions and encrypted vault files | Git submodule (private) |
+| **inventory/** | Host definitions and encrypted vault files | Managed via `run.py update-inventory` |
 | **cc-statusline/** | Custom Claude Code statusline | [📖 cc-statusline/README.md](cc-statusline/README.md) |
 
 ## Documentation
@@ -127,6 +129,54 @@ Configures home NAS server with:
 - **`roles/requirements.yml`** - External Ansible role dependencies
 
 ## Common Operations
+
+### Inventory Management
+
+The inventory repository is a separate private git repository containing host definitions and Ansible Vault encrypted secrets. It is managed as a standalone clone in the `inventory/` directory.
+
+**Initial setup:**
+
+```bash
+# Clone inventory repository
+python3 run.py update-inventory
+
+# Create vault password file
+echo "your_vault_password" > vault_password.txt
+chmod 600 vault_password.txt
+```
+
+**Update inventory:**
+
+```bash
+# Pull latest inventory changes
+python3 run.py update-inventory
+
+# Force re-clone if corrupted
+python3 run.py update-inventory --force
+```
+
+**Inventory structure:**
+
+```
+inventory/
+├── inventory.yml              # Host definitions
+├── group_vars/
+│   ├── all/vault.yml         # Shared secrets
+│   └── localhost/
+│       ├── vars.yml          # Mac-specific variables
+│       └── vault.yml         # Mac-specific secrets
+└── host_vars/
+    └── nas/
+        ├── vars.yml          # NAS-specific variables
+        └── vault.yml         # NAS-specific secrets
+```
+
+**Important notes:**
+
+- The `inventory/` directory is gitignored in the main repository
+- `run.py update-inventory` clones from `git@github.com:connormason/dotfiles-inventory.git`
+- SSH authentication to GitHub is required for inventory operations
+- Vault password must be in `vault_password.txt` for playbook execution
 
 ### Repository Management
 
@@ -211,7 +261,7 @@ dotfiles-personal/
 │   ├── link_dotfile/               # Reusable dotfile linking
 │   └── requirements.yml            # External role dependencies
 │
-├── inventory/                      # Separate git submodule (private)
+├── inventory/                      # Standalone git repository (private)
 │   ├── inventory.yml               # Host definitions
 │   ├── group_vars/                 # Group variables and vault files
 │   └── host_vars/                  # Host-specific variables and vault files
@@ -355,12 +405,27 @@ ansible-playbook playbooks/local_bootstrap.yml \
 
 ## Troubleshooting
 
-### Inventory Not Found
+### Inventory Issues
 
+**Inventory directory not found:**
 ```bash
-# Update inventory submodule
+# Clone inventory repository
 python3 run.py update-inventory
 ```
+
+**Inventory out of sync or corrupted:**
+```bash
+# Force re-clone from remote
+python3 run.py update-inventory --force
+```
+
+**SSH authentication errors:**
+1. Verify SSH key is added to GitHub account
+2. Test SSH connection: `ssh -T git@github.com`
+3. Check SSH agent has key loaded: `ssh-add -l`
+4. Add key to agent: `ssh-add ~/.ssh/id_ed25519`
+
+See [run.py documentation](docs/RUN_PY_REFERENCE.md#inventory-management) for detailed troubleshooting.
 
 ### Vault Password Issues
 

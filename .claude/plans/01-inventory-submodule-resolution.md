@@ -69,7 +69,7 @@ For personal dotfiles, simplicity trumps git purity. The inventory is always pul
 
 ### Phase 3: Update Documentation
 
-- [ ] **Task 3.1**: Update README with inventory setup instructions
+- [x] **Task 3.1**: Update README with inventory setup instructions
 - [ ] **Task 3.2**: Update CLAUDE.md to reflect new approach
 - [ ] **Task 3.3**: Add inline documentation to run.py
 
