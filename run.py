@@ -734,6 +734,111 @@ def cmd_list_hosts(args: argparse.Namespace) -> None:
 
 
 @command(group='Inventory')
+def cmd_inventory_status(args: argparse.Namespace) -> None:
+    """
+    Display current status of inventory directory
+    """
+    printf('Inventory Status', bold=True, fg='bright_white')
+    printf('=' * 60, bold=True)
+    printf('')
+
+    # Check if inventory directory exists
+    if not INVENTORY_DIR.exists():
+        printf('Status:   ', fg='bright_white', bold=True, reset=False)
+        printf('Not found', fg='red', bold=True)
+        printf(f'Path:     {folduser(INVENTORY_DIR)}', dim=True)
+        printf('')
+        printf(f'💡 Run {style("python3 run.py update-inventory", fg="bright_magenta")} to clone the inventory', fg='yellow')
+        return
+
+    printf('Status:   ', fg='bright_white', bold=True, reset=False)
+    printf('Found', fg='green', bold=True)
+    printf(f'Path:     {folduser(INVENTORY_DIR)}', dim=True)
+    printf('')
+
+    # Check if it's a git repository
+    git_dir = INVENTORY_DIR / '.git'
+    if not git_dir.exists():
+        printf('Type:     ', fg='bright_white', bold=True, reset=False)
+        printf('Not a git repository', fg='yellow', bold=True)
+        printf('')
+        printf('⚠️  Inventory exists but is not a git repository', fg='yellow')
+        printf(f'   Run {style("python3 run.py update-inventory", fg="bright_magenta")} to fix', indent=3)
+        return
+
+    printf('Type:     ', fg='bright_white', bold=True, reset=False)
+    printf('Git repository', fg='green', bold=True)
+    printf('')
+
+    # Get git remote information
+    try:
+        result = shell_command(
+            ['git', 'remote', 'get-url', 'origin'],
+            cwd=INVENTORY_DIR,
+            capture_output=True,
+        )
+        remote_url = result.stdout.strip()
+        printf('Remote:   ', fg='bright_white', bold=True, reset=False)
+        printf(remote_url, fg='cyan')
+    except subprocess.CalledProcessError:
+        printf('Remote:   ', fg='bright_white', bold=True, reset=False)
+        printf('No remote configured', fg='yellow')
+
+    # Get current branch
+    try:
+        result = shell_command(
+            ['git', 'branch', '--show-current'],
+            cwd=INVENTORY_DIR,
+            capture_output=True,
+        )
+        branch = result.stdout.strip()
+        printf('Branch:   ', fg='bright_white', bold=True, reset=False)
+        printf(branch, fg='cyan')
+    except subprocess.CalledProcessError:
+        printf('Branch:   ', fg='bright_white', bold=True, reset=False)
+        printf('Unknown', fg='yellow')
+
+    # Get last commit info
+    try:
+        result = shell_command(
+            ['git', 'log', '-1', '--format=%h - %s (%cr)'],
+            cwd=INVENTORY_DIR,
+            capture_output=True,
+        )
+        last_commit = result.stdout.strip()
+        printf('Commit:   ', fg='bright_white', bold=True, reset=False)
+        printf(last_commit, dim=True)
+    except subprocess.CalledProcessError:
+        pass
+
+    # Check for uncommitted changes
+    try:
+        result = shell_command(
+            ['git', 'status', '--porcelain'],
+            cwd=INVENTORY_DIR,
+            capture_output=True,
+        )
+        if result.stdout.strip():
+            printf('')
+            printf('⚠️  Uncommitted changes detected', fg='yellow', bold=True)
+            for line in result.stdout.strip().split('\n')[:5]:
+                printf(f'   {line}', indent=3, fg='yellow')
+    except subprocess.CalledProcessError:
+        pass
+
+    # Check if inventory.yml file exists
+    printf('')
+    if INVENTORY_FILE.exists():
+        printf('Inventory file:', fg='bright_white', bold=True, reset=False)
+        printf(' Found', fg='green', bold=True)
+        printf(f'   {folduser(INVENTORY_FILE)}', dim=True, indent=3)
+    else:
+        printf('Inventory file:', fg='bright_white', bold=True, reset=False)
+        printf(' Not found', fg='red', bold=True)
+        printf(f'   Expected: {folduser(INVENTORY_FILE)}', dim=True, indent=3)
+
+
+@command(group='Inventory')
 def cmd_update_inventory(args: argparse.Namespace) -> None:
     """
     Update inventory repo
