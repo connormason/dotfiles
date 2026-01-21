@@ -838,7 +838,21 @@ def cmd_inventory_status(args: argparse.Namespace) -> None:
         printf(f'   Expected: {folduser(INVENTORY_FILE)}', dim=True, indent=3)
 
 
-@command(group='Inventory')
+def add_update_inventory_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Add arguments for update-inventory command
+
+    :param parser: argument parser
+    """
+    parser.add_argument(
+        '-f',
+        '--force',
+        action='store_true',
+        help='Force update by discarding any uncommitted local changes',
+    )
+
+
+@command(group='Inventory', add_arguments=add_update_inventory_arguments)
 def cmd_update_inventory(args: argparse.Namespace) -> None:
     """
     Update inventory repo
@@ -847,6 +861,24 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
 
     @retry_on_failure(max_attempts=3, delay=2.0, backoff=2.0)
     def pull_inventory_repo(**kwargs: Any) -> subprocess.CompletedProcess:
+        # Check for uncommitted changes if force flag is set
+        if args.force:
+            try:
+                result = shell_command(
+                    ['git', 'status', '--porcelain'],
+                    cwd=INVENTORY_DIR,
+                    capture_output=True,
+                )
+                if result.stdout.strip():
+                    printf('⚠️  Uncommitted changes detected, resetting...', fg='yellow', indent=3)
+                    shell_command(
+                        ['git', 'reset', '--hard', 'HEAD'],
+                        cwd=INVENTORY_DIR,
+                        indent=3,
+                    )
+            except subprocess.CalledProcessError:
+                pass  # Continue with pull anyway
+
         try:
             cp = shell_command(
                 ['git', 'pull', 'origin', 'main'],
