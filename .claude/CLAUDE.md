@@ -24,10 +24,14 @@ Both scripts:
 
 ### Inventory Management
 
-- **Primary inventory**: `inventory/` (separate git submodule)
+- **Primary inventory**: `inventory/` (standalone git clone, managed by run.py)
+- **Repository**: Cloned from `git@github.com:connormason/dotfiles-inventory.git`
 - **Contains**: Host definitions, encrypted vault files for secrets
-- **Update command**: `python3 run.py update-inventory` (pulls from `git@github.com:connormason/dotfiles-inventory.git`)
+- **Setup command**: `python3 run.py update-inventory` (clones if missing, pulls if exists)
+- **Recovery**: `python3 run.py update-inventory --force` (removes and re-clones if corrupted)
 - **Vault password**: Stored in `vault_password.txt` (gitignored, must be created manually)
+
+**Note**: The inventory is NOT a git submodule. It is a separate git repository cloned into the `inventory/` directory by `run.py`. This simplifies the mental model for personal dotfiles while maintaining version control. The directory is excluded from the main repository via `.gitignore`.
 
 Inventory structure:
 ```
