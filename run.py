@@ -415,6 +415,45 @@ class ShellCommandError(subprocess.CalledProcessError):
         return s
 
 
+def detect_ssh_error(e: subprocess.CalledProcessError) -> tuple[bool, str | None]:
+    """
+    Detect SSH-related errors from git command output
+
+    :param e: subprocess exception
+    :return: tuple of (is_ssh_error, specific_error_type)
+    """
+    stderr_text = ''
+    if e.stderr:
+        stderr_text = e.stderr if isinstance(e.stderr, str) else e.stderr.decode()
+
+    stdout_text = ''
+    if e.stdout:
+        stdout_text = e.stdout if isinstance(e.stdout, str) else e.stdout.decode()
+
+    combined = f'{stderr_text}\n{stdout_text}'.lower()
+
+    # Check for various SSH error patterns
+    ssh_patterns = {
+        'permission_denied': 'permission denied (publickey)',
+        'host_key_verification': 'host key verification failed',
+        'no_identities': 'no such identity',
+        'key_load_failed': 'load key',
+        'connection_refused': 'connection refused',
+        'connection_timeout': 'connection timed out',
+        'unknown_host': 'could not resolve hostname',
+    }
+
+    for error_type, pattern in ssh_patterns.items():
+        if pattern in combined:
+            return True, error_type
+
+    # Generic SSH detection
+    if any(indicator in combined for indicator in ['ssh:', '@github.com', 'publickey', 'git@']):
+        return True, 'generic'
+
+    return False, None
+
+
 def handle_command_error(e: subprocess.CalledProcessError, context: str, suggestion: str | None = None) -> None:
     """
     Format and display subprocess errors with context.
@@ -433,7 +472,44 @@ def handle_command_error(e: subprocess.CalledProcessError, context: str, suggest
         for line in stderr_text.strip().split('\n')[:10]:
             printf(f'     {line}',   fg='red', indent=1)
 
-    if suggestion:
+    # Check for SSH-specific errors and provide tailored suggestions
+    is_ssh_error, ssh_error_type = detect_ssh_error(e)
+    if is_ssh_error and ssh_error_type:
+        printf('  └─ 🔑 SSH Authentication Issue Detected', fg='yellow', bold=True, indent=1)
+
+        if ssh_error_type == 'permission_denied':
+            printf('  └─ 💡 Your SSH key is not authorized for this repository', fg='yellow', indent=1)
+            printf('     Try these steps:', fg='yellow', indent=1)
+            printf('     1. Check if SSH key exists: ls -la ~/.ssh/', fg='yellow', indent=1)
+            printf('     2. Generate new key if needed: ssh-keygen -t ed25519 -C "your_email@example.com"', fg='yellow', indent=1)
+            printf('     3. Add key to ssh-agent: ssh-add ~/.ssh/id_ed25519', fg='yellow', indent=1)
+            printf('     4. Add public key to GitHub: https://github.com/settings/keys', fg='yellow', indent=1)
+            printf('     5. Test connection: ssh -T git@github.com', fg='yellow', indent=1)
+
+        elif ssh_error_type == 'host_key_verification':
+            printf('  └─ 💡 GitHub host key not recognized', fg='yellow', indent=1)
+            printf('     Run: ssh-keyscan github.com >> ~/.ssh/known_hosts', fg='yellow', indent=1)
+
+        elif ssh_error_type in ('no_identities', 'key_load_failed'):
+            printf('  └─ 💡 SSH key could not be loaded', fg='yellow', indent=1)
+            printf('     Run: ssh-add ~/.ssh/id_ed25519 (or your key path)', fg='yellow', indent=1)
+
+        elif ssh_error_type == 'connection_refused':
+            printf('  └─ 💡 SSH connection refused', fg='yellow', indent=1)
+            printf('     Check network connectivity and firewall settings', fg='yellow', indent=1)
+
+        elif ssh_error_type == 'connection_timeout':
+            printf('  └─ 💡 SSH connection timed out', fg='yellow', indent=1)
+            printf('     Check network connectivity and try again', fg='yellow', indent=1)
+
+        elif ssh_error_type == 'unknown_host':
+            printf('  └─ 💡 Could not resolve hostname', fg='yellow', indent=1)
+            printf('     Check your internet connection and DNS settings', fg='yellow', indent=1)
+
+        else:  # generic SSH error
+            printf('  └─ 💡 Try testing SSH connection: ssh -T git@github.com', fg='yellow', indent=1)
+
+    elif suggestion:
         printf(f'  └─ 💡 {suggestion}', fg='yellow', indent=1)
 
 
@@ -888,7 +964,7 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
                 **kwargs,
             )
         except subprocess.CalledProcessError as e:
-            handle_command_error(e, 'Error pulling inventory repo', f'Check SSH key access to {INVENTORY_REPO_URL}')
+            handle_command_error(e, 'Error pulling inventory repo')
             raise
         else:
             printf('✅ Inventory updated', fg='bright_green')
@@ -904,7 +980,7 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
                 **kwargs,
             )
         except subprocess.CalledProcessError as e:
-            handle_command_error(e, 'Error cloning inventory repo', f'Check SSH key access to {INVENTORY_REPO_URL}')
+            handle_command_error(e, 'Error cloning inventory repo')
             raise
         else:
             printf('✅ Inventory cloned', fg='bright_green')

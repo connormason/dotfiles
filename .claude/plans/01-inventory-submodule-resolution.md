@@ -65,7 +65,7 @@ For personal dotfiles, simplicity trumps git purity. The inventory is always pul
 
 - [x] **Task 2.1**: Add inventory status check command
 - [x] **Task 2.2**: Add `--force` flag to `update-inventory`
-- [ ] **Task 2.3**: Improve error handling for SSH key issues
+- [x] **Task 2.3**: Improve error handling for SSH key issues
 
 ### Phase 3: Update Documentation
 
