@@ -1,4 +1,56 @@
 #!/usr/bin/env python3
+"""
+run.py - CLI interface for Connor's personal dotfiles repository
+
+This script provides a command-line interface for managing the dotfiles repository,
+including inventory management, tool installation, and codebase maintenance tasks.
+
+Architecture
+-----------
+The script uses a decorator-based command registration system (@command) that:
+- Automatically builds argparse subparsers from registered functions
+- Organizes commands by group for help text
+- Supports generating Makefile targets from registered commands
+- Allows commands to be script-only or makefile-only
+
+Command Categories
+-----------------
+- **Inventory**: Manage the standalone inventory git repository
+- **Tool Installation**: Install Python tooling (uv, hatch) with retry logic
+- **Codebase**: Clean build artifacts, run pre-commit hooks, generate Makefile
+
+Key Features
+-----------
+- ANSI styling with full color/formatting support (style/printf functions)
+- Subprocess execution with live output streaming via pty (shell_command)
+- Retry logic with exponential backoff for network operations
+- SSH error detection and helpful troubleshooting guidance
+- Environment variable configuration for debug mode and repo URLs
+
+Environment Variables
+--------------------
+- DOTFILES_RUN_DEBUG: Enable debug output (true/false)
+- DOTFILES_INVENTORY_REPO_URL: Override inventory repository URL
+
+Usage Examples
+-------------
+    # List inventory hosts
+    python3 run.py list-hosts
+
+    # Update inventory from remote
+    python3 run.py update-inventory
+
+    # Clean build artifacts
+    python3 run.py clean
+
+    # Generate Makefile
+    python3 run.py makefile
+
+See Also
+-------
+- README.md: User-facing documentation
+- .claude/CLAUDE.md: Architecture and development guidance
+"""
 from __future__ import annotations
 
 import argparse
@@ -37,16 +89,16 @@ Constants/configuration
 """
 
 
-# Filepaths
+# Filepaths - All absolute paths relative to script location
 SCRIPT_PATH:    Path = Path(__file__)
 DOTFILES_DIR:   Path = SCRIPT_PATH.parent
 MAKEFILE_PATH:  Path = DOTFILES_DIR / 'Makefile'
-INVENTORY_DIR:  Path = DOTFILES_DIR / 'inventory'
+INVENTORY_DIR:  Path = DOTFILES_DIR / 'inventory'  # Standalone git clone (not submodule)
 INVENTORY_FILE: Path = INVENTORY_DIR / 'inventory.yml'
 PLAYBOOKS_DIR:  Path = DOTFILES_DIR / 'playbooks'
 SCRIPTS_DIR:    Path = DOTFILES_DIR / 'scripts'
 
-# Environment variables
+# Environment variables - All prefixed with DOTFILES_ namespace
 ENVVAR_PREFIX:             str = 'DOTFILES'
 RUN_DEBUG_ENVVAR:          str = f'{ENVVAR_PREFIX}_RUN_DEBUG'
 INVENTORY_REPO_URL_ENVVAR: str = f'{ENVVAR_PREFIX}_INVENTORY_REPO_URL'
@@ -58,6 +110,7 @@ INVENTORY_REPO_URL: str  = os.getenv(
 )
 
 # Other static configuration
+# Patterns for files/directories to remove during cleanup
 CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
     'package build artifacts': [
         'build',
@@ -94,6 +147,19 @@ AddArgumentsFunc = Callable[[argparse.ArgumentParser], None]
 
 """
 Command registration
+
+The @command decorator provides a declarative way to register command functions:
+- Extracts command name from function name (strips 'cmd_' or 'command_' prefix)
+- Automatically builds argparse subparsers with help text from docstrings
+- Supports optional argument addition via add_arguments callback
+- Allows grouping commands for organized help text
+- Enables filtering commands for script-only or Makefile-only visibility
+
+Example:
+    @command(group='Inventory', add_arguments=add_custom_args)
+    def cmd_update_inventory(args: argparse.Namespace) -> None:
+        '''Update inventory from remote repository'''
+        # Implementation here
 """
 
 
@@ -213,6 +279,17 @@ def get_command_groups(exclude: Iterable[str] | None = None) -> dict[str, dict[s
 
 """
 Formatting
+
+ANSI styling functions for terminal output. The style() function is inspired by Click's
+style implementation but standalone (no external dependencies). Supports:
+- Foreground/background colors (named, 256-color palette, RGB tuples)
+- Text attributes (bold, dim, italic, underline, etc.)
+- Auto-reset by default to prevent style leakage
+
+The printf() function wraps style() for common use cases and supports:
+- Debug mode filtering (only prints if RUN_DEBUG=true)
+- Text indentation
+- Automatic text-to-str conversion
 """
 
 
@@ -393,6 +470,18 @@ def arg_note(name: str, val: str, *, dim: bool = True, color: StyleColor | None 
 
 """
 Command utils
+
+Subprocess execution with enhanced error handling and output formatting.
+
+The shell_command() function provides two execution modes:
+1. capture_output=True: Captures stdout/stderr for programmatic use
+2. capture_output=False with indent: Streams output live via pty with indentation
+
+Key features:
+- Automatic environment variable injection (RUN_COMMAND_ENVVARS)
+- SSH error detection with helpful troubleshooting suggestions
+- Timeout support with graceful degradation
+- Custom ShellCommandError with formatted output
 """
 
 
@@ -673,6 +762,10 @@ def shell_command(
 
 """
 Other utility functions
+
+Includes:
+- retry_on_failure: Decorator for exponential backoff retry logic
+- parse_extra_vars: Parse ansible-playbook -e key=value arguments
 """
 
 
@@ -751,6 +844,20 @@ Bootstrap commands
 
 """
 Inventory commands
+
+Commands for managing the standalone inventory git repository.
+
+The inventory is NOT a git submodule - it's a separate repository cloned into
+the inventory/ directory by run.py. This approach simplifies the mental model
+for personal dotfiles usage.
+
+Key commands:
+- list-hosts: Parse inventory.yml and display available bootstrap targets
+- inventory-status: Show git status and metadata for inventory directory
+- update-inventory: Clone (if missing) or pull (if exists) inventory repo
+  - Supports --force flag to reset uncommitted changes before pulling
+  - Includes retry logic with exponential backoff for network resilience
+  - Provides SSH error detection and troubleshooting guidance
 """
 
 
@@ -937,7 +1044,7 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
 
     @retry_on_failure(max_attempts=3, delay=2.0, backoff=2.0)
     def pull_inventory_repo(**kwargs: Any) -> subprocess.CompletedProcess:
-        # Check for uncommitted changes if force flag is set
+        # If --force flag provided, reset any uncommitted changes before pulling
         if args.force:
             try:
                 result = shell_command(
@@ -988,16 +1095,16 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
 
     try:
 
-        # Inventory directory exists and is a git repo: pull latest
+        # Case 1: Inventory directory exists and is a git repo - pull latest changes
         if INVENTORY_DIR.exists() and (INVENTORY_DIR / '.git').exists():
             pull_inventory_repo()
 
-        # Inventory directory exists, but isn't a git repo: remove and clone
+        # Case 2: Inventory directory exists but isn't a git repo - remove and re-clone
         elif INVENTORY_DIR.exists():
             shutil.rmtree(INVENTORY_DIR)
             clone_inventory_repo()
 
-        # Inventory directory does not exist: clone
+        # Case 3: Inventory directory does not exist - clone from remote
         else:
             clone_inventory_repo()
 
@@ -1008,6 +1115,18 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
 
 """
 Tool installation commands
+
+Commands for installing Python tooling with enhanced reliability.
+
+Both uv and hatch installation commands delegate to dedicated installer scripts
+in scripts/installers/ that handle:
+- Download and installation logic
+- Checksum verification
+- Retry logic for network resilience
+- Force reinstall support
+- Verbose output for debugging
+
+The commands here simply build the appropriate CLI args and invoke the scripts.
 """
 
 
@@ -1093,6 +1212,15 @@ def cmd_install_hatch(args: argparse.Namespace) -> None:
 
 """
 Codebase commands
+
+General repository maintenance commands:
+- clean: Remove build artifacts, caches, and temporary files
+- pre: Run pre-commit hooks on all files
+- makefile: Generate Makefile targets from @command-registered functions
+  - Parses all registered commands and creates equivalent Make targets
+  - Organizes targets by command group
+  - Preserves command descriptions in Make comments
+  - Auto-generates help target with formatted command listing
 """
 
 
@@ -1198,6 +1326,18 @@ def cmd_makefile(args: argparse.Namespace) -> None:
 
 """
 Core runner entry point logic
+
+The main() function handles:
+1. Building the argument parser from registered commands
+2. Parsing command-line arguments
+3. Enabling debug mode if requested
+4. Dispatching to the appropriate command function
+5. Handling keyboard interrupts and unexpected errors gracefully
+
+The build_parser() function:
+- Creates main parser with custom help text organized by command group
+- Registers subparsers for each @command-decorated function
+- Integrates command-specific argument handlers via add_arguments callbacks
 """
 
 
