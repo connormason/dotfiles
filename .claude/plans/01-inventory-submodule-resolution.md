@@ -59,7 +59,7 @@ For personal dotfiles, simplicity trumps git purity. The inventory is always pul
 
 - [x] **Task 1.1**: Remove `.gitmodules` file
 - [x] **Task 1.2**: Remove submodule tracking from git
-- [ ] **Task 1.3**: Update `.gitignore` to exclude inventory directory
+- [x] **Task 1.3**: Update `.gitignore` to exclude inventory directory
 
 ### Phase 2: Enhance run.py Inventory Management
 
