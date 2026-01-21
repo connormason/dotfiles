@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ansible-lint:*)",
+      "Bash(ansible-playbook:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(grep:*)",
+      "Bash(jq:*)",
+      "Bash(ls:*)",
+      "Bash(make:*)",
+      "Bash(mkdir:*)",
+      "Bash(mypy:*)",
+      "Bash(pre-commit:*)",
+      "Bash(rg:*)",
+      "Bash(ruff check:*)",
+      "Bash(shellcheck:*)",
+      "Bash(tree:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv run:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(wc:*)",
+      "Bash(yamllint:*)"
+    ],
+    "deny": []
+  }
+}
