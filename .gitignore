@@ -389,3 +389,5 @@ tags
 
 vault_password.txt
 inventory/
+
+!scripts/env/
