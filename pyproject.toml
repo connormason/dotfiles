@@ -46,6 +46,9 @@ ignore = [
     "RUF022",   # `__all__` is not sorted
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"scripts/env/venvshell.py" = ["RUF001"]
+
 [tool.ruff.lint.isort]
 force-single-line = true
 required-imports  = [
