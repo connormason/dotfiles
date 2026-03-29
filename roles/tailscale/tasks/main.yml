@@ -1,7 +1,23 @@
 ---
-- name: Install tailscale
-  include_role:
-    name: artis3n.tailscale
-  vars:
-    tailscale_authkey: "{{ tailscale_auth_key }}"
-    tailscale_args: "--ssh"
+- name: Validate tailscale_auth_key is set
+  ansible.builtin.assert:
+    that:
+      - tailscale_auth_key | length > 0
+    fail_msg: >
+      tailscale_auth_key is empty. Generate a reusable auth key in the Tailscale admin console
+      and add it to your Ansible Vault (inventory/group_vars/all/vault.yml).
+
+- name: Install Tailscale (Debian)
+  ansible.builtin.include_tasks: install_debian.yml
+  when: ansible_os_family == "Debian"
+
+- name: Install Tailscale (macOS)
+  ansible.builtin.include_tasks: install_macos.yml
+  when: ansible_os_family == "Darwin"
+
+- name: Configure Tailscale
+  ansible.builtin.include_tasks: configure.yml
+
+- name: Set up HTTPS certs and Caddy
+  ansible.builtin.include_tasks: https_certs.yml
+  when: tailscale_https_enabled

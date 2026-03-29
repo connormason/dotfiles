@@ -1,0 +1,36 @@
+---
+- name: Install apt-transport-https
+  become: true
+  ansible.builtin.apt:
+    name: apt-transport-https
+    state: present
+
+- name: Add Tailscale GPG signing key
+  become: true
+  ansible.builtin.get_url:
+    url: "https://pkgs.tailscale.com/stable/debian/{{ ansible_distribution_release }}.noarmor.gpg"
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: "0644"
+
+- name: Add Tailscale apt repository
+  become: true
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg]
+      https://pkgs.tailscale.com/stable/debian {{ ansible_distribution_release }} main
+    filename: tailscale
+    state: present
+
+- name: Install Tailscale package
+  become: true
+  ansible.builtin.apt:
+    name: "{{ 'tailscale=' + tailscale_version + '*' if tailscale_version else 'tailscale' }}"
+    state: present
+    update_cache: true
+
+- name: Enable and start tailscaled
+  become: true
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: started
+    enabled: true

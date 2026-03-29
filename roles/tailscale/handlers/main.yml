@@ -1,0 +1,8 @@
+---
+- name: Restart tailscaled
+  become: true
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: restarted
+    enabled: true
+  when: ansible_os_family == "Debian"
