@@ -1,23 +1,23 @@
 ---
 - name: Set Tailscale CLI path
   ansible.builtin.set_fact:
-    _tailscale_cli: "{{ tailscale_macos_cli if ansible_os_family == 'Darwin' else 'tailscale' }}"
+    _tailscale_cli: "{{ tailscale_macos_cli if ansible_facts['os_family'] == 'Darwin' else 'tailscale' }}"
 
 - name: Build tailscale set arguments
   ansible.builtin.set_fact:
     _tailscale_set_args: >-
       --hostname={{ tailscale_hostname }}
       --accept-dns={{ "true" if tailscale_accept_dns else "false" }}
-      {{ '--ssh' if tailscale_ssh_enabled and ansible_os_family == 'Debian' else '' }}
+      {{ '--ssh' if tailscale_ssh_enabled and ansible_facts['os_family'] == 'Debian' else '' }}
 
 - name: Apply Tailscale configuration
-  become: "{{ ansible_os_family == 'Debian' }}"
+  become: "{{ ansible_facts['os_family'] == 'Debian' }}"
   ansible.builtin.command:
     cmd: "{{ _tailscale_cli }} set {{ _tailscale_set_args }}"
   changed_when: false
 
 - name: Check Tailscale backend state
-  become: "{{ ansible_os_family == 'Debian' }}"
+  become: "{{ ansible_facts['os_family'] == 'Debian' }}"
   ansible.builtin.command:
     cmd: "{{ _tailscale_cli }} status --json"
   register: tailscale_status
@@ -29,7 +29,7 @@
     _tailscale_backend_state: "{{ (tailscale_status.stdout | from_json).BackendState | default('NeedsLogin') }}"
 
 - name: Authenticate with Tailscale
-  become: "{{ ansible_os_family == 'Debian' }}"
+  become: "{{ ansible_facts['os_family'] == 'Debian' }}"
   ansible.builtin.command:
     cmd: "{{ _tailscale_cli }} login --authkey={{ tailscale_auth_key }}"
   when: _tailscale_backend_state != "Running"

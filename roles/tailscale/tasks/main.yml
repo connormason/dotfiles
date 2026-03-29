@@ -9,11 +9,11 @@
 
 - name: Install Tailscale (Debian)
   ansible.builtin.include_tasks: install_debian.yml
-  when: ansible_os_family == "Debian"
+  when: ansible_facts['os_family'] == "Debian"
 
 - name: Install Tailscale (macOS)
   ansible.builtin.include_tasks: install_macos.yml
-  when: ansible_os_family == "Darwin"
+  when: ansible_facts['os_family'] == "Darwin"
 
 - name: Configure Tailscale
   ansible.builtin.include_tasks: configure.yml
