@@ -35,6 +35,7 @@ from typing import cast
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+
 # ====================
 # Script configuration
 # ====================
@@ -61,11 +62,11 @@ class ErrorDict(TypedDict):
 
 
 class RunCommandResult(TypedDict, total=False):
-    stdout: str
-    stderr: str
+    stdout:     str
+    stderr:     str
     returncode: int
-    error: bool
-    message: str
+    error:      bool
+    message:    str
 
 
 def run_command(cmd: list[str], **kwargs: Any) -> RunCommandResult:
@@ -105,9 +106,9 @@ def run_command(cmd: list[str], **kwargs: Any) -> RunCommandResult:
 
 
 class PythonExecutable(TypedDict):
-    path: str
-    real_path: str
-    version: str
+    path:       str
+    real_path:  str
+    version:    str
     is_symlink: bool
 
 
@@ -122,9 +123,9 @@ def get_python_executables() -> dict[str, PythonExecutable]:
         if path := shutil.which(name):
             version_info = run_command([name, '--version'])
             executables[name] = {
-                'path': path,
-                'real_path': str(Path(path).resolve()),
-                'version': version_info.get('stdout', version_info.get('stderr', 'Unknown')),
+                'path':       path,
+                'real_path':  str(Path(path).resolve()),
+                'version':    version_info.get('stdout', version_info.get('stderr', 'Unknown')),
                 'is_symlink': Path(path).is_symlink(),
             }
 
@@ -146,26 +147,26 @@ class VersionParts(TypedDict):
 
 
 class PipInfo(TypedDict):
-    pip_path: str | None
+    pip_path:  str | None
     pip3_path: str | None
-    version: str
+    version:   str
 
 
 """ `uv` info types """
 
 
 class UvInstalledPython(TypedDict):
-    key: str
-    version: str
-    version_parts: VersionParts
-    path: str
-    symlink: str | None
-    url: str | None
-    os: str
-    variant: str
+    key:            str
+    version:        str
+    version_parts:  VersionParts
+    path:           str
+    symlink:        str | None
+    url:            str | None
+    os:             str
+    variant:        str
     implementation: str
-    arch: str
-    libc: str
+    arch:           str
+    libc:           str
 
 
 class UvInstalledPythons(TypedDict):
@@ -176,7 +177,7 @@ UvPythons = Union[UvInstalledPythons, ErrorDict]
 
 
 class UvInfo(TypedDict):
-    path: str
+    path:    str
     version: str
     pythons: UvPythons
 
@@ -185,8 +186,8 @@ class UvInfo(TypedDict):
 
 
 class HatchEnvironment(TypedDict):
-    type: Literal['virtual']
-    python: str
+    type:      Literal['virtual']
+    python:    str
     installer: str
 
 
@@ -194,8 +195,8 @@ HatchEnvironments = Union[dict[str, HatchEnvironment], ErrorDict]
 
 
 class HatchInfo(TypedDict):
-    path: str
-    version: str
+    path:         str
+    version:      str
     environments: HatchEnvironments
 
 
@@ -203,8 +204,8 @@ class PackageManagerInfo(TypedDict, total=False):
     """
     Dict schema with info about a package manager (values in dict returned by :func:`get_package_manager_info`)
     """
-    pip: PipInfo
-    uv: UvInfo
+    pip:   PipInfo
+    uv:    UvInfo
     hatch: HatchInfo
 
 
@@ -217,7 +218,7 @@ def get_package_manager_info() -> PackageManagerInfo:
     managers: PackageManagerInfo = PackageManagerInfo()
 
     # Check pip
-    pip_path = shutil.which('pip')
+    pip_path  = shutil.which('pip')
     pip3_path = shutil.which('pip3')
     if pip_path or pip3_path:
         pip_version = run_command([cast('str', pip3_path or pip_path), '--version'])
@@ -230,7 +231,7 @@ def get_package_manager_info() -> PackageManagerInfo:
     # Check uv
     if uv_path := shutil.which('uv'):
         uv_version = run_command([uv_path, '--color', 'never', '--version'])
-        uv_python = run_command([
+        uv_python  = run_command([
             uv_path,
             '--color',
             'never',
@@ -261,7 +262,7 @@ def get_package_manager_info() -> PackageManagerInfo:
     # Check hatch
     if hatch_path := shutil.which('hatch'):
         hatch_version = run_command([hatch_path, '--no-color', '--version'])
-        hatch_envs = run_command([hatch_path, '--no-color', 'env', 'show', '--json'])
+        hatch_envs    = run_command([hatch_path, '--no-color', 'env', 'show', '--json'])
 
         environments: HatchEnvironments
         if hatch_envs.get('error'):
@@ -289,10 +290,10 @@ def get_package_manager_info() -> PackageManagerInfo:
 
 
 class VirtualenvInfo(TypedDict):
-    in_virtualenv: bool
-    virtual_env: str | None
-    conda_env: str | None
-    sys_prefix: str
+    in_virtualenv:   bool
+    virtual_env:     str | None
+    conda_env:       str | None
+    sys_prefix:      str
     sys_base_prefix: str | None
     sys_real_prefix: str | None
 
@@ -304,12 +305,12 @@ def get_virtual_env_info() -> VirtualenvInfo:
     :return: dict with virtual environment details (:class:`VirtualenvInfo`)
     """
     return {
-        'in_virtualenv': hasattr(sys, 'real_prefix') or (
+        'in_virtualenv':   hasattr(sys, 'real_prefix') or (
             hasattr(sys, 'base_prefix') and (sys.base_prefix != sys.prefix)
         ),
-        'virtual_env': os.environ.get('VIRTUAL_ENV'),
-        'conda_env': os.environ.get('CONDA_DEFAULT_ENV'),
-        'sys_prefix': sys.prefix,
+        'virtual_env':     os.environ.get('VIRTUAL_ENV'),
+        'conda_env':       os.environ.get('CONDA_DEFAULT_ENV'),
+        'sys_prefix':      sys.prefix,
         'sys_base_prefix': getattr(sys, 'base_prefix', None),
         'sys_real_prefix': getattr(sys, 'real_prefix', None),
     }
@@ -328,23 +329,23 @@ def get_environment_variables() -> dict[str, str | None]:
     """
     return {
         'CONDA_DEFAULT_ENV': os.environ.get('CONDA_DEFAULT_ENV'),
-        'CONDA_PREFIX': os.environ.get('CONDA_PREFIX'),
-        'HATCH_ENV_ACTIVE': os.environ.get('HATCH_ENV_ACTIVE'),
-        'HATCH_UV': os.environ.get('HATCH_UV'),
-        'HOME': os.environ.get('HOME'),
-        'HOMEBREW_PREFIX': os.environ.get('HOMEBREW_PREFIX'),
-        'PATH': os.environ.get('PATH'),
-        'PIP_INDEX_URL': os.environ.get('PIP_INDEX_URL'),
-        'PWD': os.environ.get('PWD'),
-        'PYENV_ROOT': os.environ.get('PYENV_ROOT'),
-        'PYENV_VERSION': os.environ.get('PYENV_VERSION'),
-        'PYTHONHOME': os.environ.get('PYTHONHOME'),
-        'PYTHONPATH': os.environ.get('PYTHONPATH'),
-        'SHELL': os.environ.get('SHELL'),
-        'TERM': os.environ.get('TERM'),
-        'UV_INDEX_URL': os.environ.get('UV_INDEX_URL'),
-        'VIRTUAL_ENV': os.environ.get('VIRTUAL_ENV'),
-        'ZSH': os.environ.get('ZSH'),
+        'CONDA_PREFIX':      os.environ.get('CONDA_PREFIX'),
+        'HATCH_ENV_ACTIVE':  os.environ.get('HATCH_ENV_ACTIVE'),
+        'HATCH_UV':          os.environ.get('HATCH_UV'),
+        'HOME':              os.environ.get('HOME'),
+        'HOMEBREW_PREFIX':   os.environ.get('HOMEBREW_PREFIX'),
+        'PATH':              os.environ.get('PATH'),
+        'PIP_INDEX_URL':     os.environ.get('PIP_INDEX_URL'),
+        'PWD':               os.environ.get('PWD'),
+        'PYENV_ROOT':        os.environ.get('PYENV_ROOT'),
+        'PYENV_VERSION':     os.environ.get('PYENV_VERSION'),
+        'PYTHONHOME':        os.environ.get('PYTHONHOME'),
+        'PYTHONPATH':        os.environ.get('PYTHONPATH'),
+        'SHELL':             os.environ.get('SHELL'),
+        'TERM':              os.environ.get('TERM'),
+        'UV_INDEX_URL':      os.environ.get('UV_INDEX_URL'),
+        'VIRTUAL_ENV':       os.environ.get('VIRTUAL_ENV'),
+        'ZSH':               os.environ.get('ZSH'),
     }
 
 
@@ -355,10 +356,10 @@ def get_environment_variables() -> dict[str, str | None]:
 
 class PythonPaths(TypedDict):
     sys_executable: str
-    sys_path: list[str]
-    site_packages: list[str]
-    user_base: str | None
-    user_site: str | None
+    sys_path:       list[str]
+    site_packages:  list[str]
+    user_base:      str | None
+    user_site:      str | None
 
 
 def get_python_paths() -> PythonPaths:
@@ -369,10 +370,10 @@ def get_python_paths() -> PythonPaths:
     """
     return {
         'sys_executable': sys.executable,
-        'sys_path': sys.path,
-        'site_packages': [p for p in sys.path if 'site-packages' in p],
-        'user_base': getattr(sys, 'user_base', None),
-        'user_site': getattr(sys, 'user_site', None),
+        'sys_path':       sys.path,
+        'site_packages':  [p for p in sys.path if 'site-packages' in p],
+        'user_base':      getattr(sys, 'user_base', None),
+        'user_site':      getattr(sys, 'user_site', None),
     }
 
 
@@ -382,13 +383,13 @@ def get_python_paths() -> PythonPaths:
 
 
 class SystemInfo(TypedDict):
-    platform: str
-    machine: str
-    processor: str
-    python_version: str
+    platform:              str
+    machine:               str
+    processor:             str
+    python_version:        str
     python_implementation: str
-    sw_vers: str
-    uname: str
+    sw_vers:               str
+    uname:                 str
 
 
 def get_system_info() -> SystemInfo:
@@ -398,15 +399,15 @@ def get_system_info() -> SystemInfo:
     :return: dict with system details (:class:`SystemInfo`)
     """
     sw_vers = run_command(['sw_vers'])
-    uname = run_command(['uname', '-a'])
+    uname   = run_command(['uname', '-a'])
     return {
-        'platform': platform.platform(),
-        'machine': platform.machine(),
-        'processor': platform.processor(),
-        'python_version': sys.version,
+        'platform':              platform.platform(),
+        'machine':               platform.machine(),
+        'processor':             platform.processor(),
+        'python_version':        sys.version,
         'python_implementation': platform.python_implementation(),
-        'sw_vers': sw_vers.get('stdout', ''),
-        'uname': uname.get('stdout', ''),
+        'sw_vers':               sw_vers.get('stdout', ''),
+        'uname':                 uname.get('stdout', ''),
     }
 
 
@@ -416,10 +417,10 @@ def get_system_info() -> SystemInfo:
 
 
 class PythonInstallation(TypedDict):
-    exists: bool
+    exists:      bool
     description: str
-    is_symlink: bool | None
-    resolved: str | None
+    is_symlink:  bool | None
+    resolved:    str | None
 
 
 def check_common_locations() -> dict[str, PythonInstallation]:
@@ -429,21 +430,21 @@ def check_common_locations() -> dict[str, PythonInstallation]:
     :return: mapping from paths -> python installation info/existence info (:class:`PythonInstallation`)
     """
     common_paths: dict[str, str] = {
-        '/usr/bin/python3': 'System Python',
-        '/usr/local/bin/python3': 'Homebrew Python (Intel)',
-        '/opt/homebrew/bin/python3': 'Homebrew Python (Apple Silicon)',
-        str(Path.home() / '.pyenv'): 'pyenv installation',
-        str(Path.home() / 'Library/Python'): 'User Python packages',
+        '/usr/bin/python3':                     'System Python',
+        '/usr/local/bin/python3':               'Homebrew Python (Intel)',
+        '/opt/homebrew/bin/python3':            'Homebrew Python (Apple Silicon)',
+        str(Path.home() / '.pyenv'):            'pyenv installation',
+        str(Path.home() / 'Library/Python'):    'User Python packages',
         '/Library/Frameworks/Python.framework': 'Python.org installation',
-        str(Path.home() / '.local/bin'): 'User local binaries',
+        str(Path.home() / '.local/bin'):        'User local binaries',
     }
 
     return {
         path: {
-            'exists': Path(path).exists(),
+            'exists':      Path(path).exists(),
             'description': desc,
-            'is_symlink': Path(path).is_symlink() if Path(path).exists() else None,
-            'resolved': str(Path(path).resolve()) if Path(path).exists() else None,
+            'is_symlink':  Path(path).is_symlink()   if Path(path).exists() else None,
+            'resolved':    str(Path(path).resolve()) if Path(path).exists() else None,
         }
         for path, desc in common_paths.items()
     }
@@ -455,8 +456,8 @@ def check_common_locations() -> dict[str, PythonInstallation]:
 
 
 class InstalledPythonVersions(TypedDict):
-    versions: dict[str, str]  # package name -> version
-    editable_locations: dict[str, str]  # package name -> editable project location (path)
+    versions:           dict[str, str]        # package name -> version
+    editable_locations: dict[str, str]        # package name -> editable project location (path)
 
 
 InstalledPythonPackages = Union[
@@ -501,15 +502,15 @@ def get_installed_packages() -> InstalledPythonPackages:
 
 
 class Diagnostics(TypedDict):
-    timestamp: str
-    system: SystemInfo
-    python_executables: dict[str, PythonExecutable]
-    virtual_env: VirtualenvInfo
-    package_managers: PackageManagerInfo
+    timestamp:             str
+    system:                SystemInfo
+    python_executables:    dict[str, PythonExecutable]
+    virtual_env:           VirtualenvInfo
+    package_managers:      PackageManagerInfo
     environment_variables: dict[str, str | None]
-    python_paths: PythonPaths
-    common_locations: dict[str, PythonInstallation]
-    installed_packages: InstalledPythonPackages
+    python_paths:          PythonPaths
+    common_locations:      dict[str, PythonInstallation]
+    installed_packages:    InstalledPythonPackages
 
 
 def collect_diagnostics() -> Diagnostics:
@@ -519,15 +520,15 @@ def collect_diagnostics() -> Diagnostics:
     :return: complete diagnostic data dict (:class:`Diagnostics`)
     """
     return {
-        'timestamp': datetime.now().isoformat(),
-        'system': get_system_info(),
-        'python_executables': get_python_executables(),
-        'virtual_env': get_virtual_env_info(),
-        'package_managers': get_package_manager_info(),
+        'timestamp':             datetime.now().isoformat(),
+        'system':                get_system_info(),
+        'python_executables':    get_python_executables(),
+        'virtual_env':           get_virtual_env_info(),
+        'package_managers':      get_package_manager_info(),
         'environment_variables': get_environment_variables(),
-        'python_paths': get_python_paths(),
-        'common_locations': check_common_locations(),
-        'installed_packages': get_installed_packages(),
+        'python_paths':          get_python_paths(),
+        'common_locations':      check_common_locations(),
+        'installed_packages':    get_installed_packages(),
     }
 
 
@@ -614,11 +615,11 @@ def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int |
         ])
 
         try:
-            installed_pythons = uv_info['pythons']['installed']  # type: ignore[typeddict-item]
+            installed_pythons = uv_info['pythons']['installed']     # type: ignore[typeddict-item]
         except KeyError:
             pass
         else:
-            col1_width: int = 0
+            col1_width:           int = 0
             python_installations: list[tuple[str, str]] = []
             for py_inst in installed_pythons:
                 if (key := py_inst.get('key')) and (path := py_inst.get('path')):
@@ -701,7 +702,7 @@ def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int |
 
     packages = data['installed_packages']
     if isinstance(packages, dict) and ('error' not in packages):
-        pkg_versions = cast('dict[str, str]', packages.get('versions', {}))
+        pkg_versions       = cast('dict[str, str]', packages.get('versions', {}))
         editable_locations = cast('dict[str, str]', packages.get('editable_locations', {}))
 
         name_to_name_vers: dict[str, str] = {
@@ -731,19 +732,19 @@ def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int |
     return '\n'.join(lines)
 
 
-# =====================================
-# Core argument parsing and entry point
-# =====================================
+# ============================================
+# Argument parsing and core script entry point
+# ============================================
 
 
 class Args(argparse.Namespace):
     """
     Annotated :class:`argparse.Namespace` for script command-line arguments
     """
-    max_installed_packages: int | None  # --max-installed-packages
-    save: bool  # -s/--save
-    json: bool  # -j, --json
-    output: Path | None  # -o/--output
+    max_installed_packages: int | None      # --max-installed-packages
+    save:                   bool            # -s/--save
+    json:                   bool            # -j, --json
+    output:                 Path | None     # -o/--output
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -807,29 +808,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     :return: int script exit code
     """
     parser = build_parser()
-    args = parser.parse_args(argv, namespace=Args())
+    args   = parser.parse_args(argv, namespace=Args())
 
     print('Collecting diagnostic information...', file=sys.stderr)
     data = collect_diagnostics()
 
     extension: Literal['json', 'txt']
     if args.json:
-        output = json.dumps(data, indent=4)
+        output    = json.dumps(data, indent=4)
         extension = 'json'
     else:
-        output = format_diagnostic_output(data, max_installed_packages=args.max_installed_packages)
+        output    = format_diagnostic_output(data, max_installed_packages=args.max_installed_packages)
         extension = 'txt'
 
     if args.save or args.output:
         if args.output:
             output_path = Path(args.output).expanduser().resolve()
         else:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp   = datetime.now().strftime('%Y%m%d_%H%M%S')
             output_path = Path(f'python_diagnostic_{timestamp}.{extension}')
 
         output_path.write_text(output)
         print('')
-        print(f'Diagnostic report saved to: {output_path}', file=sys.stderr)
+        print(f'Diagnostic report saved to: {output_path}',     file=sys.stderr)
         print(f'File size: {output_path.stat().st_size} bytes', file=sys.stderr)
     else:
         print(output)
