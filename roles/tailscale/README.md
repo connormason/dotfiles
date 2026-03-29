@@ -37,13 +37,13 @@ Key overrides for NAS (`inventory/host_vars/nas/vars.yml`):
 ```yaml
 tailscale_https_enabled: true
 tailscale_services:
-  - { name: sonarr, port: 8989, path: sonarr }
-  - { name: radarr, port: 7878, path: radarr }
-  - { name: transmission, port: 9091, path: transmission }
-  - { name: prowlarr, port: 9696, path: prowlarr }
-  - { name: pihole, port: 80, path: pihole }
-  - { name: glance, port: 8080, path: glance, strip_prefix: true }
-  - { name: plex, port: 32400, dedicated_port: 32443 }
+  - { name: sonarr,       port: 8989,    path: sonarr }
+  - { name: radarr,       port: 7878,    path: radarr }
+  - { name: transmission, port: 9091,    path: transmission }
+  - { name: prowlarr,     port: 9696,    path: prowlarr }
+  - { name: pihole,       port: 80,      path: pihole }
+  - { name: glance,       port: 8080,    path: glance, strip_prefix: true }
+  - { name: plex,         port: 32400,   dedicated_port: 32443 }
 ```
 
 ## Service Routing
