@@ -1,7 +1,6 @@
 ---
 roles:
   - name: elliotweiser.osx-command-line-tools
-  - name: artis3n.tailscale
 
 collections:
   - name: ansible.posix

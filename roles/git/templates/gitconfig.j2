@@ -20,7 +20,7 @@
 	ignore = "!gi() { curl -sL https://www.gitignore.io/api/$@ ;}; gi"
 
 [commit]
-	template = {{ user_home }}/.stCommitMsg
+	template = {{ ansible_facts['user_dir'] }}/.stCommitMsg
 
 [core]
     pager = delta

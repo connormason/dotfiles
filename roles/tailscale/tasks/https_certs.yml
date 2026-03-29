@@ -1,0 +1,53 @@
+---
+- name: Create cert directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ tailscale_cert_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Create Caddy config directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ tailscale_caddy_config_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Provision Tailscale HTTPS certs
+  become: true
+  ansible.builtin.command:
+    cmd: >-
+      tailscale cert
+      --cert-file {{ tailscale_cert_dir }}/{{ tailscale_hostname }}.{{ tailscale_tailnet_name }}.crt
+      --key-file {{ tailscale_cert_dir }}/{{ tailscale_hostname }}.{{ tailscale_tailnet_name }}.key
+      {{ tailscale_hostname }}.{{ tailscale_tailnet_name }}
+    creates: "{{ tailscale_cert_dir }}/{{ tailscale_hostname }}.{{ tailscale_tailnet_name }}.crt"
+
+- name: Deploy Caddyfile
+  become: true
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ tailscale_caddy_config_dir }}/Caddyfile"
+    mode: "0644"
+
+- name: Deploy cert renewal systemd service
+  become: true
+  ansible.builtin.template:
+    src: tailscale-cert-renewal.service.j2
+    dest: /etc/systemd/system/tailscale-cert-renewal.service
+    mode: "0644"
+
+- name: Deploy cert renewal systemd timer
+  become: true
+  ansible.builtin.template:
+    src: tailscale-cert-renewal.timer.j2
+    dest: /etc/systemd/system/tailscale-cert-renewal.timer
+    mode: "0644"
+
+- name: Enable and start cert renewal timer
+  become: true
+  ansible.builtin.systemd:
+    name: tailscale-cert-renewal.timer
+    state: started
+    enabled: true
+    daemon_reload: true

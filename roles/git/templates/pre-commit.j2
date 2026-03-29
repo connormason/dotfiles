@@ -10,9 +10,9 @@ INSTALL_PYTHON='{{ git_precommit_python_path }}'
 # Auto-detect pre-commit Python installation
 INSTALL_PYTHON=''
 for python_path in \
-    "{{ user_home }}/.local/share/uv/tools/pre-commit/bin/python" \
-    "{{ user_home }}/Library/Application Support/hatch/env/virtual/ezcli/k55xsevo/dev/bin/python3" \
-    "{{ user_home }}/.local/pipx/venvs/pre-commit/bin/python" \
+    "{{ ansible_facts['user_dir'] }}/.local/share/uv/tools/pre-commit/bin/python" \
+    "{{ ansible_facts['user_dir'] }}/Library/Application Support/hatch/env/virtual/ezcli/k55xsevo/dev/bin/python3" \
+    "{{ ansible_facts['user_dir'] }}/.local/pipx/venvs/pre-commit/bin/python" \
     "/opt/homebrew/bin/python3" \
     "/usr/local/bin/python3" \
     "/usr/bin/python3"; do
