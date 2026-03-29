@@ -104,3 +104,11 @@
           tags: python
       tags:
         - python
+
+    # Tasks for Tailscale configuration
+    - include_role:
+        name: roles/tailscale
+        apply:
+          tags: tailscale
+      tags:
+        - tailscale
