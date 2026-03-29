@@ -1208,7 +1208,7 @@ def cmd_vault_decrypt(args: argparse.Namespace) -> None:
         relative = vault_file.relative_to(INVENTORY_DIR)
         try:
             shell_command(
-                ['ansible-vault', 'decrypt', '--vault-password-file', str(VAULT_PASSWORD), str(vault_file)],
+                ['ansible-vault', 'decrypt', str(vault_file)],
                 capture_output=True,
             )
             printf(f'  └─ {style(str(relative), fg="green")} decrypted', indent=1)
@@ -1249,7 +1249,7 @@ def cmd_vault_encrypt(args: argparse.Namespace) -> None:
         relative = vault_file.relative_to(INVENTORY_DIR)
         try:
             shell_command(
-                ['ansible-vault', 'encrypt', '--vault-password-file', str(VAULT_PASSWORD), str(vault_file)],
+                ['ansible-vault', 'encrypt', str(vault_file)],
                 capture_output=True,
             )
             printf(f'  └─ {style(str(relative), fg="green")} encrypted', indent=1)
