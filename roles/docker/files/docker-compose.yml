@@ -6,20 +6,18 @@ services:
   # Networking
   # ============================
 
-  # Caddy. Reverse proxy for xxxx.my_domain.com -> sonarr/radarr/prowlarr/transmission/plex
-  #  caddy:
-  #    image: danielmmetz/caddy-dnsimple
-  #    container_name: caddy
-  #    restart: unless-stopped
-  #    environment:
-  #      - ACME_AGREE=true
-  #      - DNSIMPLE_OAUTH_TOKEN
-  #    ports:
-  ##      - 80:80
-  #      - 443:443
-  #    volumes:
-  #      - caddy_data:/data
-  #      - ./Caddyfile:/etc/caddy/Caddyfile
+  # Caddy - Reverse proxy for Tailscale HTTPS access to services
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "32443:32443"
+    volumes:
+      - /etc/tailscale/certs:/certs:ro
+      - /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
 
   # PiHole
   # More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
@@ -51,11 +49,13 @@ services:
   plex:
     image: linuxserver/plex
     container_name: plex
-    network_mode: host            # TODO: Temporary for docker/plex weirdness
     environment:
       - PUID=1000
       - PGID=1000
       - VERSION=docker
+      - ADVERTISE_IP
+    ports:
+      - "32400:32400"
     volumes:
       - /storage/media/config/plex:/config
       - /storage/media/tv:/tv

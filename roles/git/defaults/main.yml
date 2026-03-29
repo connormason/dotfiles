@@ -1,6 +1,6 @@
 ---
 # Git template directory configuration
-git_template_dir: "{{ user_home }}/.git-template"
+git_template_dir: "{{ ansible_facts['user_dir'] }}/.git-template"
 git_template_dir_mode: "755"
 git_hook_mode: "755"
 

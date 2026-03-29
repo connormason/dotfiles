@@ -35,4 +35,4 @@
         name: roles/link_dotfile
       vars:
         link_dotfile_src: "{{ dotfiles_home }}/roles/starship/files/starship.toml"
-        link_dotfile_dst: "{{ user_home }}/.config/starship.toml"
+        link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.config/starship.toml"
