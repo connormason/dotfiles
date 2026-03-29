@@ -103,7 +103,7 @@ python3 run.py install-uv --retries 5 --retry-delay 3
 - `--retry-delay SECONDS`: Initial delay in seconds between retries with exponential backoff
 
 **Implementation:**
-Delegates to `scripts/installers/install_uv.py` (see [scripts/installers/README.md](../scripts/installers/README.md) for details).
+Delegates to `scripts/install/install_uv.py` (see [scripts/install/README.md](../scripts/install/README.md) for details).
 
 #### `install-hatch`
 
@@ -121,7 +121,7 @@ python3 run.py install-hatch --force --verbose
 Same as `install-uv` (see above).
 
 **Implementation:**
-Delegates to `scripts/installers/install_hatch.py` (see [scripts/installers/README.md](../scripts/installers/README.md) for details).
+Delegates to `scripts/install/install_hatch.py` (see [scripts/install/README.md](../scripts/install/README.md) for details).
 
 ### Codebase Maintenance
 

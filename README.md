@@ -115,7 +115,7 @@ Configures home NAS server with:
   - Customization guide
   - Development guide
 
-- **[Installer Scripts](scripts/installers/README.md)** - Python tool installers
+- **[Installer Scripts](scripts/install/README.md)** - Python tool installers
   - uv and hatch installation
   - Retry logic and security features
   - Extension guide
@@ -267,7 +267,7 @@ dotfiles-personal/
 │   └── host_vars/                  # Host-specific variables and vault files
 │
 ├── scripts/                        # Utility scripts
-│   └── installers/                 # Tool installation scripts
+│   └── install/                    # Tool installation scripts
 │       ├── install_uv.py           # uv Python package manager installer
 │       └── install_hatch.py        # hatch Python project manager installer
 │

@@ -1,4 +1,4 @@
-# ezcli Installer Scripts
+# Installer Scripts
 
 Bulletproof installer scripts for bootstrapping development environments with `uv` and `hatch`.
 
@@ -26,22 +26,22 @@ Installs [uv](https://docs.astral.sh/uv/) - the blazing-fast Python package mana
 **Usage:**
 ```bash
 # Simple installation
-./scripts/installers/install_uv.py
+./scripts/install/install_uv.py
 
 # Force reinstall even if already present
-./scripts/installers/install_uv.py --force
+./scripts/install/install_uv.py --force
 
 # Show detailed progress
-./scripts/installers/install_uv.py --verbose
+./scripts/install/install_uv.py --verbose
 
 # Combine options
-./scripts/installers/install_uv.py --force --verbose
+./scripts/install/install_uv.py --force --verbose
 
 # Customize retry behavior for unreliable networks
-./scripts/installers/install_uv.py --retries 5 --retry-delay 3
+./scripts/install/install_uv.py --retries 5 --retry-delay 3
 
 # Maximum reliability configuration
-./scripts/installers/install_uv.py --retries 10 --retry-delay 5 --verbose
+./scripts/install/install_uv.py --retries 10 --retry-delay 5 --verbose
 ```
 
 **Options:**
@@ -82,22 +82,22 @@ Installs [Hatch](https://hatch.pypa.io/) - the modern Python project manager and
 **Usage:**
 ```bash
 # Simple installation
-./scripts/installers/install_hatch.py
+./scripts/install/install_hatch.py
 
 # Force reinstall
-./scripts/installers/install_hatch.py --force
+./scripts/install/install_hatch.py --force
 
 # Verbose output
-./scripts/installers/install_hatch.py --verbose
+./scripts/install/install_hatch.py --verbose
 
 # Both options
-./scripts/installers/install_hatch.py --force -v
+./scripts/install/install_hatch.py --force -v
 
 # Customize retry behavior for unreliable networks
-./scripts/installers/install_hatch.py --retries 5 --retry-delay 3
+./scripts/install/install_hatch.py --retries 5 --retry-delay 3
 
 # Maximum reliability configuration
-./scripts/installers/install_hatch.py --retries 10 --retry-delay 5 --verbose
+./scripts/install/install_hatch.py --retries 10 --retry-delay 5 --verbose
 ```
 
 **Options:**
@@ -147,13 +147,13 @@ $ which uv
 **Retry behavior:**
 ```bash
 # Default: 3 attempts with 2s, 4s, 8s delays
-./scripts/installers/install_uv.py
+./scripts/install/install_uv.py
 
 # Aggressive: 10 attempts starting with 1s delay
-./scripts/installers/install_uv.py --retries 10 --retry-delay 1
+./scripts/install/install_uv.py --retries 10 --retry-delay 1
 
 # Conservative: 5 attempts with longer 5s initial delay
-./scripts/installers/install_uv.py --retries 5 --retry-delay 5
+./scripts/install/install_uv.py --retries 5 --retry-delay 5
 ```
 
 The exponential backoff formula is: `delay = retry_delay * (2 ** (attempt - 2))`
@@ -210,10 +210,10 @@ Scripts provide actionable troubleshooting:
 **For unreliable networks:**
 ```bash
 # Increase retry attempts and delay
-./scripts/installers/install_uv.py --retries 10 --retry-delay 5
+./scripts/install/install_uv.py --retries 10 --retry-delay 5
 
 # Use verbose mode to see detailed retry information
-./scripts/installers/install_uv.py --retries 5 --verbose
+./scripts/install/install_uv.py --retries 5 --verbose
 ```
 
 ### Verification failures
@@ -222,22 +222,6 @@ If installation succeeds but verification fails:
 1. Close and reopen terminal
 2. Try `--force` to reinstall
 3. Check official documentation links
-
-## Integration with ezcli
-
-These scripts bootstrap the development environment for ezcli itself:
-
-```bash
-# Fresh system setup
-./scripts/installers/install_uv.py
-./scripts/installers/install_hatch.py
-
-# Then use the Makefile
-make dev        # Install ezcli with all dev dependencies
-```
-
-The project's `scripts/manage.py` relies on `uv` being available, making `install_uv.py` the first step in any ezcli
-development setup.
 
 ## Design Philosophy
 
