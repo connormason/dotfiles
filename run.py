@@ -2,8 +2,8 @@
 """
 run.py - CLI interface for Connor's personal dotfiles repository
 
-This script provides a command-line interface for managing the dotfiles repository,
-including inventory management, tool installation, and codebase maintenance tasks.
+This script provides a command-line interface for managing the dotfiles repository, including inventory management,
+tool installation, and codebase maintenance tasks.
 
 Architecture
 -----------
@@ -50,6 +50,7 @@ See Also
 -------
 - README.md: User-facing documentation
 - .claude/CLAUDE.md: Architecture and development guidance
+
 """
 from __future__ import annotations
 
@@ -95,8 +96,15 @@ DOTFILES_DIR:   Path = SCRIPT_PATH.parent
 MAKEFILE_PATH:  Path = DOTFILES_DIR / 'Makefile'
 INVENTORY_DIR:  Path = DOTFILES_DIR / 'inventory'  # Standalone git clone (not submodule)
 INVENTORY_FILE: Path = INVENTORY_DIR / 'inventory.yml'
+VAULT_PASSWORD: Path = DOTFILES_DIR / 'vault_password.txt'
 PLAYBOOKS_DIR:  Path = DOTFILES_DIR / 'playbooks'
 SCRIPTS_DIR:    Path = DOTFILES_DIR / 'scripts'
+
+# Glob patterns for finding vault files within inventory
+VAULT_FILE_PATTERNS: list[str] = [
+    'group_vars/*/vault.yml',
+    'host_vars/*/vault.yml',
+]
 
 # Environment variables - All prefixed with DOTFILES_ namespace
 ENVVAR_PREFIX:             str = 'DOTFILES'
@@ -110,7 +118,7 @@ INVENTORY_REPO_URL: str  = os.getenv(
 )
 
 # Other static configuration
-# Patterns for files/directories to remove during cleanup
+# Patterns for files/directories to remove during `run.py clean`
 CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
     'package build artifacts': [
         'build',
@@ -128,6 +136,10 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
         '.tox',
         '.nox',
         '.coverage',
+    ],
+    'virtual environments': [
+        'venv',
+        '.venv',
     ],
 }
 
@@ -155,11 +167,13 @@ The @command decorator provides a declarative way to register command functions:
 - Allows grouping commands for organized help text
 - Enables filtering commands for script-only or Makefile-only visibility
 
-Example:
+Example::
+
     @command(group='Inventory', add_arguments=add_custom_args)
     def cmd_update_inventory(args: argparse.Namespace) -> None:
         '''Update inventory from remote repository'''
         # Implementation here
+
 """
 
 
@@ -280,8 +294,9 @@ def get_command_groups(exclude: Iterable[str] | None = None) -> dict[str, dict[s
 """
 Formatting
 
-ANSI styling functions for terminal output. The style() function is inspired by Click's
-style implementation but standalone (no external dependencies). Supports:
+ANSI styling functions for terminal output. The style() function is inspired by Click's style implementation but
+standalone (no external dependencies).
+Supports:
 - Foreground/background colors (named, 256-color palette, RGB tuples)
 - Text attributes (bold, dim, italic, underline, etc.)
 - Auto-reset by default to prevent style leakage
@@ -1044,6 +1059,7 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
 
     @retry_on_failure(max_attempts=3, delay=2.0, backoff=2.0)
     def pull_inventory_repo(**kwargs: Any) -> subprocess.CompletedProcess:
+
         # If --force flag provided, reset any uncommitted changes before pulling
         if args.force:
             try:
@@ -1060,7 +1076,7 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
                         indent=3,
                     )
             except subprocess.CalledProcessError:
-                pass  # Continue with pull anyway
+                pass    # Continue with pull anyway
 
         try:
             cp = shell_command(
@@ -1111,6 +1127,125 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
     except Exception:
         printf('❌ Failed to update inventory after multiple attempts', fg='red', bold=True)
         sys.exit(1)
+
+
+def _find_vault_files() -> list[Path]:
+    """
+    Find all vault.yml files in the inventory directory
+
+    :return: sorted list of vault file paths
+    """
+    vault_files: list[Path] = []
+    for pattern in VAULT_FILE_PATTERNS:
+        vault_files.extend(INVENTORY_DIR.glob(pattern))
+    return sorted(vault_files)
+
+
+def _require_vault_password() -> None:
+    """
+    Validate that the vault password file exists and exit with an error if not
+
+    :raises SystemExit: if vault password file is missing
+    """
+    if not VAULT_PASSWORD.is_file():
+        printf('❌ Vault password file not found', fg='red', bold=True)
+        printf(f'   Expected: {folduser(VAULT_PASSWORD)}', indent=3)
+        printf(f'   Create it with: {style("echo YOUR_PASSWORD > vault_password.txt", fg="bright_magenta")}', indent=3)
+        sys.exit(1)
+
+
+def _require_inventory() -> None:
+    """
+    Validate that the inventory directory exists and exit with an error if not
+
+    :raises SystemExit: if inventory directory is missing
+    """
+    if not INVENTORY_DIR.exists():
+        printf('❌ Inventory directory not found', fg='red', bold=True)
+        printf(f'   Expected: {folduser(INVENTORY_DIR)}', indent=3)
+        printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
+        sys.exit(1)
+
+
+@command(group='Inventory')
+def cmd_vault_decrypt(args: argparse.Namespace) -> None:
+    """
+    Decrypt all inventory vault files for editing
+    """
+    _require_vault_password()
+    _require_inventory()
+
+    vault_files = _find_vault_files()
+    if not vault_files:
+        printf('⚠️  No vault files found in inventory', fg='yellow')
+        return
+
+    printf('🔓 Decrypting vault files...', fg='bright_white')
+    failed = 0
+    for vault_file in vault_files:
+        relative = vault_file.relative_to(INVENTORY_DIR)
+        try:
+            shell_command(
+                ['ansible-vault', 'decrypt', '--vault-password-file', str(VAULT_PASSWORD), str(vault_file)],
+                capture_output=True,
+            )
+            printf(f'  └─ {style(str(relative), fg="green")} decrypted', indent=1)
+        except subprocess.CalledProcessError as e:
+            # ansible-vault returns error if file is already decrypted
+            stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
+            if 'is not vault encrypted' in stderr or 'input is not vault encrypted' in stderr:
+                printf(f'  └─ {style(str(relative), fg="yellow")} already decrypted, skipping', indent=1)
+            else:
+                printf(f'  └─ {style(str(relative), fg="red")} failed to decrypt', indent=1)
+                if stderr.strip():
+                    printf(f'     {stderr.strip()}', indent=1, fg='red')
+                failed += 1
+
+    if failed:
+        printf(f'❌ {failed} file{"s" if failed != 1 else ""} failed to decrypt', fg='red', bold=True)
+        sys.exit(1)
+    else:
+        printf('✅ All vault files decrypted', fg='bright_green')
+
+
+@command(group='Inventory')
+def cmd_vault_encrypt(args: argparse.Namespace) -> None:
+    """
+    Re-encrypt all inventory vault files after editing
+    """
+    _require_vault_password()
+    _require_inventory()
+
+    vault_files = _find_vault_files()
+    if not vault_files:
+        printf('⚠️  No vault files found in inventory', fg='yellow')
+        return
+
+    printf('🔒 Encrypting vault files...', fg='bright_white')
+    failed = 0
+    for vault_file in vault_files:
+        relative = vault_file.relative_to(INVENTORY_DIR)
+        try:
+            shell_command(
+                ['ansible-vault', 'encrypt', '--vault-password-file', str(VAULT_PASSWORD), str(vault_file)],
+                capture_output=True,
+            )
+            printf(f'  └─ {style(str(relative), fg="green")} encrypted', indent=1)
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
+            if 'input is already encrypted' in stderr:
+                printf(f'  └─ {style(str(relative), fg="yellow")} already encrypted, skipping', indent=1)
+            else:
+                printf(f'  └─ {style(str(relative), fg="red")} failed to encrypt', indent=1)
+                if stderr.strip():
+                    printf(f'     {stderr.strip()}', indent=1, fg='red')
+                failed += 1
+
+    if failed:
+        printf(f'❌ {failed} file{"s" if failed != 1 else ""} failed to encrypt', fg='red', bold=True)
+        sys.exit(1)
+    else:
+        printf('✅ All vault files encrypted', fg='bright_green')
 
 
 """
