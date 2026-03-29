@@ -28,7 +28,7 @@ This role must be called with two required variables:
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `link_dotfile_src` | Absolute path to source file in dotfiles repo | `{{ dotfiles_home }}/roles/git/files/gitconfig` |
-| `link_dotfile_dst` | Absolute path to destination (target location) | `{{ user_home }}/.gitconfig` |
+| `link_dotfile_dst` | Absolute path to destination (target location) | `{{ ansible_facts['user_dir'] }}/.gitconfig` |
 
 ## Optional Variables
 
@@ -48,7 +48,7 @@ Include the role with required variables:
     name: roles/link_dotfile
   vars:
     link_dotfile_src: "{{ dotfiles_home }}/roles/git/files/gitconfig"
-    link_dotfile_dst: "{{ user_home }}/.gitconfig"
+    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.gitconfig"
 ```
 
 ### Link Multiple Files in a Loop
@@ -59,7 +59,7 @@ Include the role with required variables:
     name: roles/link_dotfile
   vars:
     link_dotfile_src: "{{ dotfiles_home }}/roles/shell/files/{{ item }}"
-    link_dotfile_dst: "{{ user_home }}/.{{ item }}"
+    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.{{ item }}"
   loop:
     - zshrc
     - zprofile
@@ -74,7 +74,7 @@ Include the role with required variables:
     name: roles/link_dotfile
   vars:
     link_dotfile_src: "{{ dotfiles_home }}/roles/app/files/config.yml"
-    link_dotfile_dst: "{{ user_home }}/.config/app/config.yml"
+    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.config/app/config.yml"
     dotfile_dir_mode: "0700"
 ```
 
@@ -171,7 +171,7 @@ link_dotfile_src: ../git/files/gitconfig
 
 ```yaml
 # Good
-link_dotfile_dst: "{{ user_home }}/.config/app/config.yml"
+link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.config/app/config.yml"
 
 # Bad
 link_dotfile_dst: /Users/username/.config/app/config.yml
@@ -185,7 +185,7 @@ link_dotfile_dst: /Users/username/.config/app/config.yml
     name: roles/link_dotfile
   vars:
     link_dotfile_src: "{{ dotfiles_home }}/files/{{ item }}"
-    link_dotfile_dst: "{{ user_home }}/.{{ item }}"
+    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.{{ item }}"
   loop: [file1, file2, file3]
 
 # Bad (repetitive)

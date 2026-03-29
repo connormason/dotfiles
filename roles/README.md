@@ -192,7 +192,7 @@ locations. This is the **preferred method** for managing dotfile symlinks across
     name: roles/link_dotfile
   vars:
     link_dotfile_src: "{{ dotfiles_home }}/roles/git/files/gitconfig"
-    link_dotfile_dst: "{{ user_home }}/.gitconfig"
+    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.gitconfig"
 ```
 
 ### Required Variables
@@ -200,7 +200,7 @@ locations. This is the **preferred method** for managing dotfile symlinks across
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `link_dotfile_src` | Absolute path to source file in dotfiles repo | `{{ dotfiles_home }}/roles/git/files/gitconfig` |
-| `link_dotfile_dst` | Absolute path to destination (target location) | `{{ user_home }}/.gitconfig` |
+| `link_dotfile_dst` | Absolute path to destination (target location) | `{{ ansible_facts['user_dir'] }}/.gitconfig` |
 
 ### Optional Variables
 
@@ -216,7 +216,7 @@ locations. This is the **preferred method** for managing dotfile symlinks across
     name: roles/link_dotfile
   vars:
     link_dotfile_src: "{{ dotfiles_home }}/roles/shell/files/{{ item }}"
-    link_dotfile_dst: "{{ user_home }}/.{{ item }}"
+    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.{{ item }}"
   loop:
     - zshrc
     - zprofile
@@ -238,7 +238,7 @@ From `roles/starship/tasks/main.yaml`:
         name: roles/link_dotfile
       vars:
         link_dotfile_src: "{{ dotfiles_home }}/roles/starship/files/starship.toml"
-        link_dotfile_dst: "{{ user_home }}/.config/starship.toml"
+        link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.config/starship.toml"
 ```
 
 ### Behavior
@@ -372,7 +372,7 @@ ansible-playbook playbooks/local_bootstrap.yml \
     name: roles/link_dotfile
   vars:
     link_dotfile_src: "{{ dotfiles_home }}/roles/my_app/files/config.yaml"
-    link_dotfile_dst: "{{ user_home }}/.config/myapp/config.yaml"
+    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.config/myapp/config.yaml"
 ```
 
 ### Example: Platform-Specific Role
@@ -430,15 +430,15 @@ Variables commonly used across roles, defined in inventory (`inventory/inventory
 ### Path Variables
 
 ```yaml
-dotfiles_home: "/path/to/dotfiles-personal"  # Repository root
-user_home: "{{ ansible_facts['user_dir'] }}"  # User home directory
-homebrew_prefix: "/opt/homebrew"              # Homebrew installation path (macOS)
+dotfiles_home: "/path/to/dotfiles-personal"     # Repository root
+ansible_facts['user_dir']: "{{ ansible_facts['user_dir'] }}"    # User home directory
+homebrew_prefix: "/opt/homebrew"                # Homebrew installation path (macOS)
 ```
 
 ### User Variables
 
 ```yaml
-ansible_user: "username"           # Current user for SSH/sudo operations
+ansible_user: "username"            # Current user for SSH/sudo operations
 admin_password: "{{ vault_pass }}"  # Admin password from Ansible Vault
 ```
 
@@ -473,7 +473,7 @@ In role tasks:
 - name: Link dotfile
   ansible.builtin.file:
     src: "{{ dotfiles_home }}/roles/git/files/gitconfig"
-    dest: "{{ user_home }}/.gitconfig"
+    dest: "{{ ansible_facts['user_dir'] }}/.gitconfig"
     state: link
 ```
 
@@ -481,8 +481,8 @@ In role defaults:
 ```yaml
 # roles/my_role/defaults/main.yml
 ---
-my_config_dir: "{{ user_home }}/.config/my_app"
-my_data_dir: "{{ user_home }}/.local/share/my_app"
+my_config_dir: "{{ ansible_facts['user_dir'] }}/.config/my_app"
+my_data_dir: "{{ ansible_facts['user_dir'] }}/.local/share/my_app"
 ```
 
 ## Package Management Roles
