@@ -162,3 +162,11 @@ docstring-code-format = true
 exclude               = [
     ".gitignore",
 ]
+
+
+# `uv` configuration
+# ==================
+[[tool.uv.index]]
+name    = "default"
+url     = "https://pypi.org/simple"
+default = true
