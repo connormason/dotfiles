@@ -1,0 +1,16 @@
+---
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "32443:32443"
+    volumes:
+      - /etc/tailscale/certs:/certs:ro
+      - /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  caddy_data: {}

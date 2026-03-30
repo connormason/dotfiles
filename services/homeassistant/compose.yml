@@ -1,0 +1,13 @@
+---
+services:
+  homeassistant:
+    container_name: home-assistant
+    image: homeassistant/home-assistant
+    network_mode: host
+    restart: always
+    environment:
+      - TZ=America/Los_Angeles
+    volumes:
+      - ./homeassistant/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - ./homeassistant/shared:/shared

@@ -1,0 +1,15 @@
+---
+services:
+  radarr:
+    image: linuxserver/radarr
+    container_name: radarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /storage/media/config/radarr:/config
+      - /storage/media/movies:/movies
+      - /storage/media/downloads:/downloads
+    ports:
+      - "7878:7878"
