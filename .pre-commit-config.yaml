@@ -8,18 +8,10 @@ repos:
       - id: sync-pre-commit-deps
         name: "[sync]  pre-commit hook dependencies"
 
-  # Basic/common checks
+  # Checks for filesystem safety
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
-
-      # Checks for accidentally-committed content
-      - id: check-added-large-files
-        name: "[check] large files"
-      - id: check-merge-conflict
-        name: "[check] merge conflicts"
-
-      # Checks for filesystem safety
       - id: check-case-conflict
         name: "[check] filename case conflicts"
       - id: check-symlinks
@@ -27,27 +19,14 @@ repos:
       - id: destroyed-symlinks
         name: "[check] destroyed symlinks"
 
-      # Checks for validity of non-code filetypes and references
-      - id: check-vcs-permalinks
-        name: "[check] vcs site permalinks"
-      - id: check-executables-have-shebangs
-        name: "[check] executable shebangs"
-      - id: check-json
-        name: "[check] json files"
-      - id: check-toml
-        name: "[check] toml files"
-      - id: check-xml
-        name: "[check] xml files"
-      - id: check-yaml
-        name: "[check] yaml files"
-        exclude: ^services/homeassistant/config/
-
-  # Validate pyproject.toml
-  - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.24.1
+  # Checks for accidentally-committed large files and files with merge conflicts
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-      - id: validate-pyproject
-        name: "[check] pyproject.toml"
+      - id: check-added-large-files
+        name: "[check] large files"
+      - id: check-merge-conflict
+        name: "[check] merge conflicts"
 
   # Check for accidentally-committed secrets like passwords, API keys, and tokens
   - repo: https://github.com/gitleaks/gitleaks
@@ -56,25 +35,19 @@ repos:
       - id: gitleaks
         name: "[check] hardcoded secrets"
 
-  # Basic checks for Python code
+  # Check that scripts with shebangs are marked executable
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
-      - id: check-ast
-        name: "[check] python ast"
-      - id: debug-statements
-        name: "[check] python debug statements"
-      - id: name-tests-test
-        name: "[check] python unit test filenames"
-        args: [ --pytest-test-first ]
+      - id: check-executables-have-shebangs
+        name: "[check] executable shebangs"
 
-  # Docstring coverage
-  - repo: https://github.com/econchick/interrogate
-    rev: 1.7.0
+  # Check that links to VCS sites (like github.com) are permalinks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-      - id: interrogate
-        name: "[check] python docstring coverage"
-        pass_filenames: false
+      - id: check-vcs-permalinks
+        name: "[check] vcs site permalinks"
 
   # Fixers for file whitespace and metadata
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -95,6 +68,27 @@ repos:
               .config/istat_menus.ismp
           )
 
+  # Validate pyproject.toml
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
+        name: "[check] pyproject.toml"
+
+  # Checks for validity of non-code filetypes
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-json
+        name: "[check] json files"
+      - id: check-toml
+        name: "[check] toml files"
+      - id: check-xml
+        name: "[check] xml files"
+      - id: check-yaml
+        name: "[check] yaml files"
+        exclude: ^services/homeassistant/config/            # Doesn't like !include/!secret macros
+
   # Fix common misspellings in text files
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
@@ -102,17 +96,29 @@ repos:
       - id: codespell
         name: "[fix]   common misspellings"
         pass_filenames: false
-        args: [--write-changes]
+        args: [ --write-changes ]
         additional_dependencies:
           - tomli
 
-  # YAML linting
-  - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.37.1
+  # Basic checks for Python code
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-      - id: yamllint
-        name: "[lint]  yaml files"
-        args: [ -c, .config/.yamllint.yaml ]
+      - id: check-ast
+        name: "[check] python ast"
+      - id: debug-statements
+        name: "[check] python debug statements"
+      - id: name-tests-test
+        name: "[check] python unit test filenames"
+        args: [ --pytest-test-first ]
+
+  # Python code docstring coverage
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+        name: "[check] python docstring coverage"
+        pass_filenames: false
 
   # Python linting, formatting, import organization, typing upgrades, cleanup
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -123,7 +129,6 @@ repos:
         args: [--fix-only, --exit-non-zero-on-fix]
       - id: ruff
         name: "[lint]  python code (ruff check)"
-#        exclude: ^services/homeassistant/
 
   # Python static type checking
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -135,6 +140,14 @@ repos:
           - types-PyYAML
           - types-requests
         exclude: services/homeassistant/config/
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        name: "[lint]  yaml files"
+        args: [ -c, .config/.yamllint.yaml ]
 
 #  - repo: https://github.com/ansible/ansible-lint.git
 #    rev: v25.6.1
