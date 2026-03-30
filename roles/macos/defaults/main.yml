@@ -10,6 +10,7 @@ brew_packages:
   - git-delta
   - git-extras
   - git-lfs
+  - golang
   - hatch
   - hub
   - jq
