@@ -1,0 +1,15 @@
+---
+services:
+  transmission:
+    image: linuxserver/transmission
+    container_name: transmission
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /storage/media/config/transmission:/config
+      - /storage/media/downloads:/downloads
+      - /storage/media/watch:/watch
+    ports:
+      - "9091:9091"

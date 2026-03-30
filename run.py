@@ -96,7 +96,7 @@ Constants/configuration
 SCRIPT_PATH:    Path = Path(__file__)
 DOTFILES_DIR:   Path = SCRIPT_PATH.parent
 MAKEFILE_PATH:  Path = DOTFILES_DIR  / 'Makefile'
-INVENTORY_DIR:  Path = DOTFILES_DIR  / 'inventory'          # Standalone git clone (not submodule)
+INVENTORY_DIR:  Path = DOTFILES_DIR  / 'inventory'
 INVENTORY_FILE: Path = INVENTORY_DIR / 'inventory.yml'
 VAULT_PASSWORD: Path = DOTFILES_DIR  / 'vault_password.txt'
 PLAYBOOKS_DIR:  Path = DOTFILES_DIR  / 'playbooks'

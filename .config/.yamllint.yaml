@@ -1,6 +1,9 @@
 ---
 extends: default
 
+ignore:
+  - archived_linus/
+
 rules:
   braces:
     min-spaces-inside: 0
@@ -16,3 +19,6 @@ rules:
   octal-values:
     forbid-implicit-octal: true
     forbid-explicit-octal: true
+  truthy:
+    ignore:
+      - .github/workflows/deploy.yml

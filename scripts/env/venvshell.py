@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 VENV_DIR_NAMES: list[str] = ['.venv', 'venv']
 
 #: Enable usage with hatch environments. If False, all functionality relating to hatch will be disabled
-HATCH_ENABLED: bool = True
+HATCH_ENABLED: bool = False
 
 
 # =======================================================================================

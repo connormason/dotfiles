@@ -1,0 +1,18 @@
+---
+services:
+  plex:
+    image: linuxserver/plex
+    container_name: plex
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VERSION=docker
+      - ADVERTISE_IP
+    ports:
+      - "32400:32400"
+    volumes:
+      - /storage/media/config/plex:/config
+      - /storage/media/tv:/tv
+      - /storage/media/movies:/movies
+      - /storage/media/music:/music

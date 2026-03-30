@@ -1,5 +1,8 @@
 ---
-- name: Setup Docker
+# ============================================================
+# Docker installation
+# ============================================================
+- name: Install docker
   block:
     - name: Setup Docker repository
       block:
@@ -56,108 +59,43 @@
         state: started
       become: true
 
-# ip_address var used by "Build and copy Caddyfile" and "Build and copy mqtt-bridge config" below
-- name: Get host IP address
-  ansible.builtin.set_fact:
-    ip_address: "{{ ansible_facts['default_ipv4']['address'] }}"
-  tags:
-    - always
-
-- name: Setup caddy
+# ============================================================
+# Directory and environment setup
+# ============================================================
+- name: Setup docker environment
   block:
-    - name: Clone caddy-dnsimple repo
-      ansible.builtin.git:
-        repo: "{{ caddy_dnsimple_repo_url }}"
-        dest: "{{ caddy_dnsimple_repo_dest }}"
-        version: "{{ caddy_dnsimple_repo_branch }}"
-        clone: true
-        update: true
-        accept_hostkey: true
+    - name: Create docker directory structure
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ docker_dir }}"
+        - "{{ docker_dir }}/.build"
+        - "{{ docker_dir }}/pihole-data/etc-pihole"
 
-    - name: Build caddy-dnsimple image
-      community.docker.docker_image:
-        build:
-          path: "{{ autoplex_repo_dest }}"
-        name: danielmmetz/caddy-dnsimple
-        tag: latest
-        source: build
-      become: true
-
-    - name: Build and copy Caddyfile
-      ansible.builtin.template:
-        src: Caddyfile.j2
-        dest: "{{ docker_dir }}/Caddyfile"
-      tags:
-        - configfile
-
-    # Contains DNSimple OAuth token (DNSIMPLE_OAUTH_TOKEN), used by Caddy
-    - name: Build and copy .env file
+    - name: Render docker .env file
       ansible.builtin.template:
         src: env.j2
         dest: "{{ docker_dir }}/.env"
       tags:
         - configfile
 
-- name: Setup autoplex
-  block:
-    - name: Clone autoplex repo
-      ansible.builtin.git:
-        repo: "{{ autoplex_repo_url }}"
-        dest: "{{ autoplex_repo_dest }}"
-        version: "{{ autoplex_repo_branch }}"
-        clone: true
-        update: true
-        accept_hostkey: true
-
-    - name: Build autoplex image
-      community.docker.docker_image:
-        build:
-          path: "{{ autoplex_repo_dest }}"
-        name: danielmmetz/autoplex
-        tag: latest
-        source: build
-      become: true
-
-- name: Setup pyautoplex
-  block:
-    - name: Clone pyautoplex repo
-      ansible.builtin.git:
-        repo: "{{ pyautoplex_repo_url }}"
-        dest: "{{ pyautoplex_repo_dest }}"
-        version: "{{ pyautoplex_repo_branch }}"
-        clone: true
-        update: true
-        accept_hostkey: true
-
-    - name: Build pyautoplex image
-      community.docker.docker_image:
-        build:
-          path: "{{ pyautoplex_repo_dest }}"
-        name: connormason/pyautoplex
-        tag: latest
-        source: build
-      become: true
-
-# TODO: split this into its own task, require that it run before docker-compose
-- name: Setup homeassistant
+# ============================================================
+# Home Assistant secrets and certificates
+# ============================================================
+- name: Setup homeassistant secrets
   tags:
     - homeassistant
   block:
-    - name: Clone homeassistant config repo
-      ansible.builtin.git:
-        repo: "{{ homeassistant_repo_url }}"
-        dest: "{{ homeassistant_repo_dest }}"
-        version: "{{ homeassistant_repo_branch }}"
-        clone: true
-        update: true
-        accept_hostkey: true
-      tags:
-        - configfile
+    - name: Ensure homeassistant config directory exists
+      ansible.builtin.file:
+        path: "{{ homeassistant_config_dir }}"
+        state: directory
 
-    - name: Build and copy homeassistant secrets file
+    - name: Render homeassistant secrets file
       ansible.builtin.template:
-        src: ha_secrets.yaml.j2
-        dest: "{{ homeassistant_repo_dest }}/secrets.yaml"
+        src: "{{ playbook_dir }}/../services/homeassistant/config/secrets.yaml.j2"
+        dest: "{{ homeassistant_config_dir }}/secrets.yaml"
       tags:
         - configfile
 
@@ -172,24 +110,56 @@
         - name: Copy caseta.crt
           ansible.builtin.copy:
             src: "{{ ansible_group_all_inventory_dir }}/caseta.crt"
-            dest: "{{ homeassistant_repo_dest }}"
+            dest: "{{ homeassistant_config_dir }}"
 
         - name: Copy caseta.key
           ansible.builtin.copy:
             src: "{{ ansible_group_all_inventory_dir }}/caseta.key"
-            dest: "{{ homeassistant_repo_dest }}"
+            dest: "{{ homeassistant_config_dir }}"
 
         - name: Copy caseta-bridge.crt
           ansible.builtin.copy:
             src: "{{ ansible_group_all_inventory_dir }}/caseta-bridge.crt"
-            dest: "{{ homeassistant_repo_dest }}"
+            dest: "{{ homeassistant_config_dir }}"
 
-- name: Copy docker-compose.yml
-  ansible.builtin.copy:
-    src: docker-compose.yml
-    dest: "{{ docker_dir }}/docker-compose.yml"
-    backup: true
-  tags:
-    - configfile
+# ============================================================
+# Custom docker image builds
+# ============================================================
+- name: Setup autoplex
+  block:
+    - name: Clone autoplex repo
+      ansible.builtin.git:
+        repo: "{{ autoplex_repo_url }}"
+        dest: "{{ autoplex_repo_dest }}"
+        version: "{{ autoplex_repo_branch }}"
+        clone: true
+        update: true
+        accept_hostkey: true
 
-# TODO: docker-compose up?
+    - name: Build autoplex docker image
+      community.docker.docker_image:
+        build:
+          path: "{{ autoplex_repo_dest }}"
+        name: danielmmetz/autoplex
+        tag: latest
+        source: build
+      become: true
+
+# ============================================================
+# Deploy script and initial deploy
+# ============================================================
+- name: Deploy docker containers
+  block:
+    - name: Copy deploy script
+      ansible.builtin.copy:
+        src: deploy.sh
+        dest: "{{ docker_dir }}/deploy.sh"
+        mode: "0755"
+      tags:
+        - configfile
+
+    - name: Run initial full deploy
+      ansible.builtin.command:
+        cmd: "{{ docker_dir }}/deploy.sh all"
+      environment:
+        HOME: "{{ ansible_facts['user_dir'] }}"

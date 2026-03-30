@@ -1,6 +1,94 @@
+####################
+# Project metadata #
+####################
+[project]
+name        = "connor-mason-dotfiles"
+version     = "0.0.1"
+description = "Connor's dotfiles"
+
+# Project requirements
+# ====================
+requires-python = ">= 3.10"
+dependencies    = [
+    "typing-extensions",
+]
+
+# Project URLs
+# ============
+[project.urls]
+Homepage   = "https://github.com/connormason/dotclaude"
+Repository = "https://github.com/connormason/dotclaude"
+Source     = "https://github.com/connormason/dotclaude"
+
+# Project dependency groups
+# =========================
+[dependency-groups]
+dev = [
+    {include-group = "lint"},
+]
+lint = [
+    "interrogate >= 1.7.0",
+    "ruff >= 0.15.8",
+    "mypy >= 1.19.1",
+    "pre-commit",
+]
+
+
 # ####################
 # Tool configuration #
 # ####################
+
+# `codespell` configuration
+[tool.codespell]
+count             = true
+summary           = true
+skip              = "smb.conf.j2"
+ignore-words-list = [
+    "hass",
+    "iterm",
+]
+
+
+# `interrogate` configuration
+# ===========================
+[tool.interrogate]
+style                       = "sphinx"
+fail-under                  = 70
+ignore-init-method          = false
+ignore-init-module          = false
+ignore-magic                = true
+ignore-module               = true
+ignore-nested-functions     = true
+ignore-nested-classes       = false
+ignore-overloaded-functions = true
+ignore-private              = true
+ignore-property-decorators  = false
+ignore-semiprivate          = true
+ignore-setters              = true
+exclude = [
+    ".tmp/",
+    "build/",
+    "docs/",
+    "tests/",
+]
+
+
+# `mypy` configuration
+# ====================
+[tool.mypy]
+disallow_untyped_defs = true
+exclude_gitignore     = true
+warn_unused_configs   = true
+
+[[tool.mypy.overrides]]
+module        = ["services.homeassistant.config.*"]
+ignore_errors = true
+
+
+# `pytest` configuration
+# ======================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 
 # `ruff` configuration
@@ -11,9 +99,13 @@ indent-width   = 4
 target-version = "py39"
 extend-exclude = [
     "docs/",
+    "services/homeassistant/config/custom_components/",
 ]
 
 [tool.ruff.lint]
+typing-extensions = true
+typing-modules    = ["typing",  "types",  "typing_extensions"]
+
 extend-select = [
     "ANN",      # flake8-annotations
     "C4",       # flake8-comprehensions
@@ -47,13 +139,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"scripts/env/venvshell.py" = ["RUF001"]
+"scripts/env/venvshell.py" = ["RUF001"]       # String contains ambiguous {}. Did you mean {}?
 
 [tool.ruff.lint.isort]
 force-single-line = true
-required-imports  = [
-    "from __future__ import annotations"
-]
+required-imports  = ["from __future__ import annotations"]
 
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "single"
@@ -72,41 +162,3 @@ docstring-code-format = true
 exclude               = [
     ".gitignore",
 ]
-
-
-# `mypy` configuration
-# ====================
-[tool.mypy]
-disallow_untyped_defs = true
-exclude_gitignore     = true
-warn_unused_configs   = true
-
-
-# `interrogate` configuration
-# ===========================
-[tool.interrogate]
-style                       = "sphinx"
-fail-under                  = 70
-ignore-init-method          = false
-ignore-init-module          = false
-ignore-magic                = true
-ignore-module               = true
-ignore-nested-functions     = true
-ignore-nested-classes       = false
-ignore-overloaded-functions = true
-ignore-private              = true
-ignore-property-decorators  = false
-ignore-semiprivate          = true
-ignore-setters              = true
-exclude = [
-    ".tmp",
-    "build",
-    "docs",
-    "tests",
-]
-
-
-# `pytest` configuration
-# ======================
-[tool.pytest.ini_options]
-testpaths = ["tests"]

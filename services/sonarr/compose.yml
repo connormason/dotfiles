@@ -1,0 +1,15 @@
+---
+services:
+  sonarr:
+    image: linuxserver/sonarr
+    container_name: sonarr
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - /storage/media/config/sonarr:/config
+      - /storage/media/tv:/tv
+      - /storage/media/downloads:/downloads
+    ports:
+      - "8989:8989"

@@ -1,0 +1,265 @@
+---
+homeassistant:  # Name of the location where Home Assistant is running
+  name: bae5hau5
+
+  time_zone: America/Los_Angeles
+  latitude: !secret home_latitude
+  longitude: !secret home_longitude
+  elevation: 37
+  unit_system: imperial
+  temperature_unit: F
+
+  # Customization file
+  customize: !include customize.yaml
+
+# Logging configuration
+logger:
+  default: info
+  logs:
+    custom_components: debug
+    homeassistant.components.mqtt: debug
+
+# Frontend configuration
+frontend:
+  themes: !include themes.yaml
+
+# YAML configuration of Lovelace UI
+# lovelace:
+#   mode: yaml
+
+
+# *************
+# Basic modules
+# *************
+system_health:    # Enable system health
+cloud:            # Enable HomeAssistant Cloud
+config:           # Enable configuration UI
+updater:          # Check for available updates
+discovery:        # Discover some devices automatically
+conversation:     # Allow voice commands from the frontend
+history:          # Enable support for tracking state changes over time
+logbook:          # View all events in a logbook
+map:              # Enables a map showing the location of tracked devices
+sun:              # Track the sun
+
+# Text to speech
+tts:
+  - platform: google_translate
+    service_name: google_say
+
+
+# *********
+# Platforms
+# *********
+
+# Get weather from DarkSky
+weather:
+  - platform: darksky
+    api_key: !secret dark_sky_api_key
+
+# MQTT, using to pass things through from SmartThings hub
+mqtt:
+  broker: 192.168.1.133
+  discovery: true
+  discovery_prefix: smartthings
+
+# Lutron (lights)
+# Script to generate the key/cert files @ scripts/get_lutron_cert.py
+lutron_caseta:
+  host: 192.168.1.5
+  keyfile: caseta.key
+  certfile: caseta.crt
+  ca_certs: caseta-bridge.crt
+
+# TP-Link outlet(s)
+tplink:
+
+# Ecobee Thermostat
+ecobee:
+  api_key: !secret ecobee_api_key
+
+# LG Smart ThinQ
+smartthinq:
+  token: !secret smartthinq_token
+  region: US
+  language: en-US
+
+# Sonos
+sonos:
+  media_player:
+    hosts:
+      - 192.168.1.9
+      - 192.168.1.16
+      - 192.168.1.19
+
+# SpeedTest.net
+speedtestdotnet:
+
+# Custom Particle component (for connecting to Particle relay modules)
+# particle:
+#   username: !secret particle_photon_username
+#   password: !secret particle_photon_password
+
+
+# *******
+# Sensors
+# *******
+sensor:
+
+  # DarkSky weather sensor
+  - platform: darksky
+    api_key: !secret dark_sky_api_key
+    forecast:
+      - 0
+    monitored_conditions:
+      - summary
+      - icon
+      - temperature
+
+  - platform: template
+    sensors:
+      current_power_w:
+        friendly_name: "Current Power (Watts)"
+        unit_of_measurement: "w"
+        value_template: "{{ state_attr('switch.ac', 'current_power_w')"
+
+# ***********************
+# Lights/switches/remotes
+# ***********************
+
+# TODO: figure out how to get hue/saturation for color selection working (and maybe color temp too)
+# Lights
+light:
+
+  # Kitchen
+  - platform: mqtt
+    name: "Countertop Lights"
+    state_topic: "smartthings/Countertop Lights/switch"
+    command_topic: "smartthings/Countertop Lights/switch"
+    brightness_state_topic: "smartthings/Countertop Lights/level"
+    brightness_command_topic: "smartthings/Countertop Lights/level"
+    brightness_scale: 100
+    payload_on: "on"
+    payload_off: "off"
+    retain: true
+
+  # Living Room
+  - platform: mqtt
+    name: "Bar Lights"
+    state_topic: "smartthings/Bar Lights/switch"
+    command_topic: "smartthings/Bar Lights/switch"
+    brightness_state_topic: "smartthings/Bar Lights/level"
+    brightness_command_topic: "smartthings/Bar Lights/level"
+    brightness_scale: 100
+    payload_on: "on"
+    payload_off: "off"
+    retain: true
+
+  - platform: mqtt
+    name: "Window Lights"
+    state_topic: "smartthings/Window Lights/switch"
+    command_topic: "smartthings/Window Lights/switch"
+    brightness_state_topic: "smartthings/Window Lights/level"
+    brightness_command_topic: "smartthings/Window Lights/level"
+    brightness_scale: 100
+    payload_on: "on"
+    payload_off: "off"
+    retain: true
+
+  - platform: mqtt
+    name: "TV Stand Lights"
+    state_topic: "smartthings/TV Stand Lights/switch"
+    command_topic: "smartthings/TV Stand Lights/switch"
+    brightness_state_topic: "smartthings/TV Stand Lights/level"
+    brightness_command_topic: "smartthings/TV Stand Lights/level"
+    brightness_scale: 100
+    payload_on: "on"
+    payload_off: "off"
+    retain: true
+
+  # Master Bedroom
+  - platform: mqtt
+    name: "TV Lights"
+    state_topic: "smartthings/TV Lights/switch"
+    command_topic: "smartthings/TV Lights/switch"
+    brightness_state_topic: "smartthings/TV Lights/level"
+    brightness_command_topic: "smartthings/TV Lights/level"
+    brightness_scale: 100
+    payload_on: "on"
+    payload_off: "off"
+    retain: true
+
+# Switches
+# switch:
+#   - platform: particle_relay_module
+#     modules:
+#       garage:
+#         device_id: 1d0023000247343138333038
+#         relays:
+#           3:
+#             name: Desk Lamp
+#           4:
+#             name: Floop Lamp
+#           5:
+#             name: Party Lights
+#           6:
+#             name: Rope Light
+#         auto_update_firmware: False
+
+# Remotes
+remote:
+  - platform: harmony
+    name: Living Room
+    host: 192.168.1.29
+    activity: Watch Apple TV
+
+
+# Enable forwarding of entities to HomeKit
+# Auto-start disabled, but enabled after 5 minutes via automation to allow time for device discovery
+# Lutron items are excluded, since they are directly controllable via HomeKit, so we don't need to forward them
+homekit:
+  auto_start: false
+  filter:
+    include_domains:
+      - switch
+      - media_player
+      - light
+    exclude_entities:
+      - switch.guys_bathroom_lights
+      - light.kitchen_can_lights
+      - light.living_room_overhead_lights
+      - switch.master_bathroom_lights
+      - light.master_bedroom_table_lamps
+      - light.nerd_cove_overhead_lights
+
+
+# Device tracking
+#   interval_seconds: seconds between scans for devices
+#   consider_home: time to wait until marking someone as away
+#   new_device_defaults -> track_new_devices: whether or not to track new known hosts by default
+#
+# Timing extended for consider_home from default 3 minutes to 7 minutes. This is because iOS devices go into sleep mode
+# when not in use, which can cause some home/away thrash
+device_tracker:
+  # Nmap device tracker platform
+  #   home_interval: the number of minutes a device will be assumed home, not scanning again to preserve battery.
+  #   hosts: subnets/addresses to scan
+  #   exclude: list of hosts to not include in scanning
+  #
+  # We are excluding the IP address of the computer running homeassistant to prevent errors
+  - platform: nmap_tracker
+    home_interval: 15
+    hosts: 192.168.1.0/24
+    exclude:
+      - 192.168.1.133
+    interval_seconds: 10
+    consider_home: 0:07
+    new_device_defaults:
+      track_new_devices: false
+
+# ********
+# Includes
+# ********
+group: !include groups.yaml
+automation: !include automations.yaml
+script: !include scripts.yaml

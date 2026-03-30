@@ -1,0 +1,23 @@
+---
+services:
+  autoplex:
+    image: danielmmetz/autoplex:latest
+    container_name: autoplex
+    restart: unless-stopped
+    volumes:
+      - /storage/media/downloads:/downloads
+      - /storage/media/tv:/tv
+      - /storage/media/movies:/movies
+    command:
+      - "--mode"
+      - "copy"
+      - "--host"
+      - "transmission"
+      - "--src"
+      - "/downloads/complete/tv"
+      - "--dest"
+      - "/tv"
+      - "--src"
+      - "/downloads/complete/movies"
+      - "--dest"
+      - "/movies"

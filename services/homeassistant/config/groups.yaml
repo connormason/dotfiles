@@ -1,0 +1,77 @@
+---
+
+# ===========
+# Room groups
+# ===========
+living_room:
+  name: Living Room
+  entities:
+    - light.living_room_overhead_lights
+    - light.window_lights
+    - light.tv_stand_lights
+    - light.bar_lights
+    - media_player.living_room
+    - media_player.tv_mctvface
+    - remote.living_room
+    - remote.tv_mctvface
+    - sensor.living_room_temperature
+    - binary_sensor.living_room_occupancy
+
+kitchen:
+  name: Kitchen
+  entities:
+    - light.kitchen_can_lights
+    - light.countertop_lights
+    - media_player.kitchen
+
+main_room:
+  name: Main Room
+  entities:
+    - group.kitchen
+    - group.living_room
+
+master_bedroom:
+  name: Master Bedroom
+  entities:
+    - light.master_bedroom_table_lamps
+    - light.tv_lights
+    - switch.master_bathroom_lights
+    - switch.master_bedroom_fan
+
+nerd_cove:
+  name: Nerd Cove
+  entities:
+    - light.nerd_cove_overhead_lights
+    - media_player.nerd_cove
+    - climate.nerd_cove
+    - sensor.nerd_cove_temperature
+    - sensor.nerd_cove_humidity
+    - binary_sensor.nerd_cove_occupancy
+
+stephs_office:
+  name: Steph's Office
+  entities:
+
+all_rooms:
+  name: All Rooms
+  entities:
+    - group.main_room
+    - group.master_bedroom
+    - group.nerd_cove
+    - group.guys_bedroom
+
+
+# =============
+# People groups
+# =============
+device_trackers:
+  name: Device Trackers
+  entities:
+    - device_tracker.connor_phone
+    - device_tracker.steph_phone
+
+connor_and_steph:
+  name: Connor & Steph
+  entities:
+    - group.device_trackers
+    - group.all_rooms
