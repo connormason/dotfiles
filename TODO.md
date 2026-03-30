@@ -6,3 +6,4 @@
 - Glances (https://github.com/nicolargo/glances)
 - Symlink pihole/dnsmasq config files?
 - Update docker-compose.yml schema version?
+- remove requirements.txt?

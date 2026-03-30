@@ -1,4 +1,10 @@
 ---
+default_install_hook_types:
+  - pre-commit
+  - post-checkout
+  - post-merge
+  - post-rewrite
+
 repos:
 
   # Sync pre-commit hook dependencies based on other installed hooks
@@ -7,6 +13,20 @@ repos:
     hooks:
       - id: sync-pre-commit-deps
         name: "[sync]  pre-commit hook dependencies"
+
+  # Ensure uv.lock is up-to-date
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.2
+    hooks:
+      - id: uv-lock
+        name: "[sync]  uv.lock"
+
+  # Synchronize dependencies with local project virtual environment on checkout/pull/rebase
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.2
+    hooks:
+      - id: uv-sync
+        name: "[sync]  project venv"
 
   # Checks for filesystem safety
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -70,7 +90,7 @@ repos:
 
   # Validate pyproject.toml
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.24.1
+    rev: v0.25
     hooks:
       - id: validate-pyproject
         name: "[check] pyproject.toml"
@@ -96,7 +116,7 @@ repos:
       - id: codespell
         name: "[fix]   common misspellings"
         pass_filenames: false
-        args: [ --write-changes ]
+        args: [--write-changes]
         additional_dependencies:
           - tomli
 
@@ -110,7 +130,7 @@ repos:
         name: "[check] python debug statements"
       - id: name-tests-test
         name: "[check] python unit test filenames"
-        args: [ --pytest-test-first ]
+        args: [--pytest-test-first]
 
   # Python code docstring coverage
   - repo: https://github.com/econchick/interrogate
@@ -143,11 +163,11 @@ repos:
 
   # YAML linting
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.37.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
         name: "[lint]  yaml files"
-        args: [ -c, .config/.yamllint.yaml ]
+        args: [-c, .config/.yamllint.yaml]
 
 #  - repo: https://github.com/ansible/ansible-lint.git
 #    rev: v25.6.1

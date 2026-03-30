@@ -2,8 +2,6 @@
 extends: default
 
 ignore:
-  - .pre-commit-config.yaml
-  - .config/.ansible-lint.yaml
   - archived_linus/
 
 rules:
