@@ -19,6 +19,9 @@
 *_LOCAL_*.txt
 *_REMOTE_*.txt
 
+# Allow docker compose base file (*.BASE.* pattern above is for git merge artifacts)
+!services/compose.base.yml
+
 ### macOS ###
 # General
 .DS_Store

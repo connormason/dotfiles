@@ -1,0 +1,6 @@
+---
+name: nas-stack
+
+networks:
+  default:
+    name: nas-network
