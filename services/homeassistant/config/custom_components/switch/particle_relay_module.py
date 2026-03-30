@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 from typing import TYPE_CHECKING
+from typing import Any
 
 import voluptuous as vol
-from custom_components import particle
 from homeassistant.components.switch import PLATFORM_SCHEMA
 from homeassistant.components.switch import SwitchDevice
 from homeassistant.const import CONF_NAME
 from homeassistant.helpers import config_validation as cv
+
+from custom_components import particle
 
 if TYPE_CHECKING:
     from ..particle import ParticleDevice
@@ -132,7 +133,7 @@ class Relay(SwitchDevice):
         return self._name
 
     @property
-    def num(self):
+    def num(self) -> int:
         """
         Particle Photon pin number that the relay is attached to
         """

@@ -47,4 +47,4 @@
 
 - name: Reveal IP address, hostname, OS version (etc) when clicking the clock in login window
   command: defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
-  become: yes
+  become: true

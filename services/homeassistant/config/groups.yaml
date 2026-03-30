@@ -1,3 +1,5 @@
+---
+
 # ===========
 # Room groups
 # ===========
@@ -23,10 +25,10 @@ kitchen:
     - media_player.kitchen
 
 main_room:
- name: Main Room
- entities:
-   - group.kitchen
-   - group.living_room
+  name: Main Room
+  entities:
+    - group.kitchen
+    - group.living_room
 
 master_bedroom:
   name: Master Bedroom
@@ -63,10 +65,10 @@ all_rooms:
 # People groups
 # =============
 device_trackers:
- name: Device Trackers
- entities:
-  - device_tracker.connor_phone
-  - device_tracker.steph_phone
+  name: Device Trackers
+  entities:
+    - device_tracker.connor_phone
+    - device_tracker.steph_phone
 
 connor_and_steph:
   name: Connor & Steph

@@ -1,3 +1,4 @@
+---
 homeassistant:  # Name of the location where Home Assistant is running
   name: bae5hau5
 
@@ -259,6 +260,6 @@ device_tracker:
 # ********
 # Includes
 # ********
-group:      !include groups.yaml
+group: !include groups.yaml
 automation: !include automations.yaml
-script:     !include scripts.yaml
+script: !include scripts.yaml

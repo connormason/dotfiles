@@ -4,8 +4,8 @@ import functools
 import logging
 import time
 from pathlib import Path
-from typing import Any
 from typing import TYPE_CHECKING
+from typing import Any
 from typing import Union
 
 import requests
@@ -15,7 +15,6 @@ from homeassistant.const import CONF_USERNAME
 from homeassistant.const import EVENT_HOMEASSISTANT_START
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.helpers import config_validation as cv
-
 
 PathLike = Union[str, Path]
 

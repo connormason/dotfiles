@@ -292,7 +292,7 @@
 
 - name: Show the /Volumes directory
   command: "chflags nohidden /Volumes"
-  become: yes
+  become: true
 
 - debug:
     msg: 'Killing Finder to load new settings'

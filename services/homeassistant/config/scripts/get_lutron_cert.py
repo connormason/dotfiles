@@ -37,7 +37,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509.oid import NameOID
 
-
 CASETA_KEY_PATH        = Path('caseta.key')
 CASETA_CRT_PATH        = Path('caseta.crt')
 CASETA_BRIDGE_CRT_PATH = Path('caseta-bridge.crt')
