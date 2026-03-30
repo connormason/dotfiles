@@ -2,7 +2,10 @@
 extends: default
 
 ignore:
-  - archived_linus/
+  - .ansible-lint.yaml
+  - .venv
+  - vault.yml
+  - vault.yaml
 
 rules:
   braces:

@@ -48,7 +48,6 @@ ignore-words-list = [
     "iterm",
 ]
 
-
 # `interrogate` configuration
 # ===========================
 [tool.interrogate]
@@ -72,7 +71,6 @@ exclude = [
     "tests/",
 ]
 
-
 # `mypy` configuration
 # ====================
 [tool.mypy]
@@ -84,12 +82,10 @@ warn_unused_configs   = true
 module        = ["services.homeassistant.config.*"]
 ignore_errors = true
 
-
 # `pytest` configuration
 # ======================
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
 
 # `ruff` configuration
 # ====================
@@ -162,7 +158,6 @@ docstring-code-format = true
 exclude               = [
     ".gitignore",
 ]
-
 
 # `uv` configuration
 # ==================
