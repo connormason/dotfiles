@@ -1,10 +1,18 @@
 ---
 repos:
 
+  # Sync pre-commit hook dependencies based on other installed hooks
+  - repo: https://github.com/pre-commit/sync-pre-commit-deps
+    rev: v0.0.3
+    hooks:
+      - id: sync-pre-commit-deps
+        name: "[sync]  pre-commit hook dependencies"
+
   # Basic/common checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+
       # Checks for accidentally-committed content
       - id: check-added-large-files
         name: "[check] large files"

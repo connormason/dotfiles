@@ -1,6 +1,6 @@
-#
+# ===========
 # Room groups
-#
+# ===========
 living_room:
   name: Living Room
   entities:
@@ -59,9 +59,9 @@ all_rooms:
     - group.guys_bedroom
 
 
-#
+# =============
 # People groups
-#
+# =============
 device_trackers:
  name: Device Trackers
  entities:

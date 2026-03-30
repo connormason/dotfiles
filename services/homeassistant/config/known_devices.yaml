@@ -1,7 +1,7 @@
 
-#
+# =================================
 # Phones (used for device tracking)
-#
+# =================================
 connor_phone:
   hide_if_away: false
   icon:
@@ -18,9 +18,9 @@ steph_phone:
   picture:
   track: true
 
-#
+# ===============================================================================
 # Computers/tablets/personal devices (except home server because that's our host)
-#
+# ===============================================================================
 connor_imac_pro:
   hide_if_away: false
   icon:
@@ -94,11 +94,12 @@ steph_watch:
   track: false
 
 
-#
+# ==============
 # Static devices
-#
+# ==============
 
 # Media devices
+# =============
 living_room_tv:
   hide_if_away: false
   icon:
@@ -180,6 +181,7 @@ nerd_cove_sonos:
   track: false
 
 # Assistants
+# ==========
 living_room_google_home:
   hide_if_away: false
   icon:
@@ -213,6 +215,7 @@ master_bathroom_homepod:
   track: false
 
 # Hubs
+# ====
 living_room_harmony_hub:
   hide_if_away: false
   icon:
@@ -254,6 +257,7 @@ orbi_satellite:
   track: false
 
 # Other
+# =====
 ecobee:
   hide_if_away: false
   icon:
@@ -271,9 +275,9 @@ tp_link_plug:
   track: false
 
 
-#
+# =============
 # Other devices
-#
+# =============
 2c_64_1f_09_bf_b1:
   hide_if_away: false
   icon:
