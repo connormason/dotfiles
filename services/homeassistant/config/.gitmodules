@@ -1,0 +1,3 @@
+[submodule "custom_components/smartthinq"]
+	path = custom_components/smartthinq
+	url = https://github.com/sampsyo/hass-smartthinq.git

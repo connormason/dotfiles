@@ -1,0 +1,37 @@
+# Set BlueNight theme on HomeAssistant startup
+- alias: 'Set theme at startup'
+  initial_state: 'on'
+  trigger:
+   - platform: homeassistant
+     event: start
+  action:
+    service: frontend.set_theme
+    data:
+      name: darkred
+
+# Delay start to HomeKit passthrough
+- alias: 'Start HomeKit'
+  id: start_homekit
+  trigger:
+    - platform: homeassistant
+      event: start
+  action:
+    - delay: 00:05  # Waits 5 minutes
+    - service: homekit.start
+
+
+# Turn off Connor and Steph's lights when Connor and Steph leave home
+# TODO: also stop playing music
+- alias: Connor and Steph leave home
+  id: connor_and_steph_leave_home
+  trigger:
+    platform: state
+    entity_id: group.connor_and_steph
+    to: 'not_home'
+  condition:
+    condition: time
+    after: '10:00'
+  action:
+    service: switch.turn_off
+    entity_id: group.connor_and_steph
+  initial_state: 'on'

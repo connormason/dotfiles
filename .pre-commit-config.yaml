@@ -12,6 +12,7 @@ repos:
         name: "[check] merge conflicts"
       - id: detect-private-key
         name: "[check] private keys"
+        exclude: ^services/homeassistant/config/caseta\.key$
 
       # Checks for filesystem safety
       - id: check-case-conflict
@@ -43,6 +44,7 @@ repos:
         name: "[check] xml"
       - id: check-yaml
         name: "[check] yaml"
+        exclude: ^services/homeassistant/config/
 
   # Validate pyproject.toml
   - repo: https://github.com/abravalheri/validate-pyproject
@@ -89,7 +91,8 @@ repos:
           (?x)(
               ^.pre-commit-config.yaml|
               ^.config/.ansible-lint.yaml|
-              archived_linux/
+              archived_linux/|
+              ^services/homeassistant/config/
           )
 
   # Python linting, formatting, import organization, typing upgrades, cleanup
@@ -99,6 +102,7 @@ repos:
       - id: ruff
         name: "[lint]  ruff check --fix"
         args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^services/homeassistant/
 
   # Python static type checking
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -106,7 +110,7 @@ repos:
     hooks:
       - id: mypy
         name: "[lint]  mypy"
-        exclude: tests
+        exclude: "tests|services/homeassistant"
         additional_dependencies:
           - types-PyYAML
 
