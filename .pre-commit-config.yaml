@@ -167,7 +167,6 @@ repos:
     hooks:
       - id: yamllint
         name: "[lint]  yaml files"
-        args: [-c, .config/.yamllint.yaml]
 
 #  - repo: https://github.com/ansible/ansible-lint.git
 #    rev: v25.6.1

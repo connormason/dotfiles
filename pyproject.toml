@@ -31,6 +31,8 @@ lint = [
     "ruff >= 0.15.8",
     "mypy >= 1.19.1",
     "pre-commit",
+    "types-PyYaml",
+    "types-requests",
 ]
 
 
@@ -47,7 +49,6 @@ ignore-words-list = [
     "hass",
     "iterm",
 ]
-
 
 # `interrogate` configuration
 # ===========================
@@ -72,24 +73,23 @@ exclude = [
     "tests/",
 ]
 
-
 # `mypy` configuration
 # ====================
 [tool.mypy]
-disallow_untyped_defs = true
-exclude_gitignore     = true
-warn_unused_configs   = true
+disallow_untyped_defs  = true
+exclude_gitignore      = true
+ignore_missing_imports = true
+python_version         = "3.9"
+warn_unused_configs    = true
 
-[[tool.mypy.overrides]]
-module        = ["services.homeassistant.config.*"]
-ignore_errors = true
-
+exclude = [
+    "services/homeassistant/"
+]
 
 # `pytest` configuration
 # ======================
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
 
 # `ruff` configuration
 # ====================
@@ -155,10 +155,9 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
 
-[tool.ruff.format]
-quote-style           = "single"
-indent-style          = "space"
-docstring-code-format = true
-exclude               = [
-    ".gitignore",
-]
+# `uv` configuration
+# ==================
+[[tool.uv.index]]
+name    = "default"
+url     = "https://pypi.org/simple"
+default = true

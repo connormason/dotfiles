@@ -172,7 +172,7 @@ Configured in `.pre-commit-config.yaml`:
 - **File integrity**: Large files, merge conflicts, private keys, symlinks
 - **Python**: AST validation, debug statements, ruff linting, mypy type checking, interrogate docstring coverage
 - **Data formats**: JSON, YAML, TOML, XML validation
-- **YAML**: yamllint with custom config (`.config/.yamllint.yaml`)
+- **YAML**: yamllint with custom config (`.yamllint.yaml`)
 - **Fixers**: Whitespace, line endings, UTF-8 BOM
 
 Run hooks:
@@ -187,14 +187,14 @@ python3 run.py pre
 ### Ansible Linting
 
 Commented out in pre-commit config but available:
-- `ansible-lint` with `.config/.ansible-lint.yaml` configuration
+- `ansible-lint` with `.ansible-lint.yaml` configuration
 - `shellcheck` for shell script validation
 
 ## Key Configuration Files
 
 - **`.pre-commit-config.yaml`**: Code quality hooks
-- **`.config/.yamllint.yaml`**: YAML linting rules
-- **`.config/.ansible-lint.yaml`**: Ansible best practices
+- **`.yamllint.yaml`**: YAML linting rules
+- **`.ansible-lint.yaml`**: Ansible best practices
 - **`vault_password.txt`**: Ansible Vault password (gitignored, create manually)
 - **`roles/requirements.yml`**: External Ansible role dependencies
 
