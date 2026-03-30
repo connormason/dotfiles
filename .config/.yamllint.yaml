@@ -21,4 +21,4 @@ rules:
     forbid-explicit-octal: true
   truthy:
     ignore:
-      - .github/workflows/deploy.yml
+      - .github/workflows/*.yml
