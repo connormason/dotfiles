@@ -151,14 +151,6 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
 
-[tool.ruff.format]
-quote-style           = "single"
-indent-style          = "space"
-docstring-code-format = true
-exclude               = [
-    ".gitignore",
-]
-
 # `uv` configuration
 # ==================
 [[tool.uv.index]]
