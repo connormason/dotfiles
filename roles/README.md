@@ -652,7 +652,7 @@ python3 run.py pre
 
 ### ansible-lint Configuration
 
-When enabled, ansible-lint uses `.config/.ansible-lint.yaml`:
+When enabled, ansible-lint uses `.ansible-lint.yaml`:
 ```yaml
 # Skip certain rule categories
 skip_list:
@@ -662,7 +662,7 @@ skip_list:
 
 ### yamllint Configuration
 
-YAML linting uses `.config/.yamllint.yaml`:
+YAML linting uses `.yamllint.yaml`:
 ```yaml
 # Custom rules for role files
 rules:

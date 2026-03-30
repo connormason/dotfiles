@@ -1,0 +1,61 @@
+---
+name: Lint
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync --group lint
+      - name: Ruff check
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  mypy:
+    name: Mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: |
+          uv sync --group lint
+          uv pip install types-PyYAML types-requests
+      - name: Mypy
+        run: uv run mypy .
+
+  interrogate:
+    name: Interrogate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync --group lint
+      - name: Check docstring coverage
+        run: uv run interrogate
+
+  yamllint:
+    name: yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Run yamllint
+        run: uvx yamllint --config .yamllint.yaml .
+
+  codespell:
+    name: Codespell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: codespell-project/actions/check-spelling@v2

@@ -123,8 +123,8 @@ Configures home NAS server with:
 ### Configuration Files
 
 - **`.pre-commit-config.yaml`** - Code quality hooks (Python, YAML, JSON validation)
-- **`.config/.yamllint.yaml`** - YAML linting rules
-- **`.config/.ansible-lint.yaml`** - Ansible best practices
+- **`.yamllint.yaml`** - YAML linting rules
+- **`.ansible-lint.yaml`** - Ansible best practices
 - **`vault_password.txt`** - Ansible Vault password (gitignored, create manually)
 - **`roles/requirements.yml`** - External Ansible role dependencies
 
@@ -233,61 +233,53 @@ make pre
 
 ```
 dotfiles-personal/
-├── run.py                          # Python CLI for repository management
-├── local_bootstrap.sh              # macOS bootstrap script
-├── nas_bootstrap.sh                # NAS bootstrap script
-├── Makefile                        # Auto-generated from run.py commands
+├── run.py                                  # Python CLI for repository management
+├── local_bootstrap.sh                      # macOS bootstrap script
+├── nas_bootstrap.sh                        # NAS bootstrap script
+├── Makefile                                # Auto-generated from run.py commands
 │
-├── playbooks/                      # Ansible playbooks
-│   ├── local_bootstrap.yml         # macOS configuration playbook
-│   └── nas_bootstrap.yml           # NAS configuration playbook
+├── playbooks/                              # Ansible playbooks
+│   ├── local_bootstrap.yml                 # macOS configuration playbook
+│   └── nas_bootstrap.yml                   # NAS configuration playbook
 │
-├── roles/                          # Ansible roles
-│   ├── macos/                      # macOS package management
-│   ├── macos_settings/             # macOS system preferences
-│   ├── macos_dock/                 # Dock configuration
-│   ├── debian/                     # Debian system packages
-│   ├── docker/                     # Docker media stack
-│   ├── zfs/                        # ZFS filesystem
-│   ├── samba/                      # File sharing
-│   ├── git/                        # Git configuration
-│   ├── ssh/                        # SSH configuration
-│   ├── zsh/                        # Shell configuration
-│   ├── starship/                   # Shell prompt
-│   ├── hammerspoon/                # Window management
-│   ├── iterm/                      # iTerm2 configuration
-│   ├── python/                     # Python tooling
-│   ├── glance/                     # Dashboard
-│   ├── link_dotfile/               # Reusable dotfile linking
-│   └── requirements.yml            # External role dependencies
+├── roles/                                  # Ansible roles
+│   ├── macos/                              # macOS package management
+│   ├── macos_settings/                     # macOS system preferences
+│   ├── macos_dock/                         # Dock configuration
+│   ├── debian/                             # Debian system packages
+│   ├── docker/                             # Docker media stack
+│   ├── zfs/                                # ZFS filesystem
+│   ├── samba/                              # File sharing
+│   ├── git/                                # Git configuration
+│   ├── ssh/                                # SSH configuration
+│   ├── zsh/                                # Shell configuration
+│   ├── starship/                           # Shell prompt
+│   ├── hammerspoon/                        # Window management
+│   ├── iterm/                              # iTerm2 configuration
+│   ├── python/                             # Python tooling
+│   ├── glance/                             # Dashboard
+│   ├── link_dotfile/                       # Reusable dotfile linking
+│   └── requirements.yml                    # External role dependencies
 │
-├── inventory/                      # Standalone git repository (private)
-│   ├── inventory.yml               # Host definitions
-│   ├── group_vars/                 # Group variables and vault files
-│   └── host_vars/                  # Host-specific variables and vault files
+├── inventory/                              # Standalone git repository (private)
+│   ├── inventory.yml                       # Host definitions
+│   ├── group_vars/                         # Group variables and vault files
+│   └── host_vars/                          # Host-specific variables and vault files
 │
-├── scripts/                        # Utility scripts
-│   └── install/                    # Tool installation scripts
-│       ├── install_uv.py           # uv Python package manager installer
-│       └── install_hatch.py        # hatch Python project manager installer
+├── scripts/                                # Utility scripts
+│   └── install/                            # Tool installation scripts
+│       ├── install_uv.py                   # uv Python package manager installer
+│       └── install_hatch.py                # hatch Python project manager installer
 │
-├── library/                        # Custom Ansible modules
+├── library/                                # Custom Ansible modules
 │   └── configure_network_interfaces.py
 │
-├── cc-statusline/                  # Custom Claude Code statusline
-│   ├── statusline.sh               # Main orchestration script
-│   ├── components/                 # 15 modular component scripts
-│   ├── themes/                     # 4 theme files
-│   └── layouts/                    # 4 layout configurations
+├── docs/                                   # Documentation
+│   └── RUN_PY_REFERENCE.md                 # Python CLI reference
 │
-├── docs/                           # Documentation
-│   └── RUN_PY_REFERENCE.md         # Python CLI reference
-│
-├── .config/                        # Tool configuration files
-│   ├── .yamllint.yaml              # YAML linting rules
-│   └── .ansible-lint.yaml          # Ansible linting rules
-│
-└── .pre-commit-config.yaml         # Pre-commit hooks configuration
+├── .ansible-lint.yaml                      # Ansible linting rules
+├── .yamllint.yaml                          # YAML linting rules
+└── .pre-commit-config.yaml                 # Pre-commit hooks configuration
 ```
 
 ## Key Features
