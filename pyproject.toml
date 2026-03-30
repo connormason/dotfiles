@@ -31,6 +31,8 @@ lint = [
     "ruff >= 0.15.8",
     "mypy >= 1.19.1",
     "pre-commit",
+    "types-PyYaml",
+    "types-requests",
 ]
 
 
@@ -74,13 +76,11 @@ exclude = [
 # `mypy` configuration
 # ====================
 [tool.mypy]
-disallow_untyped_defs = true
-exclude_gitignore     = true
-warn_unused_configs   = true
-
-[[tool.mypy.overrides]]
-module        = ["services.homeassistant.config.*"]
-ignore_errors = true
+disallow_untyped_defs  = true
+exclude_gitignore      = true
+ignore_missing_imports = true
+python_version         = "3.9"
+warn_unused_configs    = true
 
 # `pytest` configuration
 # ======================
