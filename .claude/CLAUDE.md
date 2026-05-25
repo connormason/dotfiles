@@ -218,7 +218,7 @@ Commented out in pre-commit config but available:
 Media server and home automation stack in `roles/docker/files/docker-compose.yml`:
 
 **Services**:
-- **Media**: Plex, Radarr (movies), Sonarr (TV), Transmission (torrents), Prowlarr (indexer), Flaresolverr
+- **Media**: Plex, Jellyfin, Radarr (movies), Sonarr (TV), Transmission (torrents), Prowlarr (indexer), Flaresolverr
 - **Network**: PiHole (DNS/ad-blocking)
 - **Automation**: Home Assistant, Glance dashboard
 - **Support**: Autoplex (automated file organization)

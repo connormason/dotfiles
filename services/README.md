@@ -20,6 +20,7 @@ from inside the `nas-network` bridge (or, for Home Assistant, the host network n
 | `home-assistant` | `homeassistant/home-assistant`     | host networking (default `8123/tcp`)          | Home automation hub                           |
 | `pihole`         | `pihole/pihole`                    | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80 | DNS, ad-blocking, DHCP                        |
 | `plex`           | `linuxserver/plex`                 | `32400/tcp`                                   | Media streaming server                        |
+| `jellyfin`       | `linuxserver/jellyfin`             | `8096/tcp`, `7359/udp`                        | Media streaming server (Plex alternative)     |
 | `prowlarr`       | `linuxserver/prowlarr`             | `9696/tcp`                                    | Indexer aggregator for Sonarr/Radarr          |
 | `radarr`         | `linuxserver/radarr`               | `7878/tcp`                                    | Movie library management                      |
 | `sonarr`         | `linuxserver/sonarr`               | `8989/tcp`                                    | TV library management                         |
@@ -71,6 +72,12 @@ is sourced from the environment (the deploy `.env` file).
 Media server. Uses the LinuxServer.io image with `PUID=1000/PGID=1000`. `ADVERTISE_IP` is set in the
 deploy `.env` to the Tailscale HTTPS URL (`https://nas.<tailnet>.ts.net:32443`) so remote clients
 get a working external address.
+
+### `jellyfin`
+Media server running alongside Plex for evaluation. Uses the LinuxServer.io image with
+`PUID=1000/PGID=1000` and shares the same `/storage/media/{tv,movies,music}` libraries as Plex.
+LAN-only HTTP on port `8096`; client auto-discovery on `7359/udp`. Config persists at
+`/storage/media/config/jellyfin`.
 
 ### `prowlarr`, `radarr`, `sonarr`, `transmission`
 Standard *arr / download stack. All share the `/storage/media` tree on the host so completed
