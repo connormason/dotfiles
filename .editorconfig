@@ -7,17 +7,26 @@ end_of_line              = lf
 indent_size              = 4
 indent_style             = space
 insert_final_newline     = true
-trim_trailing_whitespace = true
 max_line_length          = 120
+trim_trailing_whitespace = true
 
-[*.{yml,yaml}]
+[*.{layout,theme}]
 indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
 
+[*.pkl]
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_size = 2
+
 [Makefile]
 indent_style = tab
 
 [.claude/settings*.json]
+indent_size = 2
+
+[*todo.md]
 indent_size = 2
