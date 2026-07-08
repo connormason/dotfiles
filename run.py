@@ -49,7 +49,7 @@ Usage Examples
 See Also
 -------
 - README.md: User-facing documentation
-- .claude/CLAUDE.md: Architecture and development guidance
+- CLAUDE.md: Architecture and development guidance
 
 """
 from __future__ import annotations
