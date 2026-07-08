@@ -1,4 +1,33 @@
 {
+  "defaultMode": "acceptEdits",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$CLAUDE_TOOL_ARG_FILE_PATH\" == *.py ]]; then uv run ruff check --fix-only \"$CLAUDE_TOOL_ARG_FILE_PATH\" 2>/dev/null; fi; exit 0"
+          },
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; if [[ \"$f\" == *.yml || \"$f\" == *.yaml ]]; then uv run yamllint \"$f\" 2>&1 || true; fi; exit 0"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_ARG_FILE_PATH\" | grep -qE '(vault_password\\.txt|/vault_password|inventory/)'; then echo 'BLOCKED: Cannot edit vault password or inventory files — these are sensitive and managed separately' >&2; exit 2; fi"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(ansible-lint:*)",
@@ -7,6 +36,7 @@
       "Bash(brew info:*)",
       "Bash(cat:*)",
       "Bash(cmp:*)",
+      "Bash(cp:*)",
       "Bash(echo:*)",
       "Bash(find:*)",
       "Bash(gh pr diff:*)",
@@ -23,11 +53,13 @@
       "Bash(hatch env:*)",
       "Bash(hatch run:*)",
       "Bash(hatch version:*)",
+      "Bash(head:*)",
       "Bash(interrogate:*)",
       "Bash(jq:*)",
       "Bash(ls:*)",
       "Bash(make:*)",
       "Bash(mkdir:*)",
+      "Bash(mv:*)",
       "Bash(mypy:*)",
       "Bash(nox:*)",
       "Bash(pip3 install:*)",
@@ -38,7 +70,9 @@
       "Bash(ruff:*)",
       "Bash(sed:*)",
       "Bash(shellcheck:*)",
+      "Bash(tail:*)",
       "Bash(test:*)",
+      "Bash(touch:*)",
       "Bash(tree:*)",
       "Bash(uv sync:*)",
       "Bash(uv run:*)",
