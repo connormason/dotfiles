@@ -2,12 +2,12 @@
 # Project metadata
 # ####################################################################################################################
 [project]
-name        = "dotfiles"
-version     = "0.0.1"
+name = "dotfiles"
+version = "0.0.1"
 description = "Connor's dotfiles"
-readme      = "README.md"
-authors     = [{name = "Connor Mason"}]
-keywords    = ["dotfiles", "config", "configuration", "shell"]
+readme = "README.md"
+authors = [{name = "Connor Mason"}]
+keywords = ["dotfiles", "config", "configuration", "shell"]
 classifiers = [
     # keep-sorted start
     "Development Status :: 4 - Beta",
@@ -24,7 +24,7 @@ classifiers = [
 # Project requirements
 # ====================
 requires-python = ">= 3.12"
-dependencies    = [
+dependencies = [
     # keep-sorted start case=no
     "PyYaml >= 6.0",
     "ansible-core",
@@ -79,14 +79,14 @@ test = [
     # keep-sorted start case=no
     "coverage[toml] >= 7.11",
     "pytest >= 9.0",
-    "pytest-html >= 3.2.0",         # HTML test reports
-    "pytest-clarity >= 1.0.1",      # Better assertion diffs
-    "pytest-mock >= 3.11.1",        # Mocking support
-    "pytest-sugar >= 0.9.7",        # Better pytest output
-    "pytest-timeout >= 2.1.0",      # Test timeouts
-    "pytest-xdist >= 3.3.0",        # Parallel test execution
-    "yamllint >= 1.32.0",           # Ansible testing
-    "pyyaml >= 6.0.1",              # YAML parsing
+    "pytest-html >= 3.2.0",    # HTML test reports
+    "pytest-clarity >= 1.0.1", # Better assertion diffs
+    "pytest-mock >= 3.11.1",   # Mocking support
+    "pytest-sugar >= 0.9.7",   # Better pytest output
+    "pytest-timeout >= 2.1.0", # Test timeouts
+    "pytest-xdist >= 3.3.0",   # Parallel test execution
+    "yamllint >= 1.32.0",      # Ansible testing
+    "pyyaml >= 6.0.1",         # YAML parsing
     # keep-sorted end
 ]
 
@@ -112,9 +112,9 @@ default = true
 # `codespell` configuration
 # =========================
 [tool.codespell]
-count             = true
-summary           = true
-skip              = "smb.conf.j2"
+count = true
+summary = true
+skip = "smb.conf.j2"
 ignore-words-list = [
     # keep-sorted start
     "*.css",
@@ -164,11 +164,11 @@ exclude = [
 disallow_untyped_defs  = true
 exclude_gitignore      = true
 ignore_missing_imports = true
-python_version         = "3.9"          # TODO: update
+python_version         = "3.9" # TODO: update
 warn_unused_configs    = true
 
 exclude = [
-    "services/homeassistant/"
+    "services/homeassistant/",
 ]
 
 [[tool.mypy.overrides]]
@@ -203,9 +203,9 @@ exclude = [
 
 extend-safe-fixes = [
     # keep-sorted start
-    "B007",                 # Loop control variable{name}not used within loop body
-    "B028",                 # No explicit `stacklevel` keyword argument found
-    "D400",                 # First line should end with a period
+    "B007", # Loop control variable{name}not used within loop body
+    "B028", # No explicit `stacklevel` keyword argument found
+    "D400", # First line should end with a period
     # keep-sorted end
 ]
 extend-select = [
@@ -349,7 +349,7 @@ property-decorators = []
 # "pylint" lint rule settings [PLC, PLE, PLR, PLW]
 # ------------------------------------------------
 [tool.ruff.lint.pylint]
-allow-magic-value-types = ["str", "bytes", "int", "float"]          # PLR2004
+allow-magic-value-types = ["str", "bytes", "int", "float"] # PLR2004
 
 # "pyupgrade" lint rule settings [UP]
 # -----------------------------------
@@ -364,10 +364,10 @@ keep-runtime-typing = true
 # `mdformat` configuration
 # ========================
 [tool.mdformat]
-end_of_line = "lf"      # options: {"lf", "crlf", "keep"}
-number      = true      # options: {false, true}
-validate    = true      # options: {false, true}
-wrap        = 120       # options: {"keep", "no", INTEGER}
+end_of_line = "lf" # options: {"lf", "crlf", "keep"}
+number      = true # options: {false, true}
+validate    = true # options: {false, true}
+wrap        = 120  # options: {"keep", "no", INTEGER}
 
 # `ruff format` configuration
 # ===========================
