@@ -8,20 +8,42 @@ ignore:
   - vault.yaml
 
 rules:
+  anchors: enable
   braces:
     min-spaces-inside: 0
     max-spaces-inside: 1
+  brackets: enable
+  colons: enable
+  commas: enable
   comments:
+    level: warning
     min-spaces-from-content: 1
-  comments-indentation: false
+  comments-indentation:
+    level: warning
+    ignore:
+      - .pre-commit-config.yaml
+  document-end: disable
+  document-start:
+    level: warning
+  empty-lines: enable
+  empty-values: disable
+  float-values: disable
+  hyphens: enable
+  indentation: enable
+  key-duplicates: enable
+  key-ordering: disable
   line-length:
-    max: 320
+    max: 240
     allow-non-breakable-words: true
   new-line-at-end-of-file:
     level: warning
+  new-lines: enable
   octal-values:
     forbid-implicit-octal: true
     forbid-explicit-octal: true
+  quoted-strings: disable
+  trailing-spaces: enable
   truthy:
+    level: warning
     ignore:
       - .github/workflows/*.yml

@@ -5,8 +5,8 @@ This module allows for configuration of macOS network interfaces by wrapping the
 ## Parameters
 
 - `interfaces` (list): list of dictionaries describing desired port/service configuration (see
-                       [Interface Configuration](#interface-configuration)). Each entry corresponds to a hardware port
-                       and its associated network service on the host machine
+  [Interface Configuration](#interface-configuration)). Each entry corresponds to a hardware port and its associated
+  network service on the host machine
 
 ### Interface Configuration
 
@@ -29,28 +29,30 @@ Sub-options for each entry in `interfaces` parameter
     - `address` (str, required): IPv6 address to set for interface
     - `prefix_length` (str, required): IPv6 prefix length to set for interface
     - `router` (str, optional): IPv6 router address to set for interface
-- `dns_servers` (list, optional): DNS servers to set for interface. If None, existing DNS servers will be preserved.
-                                  If empty list, existing DNS servers will be cleared out
-- `search_domains` (list, optional): DNS servers to set for interface. If None, existing DNS servers will be
-                                     preserved. If empty list, existing DNS servers will be cleared out
+- `dns_servers` (list, optional): DNS servers to set for interface. If None, existing DNS servers will be preserved. If
+  empty list, existing DNS servers will be cleared out
+- `search_domains` (list, optional): DNS servers to set for interface. If None, existing DNS servers will be preserved.
+  If empty list, existing DNS servers will be cleared out
 - `hardware` (dict, optional): Hardware configuration for port associated with network interface. If not provided,
-                               hardware configuration will be automatically configured by macOS
-  - `speed` (int, optional): Configure speed of network port. Note that not all ports support all speeds.
-                             Choices: 10, 100, 1000
+  hardware configuration will be automatically configured by macOS
+  - `speed` (int, optional): Configure speed of network port. Note that not all ports support all speeds. Choices: 10,
+    100, 1000
   - `duplex` (str, optional): Configure duplex setting of network port. Note that not all ports support all settings,
-                              and not all configurations support setting this at all. Choices: half-duplex, full-duplex
+    and not all configurations support setting this at all. Choices: half-duplex, full-duplex
   - `flow_control` (bool, optional): Enable flow control for network port. Note that not all configurations support
-                                     this. Required if `duplex` value is provided
+    this. Required if `duplex` value is provided
   - `energy_efficient_ethernet` (bool, optional): Enable energy efficient ethernet for network port. Note that not all
-                                                  configurations support this. Required if `duplex` value is provided
+    configurations support this. Required if `duplex` value is provided
   - `mtu` (int, optional): MTU setting of network port. If not provided, default MTU setting will be used
 
 Note that the following parameters are mutually exclusive:
+
 - `dhcp`
 - `dhcp_with_manual_address`
 - `manual`
 
 For `ipv6` option, the following parameters are mutually exclusive:
+
 - `off`
 - `automatic`
 - `link_local`
@@ -59,6 +61,7 @@ For `ipv6` option, the following parameters are mutually exclusive:
 ## Returns
 
 ### Always Returned
+
 - `changed` (bool): whether any changes were made to the network configurations
 - `changelog` (list): list of changes made to the network configurations
 - `commands_run` (list): list of `networksetup` commands run during configuration
@@ -66,19 +69,21 @@ For `ipv6` option, the following parameters are mutually exclusive:
 - `available_network_services` (list): list of information dictionaries describing network services available on host
 
 ### Returned on Failure
+
 - `cmd` (str): `networksetup` command that was unable to run successfully
 - `stdout` (str): Standard out of `networksetup` command that was unable to run successfully
 - `stderr` (str): Standard err of `networksetup` command that was unable to run successfully
 
 ### Returned Conditionally Based on Configuration
+
 - `valid_mtu_range_by_port` (dict): mapping from hardware port MAC address -> supported range of MTU values (min, max)
 - `valid_media_by_port` (dict): mapping from hardware port MAC address -> list of dictionaries describing available
-                                media configurations for the port (speed, duplex, flow control, energy efficient
-                                ethernet)
+  media configurations for the port (speed, duplex, flow control, energy efficient ethernet)
 
 ## Examples
 
 ### Configure an interface for DHCP
+
 ```
 - hosts: myhost.mydomain.com
   tasks:
@@ -89,6 +94,7 @@ For `ipv6` option, the following parameters are mutually exclusive:
 ```
 
 ### Configure an interface for DHCP w/ manual IP address and set custom service name
+
 ```
 - hosts: myhost.mydomain.com
   tasks:
@@ -101,6 +107,7 @@ For `ipv6` option, the following parameters are mutually exclusive:
 ```
 
 ### Configure two interfaces, one for DHCP, one manually
+
 ```
 - hosts: myhost.mydomain.com
   tasks:

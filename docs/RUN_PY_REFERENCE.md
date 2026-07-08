@@ -1,7 +1,7 @@
 # run.py - Command Reference
 
-Python CLI tool for managing the dotfiles repository. Provides commands for inventory management, tool installation,
-and codebase maintenance with ANSI styling and retry logic for robustness.
+Python CLI tool for managing the dotfiles repository. Provides commands for inventory management, tool installation, and
+codebase maintenance with ANSI styling and retry logic for robustness.
 
 ## Quick Start
 
@@ -31,6 +31,7 @@ python3 run.py list-hosts
 ```
 
 **Output example:**
+
 ```
 Available Bootstrap Targets
 ============================================================
@@ -48,6 +49,7 @@ Total hosts: 2
 ```
 
 **Error handling:**
+
 - Checks if `inventory/inventory.yml` exists
 - Validates YAML structure
 - Suggests running `update-inventory` if missing
@@ -61,16 +63,19 @@ python3 run.py update-inventory
 ```
 
 **Behavior:**
+
 - **If inventory exists and is git repo**: Pulls latest changes with `git pull origin main`
 - **If inventory exists but not git repo**: Removes directory and clones fresh
 - **If inventory doesn't exist**: Clones repository
 
 **Retry logic:**
+
 - Pull operation: 3 attempts with 2s delay, exponential backoff (2x multiplier)
 - Clone operation: 3 attempts with 5s delay, exponential backoff (2x multiplier)
 - 30s timeout for pull, 60s timeout for clone
 
 **Configuration:**
+
 - Repository URL: `DOTFILES_INVENTORY_REPO_URL` environment variable
 - Default: `git@github.com:connormason/dotfiles-inventory.git`
 
@@ -97,13 +102,14 @@ python3 run.py install-uv --retries 5 --retry-delay 3
 ```
 
 **Options:**
+
 - `-f, --force`: Force reinstall even if `uv` already installed
 - `-v, --verbose`: Enable verbose output for debugging
 - `--retries N`: Maximum number of download retry attempts
 - `--retry-delay SECONDS`: Initial delay in seconds between retries with exponential backoff
 
-**Implementation:**
-Delegates to `scripts/install/install_uv.py` (see [scripts/install/README.md](../scripts/install/README.md) for details).
+**Implementation:** Delegates to `scripts/install/install_uv.py` (see
+[scripts/install/README.md](../scripts/install/README.md) for details).
 
 #### `install-hatch`
 
@@ -117,11 +123,10 @@ python3 run.py install-hatch
 python3 run.py install-hatch --force --verbose
 ```
 
-**Options:**
-Same as `install-uv` (see above).
+**Options:** Same as `install-uv` (see above).
 
-**Implementation:**
-Delegates to `scripts/install/install_hatch.py` (see [scripts/install/README.md](../scripts/install/README.md) for details).
+**Implementation:** Delegates to `scripts/install/install_hatch.py` (see
+[scripts/install/README.md](../scripts/install/README.md) for details).
 
 ### Codebase Maintenance
 
@@ -138,15 +143,18 @@ python3 run.py clean
 **Cleaned patterns:**
 
 **Package build artifacts:**
+
 - `build/`
 - `dist/`
 - `*.egg-info`
 
 **Package cache files:**
+
 - `**/__pycache__/`
 - `**/*.pyc`
 
 **Tool cache files:**
+
 - `.mypy_cache`
 - `.pytest_cache`
 - `.ruff_cache`
@@ -155,6 +163,7 @@ python3 run.py clean
 - `.coverage`
 
 **Output:**
+
 ```
 🧹 Cleaning project workspace...
    Cleaning package build artifacts...
@@ -163,25 +172,25 @@ python3 run.py clean
 ✅ Cleanup complete
 ```
 
-**Debug mode:**
-Shows each file/directory removed (enable with `--debug` flag).
+**Debug mode:** Shows each file/directory removed (enable with `--debug` flag).
 
 #### `pre`
 
-Run pre-commit hooks on all project files.
+Run prek hooks on all project files.
 
 ```bash
 python3 run.py pre
 ```
 
-**Behavior:**
-Executes `pre-commit run --all-files` with live output. Does not fail on hook failures (exit code ignored).
+**Behavior:** Executes `prek run --all-files` with live output. Does not fail on hook failures (exit code ignored).
 
-**Pre-commit hooks include:**
-- File integrity checks (large files, merge conflicts, private keys)
+**Hooks include:**
+
+- File integrity checks (large files, merge conflicts, private keys, detect-secrets)
 - Python validation (syntax, debug statements, ruff, mypy, interrogate)
 - Data format validation (JSON, YAML, TOML, XML)
-- YAML linting with custom config
+- Formatters (shfmt, taplo, mdformat, ruff --fix-only)
+- Linters (shellcheck, yamllint, codespell)
 - Whitespace and line ending fixers
 
 See [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) for complete hook configuration.
@@ -195,6 +204,7 @@ python3 run.py makefile
 ```
 
 **Behavior:**
+
 - Reads all `@command` decorated functions from `run.py`
 - Generates `Makefile` with targets for each command
 - Excludes commands marked `script_only=True`
@@ -202,6 +212,7 @@ python3 run.py makefile
 - Includes color-coded help text
 
 **Generated Makefile usage:**
+
 ```bash
 # Show help
 make help
@@ -213,6 +224,7 @@ make pre
 ```
 
 **Auto-generated structure:**
+
 ```makefile
 .PHONY: help list-hosts update-inventory install-uv ...
 
@@ -248,6 +260,7 @@ def cmd_list_hosts(args: argparse.Namespace) -> None:
 ```
 
 **Decorator parameters:**
+
 - `name`: Command name (defaults to function name with prefixes removed)
 - `add_arguments`: Function to add command-specific arguments to subparser
 - `description`: Command description (defaults to docstring)
@@ -257,8 +270,7 @@ def cmd_list_hosts(args: argparse.Namespace) -> None:
 - `script_only`: If True, exclude from Makefile generation
 - `makefile_only`: If True, exclude from script help output
 
-**Registry:**
-All registered commands stored in `REGISTERED_COMMANDS` dict mapping `name -> CommandInfo`.
+**Registry:** All registered commands stored in `REGISTERED_COMMANDS` dict mapping `name -> CommandInfo`.
 
 ### ANSI Styling System
 
@@ -282,12 +294,14 @@ style('IMPORTANT', fg='red', bold=True, underline=True)
 ```
 
 **Available colors:**
+
 - Basic: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`
 - Bright: `bright_black`, `bright_red`, `bright_green`, etc.
 - 256-color codes: `0-255`
 - RGB tuples: `(r, g, b)` where each component is `0-255`
 
 **Helper function:**
+
 ```python
 printf('Styled output', fg='green', bold=True, indent=4, debug=True)
 ```
@@ -314,6 +328,7 @@ shell_command(
 ```
 
 **Parameters:**
+
 - `cmd`: List of command arguments
 - `text`: If True, return `str` (default); if False, return `bytes`
 - `encoding`: Text encoding (when `text=True`)
@@ -325,12 +340,13 @@ shell_command(
 - `timeout`: Command timeout in seconds
 
 **Error handling:**
+
 - Raises `ShellCommandError` (extends `CalledProcessError`) with formatted output
 - Timeout handling with graceful process termination
 - Live output via PTY for real-time display
 
-**Global environment:**
-Commands inherit environment from:
+**Global environment:** Commands inherit environment from:
+
 1. `os.environ` (system environment)
 2. `RUN_COMMAND_ENVVARS` (global script environment)
 3. `env` parameter (command-specific overrides)
@@ -347,12 +363,14 @@ def network_operation():
 ```
 
 **Behavior:**
+
 - Attempt 1: Immediate execution
 - Attempt 2: Wait `delay` seconds (2.0s)
 - Attempt 3: Wait `delay * backoff` seconds (4.0s)
 - Attempt N: Wait `delay * (backoff ** (N-1))` seconds
 
 **Output:**
+
 ```
   └─ Attempt 1/3 failed, retrying in 2.0s...
   └─ Attempt 2/3 failed, retrying in 4.0s...
@@ -360,6 +378,7 @@ def network_operation():
 ```
 
 Used by `update-inventory` for git operations with different parameters:
+
 - Pull: 3 attempts, 2s initial delay, 2x backoff
 - Clone: 3 attempts, 5s initial delay, 2x backoff
 
@@ -368,6 +387,7 @@ Used by `update-inventory` for git operations with different parameters:
 ### Constants
 
 **File paths:**
+
 ```python
 SCRIPT_PATH     = Path(__file__)
 DOTFILES_DIR    = SCRIPT_PATH.parent
@@ -379,6 +399,7 @@ SCRIPTS_DIR     = DOTFILES_DIR / 'scripts'
 ```
 
 **Environment variables:**
+
 ```python
 # Debug mode toggle
 RUN_DEBUG_ENVVAR = 'DOTFILES_RUN_DEBUG'
@@ -392,12 +413,12 @@ INVENTORY_REPO_URL = os.getenv(
 )
 ```
 
-**Clean patterns:**
-See `CLEAN_PATTERN_GROUPS` dict for complete list of glob patterns removed by `clean` command.
+**Clean patterns:** See `CLEAN_PATTERN_GROUPS` dict for complete list of glob patterns removed by `clean` command.
 
 ### Type System
 
 **Key type aliases:**
+
 ```python
 PathLike         = Union[str, Path]
 StyleColor       = Union[int, tuple[int, int, int], str]
@@ -406,6 +427,7 @@ AddArgumentsFunc = Callable[[argparse.ArgumentParser], None]
 ```
 
 **Command info dataclass:**
+
 ```python
 @dataclass
 class CommandInfo:
@@ -439,6 +461,7 @@ except subprocess.CalledProcessError as e:
 ```
 
 **Output format:**
+
 ```
 ❌ Failed to push to remote
   └─ Exit code: 128
@@ -451,11 +474,11 @@ except subprocess.CalledProcessError as e:
 
 ### Exception Types
 
-**ShellCommandError:**
-Raised by `shell_command()` when subprocess exits with non-zero code and `check=True`. Extends
+**ShellCommandError:** Raised by `shell_command()` when subprocess exits with non-zero code and `check=True`. Extends
 `subprocess.CalledProcessError` with formatted `__str__()` that includes stdout/stderr.
 
 **Standard subprocess exceptions:**
+
 - `subprocess.CalledProcessError`: Non-zero exit code
 - `subprocess.TimeoutExpired`: Command exceeded timeout
 - `KeyboardInterrupt`: User cancelled operation (caught in `main()`)
@@ -474,7 +497,7 @@ python3 run.py --debug update-inventory
 # Install uv with custom retry behavior
 python3 run.py install-uv --retries 5 --retry-delay 3
 
-# Clean and run pre-commit
+# Clean and run prek
 python3 run.py clean
 python3 run.py pre
 ```
@@ -530,6 +553,7 @@ def flaky_operation():
 ### Adding New Commands
 
 1. **Define command function:**
+
 ```python
 @command(
     group='My Group',
@@ -543,6 +567,7 @@ def cmd_my_command(args: argparse.Namespace) -> None:
 ```
 
 2. **Add arguments (optional):**
+
 ```python
 def add_my_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--option', help='Some option')
@@ -557,6 +582,7 @@ def cmd_my_command(args: argparse.Namespace) -> None:
 ```
 
 3. **Regenerate Makefile:**
+
 ```bash
 python3 run.py makefile
 ```
@@ -630,6 +656,7 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 **Symptom:** `update-inventory` fails with SSH errors
 
 **Solution:**
+
 ```bash
 # Verify SSH key access
 ssh -T git@github.com
@@ -642,6 +669,7 @@ ssh-add ~/.ssh/id_ed25519
 ```
 
 **Alternative:** Use HTTPS URL instead of SSH
+
 ```bash
 export DOTFILES_INVENTORY_REPO_URL=https://github.com/connormason/dotfiles-inventory.git
 python3 run.py update-inventory
@@ -652,6 +680,7 @@ python3 run.py update-inventory
 **Symptom:** `list-hosts` fails with "Failed to parse inventory file"
 
 **Solution:**
+
 ```bash
 # Validate YAML syntax
 python3 -c "import yaml; yaml.safe_load(open('inventory/inventory.yml'))"
@@ -665,6 +694,7 @@ yamllint inventory/inventory.yml
 **Symptom:** `install-uv` or `install-hatch` fails
 
 **Solution:**
+
 ```bash
 # Run with verbose output
 python3 run.py install-uv --verbose
@@ -681,13 +711,14 @@ python3 run.py install-uv --retries 10 --retry-delay 5
 **Symptom:** `pre` command shows hook failures
 
 **Solution:**
+
 ```bash
-# Update pre-commit hooks
-pre-commit autoupdate
+# Update prek hooks
+prek auto-update
 
 # Clear hook cache
-pre-commit clean
-pre-commit install-hooks
+prek cache clean
+prek prepare-hooks
 
 # Run again
 python3 run.py pre
@@ -731,6 +762,7 @@ This provides better UX than `subprocess.PIPE` for long-running commands.
 ```
 
 **Suggested additions:**
+
 - Bootstrap commands to run full playbook workflows
 - Ansible playbook execution wrappers with tag support
 - Vault password management helpers

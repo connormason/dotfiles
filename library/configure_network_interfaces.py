@@ -431,8 +431,7 @@ def parse_getmtu(stdout: str) -> Optional[CurrentMTUConfig]:
     """
     if m := MTU_REGEX.match(stdout):
         return CurrentMTUConfig(current=int(m.group('current')), active=int(m.group('active')))
-    else:
-        return None
+    return None
 
 
 def parse_listvalidmturange(stdout: str) -> Optional[tuple[int, int]]:
@@ -444,8 +443,7 @@ def parse_listvalidmturange(stdout: str) -> Optional[tuple[int, int]]:
     """
     if m := MTU_RANGE_REGEX.match(stdout):
         return int(m.group('min')), int(m.group('max'))
-    else:
-        return None
+    return None
 
 
 def parse_media(media_str: str) -> Optional[HardwarePortMediaConfig]:
@@ -460,16 +458,15 @@ def parse_media(media_str: str) -> Optional[HardwarePortMediaConfig]:
     """
     if m := MEDIA_CONFIG_REGEX.match(media_str):
         speed_int = SPEED_REVERSE_MAPPING[m.group('speed')]
-        media = [item.strip() for item in m.group('media').split(',')]
-        duplex = 'half-duplex' if 'half-duplex' in media else 'full-duplex'
+        media     = [item.strip() for item in m.group('media').split(',')]
+        duplex    = 'half-duplex' if 'half-duplex' in media else 'full-duplex'
         return HardwarePortMediaConfig(
             speed=speed_int,
             duplex=duplex,
             flow_control='flow-control' in media,
             energy_efficient_ethernet='energy-efficient-ethernet' in media,
         )
-    else:
-        return None
+    return None
 
 
 def parse_listvalidmedia(stdout: str) -> list[HardwarePortMediaConfig]:
@@ -504,8 +501,7 @@ def parse_getinfo(name: str, stdout: str) -> Optional[NetworkServiceInfo]:
 
     if (info['configuration'] is None) or (info['configuration'] not in INTERFACE_CONFIGURATION_MAP):
         return None
-    else:
-        info['configuration'] = INTERFACE_CONFIGURATION_MAP[info['configuration']]
+    info['configuration'] = INTERFACE_CONFIGURATION_MAP[info['configuration']]
 
     ipv6_prefix_length: int | None = None
     if ipv6_prefix_length_str := info.get('ipv6_prefix_length'):
@@ -740,7 +736,7 @@ class ConfigureNetworkInterfaces:
         :return: (return code, stdout, stderr)
         """
         if cmd.startswith('networksetup'):
-            cmd = cmd.lstrip('networksetup').lstrip()
+            cmd = cmd.removeprefix('networksetup').lstrip()
 
         full_cmd = f'sudo {self.bin} {cmd}'
         self.result['commands_run'].append(full_cmd)
@@ -749,8 +745,7 @@ class ConfigureNetworkInterfaces:
         if (rc != 0) and check_rc:
             self._update_result(cmd=full_cmd, returncode=rc, stdout=stdout, stderr=stderr)
             raise ConfigurationError(f'Command `networksetup {cmd}` failed: {stderr}')
-        else:
-            return rc, stdout, stderr
+        return rc, stdout, stderr
 
     """ ``networksetup`` command execution/parsing helpers """
 
@@ -785,13 +780,14 @@ class ConfigureNetworkInterfaces:
         """
         cmd = f'networksetup -listvalidMTUrange "{hardware_port}"'
         rc, stdout, stderr = self.networksetup_cmd(cmd)
+
         result = parse_listvalidmturange(stdout)
         if result is not None:
             self.result.setdefault('valid_mtu_range_by_port', {})[hardware_port] = (result[0], result[1])
             return result[0], result[1]
-        else:
-            self._update_result(cmd=cmd, returncode=rc, stdout=stdout, stderr=stderr)
-            raise ConfigurationError(f'Unable to parse valid MTU range for hardware port "{hardware_port}"')
+
+        self._update_result(cmd=cmd, returncode=rc, stdout=stdout, stderr=stderr)
+        raise ConfigurationError(f'Unable to parse valid MTU range for hardware port "{hardware_port}"')
 
     def get_port_mtu(self, hardware_port: str) -> CurrentMTUConfig:
         """
@@ -803,12 +799,13 @@ class ConfigureNetworkInterfaces:
         """
         cmd = f'networksetup -getMTU "{hardware_port}"'
         rc, stdout, stderr = self.networksetup_cmd(cmd)
+
         result = parse_getmtu(stdout)
         if result is not None:
             return result
-        else:
-            self._update_result(cmd=cmd, returncode=rc, stdout=stdout, stderr=stderr)
-            raise ConfigurationError(f'Unable to parse current/active MTU values for hardware port "{hardware_port}"')
+
+        self._update_result(cmd=cmd, returncode=rc, stdout=stdout, stderr=stderr)
+        raise ConfigurationError(f'Unable to parse current/active MTU values for hardware port "{hardware_port}"')
 
     def get_port_media_configuration(self, hardware_port: str) -> CurrentHardwarePortMediaConfig:
         """
@@ -830,14 +827,13 @@ class ConfigureNetworkInterfaces:
         current: Union[HardwarePortMediaConfig, str]
         if current_str == 'autoselect':
             current = 'autoselect'
+        elif media_config := parse_media(current_str):
+            current = media_config
         else:
-            if media_config := parse_media(current_str):
-                current = media_config
-            else:
-                raise ConfigurationError(f'Unable to parse current media configuration for port "{hardware_port}"')
+            raise ConfigurationError(f'Unable to parse current media configuration for port "{hardware_port}"')
 
         active_str = lines[1].replace('Active: ', '').strip()
-        active = parse_media(active_str)
+        active     = parse_media(active_str)
         if active is None:
             raise ConfigurationError(f'Unable to parse active media configuration for port "{hardware_port}"')
 
@@ -872,8 +868,7 @@ class ConfigureNetworkInterfaces:
             if update_result_on_error:
                 self._update_result(cmd=cmd, returncode=rc, stdout=stdout, stderr=stderr)
             raise ConfigurationError(f'Unable to parse network configuration for service "{service}"')
-        else:
-            return info
+        return info
 
     def get_network_services_by_mac_address(self) -> dict[str, NetworkServiceInfo]:
         """
@@ -899,7 +894,7 @@ class ConfigureNetworkInterfaces:
                         all_service_info[service_info.address] = service_info
 
             self.result['available_network_services'] = all_service_info
-            self._network_services_by_mac_address = all_service_info
+            self._network_services_by_mac_address     = all_service_info
 
         return self._network_services_by_mac_address
 
@@ -913,8 +908,7 @@ class ConfigureNetworkInterfaces:
         _, stdout, _ = self.networksetup_cmd(f'networksetup -getdnsservers "{service}"')
         if "There aren't any" in stdout:
             return []
-        else:
-            return [line.strip() for line in stdout.splitlines()]
+        return [line.strip() for line in stdout.splitlines()]
 
     def get_network_service_search_domains(self, service: str) -> list[str]:
         """
@@ -926,8 +920,7 @@ class ConfigureNetworkInterfaces:
         _, stdout, _ = self.networksetup_cmd(f'networksetup -getsearchdomains "{service}"')
         if "There aren't any" in stdout:
             return []
-        else:
-            return [line.strip() for line in stdout.splitlines()]
+        return [line.strip() for line in stdout.splitlines()]
 
     """ Main configuration command methods """
 
@@ -964,17 +957,16 @@ class ConfigureNetworkInterfaces:
                         f'MTU setting ({mtu}) for interface {i} ({port_info.address}) below minimum supported value '
                         f'for hardware port (supported range: {min}-{max})'
                     )
-                elif mtu > max:
+                if mtu > max:
                     raise ConfigurationError(
                         f'MTU setting ({mtu}) for interface {i} ({port_info.address}) above maximum supported value '
                         f'for hardware port (supported range: {min}-{max})'
                     )
 
             # Validate hardware settings (all other than MTU are gated on speed being present)
-            speed = hardware.get('speed')
-            if speed:
+            if speed := hardware.get('speed'):
                 supported_media = self.get_valid_port_media_configurations(port_info.name)
-                media_config = HardwarePortMediaConfig(
+                media_config    = HardwarePortMediaConfig(
                     speed=speed,
                     duplex='half-duplex' if hardware['duplex'] in ['half', 'half-duplex'] else 'full-duplex',
                     flow_control=hardware['flow_control'],
@@ -1012,11 +1004,7 @@ class ConfigureNetworkInterfaces:
         elif config['dhcp_with_manual_address']:
             new_ip_address = config['dhcp_with_manual_address']['ip_address']
             self.networksetup_cmd(f'networksetup -setmanualwithdhcprouter "{service.name}" "{new_ip_address}"')
-            if service.configuration != 'dhcp_with_manual_address':
-                self.result['changelog'].append(
-                    f'Set service "{service.name}" to DHCP w/ manual address "{new_ip_address}"'
-                )
-            elif service.ip_address != new_ip_address:
+            if service.configuration != 'dhcp_with_manual_address' or service.ip_address != new_ip_address:
                 self.result['changelog'].append(
                     f'Set service "{service.name}" to DHCP w/ manual address "{new_ip_address}"'
                 )
@@ -1175,7 +1163,7 @@ class ConfigureNetworkInterfaces:
         self.validate_config()
 
         # Configure interfaces
-        for i, interface in enumerate(self.interfaces):
+        for _, interface in enumerate(self.interfaces):
             self.configure_interface(interface)
 
 

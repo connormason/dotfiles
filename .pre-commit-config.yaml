@@ -1,182 +1,498 @@
 ---
+# prek/pre-commit configuration
+# https://prek.j178.dev/configuration/
 default_install_hook_types:
   - pre-commit
   - post-checkout
   - post-merge
   - post-rewrite
+exclude: ^archive/
 
 repos:
+  # ========================================================================================
+  # Dependency syncing
+  #
+  #   - Priority 0     pyproject.toml          -> uv.lock
+  #   - Priority 5     uv.lock                 -> .venv/
+  #                    uv.lock                 -> requirements.txt
+  #                    uv.lock                 -> .pre-commit-config.yaml (hook versions)
+  #   - Priority 6    .pre-commit-config.yaml  -> .pre-commit-config.yaml (hook deps)
+  #
+  # ========================================================================================
 
-  # Sync pre-commit hook dependencies based on other installed hooks
-  - repo: https://github.com/pre-commit/sync-pre-commit-deps
-    rev: v0.0.3
-    hooks:
-      - id: sync-pre-commit-deps
-        name: "[sync]  pre-commit hook dependencies"
-
-  # Ensure uv.lock is up-to-date
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.11.2
+    rev: 0.11.28
     hooks:
+
+      # Ensure uv.lock is up-to-date
+      # pyproject.toml -> uv.lock
       - id: uv-lock
-        name: "[sync]  uv.lock"
+        name: "[sync]   dependencies (pyproject.toml -> uv.lock)"
+        stages: [pre-commit, manual]
+        priority: 0
 
-  # Synchronize dependencies with local project virtual environment on checkout/pull/rebase
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.11.2
-    hooks:
+      # Sync .venv/ with uv.lock on checkout/pull/rebase
+      # uv.lock -> .venv/
       - id: uv-sync
-        name: "[sync]  project venv"
+        name: "[sync]   dependencies (uv.lock -> .venv)"
+        priority: 5
 
-  # Checks for filesystem safety
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+      # Export locked package requirements to requirements.txt
+      # uv.lock -> requirements.txt
+      - id: uv-export
+        name: "[sync]   dependencies (uv.lock -> requirements.txt)"
+        stages: [pre-commit, manual]
+        priority: 5
+        args:
+          - "--format=requirements.txt"
+          - "--output-file=requirements.txt"
+          - "--frozen"
+          - "--no-hashes"
+          - "--no-header"
+
+  - repo: https://github.com/tsvikas/sync-with-uv
+    rev: v0.5.0
     hooks:
+
+      # Sync pre-commit hook versions with uv.lock versions
+      # uv.lock -> .pre-commit-config.yaml
+      - id: sync-with-uv
+        name: "[sync]   dependencies (uv.lock -> .pre-commit-config.yaml)"
+        stages: [pre-commit, manual]
+        priority: 5
+
+  - repo: https://github.com/pre-commit/sync-pre-commit-deps
+    rev: v0.0.4
+    hooks:
+
+      # Sync pre-commit hook dependencies based on other installed hooks
+      # .pre-commit-config.yaml -> .pre-commit-config.yaml
+      - id: sync-pre-commit-deps
+        name: "[sync]   dependencies (.pre-commit-config.yaml -> .pre-commit-config.yaml)"
+        stages: [pre-commit, manual]
+        priority: 6
+
+  # ========================================================================================
+  # Read-only checks
+  #
+  # Priority 10 (run in parallel)
+  # ========================================================================================
+
+  - repo: builtin
+    hooks:
+
+      # Check for files that would conflict in case-insensitive filesystems
       - id: check-case-conflict
-        name: "[check] filename case conflicts"
+        name: "[check]  filename casing"
+        stages: [pre-commit, manual]
+        priority: 10
+
+      # Check for broken symlinks
       - id: check-symlinks
-        name: "[check] symlinks"
+        name: "[check]  symlinks"
+        stages: [pre-commit, manual]
+        priority: 10
+
+      # Detect destroyed symlinks
       - id: destroyed-symlinks
-        name: "[check] destroyed symlinks"
+        name: "[check]  destroyed symlinks"
+        stages: [pre-commit, manual]
+        priority: 10
 
-  # Checks for accidentally-committed large files and files with merge conflicts
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      - id: check-added-large-files
-        name: "[check] large files"
-      - id: check-merge-conflict
-        name: "[check] merge conflicts"
+      # Ensures that (non-binary) files with a shebang are executable
+      - id: check-shebang-scripts-are-executable
+        name: "[check]  files w/ shebangs are executable"
+        stages: [pre-commit, manual]
+        priority: 10
+        exclude: \.j2$            # Jinja templates carry a shebang but are rendered, not executed
 
-  # Check for accidentally-committed secrets like passwords, API keys, and tokens
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
-    hooks:
-      - id: gitleaks
-        name: "[check] hardcoded secrets"
-
-  # Check that scripts with shebangs are marked executable
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
+      # Ensures that (non-binary) executables have a shebang
       - id: check-executables-have-shebangs
-        name: "[check] executable shebangs"
+        name: "[check]  executable files have shebangs"
+        stages: [pre-commit, manual]
+        priority: 10
 
-  # Check that links to VCS sites (like github.com) are permalinks
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
+      # Prevent committing large files
+      - id: check-added-large-files
+        name: "[check]  large files"
+        stages: [pre-commit, manual]
+        priority: 10
+        exclude: |
+          (?x)(
+              ^uv\.lock|
+              ^.*\.md
+          )
+
+      # Check for merge conflicts (git merge strings in files)
+      - id: check-merge-conflict
+        name: "[check]  merge conflicts"
+        stages: [pre-commit, manual]
+        priority: 10
+
+      # Prevent addition of new submodules
+      - id: forbid-new-submodules
+        name: "[check]  no new submodules"
+        stages: [pre-commit, manual]
+        priority: 10
+
+      # Check that VCS links are permalinks
       - id: check-vcs-permalinks
-        name: "[check] vcs site permalinks"
+        name: "[check]  vcs permalinks"
+        stages: [pre-commit, manual]
+        priority: 10
+        types_or: [markdown, rst]
 
-  # Fixers for file whitespace and metadata
+      # Detect private keys
+      - id: detect-private-key
+        name: "[check]  private keys"
+        stages: [pre-commit, manual]
+        priority: 10
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+
+      # Scan staged content for high-entropy strings / credential patterns.
+      # After auditing new findings, refresh the baseline:
+      #   uvx detect-secrets scan --baseline .secrets.baseline && uvx detect-secrets audit .secrets.baseline
+      - id: detect-secrets
+        name: "[check]  secrets"
+        stages: [pre-commit, manual]
+        priority: 10
+        args: [--baseline, .secrets.baseline]
+        exclude: |
+          (?x)(
+              ^uv\.lock$|
+              ^\.secrets\.baseline$
+          )
+
+  - repo: builtin
+    hooks:
+
+      # Validate TOML file syntax
+      - id: check-toml
+        name: "[check]  toml syntax"
+        stages: [pre-commit, manual]
+        priority: 10
+
+      # Validate XML file syntax
+      - id: check-xml
+        name: "[check]  xml syntax"
+        stages: [pre-commit, manual]
+        priority: 10
+
+      # Validate YAML file syntax
+      - id: check-yaml
+        name: "[check]  yaml syntax"
+        stages: [pre-commit, manual]
+        priority: 10
+        exclude: ^services/homeassistant/config/            # Doesn't like !include/!secret macros
+
+      # Validate JSON file syntax
+      - id: check-json
+        name: "[check]  json syntax"
+        stages: [pre-commit, manual]
+        priority: 10
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.25
+    hooks:
+
+      # Validate pyproject.toml
+      - id: validate-pyproject
+        name: "[check]  pyproject.toml syntax/schema"
+        stages: [pre-commit, manual]
+        priority: 10
+        args: ["--disable-plugins", "hatch"]
+        additional_dependencies:
+          - validate-pyproject[all]
+          - validate-pyproject-schema-store
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+
+      # Verify python source files parse as valid python
+      - id: check-ast
+        name: "[check]  python ast"
+        stages: [pre-commit, manual]
+        priority: 10
+
+      # Check for debugger imports and py37+ ``breakpoint()`` calls in python source files
+      - id: debug-statements
+        name: "[check]  python debug statements"
+        stages: [pre-commit, manual]
+        priority: 10
+
+      # Verify python unit test filenames match pytest expectations
+      - id: name-tests-test
+        name: "[check]  unit test filenames"
+        stages: [pre-commit, manual]
+        priority: 10
+        args: [--pytest-test-first]
+
+  # ========================================================================================
+  # Text/whitespace fixers
+  #
+  # Priority 20 - 23 (run sequentially, all may modify any text file)
+  # ========================================================================================
+
+  - repo: builtin
+    hooks:
+
+      # Removes UTF-8 byte order marker
       - id: fix-byte-order-marker
-        name: "[fix]   utf-8 byte order marker"
+        name: "[fix]    utf-8 byte order marker"
+        stages: [pre-commit]
+        priority: 20
+
+      # Ensures files end in a single newline
       - id: end-of-file-fixer
-        name: "[fix]   end-of-file"
+        name: "[fix]    end-of-file"
+        stages: [pre-commit]
+        priority: 21
+
+      # Replaces mixed line ending
       - id: mixed-line-ending
-        name: "[fix]   mixed line ending"
-        exclude: .gitignore
+        name: "[fix]    mixed line ending"
+        stages: [pre-commit]
+        priority: 22
+        exclude: ^\.gitignore
+
+      # Trims trailing whitespace from files
       - id: trailing-whitespace
-        name: "[fix]   trailing whitespace"
+        name: "[fix]    trailing whitespace"
+        stages: [pre-commit]
+        priority: 23
         exclude: |
           (?x)(
               ^.gitignore|
               .config/istat_menus.ismp
           )
 
-  # Validate pyproject.toml
-  - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.25
-    hooks:
-      - id: validate-pyproject
-        name: "[check] pyproject.toml"
+  # ========================================================================================
+  # Formatters/fixers
+  #
+  #   - Priority 30    any file type                  keep-sorted
+  #   - Priority 35    shell scripts                  shfmt
+  #                    json (.claude)                 pretty-format-json
+  #                    toml                           taplo
+  #                    markdown                       mdformat
+  #                    python                         ruff --fix-only
+  #
+  # ========================================================================================
 
-  # Checks for validity of non-code filetypes
+  - repo: https://github.com/google/keep-sorted
+    rev: v0.9.1
+    hooks:
+
+      # Language-agnostic auto-sorting between two markers
+      - id: keep-sorted
+        stages: [pre-commit]
+        name: "[format] sorting (keep-sorted)"
+        priority: 30
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.13.1-1
+    hooks:
+
+      # Shell script auto-formatting
+      - id: shfmt
+        name: "[format] shell scripts (shfmt)"
+        stages: [pre-commit]
+        priority: 35
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
-      - id: check-json
-        name: "[check] json files"
-      - id: check-toml
-        name: "[check] toml files"
-      - id: check-xml
-        name: "[check] xml files"
-      - id: check-yaml
-        name: "[check] yaml files"
-        exclude: ^services/homeassistant/config/            # Doesn't like !include/!secret macros
 
-  # Fix common misspellings in text files
+      # Format Claude Code settings JSON files
+      - id: pretty-format-json
+        name: "[format] json (.claude, indent=2)"
+        stages: [pre-commit]
+        priority: 35
+        types: [text]
+        args:
+          - "--no-ensure-ascii"
+          - "--indent=2"
+          - "--autofix"
+          - "--top-keys=id,name,type,matcher,mode,command"
+        files: ^\.claude/settings.*\.json$
+
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
+    hooks:
+
+      # TOML file auto-formatting
+      - id: taplo-format
+        name: "[format] toml (taplo)"
+        stages: [pre-commit]
+        priority: 35
+
+  - repo: https://github.com/hukkin/mdformat
+    rev: 1.0.0
+    hooks:
+
+      # Markdown file auto-formatting
+      - id: mdformat
+        name: "[format] markdown (mdformat)"
+        stages: [pre-commit]
+        priority: 35
+        exclude: |
+          (?x)^(
+            ^.ctx/.*|
+            ^docs/plans/.*
+          )$
+        additional_dependencies:
+          - mdformat-config
+          - mdformat-footnote
+          - mdformat-front-matters
+          - mdformat-gfm
+          - mdformat-gfm-alerts
+          - mdformat-pyproject
+          - mdformat-simple-breaks
+          - mdformat-toc
+
+  # Python lint auto-fixes
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      - id: ruff
+        name: "[fix]    python lint (ruff check --fix-only)"
+        stages: [pre-commit]
+        priority: 35
+        args: [--fix-only, --exit-non-zero-on-fix]
+
+  # ========================================================================================
+  # Linters
+  #
+  # Priority 40 (run in parallel)
+  # ========================================================================================
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+
+      # Python lint check (must happen after --fix-only stage above)
+      # Check/lint and output errors as junit if running in CI
+      - id: ruff
+        name: "[lint]   python lint (ruff check) - junit output"
+        stages: [manual]
+        priority: 40
+
+      # Python lint check (must happen after --fix-only stage above)
+      # Always check/lint (local or CI), output errors to stdout
+      - id: ruff
+        name: "[lint]   python lint (ruff check)"
+        stages: [pre-commit, manual]
+        priority: 40
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.2.0
+    hooks:
+
+      # Python static type checking
+      - id: mypy
+        name: "[lint]   python typing (mypy)"
+        stages: [pre-commit, manual]
+        priority: 40
+        additional_dependencies:
+          - "--index-url=https://pypi.org/simple"
+          - types-PyYAML
+          - types-requests
+          - types-toml
+        args: [--config-file, pyproject.toml, --junit-xml, .reports/mypy.xml]
+        exclude: ^services/homeassistant/config/
+
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+
+      # Check python code docstring coverage
+      - id: interrogate
+        name: "[check]  python docstring coverage"
+        stages: [pre-commit, manual]
+        priority: 40
+        pass_filenames: false
+        args: [--config, pyproject.toml]
+        # NOTE: The exclude list is only considered when `interrogate` is run with pre-commit (prek) hooks.
+        #       Excluded files must be duplicated ``tool.interrogate.exclude`` entry of pyproject.toml
+        #       if `interrogate` is run outside of pre-commmit/prek.
+        exclude: |
+          (?x)(
+              ^\.cicd/|
+              ^\.claude/|
+              ^\.nox/|
+              ^\.tmp/|
+              ^\.worktrees/|
+              ^build/|
+              ^docs/|
+              ^tests/
+          )
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+
+      # Linting for shell scripts
+      - id: shellcheck
+        name: "[lint]   shell scripts"
+        stages: [pre-commit, manual]
+        priority: 40
+        exclude: \.zsh$           # shellcheck does not support zsh (e.g. roles/zsh/files/p10k.zsh)
+
+  # - repo: https://github.com/DavidAnson/markdownlint-cli2
+  #   rev: v0.22.0
+  #   hooks:
+
+  #     # Markdown linting
+  #     - id: markdownlint-cli2
+  #       name: "[lint]   Markdown files"
+  #       stages: [pre-commit, manual]
+  #       priority: 40
+
+  # - repo: https://github.com/ComPWA/taplo-pre-commit
+  #   rev: v0.9.3
+  #   hooks:
+
+  #     # TOML linting
+  #     - id: taplo-lint
+  #       name: "[lint]   toml"
+  #       stages: [pre-commit, manual]
+  #       priority: 40
+  #       exclude: ^archive
+
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.38.0
+    hooks:
+
+      # YAML linting
+      - id: yamllint
+        name: "[lint]   yaml (yamllint)"
+        stages: [pre-commit, manual]
+        priority: 40
+
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
     hooks:
+
+      # Fix common misspellings in text files
       - id: codespell
-        name: "[fix]   common misspellings"
+        name: "[check]  spelling mistakes"
+        stages: [pre-commit, manual]
+        priority: 40
         pass_filenames: false
         args: [--write-changes]
         additional_dependencies:
           - tomli
 
-  # Basic checks for Python code
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      - id: check-ast
-        name: "[check] python ast"
-      - id: debug-statements
-        name: "[check] python debug statements"
-      - id: name-tests-test
-        name: "[check] python unit test filenames"
-        args: [--pytest-test-first]
-
-  # Python code docstring coverage
-  - repo: https://github.com/econchick/interrogate
-    rev: 1.7.0
-    hooks:
-      - id: interrogate
-        name: "[check] python docstring coverage"
-        pass_filenames: false
-
-  # Python linting, formatting, import organization, typing upgrades, cleanup
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.8
-    hooks:
-      - id: ruff
-        name: "[fix]   python code (ruff check --fix-only)"
-        args: [--fix-only, --exit-non-zero-on-fix]
-      - id: ruff
-        name: "[lint]  python code (ruff check)"
-
-  # Python static type checking
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
-    hooks:
-      - id: mypy
-        name: "[lint]  python code (mypy)"
-        additional_dependencies:
-          - types-PyYAML
-          - types-requests
-        exclude: services/homeassistant/config/
-
-  # YAML linting
-  - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.38.0
-    hooks:
-      - id: yamllint
-        name: "[lint]  yaml files"
-
 #  - repo: https://github.com/ansible/ansible-lint.git
 #    rev: v25.6.1
 #    hooks:
-#      - id: ansible-lint
-#        name: "[lint]  ansible"
-#        args: [--fix]
 
-#  - repo: https://github.com/koalaman/shellcheck-precommit
-#    rev: v0.11.0
-#    hooks:
-#      - id: shellcheck
-##        args: ["--severity=warning"]  # Optionally only show errors and warnings
+#     # Ansible linting
+#     - id: ansible-lint
+#       name: "[lint]   ansible"
+#       stages: [pre-commit, manual]
+#       priority: 40
+#       args: [--fix]

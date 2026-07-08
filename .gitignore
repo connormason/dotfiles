@@ -19,9 +19,6 @@
 *_LOCAL_*.txt
 *_REMOTE_*.txt
 
-# Allow docker compose base file (*.BASE.* pattern above is for git merge artifacts)
-!services/compose.base.yml
-
 ### macOS ###
 # General
 .DS_Store
@@ -390,7 +387,19 @@ tags
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,python,git,ansible,pycharm+all,vim,VisualStudioCode,sublimetext
 
-vault_password.txt
-inventory/
-
+!services/compose.base.yml
 !scripts/env/
+
+.reports/
+
+# Inventory private repo
+/inventory/*
+!/inventory/.gitkeep
+
+# Ansible Vault password
+vault_password.txt
+
+# Temp cache data
+.ansible/.lock
+.tmp/
+.claude/settings.local.json

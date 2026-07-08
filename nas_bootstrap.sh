@@ -12,13 +12,11 @@ set -e
 # Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="${SCRIPT_DIR}"
-HOME_DIR=$HOME
-USERNAME=$(whoami)
 
 # Validate we're in the right place by checking for required files/directories
-if [[ ! -f "${DOTFILES_DIR}/run.py" ]] || \
-   [[ ! -f "${DOTFILES_DIR}/nas_bootstrap.sh" ]] || \
-   [[ ! -d "${DOTFILES_DIR}/playbooks" ]]; then
+if [[ ! -f "${DOTFILES_DIR}/run.py" ]] ||
+    [[ ! -f "${DOTFILES_DIR}/nas_bootstrap.sh" ]] ||
+    [[ ! -d "${DOTFILES_DIR}/playbooks" ]]; then
     echo -e "${RED}ERROR: This doesn't appear to be the dotfiles directory!${NC}"
     echo -e "${RED}Expected to find: run.py, nas_bootstrap.sh, playbooks/${NC}"
     echo -e "${RED}Current directory: ${DOTFILES_DIR}${NC}"

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Standalone dotenv file parser and environment variable loader
+Standalone dotenv file parser and environment variable loader.
 
 Parses .env files and outputs values in JSON, shell export, or key-value pair format
 
@@ -43,16 +43,9 @@ __version__ = '1.0.0'
 PathLike = Union[str, Path]
 
 
-class Error(Exception):
-    """
-    Parsing error raised when a regex match or read operation fails within the :class:`Reader`
-    """
-    ...
-
-
-# =======
-# Regexes
-# =======
+# ==================================================================================================
+# Vendored from ezcli.dotenv v1.6.13 (parser.py)
+# ==================================================================================================
 
 _newline              = re.compile(r'(\r\n|\n|\r)',               re.UNICODE)
 _multiline_whitespace = re.compile(r'\s*',                        re.UNICODE | re.MULTILINE)
@@ -70,27 +63,17 @@ _rest_of_line         = re.compile(r'[^\r\n]*(?:\r|\n|\r\n)?',    re.UNICODE)
 _double_quote_escapes = re.compile(r"\\[\\'\"abfnrtv]",           re.UNICODE)
 _single_quote_escapes = re.compile(r"\\[\\']",                    re.UNICODE)
 
-_posix_variable = re.compile(
-    r"""
-    \$\{
-        (?P<name>[^\}:]*)
-        (?::-
-            (?P<default>[^\}]*)
-        )?
-    \}
-    """,
-    re.VERBOSE,
-)
 
-
-# =======
-# Parsing
-# =======
+class Error(Exception):
+    """
+    Parsing error raised when a regex match or read operation fails within the :class:`Reader`.
+    """
+    pass
 
 
 class Original(NamedTuple):
     """
-    The original text of a parsed line and its starting line number
+    The original text of a parsed line and its starting line number.
 
     Preserves the raw string content so that lines can be rewritten verbatim when modifying a `.env` file
     """
@@ -100,7 +83,7 @@ class Original(NamedTuple):
 
 class Binding(NamedTuple):
     """
-    A single parsed key-value binding from a `.env` file
+    A single parsed key-value binding from a `.env` file.
 
     Represents one logical line of a dotenv file after parsing. Lines that could not be parsed have `error=True`
     with `key` and `value` set to `None`
@@ -113,7 +96,7 @@ class Binding(NamedTuple):
 
 class Position:
     """
-    Tracks the current character offset and line number within a dotenv source string
+    Tracks the current character offset and line number within a dotenv source string.
 
     Used by :class:`Reader` to maintain cursor state as the parser advances through the input
 
@@ -127,7 +110,7 @@ class Position:
     @classmethod
     def start(cls) -> Position:
         """
-        Create a position representing the beginning of a source string
+        Create a position representing the beginning of a source string.
 
         :return: a new :class:`Position` at character 0, line 1
         """
@@ -135,7 +118,7 @@ class Position:
 
     def set(self, other: Position) -> None:
         """
-        Copy the character offset and line number from another position
+        Copy the character offset and line number from another position.
 
         :param other: the position to copy from
         """
@@ -144,7 +127,7 @@ class Position:
 
     def advance(self, string: str) -> None:
         """
-        Advance the position by the length of the given string, counting newlines
+        Advance the position by the length of the given string, counting newlines.
 
         :param string: the text that was consumed from the source
         """
@@ -154,7 +137,7 @@ class Position:
 
 class Reader:
     """
-    Buffered reader that tokenizes a dotenv source string using regex-based pattern matching
+    Buffered reader that tokenizes a dotenv source string using regex-based pattern matching.
 
     Reads the entire stream into memory, then provides methods to consume characters and match regex patterns while
     tracking the current :class:`Position`. Supports marking regions of text so that the original raw content can be
@@ -169,7 +152,7 @@ class Reader:
 
     def has_next(self) -> bool:
         """
-        Check if there are remaining characters to read
+        Check if there are remaining characters to read.
 
         :return: ``True`` if the cursor has not reached the end of the string
         """
@@ -177,13 +160,13 @@ class Reader:
 
     def set_mark(self) -> None:
         """
-        Save the current position as a mark for later retrieval via :meth:`get_marked`
+        Save the current position as a mark for later retrieval via :meth:`get_marked`.
         """
         self.mark.set(self.position)
 
     def get_marked(self) -> Original:
         """
-        Return the text between the last mark and the current position as an :class:`Original`
+        Return the text between the last mark and the current position as an :class:`Original`.
 
         :return: the raw substring and starting line number since :meth:`set_mark` was last called
         """
@@ -194,7 +177,7 @@ class Reader:
 
     def peek(self, count: int) -> str:
         """
-        Return upcoming characters without advancing the position
+        Return upcoming characters without advancing the position.
 
         :param count: number of characters to peek at
         :return: up to `count` characters from the current position
@@ -203,7 +186,7 @@ class Reader:
 
     def read(self, count: int) -> str:
         """
-        Consume and return the next `count` characters, advancing the position
+        Consume and return the next `count` characters, advancing the position.
 
         :param count: number of characters to read
         :raises Error: if fewer than `count` characters remain
@@ -217,7 +200,7 @@ class Reader:
 
     def read_regex(self, regex: re.Pattern[str]) -> Sequence[str]:
         """
-        Match a regex at the current position, consume the matched text, and return capture groups
+        Match a regex at the current position, consume the matched text, and return capture groups.
 
         :param regex: compiled regex pattern to match at the current cursor position
         :raises Error: if the pattern does not match at the current position
@@ -232,7 +215,7 @@ class Reader:
 
 def parse_key(reader: Reader) -> str | None:
     """
-    Parse a dotenv key from the current reader position
+    Parse a dotenv key from the current reader position.
 
     Handles both single-quoted keys (e.g. ``"MY KEY"``) and unquoted keys. Lines starting with "#" are treated as
     comments and return `None`
@@ -243,16 +226,29 @@ def parse_key(reader: Reader) -> str | None:
     char = reader.peek(1)
     if char == '#':
         return None
-    elif char == "'":
+    if char == "'":
         key, *_ = reader.read_regex(_single_quoted_key)
     else:
         key, *_ = reader.read_regex(_unquoted_key)
     return key
 
 
-def parse_value(reader: Reader) -> str:
+def _decode_escapes(regex: re.Pattern[str], string: str) -> str:
     """
-    Parse a dotenv value from the current reader position
+    Replace backslash escape sequences matched by the given regex with their decoded Unicode equivalents.
+
+    :param regex: compiled pattern matching escape sequences to decode
+    :param string: the string containing escape sequences
+    :return: string with matched escape sequences decoded
+    """
+    def decode_match(match: re.Match[str]) -> str:
+        return codecs.decode(match.group(0), 'unicode-escape')
+    return regex.sub(decode_match, string)
+
+
+def parse_value(reader: Reader) -> str:
+    r"""
+    Parse a dotenv value from the current reader position.
 
     Handles single-quoted values (with ``\\'`` escapes), double-quoted values (with standard backslash escapes),
     unquoted values (trimming inline comments and trailing whitespace), and empty values
@@ -260,28 +256,22 @@ def parse_value(reader: Reader) -> str:
     :param reader: the :class:`Reader` positioned at the start of a value (after the "=")
     :return: the parsed and unescaped value string
     """
-    def decode_escapes(regex: re.Pattern[str], string: str) -> str:
-        def decode_match(match: re.Match[str]) -> str:
-            return codecs.decode(match.group(0), 'unicode-escape')
-        return regex.sub(decode_match, string)
-
     char = reader.peek(1)
     if char == "'":
         value, *_ = reader.read_regex(_single_quoted_value)
-        return decode_escapes(_single_quote_escapes, value)
-    elif char == '"':
+        return _decode_escapes(_single_quote_escapes, value)
+    if char == '"':
         value, *_ = reader.read_regex(_double_quoted_value)
-        return decode_escapes(_double_quote_escapes, value)
-    elif char in ('', '\n', '\r'):
+        return _decode_escapes(_double_quote_escapes, value)
+    if char in ('', '\n', '\r'):
         return ''
-    else:
-        part, *_ = reader.read_regex(_unquoted_value)
-        return re.sub(r'\s+#.*', '', part).rstrip()
+    part, *_ = reader.read_regex(_unquoted_value)
+    return re.sub(r'\s+#.*', '', part).rstrip()
 
 
 def parse_binding(reader: Reader) -> Binding:
     """
-    Parse a single key-value binding from the current reader position
+    Parse a single key-value binding from the current reader position.
 
     Consumes one logical line of dotenv content including leading whitespace, optional ``export`` prefix, key,
     equals sign, value, inline comment, and line ending. If parsing fails, the remainder of the line is consumed
@@ -331,7 +321,7 @@ def parse_binding(reader: Reader) -> Binding:
 
 def parse_stream(stream: IO[str]) -> Iterator[Binding]:
     """
-    Parse an entire dotenv stream into a sequence of :class:`Binding` objects
+    Parse an entire dotenv stream into a sequence of :class:`Binding` objects.
 
     Reads the stream and yields one :class:`Binding` per logical line until all content has been consumed
 
@@ -343,19 +333,32 @@ def parse_stream(stream: IO[str]) -> Iterator[Binding]:
         yield parse_binding(reader)
 
 
-# ===============
-# Variables (AST)
-# ===============
+# ==================================================================================================
+# Vendored from ezcli.dotenv v1.6.13 (variables.py)
+# ==================================================================================================
+
+
+_posix_variable: re.Pattern[str] = re.compile(
+    r"""
+    \$\{
+        (?P<name>[^\}:]*)
+        (?::-
+            (?P<default>[^\}]*)
+        )?
+    \}
+    """,
+    re.VERBOSE,
+)
 
 
 class Atom(metaclass=abc.ABCMeta):
     """
-    Abstract base class for parsed components of a dotenv value string
+    Abstract base class for parsed components of a dotenv value string.
 
     Each atom represents either a literal text segment or a variable reference that can be resolved against an
     environment mapping
     """
-    def __ne__(self, other: Any) -> bool:
+    def __ne__(self, other: object) -> bool:
         result = self.__eq__(other)
         if result is NotImplemented:
             return NotImplemented
@@ -364,7 +367,7 @@ class Atom(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def resolve(self, env: Mapping[str, str | None]) -> str:
         """
-        Resolve this atom to a concrete string value
+        Resolve this atom to a concrete string value.
 
         :param env: environment mapping of variable names to their values
         :return: the resolved string value
@@ -374,7 +377,7 @@ class Atom(metaclass=abc.ABCMeta):
 
 class Literal(Atom):
     """
-    A literal text segment within a dotenv value
+    A literal text segment within a dotenv value.
 
     Represents a portion of a value string that contains no variable references and resolves to its stored text
     verbatim
@@ -387,18 +390,17 @@ class Literal(Atom):
     def __repr__(self) -> str:
         return f'Literal(value={self.value})'
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return self.value == other.value
+
     def __hash__(self) -> int:
         return hash((self.__class__, self.value))
 
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, self.__class__):
-            return self.value == other.value
-        else:
-            return NotImplemented
-
     def resolve(self, env: Mapping[str, str | None]) -> str:
         """
-        Return the literal value unchanged
+        Return the literal value unchanged.
 
         :param env: environment mapping (unused for literal)
         :return: the stored literal text
@@ -408,7 +410,7 @@ class Literal(Atom):
 
 class Variable(Atom):
     """
-    A POSIX-style variable reference within a dotenv value
+    A POSIX-style variable reference within a dotenv value.
 
     Represents a ``${NAME}`` or ``${NAME:-default}`` reference that resolves by looking up the variable name in the
     provided environment mapping, falling back to the default value when the variable is not found
@@ -423,21 +425,20 @@ class Variable(Atom):
     def __repr__(self) -> str:
         return f'Variable(name={self.name}, default={self.default})'
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        return (self.name, self.default) == (other.name, other.default)
+
     def __hash__(self) -> int:
         return hash((self.__class__, self.name, self.default))
 
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, self.__class__):
-            return (self.name, self.default) == (other.name, other.default)
-        else:
-            return NotImplemented
-
     def resolve(self, env: Mapping[str, str | None]) -> str:
         """
-        Resolve the variable reference against the given environment
+        Resolve the variable reference against the given environment.
 
-        Looks up :attr:`name` in `env`. If not found, or the value is `None`, falls back to :attr:`default`
-        (or an empty string if no default was specified)
+        Looks up :attr:`name` in `env`. If not found, or the value is `None`, falls back to :attr:`default` (or an
+        empty string if no default was specified)
 
         :param env: environment mapping of variable names to their values
         :return: the resolved value from the environment, the default, or an empty string
@@ -449,7 +450,7 @@ class Variable(Atom):
 
 def parse_variables(value: str) -> Iterator[Atom]:
     """
-    Parse a dotenv value string into a sequence of :class:`Atom` nodes
+    Parse a dotenv value string into a sequence of :class:`Atom` nodes.
 
     Scans for POSIX-style ``${NAME}`` and ``${NAME:-default}`` variable references, yielding :class:`Variable` nodes
     for each match and :class:`Literal` nodes for the text between them
@@ -473,19 +474,19 @@ def parse_variables(value: str) -> Iterator[Atom]:
         yield Literal(value=value[cursor:length])
 
 
-# ==========
-# Resolution
-# ==========
+# ==================================================================================================
+# Vendored from ezcli.dotenv v1.6.13 (main.py)
+# ==================================================================================================
 
 
 def resolve_variables(values: Iterable[tuple[str, str | None]], override: bool) -> Mapping[str, str | None]:
     """
-    Resolve ``${VAR}``-style variable references across a sequence of key-value pairs
+    Resolve ``${VAR}``-style variable references across a sequence of key-value pairs.
 
     Processes values in order, building up a mapping of resolved names. Each value's variable references are resolved
     against the combination of previously resolved values and :attr:`os.environ`.
 
-    When `override=True`,  :attr:`os.environ` takes lower precedence than already-resolved dotenv values.
+    When `override=True`, :attr:`os.environ` takes lower precedence than already-resolved dotenv values.
     When `override=False`, :attr:`os.environ` values take priority
 
     :param values: iterable of ``(key, value)`` tuples with unresolved variable references
@@ -509,13 +510,12 @@ def resolve_variables(values: Iterable[tuple[str, str | None]], override: bool) 
             result = ''.join(atom.resolve(env) for atom in atoms)
 
         new_values[name] = result
-
     return new_values
 
 
 def _walk_to_root(path: PathLike) -> Iterator[Path]:
     """
-    Yield directories starting from the given path up to the filesystem root
+    Yield directories starting from the given path up to the filesystem root.
 
     If `path` points to a file, iteration begins from its parent directory. Each iteration yields the next parent
     directory until the root is reached
@@ -541,7 +541,7 @@ def _walk_to_root(path: PathLike) -> Iterator[Path]:
 
 def find_dotenv(filename: str = '.env', *, raise_error_if_not_found: bool = False) -> str:
     """
-    Search from CWD upward for the given dotenv file
+    Search from CWD upward for the given dotenv file.
 
     :param filename: the dotenv filename to search for
     :param raise_error_if_not_found: whether to raise :class:`OSError` if the file is not found
@@ -566,7 +566,7 @@ def dotenv_values(
     quiet: bool = False,
 ) -> tuple[dict[str, str | None], bool]:
     """
-    Parse a .env file and return (values_dict, has_errors)
+    Parse a .env file and return (values_dict, has_errors).
 
     :param dotenv_path: absolute or relative path to the `.env` file
     :param interpolate: whether to resolve ``${VAR}``-style variable references in values
@@ -592,13 +592,12 @@ def dotenv_values(
 
     if interpolate:
         return dict(resolve_variables(raw_values, override=override)), has_errors
-    else:
-        return dict(raw_values), has_errors
+    return dict(raw_values), has_errors
 
 
-# =================
-# Output formatting
-# =================
+# ==================================================================================================
+# Output formatters
+# ==================================================================================================
 
 
 OutputFormat = LiteralStr['json', 'export', 'pairs']
@@ -606,18 +605,17 @@ OutputFormat = LiteralStr['json', 'export', 'pairs']
 
 def _shell_escape(value: str) -> str:
     """
-    Escape a value for safe use inside double-quoted shell strings
+    Escape a value for safe use inside double-quoted shell strings.
     """
     value = value.replace('\\', '\\\\')
     value = value.replace('"', '\\"')
     value = value.replace('$', '\\$')
-    value = value.replace('`', '\\`')
-    return value
+    return value.replace('`', '\\`')
 
 
 def format_json(values: dict[str, str | None], **kwargs: Any) -> str:
     """
-    Format parsed values as a JSON object
+    Format parsed values as a JSON object.
     """
     return json.dumps(
         values,
@@ -628,10 +626,11 @@ def format_json(values: dict[str, str | None], **kwargs: Any) -> str:
 
 def format_export(values: dict[str, str | None]) -> str:
     """
-    Format parsed values as shell export statements
+    Format parsed values as shell export statements.
     """
     lines: list[str] = [
-        f'export {key}="{_shell_escape(val)}"' for key, val in values.items()
+        f'export {key}="{_shell_escape(val)}"'
+        for key, val in values.items()
         if val is not None
     ]
     return '\n'.join(lines) + '\n' if lines else ''
@@ -639,10 +638,11 @@ def format_export(values: dict[str, str | None]) -> str:
 
 def format_pairs(values: dict[str, str | None]) -> str:
     """
-    Format parsed values as KEY=value pairs
+    Format parsed values as KEY=value pairs.
     """
     lines: list[str] = [
-        key if val is None else f'{key}={val}' for key, val in values.items()
+        key if val is None else f'{key}={val}'
+        for key, val in values.items()
     ]
     return '\n'.join(lines) + '\n' if lines else ''
 
@@ -654,25 +654,25 @@ OUTPUT_FORMATTERS: dict[OutputFormat, Callable[[dict[str, str | None]], str]] = 
 }
 
 
-# ============================================
-# Argument parsing and core script entry point
-# ============================================
+# ==================================================================================================
+# Script CLI entry point
+# ==================================================================================================
 
 
 class Args(argparse.Namespace):
     """
-    Annotated :class:`argparse.Namespace` for script command-line arguments, returned by :func:`parse_args`
+    Annotated :class:`argparse.Namespace` returned by :func:`parse_args`.
     """
-    file:           Path | None     # positional script arg
-    mode:           OutputFormat    # --json/--export/--pairs
-    override:       bool            # --override
-    no_interpolate: bool            # --no-interpolate
-    quiet:          bool            # --quiet
+    file:        Path | None        # positional script arg
+    mode:        OutputFormat       # --json/--export/--pairs
+    override:    bool               # --override
+    interpolate: bool               # --no-interpolate
+    quiet:       bool               # --quiet
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:
     """
-    Parse command-line arguments
+    Parse command-line arguments.
 
     :param argv: argument list to parse, defaults to sys.argv[1:]
     :return: parsed namespace (:class:`Args`)
@@ -687,10 +687,13 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
             '  %(prog)s --pairs .env               Output as KEY=value pairs\n'
             '  eval "$(%(prog)s --export .env)"    Source into current shell\n'
         ),
-        add_help=False
+        add_help=False,
     )
 
     def add_positional_args() -> None:
+        """
+        Register the positional arguments group on the parser.
+        """
         parser.add_argument(
             'file',
             nargs='?',
@@ -699,10 +702,14 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
             metavar='FILE',
             help='path to .env file (default: auto-discover from current working directory)',
         )
+    add_positional_args()
 
-    def add_mode_opts() -> None:
-        mode_opts = parser.add_argument_group('output format options')
-        mode_opts.add_argument(
+    def add_output_format_opts() -> None:
+        """
+        Register the output format options group on the parser.
+        """
+        output_format_opts = parser.add_argument_group('output format options')
+        output_format_opts.add_argument(
             '-j',
             '--json',
             dest='mode',
@@ -711,7 +718,7 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
             default='json',
             help='output as JSON object (default)',
         )
-        mode_opts.add_argument(
+        output_format_opts.add_argument(
             '-e',
             '--export',
             dest='mode',
@@ -719,7 +726,7 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
             const='export',
             help='output as export KEY="value" statements',
         )
-        mode_opts.add_argument(
+        output_format_opts.add_argument(
             '-p',
             '--pairs',
             dest='mode',
@@ -727,8 +734,12 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
             const='pairs',
             help='output as KEY=value pairs',
         )
+    add_output_format_opts()
 
     def add_resolution_opts() -> None:
+        """
+        Register the variable resolution options group on the parser.
+        """
         resolution_opts = parser.add_argument_group('variable resolution options')
         resolution_opts.add_argument(
             '--override',
@@ -743,8 +754,12 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
             default=True,
             help='disable ${VAR} variable expansion',
         )
+    add_resolution_opts()
 
     def add_other_opts() -> None:
+        """
+        Register the miscellaneous options group on the parser.
+        """
         other_opts = parser.add_argument_group('other options')
         other_opts.add_argument(
             '-q',
@@ -767,10 +782,6 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
             default=argparse.SUPPRESS,
             help='show this help message and exit',
         )
-
-    add_positional_args()
-    add_mode_opts()
-    add_resolution_opts()
     add_other_opts()
 
     return parser.parse_args(argv, namespace=Args())
@@ -778,13 +789,15 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """
-    Standalone dotenv file parser and environment variable loader
+    Standalone dotenv file parser and environment variable loader.
 
     Parses .env files and outputs values in JSON, shell export, or key-value pair format
 
     :param argv: argument list to parse, defaults to sys.argv[1:]
     :return: int script exit code
     """
+
+    # Parse command-line arguments
     args = parse_args(argv)
 
     # Resolve file path

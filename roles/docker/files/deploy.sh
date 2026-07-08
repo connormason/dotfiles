@@ -53,7 +53,7 @@ main() {
 
     # Default to "all" if no arguments
     if [[ ${#services[@]} -eq 0 ]] || [[ "${services[0]}" == "all" ]]; then
-        read -ra services <<< "$(discover_services)"
+        read -ra services <<<"$(discover_services)"
         echo "Deploying all services: ${services[*]}"
     fi
 

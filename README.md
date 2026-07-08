@@ -1,7 +1,7 @@
 # Connor's Dotfiles
 
-Personal dotfiles repository using Ansible for automated system configuration on macOS and Debian Linux systems.
-Manages dotfiles, applications, system settings, and home infrastructure (NAS with media server stack).
+Personal dotfiles repository using Ansible for automated system configuration on macOS and Debian Linux systems. Manages
+dotfiles, applications, system settings, and home infrastructure (NAS with media server stack).
 
 ## Quick Start
 
@@ -38,6 +38,7 @@ This repository implements a dual-bootstrap system targeting two distinct enviro
 ### macOS Configuration (`local_bootstrap.yml`)
 
 Configures personal Mac with:
+
 - **Development tools**: Git, Python tooling (uv, hatch, pipx), SSH, zsh with plugins
 - **GUI applications**: Homebrew casks and Mac App Store apps
 - **System settings**: Finder, Dock, Activity Monitor, power management
@@ -47,6 +48,7 @@ Configures personal Mac with:
 ### NAS/Server Configuration (`nas_bootstrap.yml`)
 
 Configures home NAS server with:
+
 - **Storage**: ZFS filesystem management
 - **File sharing**: Samba (SMB/CIFS)
 - **Media stack**: Plex, Sonarr, Radarr, Transmission, Prowlarr (via Docker)
@@ -56,31 +58,34 @@ Configures home NAS server with:
 
 ### Core Components
 
-| Component | Purpose | Documentation |
-|-----------|---------|---------------|
-| **run.py** | Python CLI for repository management | [📖 docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md) |
-| **playbooks/** | Ansible playbooks and execution workflows | [📖 playbooks/README.md](playbooks/README.md) |
-| **roles/** | Ansible roles for system configuration | [📖 roles/README.md](roles/README.md) |
-| **inventory/** | Host definitions and encrypted vault files | Managed via `run.py update-inventory` |
-| **cc-statusline/** | Custom Claude Code statusline | [📖 cc-statusline/README.md](cc-statusline/README.md) |
+| Component          | Purpose                                    | Documentation                                           |
+| ------------------ | ------------------------------------------ | ------------------------------------------------------- |
+| **run.py**         | Python CLI for repository management       | [📖 docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md) |
+| **playbooks/**     | Ansible playbooks and execution workflows  | [📖 playbooks/README.md](playbooks/README.md)           |
+| **roles/**         | Ansible roles for system configuration     | [📖 roles/README.md](roles/README.md)                   |
+| **inventory/**     | Host definitions and encrypted vault files | Managed via `run.py update-inventory`                   |
+| **cc-statusline/** | Custom Claude Code statusline              | [📖 cc-statusline/README.md](cc-statusline/README.md)   |
 
 ## Documentation
 
 ### User Guides
 
 - **[Python CLI Reference](docs/RUN_PY_REFERENCE.md)** - Complete `run.py` command reference
+
   - Inventory management (list-hosts, update-inventory)
   - Tool installation (install-uv, install-hatch)
   - Codebase maintenance (clean, pre, makefile)
   - Architecture details and extension guide
 
 - **[Playbook Workflows](playbooks/README.md)** - Ansible playbook execution guide
+
   - Bootstrap scripts with security features
   - Tag system for selective execution
   - Troubleshooting common issues
   - Best practices for development workflow
 
 - **[Ansible Roles](roles/README.md)** - Role system overview
+
   - 17 roles organized by platform (macOS, Linux, Shared)
   - Role dependencies and usage patterns
   - Creating new roles
@@ -91,18 +96,21 @@ Configures home NAS server with:
 #### System Configuration
 
 - **[macOS Role](roles/macos/README.md)** - Package management layers
+
   - Homebrew formulae (CLI tools)
   - Homebrew casks (GUI applications)
   - Mac App Store apps
   - Adding/removing applications
 
 - **[Docker Role](roles/docker/README.md)** - NAS media stack
+
   - 10+ service architecture (Plex, Sonarr, Radarr, etc.)
   - Storage layout and network configuration
   - Service management and troubleshooting
   - Adding new services
 
 - **[link_dotfile Role](roles/link_dotfile/README.md)** - Reusable dotfile linking pattern
+
   - Safe symlink creation with backups
   - Usage in other roles
   - Best practices
@@ -110,12 +118,14 @@ Configures home NAS server with:
 #### Developer Tools
 
 - **[cc-statusline](cc-statusline/README.md)** - Custom Claude Code statusline
+
   - 15 modular components
   - 4 themes and 4 layouts
   - Customization guide
   - Development guide
 
 - **[Installer Scripts](scripts/install/README.md)** - Python tool installers
+
   - uv and hatch installation
   - Retry logic and security features
   - Extension guide
@@ -132,7 +142,8 @@ Configures home NAS server with:
 
 ### Inventory Management
 
-The inventory repository is a separate private git repository containing host definitions and Ansible Vault encrypted secrets. It is managed as a standalone clone in the `inventory/` directory.
+The inventory repository is a separate private git repository containing host definitions and Ansible Vault encrypted
+secrets. It is managed as a standalone clone in the `inventory/` directory.
 
 **Initial setup:**
 
@@ -190,7 +201,7 @@ python3 run.py update-inventory
 # Clean build artifacts
 python3 run.py clean
 
-# Run pre-commit hooks
+# Run prek hooks
 python3 run.py pre
 
 # Generate Makefile from run.py commands
@@ -275,11 +286,16 @@ dotfiles-personal/
 │   └── configure_network_interfaces.py
 │
 ├── docs/                                   # Documentation
-│   └── RUN_PY_REFERENCE.md                 # Python CLI reference
+│   ├── RUN_PY_REFERENCE.md                 # Python CLI reference
+│   ├── notes/                              # Informal working notes
+│   └── plans/                              # Design docs & implementation plans (YYYY-MM/)
 │
+├── .ctx/                                   # On-demand Claude reference docs (architecture, build, conventions)
 ├── .ansible-lint.yaml                      # Ansible linting rules
 ├── .yamllint.yaml                          # YAML linting rules
-└── .pre-commit-config.yaml                 # Pre-commit hooks configuration
+├── .pre-commit-config.yaml                 # prek / pre-commit hook configuration
+├── CLAUDE.md                               # Claude Code project instructions
+└── CLAUDE-LESSONS.md                       # Captured rules to prevent recurring mistakes
 ```
 
 ## Key Features
@@ -287,10 +303,12 @@ dotfiles-personal/
 ### Dual Bootstrap System
 
 Two separate bootstrap workflows targeting different environments:
+
 - **`local_bootstrap.sh`** → `playbooks/local_bootstrap.yml`: Personal Mac configuration
 - **`nas_bootstrap.sh`** → `playbooks/nas_bootstrap.yml`: Home NAS/server configuration
 
 Both scripts:
+
 1. Validate repository structure
 2. Install Homebrew with checksum verification
 3. Install Ansible via Homebrew
@@ -312,6 +330,7 @@ Both scripts:
 ### Docker Media Stack (NAS)
 
 Comprehensive media server and home automation:
+
 - **Media services**: Plex, Sonarr, Radarr, Transmission, Prowlarr, Flaresolverr
 - **Network services**: PiHole (DNS/ad-blocking)
 - **Automation**: Home Assistant, Glance dashboard
@@ -327,6 +346,7 @@ Comprehensive media server and home automation:
 ### Python CLI (`run.py`)
 
 Feature-rich command-line interface:
+
 - **Command registration** via decorator pattern
 - **ANSI styling** for rich terminal output
 - **Retry logic** with exponential backoff for network operations
@@ -336,6 +356,7 @@ Feature-rich command-line interface:
 ### Custom Claude Code Statusline
 
 Modular statusline system with:
+
 - **15 components** (git, model, tokens, cost, etc.)
 - **4 themes** (default, emoji, minimal, neon)
 - **4 layouts** (minimal, default, full, connor)
@@ -346,6 +367,7 @@ Modular statusline system with:
 ### Adding Applications (macOS)
 
 Edit `roles/macos/defaults/main.yml`:
+
 - CLI tools → `brew_packages`
 - GUI apps → `brew_cask_packages`
 - App Store apps → `mas_apps` (requires app ID)
@@ -371,7 +393,7 @@ See [roles/README.md](roles/README.md) for details.
 ### Testing Changes
 
 ```bash
-# Run pre-commit hooks
+# Run prek hooks
 python3 run.py pre
 
 # Test specific role with check mode
@@ -390,28 +412,31 @@ ansible-playbook playbooks/local_bootstrap.yml \
 
 ## Environment Variables
 
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `DOTFILES_RUN_DEBUG` | Enable debug output in run.py | `false` |
-| `DOTFILES_INVENTORY_REPO_URL` | Inventory repository URL | `git@github.com:connormason/dotfiles-inventory.git` |
+| Variable                      | Purpose                       | Default                                             |
+| ----------------------------- | ----------------------------- | --------------------------------------------------- |
+| `DOTFILES_RUN_DEBUG`          | Enable debug output in run.py | `false`                                             |
+| `DOTFILES_INVENTORY_REPO_URL` | Inventory repository URL      | `git@github.com:connormason/dotfiles-inventory.git` |
 
 ## Troubleshooting
 
 ### Inventory Issues
 
 **Inventory directory not found:**
+
 ```bash
 # Clone inventory repository
 python3 run.py update-inventory
 ```
 
 **Inventory out of sync or corrupted:**
+
 ```bash
 # Force re-clone from remote
 python3 run.py update-inventory --force
 ```
 
 **SSH authentication errors:**
+
 1. Verify SSH key is added to GitHub account
 2. Test SSH connection: `ssh -T git@github.com`
 3. Check SSH agent has key loaded: `ssh-add -l`
@@ -429,7 +454,7 @@ See [run.py documentation](docs/RUN_PY_REFERENCE.md#inventory-management) for de
 
 1. Verify if Homebrew installer was legitimately updated at https://github.com/Homebrew/install
 2. Generate new checksum:
-`curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256`
+   `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256`
 3. Update `EXPECTED_CHECKSUM` in bootstrap scripts
 
 ### Role Failures
@@ -444,6 +469,7 @@ See [playbooks/README.md](playbooks/README.md#troubleshooting) for comprehensive
 ## Pre-commit Hooks
 
 Configured checks include:
+
 - **File integrity**: Large files, merge conflicts, private keys, symlinks
 - **Python**: AST validation, debug statements, ruff linting, mypy type checking, interrogate docstring coverage
 - **Data formats**: JSON, YAML, TOML, XML validation
@@ -451,9 +477,10 @@ Configured checks include:
 - **Fixers**: Whitespace, line endings, UTF-8 BOM
 
 Run hooks:
+
 ```bash
 # All files
-pre-commit run --all-files
+prek run --all-files
 
 # Or via script
 python3 run.py pre

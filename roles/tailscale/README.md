@@ -24,8 +24,8 @@ Sets up [Tailscale VPN](https://tailscale.com/) on Debian and macOS systems.
 Set these in your Ansible Vault (`inventory/group_vars/all/vault.yml`):
 
 ```yaml
-tailscale_auth_key: "tskey-auth-..."
-tailscale_tailnet_name: "your-tailnet.ts.net"
+tailscale_auth_key: tskey-auth-...
+tailscale_tailnet_name: your-tailnet.ts.net
 ```
 
 ## Optional Variables
@@ -37,28 +37,28 @@ Key overrides for NAS (`inventory/host_vars/nas/vars.yml`):
 ```yaml
 tailscale_https_enabled: true
 tailscale_services:
-  - { name: sonarr,       port: 8989,    path: sonarr }
-  - { name: radarr,       port: 7878,    path: radarr }
-  - { name: transmission, port: 9091,    path: transmission }
-  - { name: prowlarr,     port: 9696,    path: prowlarr }
-  - { name: pihole,       port: 80,      path: pihole }
-  - { name: glance,       port: 8080,    path: glance, strip_prefix: true }
-  - { name: plex,         port: 32400,   dedicated_port: 32443 }
+  - {name: sonarr, port: 8989, path: sonarr}
+  - {name: radarr, port: 7878, path: radarr}
+  - {name: transmission, port: 9091, path: transmission}
+  - {name: prowlarr, port: 9696, path: prowlarr}
+  - {name: pihole, port: 80, path: pihole}
+  - {name: glance, port: 8080, path: glance, strip_prefix: true}
+  - {name: plex, port: 32400, dedicated_port: 32443}
 ```
 
 ## Service Routing
 
 Services are accessible via `https://nas.<tailnet>.ts.net/<path>`:
 
-| Service | URL | Notes |
-|---|---|---|
-| Sonarr | `/sonarr` | Requires `UrlBase = /sonarr` in app settings |
-| Radarr | `/radarr` | Requires `UrlBase = /radarr` in app settings |
-| Prowlarr | `/prowlarr` | Requires `UrlBase = /prowlarr` in app settings |
-| Transmission | `/transmission` | Requires `rpc-url = /transmission/` in settings.json |
-| PiHole | `/pihole` | Automatically rewrites to `/admin` |
-| Glance | `/glance` | No app config needed |
-| Plex | `:32443` (dedicated port) | Access via `https://nas.<tailnet>.ts.net:32443` |
+| Service      | URL                       | Notes                                                |
+| ------------ | ------------------------- | ---------------------------------------------------- |
+| Sonarr       | `/sonarr`                 | Requires `UrlBase = /sonarr` in app settings         |
+| Radarr       | `/radarr`                 | Requires `UrlBase = /radarr` in app settings         |
+| Prowlarr     | `/prowlarr`               | Requires `UrlBase = /prowlarr` in app settings       |
+| Transmission | `/transmission`           | Requires `rpc-url = /transmission/` in settings.json |
+| PiHole       | `/pihole`                 | Automatically rewrites to `/admin`                   |
+| Glance       | `/glance`                 | No app config needed                                 |
+| Plex         | `:32443` (dedicated port) | Access via `https://nas.<tailnet>.ts.net:32443`      |
 
 ## Post-Deployment Steps
 

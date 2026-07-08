@@ -1,53 +1,129 @@
-####################
-# Project metadata #
-####################
+# ####################################################################################################################
+# Project metadata
+# ####################################################################################################################
 [project]
-name        = "connor-mason-dotfiles"
-version     = "0.0.1"
+name = "dotfiles"
+version = "0.0.1"
 description = "Connor's dotfiles"
+readme = "README.md"
+authors = [{name = "Connor Mason"}]
+keywords = ["dotfiles", "config", "configuration", "shell"]
+classifiers = [
+    # keep-sorted start
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Natural Language :: English",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: MacOS",
+    "Programming Language :: Python",
+    "Topic :: Software Development",
+    "Typing :: Typed",
+    # keep-sorted end
+]
 
 # Project requirements
 # ====================
-requires-python = ">= 3.10"
-dependencies    = [
+requires-python = ">= 3.12"
+dependencies = [
+    # keep-sorted start case=no
+    "ansible-core",
+    "PyYaml >= 6.0",
     "typing-extensions",
+    # keep-sorted end
 ]
 
 # Project URLs
 # ============
 [project.urls]
-Homepage   = "https://github.com/connormason/dotclaude"
-Repository = "https://github.com/connormason/dotclaude"
-Source     = "https://github.com/connormason/dotclaude"
+Homepage   = "https://github.com/connormason/dotfiles"
+Repository = "https://github.com/connormason/dotfiles"
+Source     = "https://github.com/connormason/dotfiles"
 
 # Project dependency groups
 # =========================
 [dependency-groups]
 dev = [
     {include-group = "lint"},
+    {include-group = "test"},
 ]
 lint = [
+    # keep-sorted start case=no
+    "codespell",
+    "flake8-dunder-all",
     "interrogate >= 1.7.0",
+    "mdformat",
+    "mdformat-config",
+    "mdformat-footnote",
+    "mdformat-front-matters",
+    "mdformat-gfm",
+    "mdformat-gfm-alerts",
+    "mdformat-pyproject",
+    "mdformat-simple-breaks",
+    "mdformat-toc",
+    "mypy >= 1.19.1, < 1.20 ; python_version <  '3.10'",
+    "mypy >= 2.0            ; python_version >= '3.10'",
+    "prek",
+    "pyjson5",
     "ruff >= 0.15.8",
-    "mypy >= 1.19.1",
-    "pre-commit",
+    "shellcheck-py",
+    "shfmt_py",
+    "taplo",
     "types-PyYaml",
     "types-requests",
+    "types-toml",
+    "validate-pyproject-schema-store",
+    "validate-pyproject[all]",
+    "yamllint",
+    # keep-sorted end
+]
+test = [
+    # keep-sorted start case=no
+    "coverage[toml] >= 7.11",
+    "pytest >= 9.0",
+    "pytest-clarity >= 1.0.1", # Better assertion diffs
+    "pytest-html >= 3.2.0",    # HTML test reports
+    "pytest-mock >= 3.11.1",   # Mocking support
+    "pytest-sugar >= 0.9.7",   # Better pytest output
+    "pytest-timeout >= 2.1.0", # Test timeouts
+    "pytest-xdist >= 3.3.0",   # Parallel test execution
+    "pyyaml >= 6.0.1",         # YAML parsing
+    "yamllint >= 1.32.0",      # Ansible testing
+    # keep-sorted end
 ]
 
 
-# ####################
-# Tool configuration #
-# ####################
+# ####################################################################################################################
+# Package management tool configuration
+# ####################################################################################################################
+
+# `uv` configuration
+# ==================
+[tool.uv]
+default-groups = ["dev"]
+
+[[tool.uv.index]]
+name    = "default"
+url     = "https://pypi.org/simple"
+default = true
+
+# ####################################################################################################################
+# Linting tool configuration
+# ####################################################################################################################
 
 # `codespell` configuration
+# =========================
 [tool.codespell]
-count             = true
-summary           = true
-skip              = "smb.conf.j2"
+count = true
+summary = true
+skip = "smb.conf.j2"
 ignore-words-list = [
+    # keep-sorted start
+    "*.css",
+    "*.html",
     "hass",
     "iterm",
+    "wit",
+    # keep-sorted end
 ]
 
 # `interrogate` configuration
@@ -66,11 +142,21 @@ ignore-private              = true
 ignore-property-decorators  = false
 ignore-semiprivate          = true
 ignore-setters              = true
+
+# NOTE: This exclude list not currently considered when `interrogate` is run with pre-commit (prek) hooks.
+#       Excluded files are duplicated in .pre-commit-config.yaml
 exclude = [
+    # keep-sorted start
+    ".cicd/",
+    ".claude/",
+    ".nox/",
     ".tmp/",
+    ".worktrees/",
+    "archive/",
     "build/",
     "docs/",
     "tests/",
+    # keep-sorted end
 ]
 
 # `mypy` configuration
@@ -79,85 +165,308 @@ exclude = [
 disallow_untyped_defs  = true
 exclude_gitignore      = true
 ignore_missing_imports = true
-python_version         = "3.9"
+python_version         = "3.9" # TODO: update
 warn_unused_configs    = true
 
 exclude = [
-    "services/homeassistant/"
+    "services/homeassistant/",
 ]
 
-# `pytest` configuration
-# ======================
-[tool.pytest.ini_options]
-testpaths = ["tests"]
+[[tool.mypy.overrides]]
+disable_error_code = ["override"]
+module             = ["run"]
 
-# `ruff` configuration
-# ====================
+# `ruff` global configuration
+# ===========================
 [tool.ruff]
-line-length    = 120
-indent-width   = 4
-target-version = "py39"
+indent-width      = 4
+line-length       = 120
+output-format     = "full"
+respect-gitignore = true
+show-fixes        = true
+target-version    = "py39"
+
 extend-exclude = [
     "docs/",
     "services/homeassistant/config/custom_components/",
 ]
 
+# `ruff check` linter configuration
+# =================================
 [tool.ruff.lint]
-typing-extensions = true
-typing-modules    = ["typing",  "types",  "typing_extensions"]
+future-annotations = true
+typing-extensions  = true
+typing-modules     = ["typing", "types", "typing_extensions"]
 
+exclude = [
+    "archive/**/*.py",
+]
+
+extend-safe-fixes = [
+    # keep-sorted start
+    "B007", # Loop control variable{name}not used within loop body
+    "B028", # No explicit `stacklevel` keyword argument found
+    "D400", # First line should end with a period
+    # keep-sorted end
+]
 extend-select = [
-    "ANN",      # flake8-annotations
-    "C4",       # flake8-comprehensions
-    "COM",      # flake8-commas
-    "EXE",      # flake8-executable
-    "FA",       # flake8-future-imports
-    "I",        # isort
-    "ICN",      # flake8-import-convetions
-    "INP",      # flake8-no-pep420
-    "ISC",      # flake8-implicit-str-concat
-    "LOG",      # flake8-logging
-    "PGH",      # pygrep-hooks
-    "PT",       # flake8-pytest-style
-    "PTH",      # flake8-use-pathlib
-    "Q",        # flake8-quotes
-    "RSE",      # flake8-raise
-    "RUF",      # ruff
-    "TC",       # flake8-type-checking
-    "TID",      # flake8-tidy-imports
-    "UP",       # pyupgrade
-    "W",        # pycodestyle warnings
+    # keep-sorted start
+    "ANN",  # flake8-annotations
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "COM",  # flake8-commas
+    "E",    # pycodestyle errors            [E4, E7, E9 included by default (lint.select)]
+    "EXE",  # flake8-executable
+    "F",    # pyflakes                      [included by default (lint.select)]
+    "FA",   # flake8-future-imports
+    "FURB", # refurb
+    "I",    # isort
+    "ICN",  # flake8-import-conventions
+    "INP",  # flake8-no-pep420
+    "ISC",  # flake8-implicit-str-concat
+    "LOG",  # flake8-logging
+    "PERF", # perflint
+    "PGH",  # pygrep-hooks
+    "PIE",  # flake8-pie
+    "PLC",  # Pylint - Convention
+    "PLE",  # Pylint - Error
+    "PLR",  # Pylint - Refactor
+    "PLW",  # Pylint - Warning
+    "PT",   # flake8-pytest-style
+    "PTH",  # flake8-use-pathlib
+    "PYI",  # flake8-pyi
+    "Q",    # flake8-quotes
+    "RET",  # flake8-return
+    "RSE",  # flake8-raise
+    "RUF",  # ruff
+    "S",    # flake8-bandit
+    "SIM",  # flake8-simplify
+    "SLOT", # flake8-slots
+    "T10",  # flake8-debugger
+    "TC",   # flake8-type-checking
+    "TID",  # flake8-tidy-imports
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+    "YTT",  # flake8-2020
+    # keep-sorted end
 ]
 ignore = [
-    "ANN401",   # Dynamically typed expressions (typing.Any) are disallowed in {name}
-    "C408",     # Unnecessary {kind}() call (rewrite as a literal)
-    "COM812",   # Trailing comma missing
-    "PT011",    # pytest.raises({exception}) is too broad, set the match parameter or use a more specific exception
-    "PT012",    # pytest.raises() block should contain a single simple statement
-    "PT017",    # Found assertion on exception {name} in except block, use pytest.raises() instead
-    "RUF022",   # `__all__` is not sorted
+    # flake8-annotations ----------------------------------------------------------------------------------------------
+    "ANN401", # Dynamically typed expressions (typing.Any) are disallowed in {name}
+    # flake8-bugbear --------------------------------------------------------------------------------------------------
+    "B009", # Do not call `getattr` with a constant attribute value
+    "B010", # Do not call `setattr` with a constant attribute value
+    # flake8-comprehensions -------------------------------------------------------------------------------------------
+    "C408", # Unnecessary {kind}() call (rewrite as a literal)
+    # flake8-commas ---------------------------------------------------------------------------------------------------
+    "COM812", # Trailing comma missing
+    # perflint --------------------------------------------------------------------------------------------------------
+    "PERF203", # `try`-`except` within a loop incurs performance overhead
+    # flake8-pie ------------------------------------------------------------------------------------------------------
+    "PIE790", # Unnecessary `pass` statement
+    "PIE796", # Enum contains duplicate value: `{value}`
+    # Pylint - Convention ---------------------------------------------------------------------------------------------
+    "PLC0414", # Import alias does not rename original package
+    "PLC0415", # `import` should be at the top-level of a file
+    # Pylint - Refactor -----------------------------------------------------------------------------------------------
+    "PLR0911", # Too many return statements
+    "PLR0912", # Too many branches ({branches} > {max_branches})
+    "PLR0913", # Too many arguments in function definition ({c_args} > {max_args})
+    "PLR0915", # Too many statements ({statements} > {max_statements})
+    # Pylint - Warning ------------------------------------------------------------------------------------------------
+    "PLW0603", # Using the global statement to update {name} is discouraged
+    "PLW2901", # Outer {outer_kind} variable {name} overwritten by inner {inner_kind} target
+    # flake8-pytest-style ---------------------------------------------------------------------------------------------
+    "PT011", # pytest.raises({exception}) is too broad, set the match parameter or use a more specific exception
+    "PT012", # pytest.raises() block should contain a single simple statement
+    "PT017", # Found assertion on exception {name} in except block, use pytest.raises() instead
+    # flake8-pyi ------------------------------------------------------------------------------------------------------
+    "PYI051", # `Literal[{literal}]` is redundant in a union with `{builtin_type}`
+    # flake8-bandit ---------------------------------------------------------------------------------------------------
+    "S108", # Probable insecure usage of temporary file or directory: "{}"
+    "S110", # `try`-`except`-`pass` detected, consider logging the exception
+    "S603", # `subprocess` call: check for execution of untrusted input
+    "S607", # Starting a process with a partial executable path
+    "S608", # Possible SQL injection vector through string-based query construction
+    # flake8-simplify -------------------------------------------------------------------------------------------------
+    "SIM118", # Use `key {operator} dict` instead of `key {operator} dict.keys()`
+
+    # TODO: ??
+    # "RUF022",   # `__all__` is not sorted
 ]
 
-[tool.ruff.lint.per-file-ignores]
-"scripts/env/venvshell.py" = ["RUF001"]       # String contains ambiguous {}. Did you mean {}?
 
+# `ruff check` linter per-file rule ignores
+# =========================================
+[tool.ruff.lint.per-file-ignores]
+# keep-sorted start
+"run.py"                                                   = ["S112"]
+"scripts/env/venvshell.py"                                 = ["RUF001"]
+"services/homeassistant/config/scripts/get_lutron_cert.py" = ["S"]
+"tests/**"                                                 = ["B", "S", "SIM", "PERF"]
+# keep-sorted end
+
+# `ruff check` linter rule group-specific settings
+# ================================================
+# "flake8-annotations" lint rule settings [ANN]
+# ---------------------------------------------
+[tool.ruff.lint.flake8-annotations]
+suppress-dummy-args = true
+
+# "flake8-quotes" lint rule settings [Q]
+# --------------------------------------
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes    = "single"
+multiline-quotes = "double"
+
+# "flake8-type-checking" lint rule settings [TC]
+# ----------------------------------------------
+[tool.ruff.lint.flake8-type-checking]
+exempt-modules                 = ["collections.abc", "typing", "typing_extensions"]
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+runtime-evaluated-decorators   = []
+
+# "isort" lint rule settings [I]
+# ------------------------------
 [tool.ruff.lint.isort]
 force-single-line = true
 required-imports  = ["from __future__ import annotations"]
 
-[tool.ruff.lint.flake8-quotes]
-inline-quotes = "single"
+# "pycodestyle" lint rule settings [E, W]
+# ---------------------------------------
+[tool.ruff.lint.pycodestyle]
+ignore-overlong-task-comments = true
+max-doc-length                = 120
+max-line-length               = 120
 
-[tool.ruff.lint.flake8-type-checking]
-exempt-modules                 = ["typing", "typing_extensions"]
-runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+# "pydocstyle" lint rule settings [D]
+# -----------------------------------
+[tool.ruff.lint.pydocstyle]
+convention          = "numpy"
+ignore-decorators   = ["typing.overload"]
+property-decorators = []
 
+# "pylint" lint rule settings [PLC, PLE, PLR, PLW]
+# ------------------------------------------------
+[tool.ruff.lint.pylint]
+allow-magic-value-types = ["str", "bytes", "int", "float"] # PLR2004
+
+# "pyupgrade" lint rule settings [UP]
+# -----------------------------------
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
 
-# `uv` configuration
-# ==================
-[[tool.uv.index]]
-name    = "default"
-url     = "https://pypi.org/simple"
-default = true
+
+# ####################################################################################################################
+# Formatting tool configuration
+# ####################################################################################################################
+
+# `mdformat` configuration
+# ========================
+[tool.mdformat]
+end_of_line = "lf" # options: {"lf", "crlf", "keep"}
+number      = true # options: {false, true}
+validate    = true # options: {false, true}
+wrap        = 120  # options: {"keep", "no", INTEGER}
+
+# `ruff format` configuration
+# ===========================
+[tool.ruff.format]
+docstring-code-format = true
+exclude               = [".gitignore"]
+indent-style          = "space"
+quote-style           = "single"
+
+
+# ####################################################################################################################
+# Testing tool configuration
+# ####################################################################################################################
+
+# `pytest` configuration
+# ======================
+[tool.pytest.ini_options]
+minversion       = "3.11"
+testpaths        = ["tests"]
+python_files     = ["test_*.py"]
+python_classes   = ["Test*"]
+python_functions = ["test_*"]
+
+junit_family     = "xunit2"
+render_collapsed = "all"
+
+addopts = """
+-v
+-l
+-ra
+--strict-markers
+-W default
+-p no:rerunfailures
+--html=.reports/pytest.html
+--junit-xml=.reports/pytest.xml
+"""
+
+markers = [
+    # keep-sorted start
+    "macos_only: Tests that only run on macOS",
+    "requires_homebrew: Tests that require Homebrew to be installed",
+    "role: Role-specific tests",
+    "slow: Tests that take significant time",
+    # keep-sorted end
+]
+norecursedirs = [
+    # keep-sorted start
+    "*.egg",
+    ".git",
+    ".tox",
+    "__pycache__",
+    "archive",
+    "build",
+    "dist",
+    "inventory",
+    # keep-sorted end
+]
+
+# `coverage` configuration
+# ========================
+[tool.coverage.run]
+source = ["."]
+omit = [
+    # keep-sorted start
+    "*/dist-packages/*",
+    "*/migrations/*",
+    "*/site-packages/*",
+    ".venv/*",
+    "archive/*",
+    "inventory/*",
+    "setup.py",
+    "tests/*",
+    "venv/*",
+    # keep-sorted end
+]
+
+[tool.coverage.html]
+directory = ".reports/coverage"
+
+[tool.coverage.json]
+output = ".reports/coverage.json"
+
+[tool.coverage.report]
+skip_covered = false
+show_empty = true
+show_missing = true
+precision = 2
+fail_under = 70
+exclude_lines = [
+    # keep-sorted start
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "if self\\.debug",
+    "if typing.TYPE_CHECKING:",
+    "pass",
+    "pragma: no cover",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    # keep-sorted end
+]
