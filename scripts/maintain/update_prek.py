@@ -4,7 +4,7 @@ Script to update pre-commit hook versions using ``prek auto-update``.
 
 Usage::
 
-    python scripts/codebase/update_prek.py [--dry-run] [--repo URL] [--config PATH]
+    python scripts/maintain/update_prek.py [--dry-run] [--repo URL] [--config PATH]
 
 """
 from __future__ import annotations

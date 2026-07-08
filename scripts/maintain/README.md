@@ -4,15 +4,15 @@
 
 # Maintain Scripts
 
-Python scripts for automating common codebase maintenance tasks: keeping `.gitignore` patterns current and pre-commit
-hook versions up to date.
+Python scripts for automating common codebase maintenance tasks: keeping `.gitignore` patterns current and prek hook
+versions up to date.
 
 ## Scripts
 
 | Script                | Language | Description                                                                                   |
 | --------------------- | -------- | --------------------------------------------------------------------------------------------- |
 | `update_gitignore.py` | Python   | Refresh `.gitignore` with latest patterns from gitignore.io while preserving custom additions |
-| `update_precommit.py` | Python   | Bump pre-commit hook versions via `pre-commit autoupdate`                                     |
+| `update_prek.py`      | Python   | Bump prek hook versions via `prek auto-update`                                                |
 
 ---
 
@@ -69,58 +69,68 @@ uv run scripts/maintain/update_gitignore.py --gitignore-path path/to/.gitignore
 
 ---
 
-## update_precommit.py
+## update_prek.py
 
-Thin wrapper around `pre-commit autoupdate` that adds dry-run support, targeted repo filtering, and a configurable
-timeout. In dry-run mode the config file is reverted to its original state after autoupdate runs, so the diff is visible
-without any permanent changes.
+Thin wrapper around `prek auto-update` that adds dry-run support, targeted repo filtering, tag/cooldown constraints, and
+a configurable timeout. In dry-run mode the config file is reverted to its original state after auto-update runs, so the
+diff is visible without any permanent changes.
 
 **Usage:**
 
 ```bash
 # Update all hooks in .pre-commit-config.yaml
-uv run scripts/maintain/update_precommit.py
+uv run scripts/maintain/update_prek.py
 
 # Preview what would change without persisting the update
-uv run scripts/maintain/update_precommit.py --dry-run
+uv run scripts/maintain/update_prek.py --dry-run
 
 # Update only a specific repo
-uv run scripts/maintain/update_precommit.py --repo https://github.com/astral-sh/ruff-pre-commit
+uv run scripts/maintain/update_prek.py --repo https://github.com/astral-sh/ruff-pre-commit
 
 # Update multiple repos
-uv run scripts/maintain/update_precommit.py \
+uv run scripts/maintain/update_prek.py \
   --repo https://github.com/astral-sh/ruff-pre-commit \
   --repo https://github.com/pre-commit/pre-commit-hooks
 
-# Use a non-default config file with a longer timeout
-uv run scripts/maintain/update_precommit.py -c .pre-commit-config.yaml --timeout 240
+# Only bump versions released at least 7 days ago, using a longer timeout
+uv run scripts/maintain/update_prek.py --cooldown-days 7 --timeout 240
 ```
 
 **Options:**
 
-| Flag                    | Default                   | Description                                                 |
-| ----------------------- | ------------------------- | ----------------------------------------------------------- |
-| `-c, --config PATH`     | `.pre-commit-config.yaml` | Path to the pre-commit config file                          |
-| `-r, --repo URL`        | (all repos)               | Restrict update to this repo URL; repeat for multiple repos |
-| `-t, --timeout SECONDS` | `120`                     | Timeout for the `pre-commit autoupdate` subprocess          |
-| `--dry-run`             | off                       | Run autoupdate, show changes, then revert the file          |
-| `-h, --help`            | —                         | Show help and exit                                          |
+| Flag                      | Default                   | Description                                                   |
+| ------------------------- | ------------------------- | ------------------------------------------------------------- |
+| `-c, --config PATH`       | `.pre-commit-config.yaml` | Path to the prek/pre-commit config file                       |
+| `-r, --repo URL`          | (all repos)               | Restrict update to this repo URL; repeat for multiple repos   |
+| `--exclude-repo URL`      | (none)                    | Skip the given repo URL; repeat for multiple repos            |
+| `--include-tag PATTERN`   | (all tags)                | Only consider tags matching this glob pattern; repeatable     |
+| `--exclude-tag PATTERN`   | (none)                    | Ignore tags matching this glob pattern; repeatable            |
+| `--repo-include-tag SPEC` | (none)                    | Per-repo tag include filter as `<repo>=<pattern>`; repeatable |
+| `--repo-exclude-tag SPEC` | (none)                    | Per-repo tag exclude filter as `<repo>=<pattern>`; repeatable |
+| `--bleeding-edge`         | off                       | Update to the default branch head instead of the latest tag   |
+| `--freeze`                | off                       | Store frozen hashes in `rev` instead of tag names             |
+| `--cooldown-days DAYS`    | (none)                    | Minimum release age (in days) for a version to be eligible    |
+| `-j, --jobs N`            | (prek default)            | Number of threads prek should use (`0` lets prek decide)      |
+| `--refresh`               | off                       | Refresh all cached prek data before running                   |
+| `-t, --timeout SECONDS`   | `120`                     | Timeout for the `prek auto-update` subprocess                 |
+| `--dry-run`               | off                       | Run auto-update, show changes, then revert the file           |
+| `-h, --help`              | —                         | Show help and exit                                            |
 
 **Behavior:**
 
 1. Reads the current config file content for later comparison / revert.
-2. Runs `pre-commit autoupdate` (optionally scoped to specific repos).
-3. Prints stdout from autoupdate (`Updating <repo> ... <old> -> <new>` lines).
+2. Runs `prek auto-update` (optionally scoped to specific repos and tag/cooldown constraints).
+3. Prints stdout from auto-update (`Updating <repo> ... <old> -> <new>` lines).
 4. If `--dry-run` and changes were made, reverts the file to its original state.
 5. Reports whether any hook versions changed.
 
 **Public API (`__all__`):**
 
-| Symbol           | Signature                                      | Description          |
-| ---------------- | ---------------------------------------------- | -------------------- |
-| `run_autoupdate` | \`(config_path: Path, \*, repo_urls: list[str] | None, timeout: float |
+| Symbol           | Signature                                                            | Description                                   |
+| ---------------- | -------------------------------------------------------------------- | --------------------------------------------- |
+| `run_autoupdate` | `(config_path: Path, *, repo_urls=None, ..., timeout=120, **kwargs)` | Run `prek auto-update` and return the process |
 
-**Dependencies:** Python standard library only (`argparse`, `subprocess`, `pathlib`). Requires `pre-commit` on PATH.
+**Dependencies:** Python standard library only (`argparse`, `subprocess`, `pathlib`). Requires `prek` on PATH.
 
 ---
 
