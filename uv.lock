@@ -424,6 +424,7 @@ dev = [
     { name = "taplo" },
     { name = "types-pyyaml" },
     { name = "types-requests" },
+    { name = "types-toml" },
     { name = "validate-pyproject", extra = ["all"] },
     { name = "validate-pyproject-schema-store" },
     { name = "yamllint" },
@@ -450,6 +451,7 @@ lint = [
     { name = "taplo" },
     { name = "types-pyyaml" },
     { name = "types-requests" },
+    { name = "types-toml" },
     { name = "validate-pyproject", extra = ["all"] },
     { name = "validate-pyproject-schema-store" },
     { name = "yamllint" },
@@ -507,6 +509,7 @@ dev = [
     { name = "taplo" },
     { name = "types-pyyaml" },
     { name = "types-requests" },
+    { name = "types-toml" },
     { name = "validate-pyproject", extras = ["all"] },
     { name = "validate-pyproject-schema-store" },
     { name = "yamllint" },
@@ -535,6 +538,7 @@ lint = [
     { name = "taplo" },
     { name = "types-pyyaml" },
     { name = "types-requests" },
+    { name = "types-toml" },
     { name = "validate-pyproject", extras = ["all"] },
     { name = "validate-pyproject-schema-store" },
     { name = "yamllint" },
@@ -1510,6 +1514,15 @@ wheels = [
 ]
 
 [[package]]
+name = "types-toml"
+version = "0.10.8.20260518"
+source = { registry = "https://pypi.apple.com/simple" }
+sdist = { url = "https://pypi.apple.com/packages/packages/4b/11/6ece999e91f2ccb848ab4420f3f4816e78ac0541f739e6864affdaaa5737/types_toml-0.10.8.20260518.tar.gz", hash = "sha256:80e10facd24fdeda9d5c672187d72be3ac284843788d67f5aae59e3e016db6fe", size = 9419, upload-time = "2026-05-18T06:02:16.719Z" }
+wheels = [
+    { url = "https://pypi.apple.com/packages/packages/91/25/489751806bf5c95e4007f8e17409199c54d31e49ffbea07c5729b1286c8e/types_toml-0.10.8.20260518-py3-none-any.whl", hash = "sha256:0e564ab05f6fde62a315b3b5a9b6624fda569399795d30a37e64705a70459303", size = 9669, upload-time = "2026-05-18T06:02:15.86Z" },
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.16.0"
 source = { registry = "https://pypi.apple.com/simple" }
@@ -1547,11 +1560,11 @@ all = [
 
 [[package]]
 name = "validate-pyproject-schema-store"
-version = "2026.7.6"
+version = "2026.7.8"
 source = { registry = "https://pypi.apple.com/simple" }
-sdist = { url = "https://pypi.apple.com/packages/packages/68/da/15b39ad264cc7c1a818a2dffdc65d780a768de309c00b8c2bcaf20ec4def/validate_pyproject_schema_store-2026.7.6.tar.gz", hash = "sha256:3ba2490b333cbcb3c2a4596d0ec0b83160381b4277c2f1b5d567265bb28cc0ef", size = 191205, upload-time = "2026-07-06T12:15:19.043Z" }
+sdist = { url = "https://pypi.apple.com/packages/packages/37/1a/56d4924eed352c36828358f33e814f2a8bc9dcf28d41a9136a9af3462f9b/validate_pyproject_schema_store-2026.7.8.tar.gz", hash = "sha256:08eb8624b4a020e3bffe9eba2fc1e3123b97e6a159ef38c76d36d33cb45508ca", size = 191745, upload-time = "2026-07-08T10:32:05.15Z" }
 wheels = [
-    { url = "https://pypi.apple.com/packages/packages/8c/7f/37e4f63dad1d01127a91651b1774703c5f8a6a4e4c7df7c4c5447b3cf735/validate_pyproject_schema_store-2026.7.6-py3-none-any.whl", hash = "sha256:1d90a7063a8f645f933c29185524344841b6290d58dc7613f2e87b34b3909b75", size = 197726, upload-time = "2026-07-06T12:15:17.567Z" },
+    { url = "https://pypi.apple.com/packages/packages/77/9a/881842d94b6ba4ce9e56e5771b7b8ea4a69b67f0e994e8ecc8de4b7d8c50/validate_pyproject_schema_store-2026.7.8-py3-none-any.whl", hash = "sha256:8eb021f774b91926a2a194ddcd1cdaaa1b716b8031434fb099bf9b0bf03f8a89", size = 198162, upload-time = "2026-07-08T10:32:03.432Z" },
 ]
 
 [[package]]

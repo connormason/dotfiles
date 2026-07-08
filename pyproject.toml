@@ -26,8 +26,8 @@ classifiers = [
 requires-python = ">= 3.12"
 dependencies = [
     # keep-sorted start case=no
-    "PyYaml >= 6.0",
     "ansible-core",
+    "PyYaml >= 6.0",
     "typing-extensions",
     # keep-sorted end
 ]
@@ -70,6 +70,7 @@ lint = [
     "taplo",
     "types-PyYaml",
     "types-requests",
+    "types-toml",
     "validate-pyproject-schema-store",
     "validate-pyproject[all]",
     "yamllint",
@@ -79,14 +80,14 @@ test = [
     # keep-sorted start case=no
     "coverage[toml] >= 7.11",
     "pytest >= 9.0",
-    "pytest-html >= 3.2.0",    # HTML test reports
     "pytest-clarity >= 1.0.1", # Better assertion diffs
+    "pytest-html >= 3.2.0",    # HTML test reports
     "pytest-mock >= 3.11.1",   # Mocking support
     "pytest-sugar >= 0.9.7",   # Better pytest output
     "pytest-timeout >= 2.1.0", # Test timeouts
     "pytest-xdist >= 3.3.0",   # Parallel test execution
-    "yamllint >= 1.32.0",      # Ansible testing
     "pyyaml >= 6.0.1",         # YAML parsing
+    "yamllint >= 1.32.0",      # Ansible testing
     # keep-sorted end
 ]
 
