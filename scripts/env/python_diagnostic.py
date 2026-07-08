@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Python Environment Diagnostic Tool
+Python Environment Diagnostic Tool.
 
 This script collects comprehensive information about a user's Python environment to help diagnose installation and
 configuration issues.
@@ -58,10 +58,16 @@ PYTHON_EXECUTABLE_NAMES: list[str] = [
 
 
 class ErrorDict(TypedDict):
+    """
+    Error information from a failed command.
+    """
     error: str
 
 
 class RunCommandResult(TypedDict, total=False):
+    """
+    Result of running a subprocess command.
+    """
     stdout:     str
     stderr:     str
     returncode: int
@@ -71,7 +77,7 @@ class RunCommandResult(TypedDict, total=False):
 
 def run_command(cmd: list[str], **kwargs: Any) -> RunCommandResult:
     """
-    Run a command and return output, error, and return code
+    Run a command and return output, error, and return code.
 
     :param cmd: command to run as list of arguments
     :return: dict with stdout, stderr, returncode, and error flag
@@ -106,6 +112,9 @@ def run_command(cmd: list[str], **kwargs: Any) -> RunCommandResult:
 
 
 class PythonExecutable(TypedDict):
+    """
+    Information about a discovered Python executable.
+    """
     path:       str
     real_path:  str
     version:    str
@@ -114,7 +123,7 @@ class PythonExecutable(TypedDict):
 
 def get_python_executables() -> dict[str, PythonExecutable]:
     """
-    Find all Python executables in PATH
+    Find all Python executables in PATH.
 
     :return: mapping from executable name -> path/version info (:class:`PythonExecutable`)
     """
@@ -138,24 +147,35 @@ def get_python_executables() -> dict[str, PythonExecutable]:
 
 
 class VersionParts(TypedDict):
+    """
+    Parsed semantic version components.
+    """
     major: int
     minor: int
     patch: int
 
 
-""" `pip` info types """
+# `pip` info types
+# ----------------
 
 
 class PipInfo(TypedDict):
+    """
+    Pip installation paths and version.
+    """
     pip_path:  str | None
     pip3_path: str | None
     version:   str
 
 
-""" `uv` info types """
+# `uv` info types
+# ---------------
 
 
 class UvInstalledPython(TypedDict):
+    """
+    Details of a single Python installation managed by uv.
+    """
     key:            str
     version:        str
     version_parts:  VersionParts
@@ -170,6 +190,9 @@ class UvInstalledPython(TypedDict):
 
 
 class UvInstalledPythons(TypedDict):
+    """
+    Collection of Python installations managed by uv.
+    """
     installed: list[UvInstalledPython]
 
 
@@ -177,15 +200,22 @@ UvPythons = Union[UvInstalledPythons, ErrorDict]
 
 
 class UvInfo(TypedDict):
+    """
+    Uv tool path, version, and managed Python installations.
+    """
     path:    str
     version: str
     pythons: UvPythons
 
 
-""" `hatch` info types """
+# `hatch` info types
+# ------------------
 
 
 class HatchEnvironment(TypedDict):
+    """
+    Configuration for a single Hatch virtual environment.
+    """
     type:      Literal['virtual']
     python:    str
     installer: str
@@ -195,6 +225,9 @@ HatchEnvironments = Union[dict[str, HatchEnvironment], ErrorDict]
 
 
 class HatchInfo(TypedDict):
+    """
+    Hatch tool path, version, and environment configuration.
+    """
     path:         str
     version:      str
     environments: HatchEnvironments
@@ -202,7 +235,7 @@ class HatchInfo(TypedDict):
 
 class PackageManagerInfo(TypedDict, total=False):
     """
-    Dict schema with info about a package manager (values in dict returned by :func:`get_package_manager_info`)
+    Dict schema with info about a package manager (values in dict returned by :func:`get_package_manager_info`).
     """
     pip:   PipInfo
     uv:    UvInfo
@@ -211,7 +244,7 @@ class PackageManagerInfo(TypedDict, total=False):
 
 def get_package_manager_info() -> PackageManagerInfo:
     """
-    Get information about package managers (pip, uv, hatch)
+    Get information about package managers (pip, uv, hatch).
 
     :return: mapping from package manager name -> path/version info (:class:`PackageManagerInfo`)
     """
@@ -290,6 +323,9 @@ def get_package_manager_info() -> PackageManagerInfo:
 
 
 class VirtualenvInfo(TypedDict):
+    """
+    Current virtual environment state and prefix paths.
+    """
     in_virtualenv:   bool
     virtual_env:     str | None
     conda_env:       str | None
@@ -300,7 +336,7 @@ class VirtualenvInfo(TypedDict):
 
 def get_virtual_env_info() -> VirtualenvInfo:
     """
-    Get information about current virtual environment
+    Get information about current virtual environment.
 
     :return: dict with virtual environment details (:class:`VirtualenvInfo`)
     """
@@ -323,7 +359,7 @@ def get_virtual_env_info() -> VirtualenvInfo:
 
 def get_environment_variables() -> dict[str, str | None]:
     """
-    Get relevant environment variables (non-sensitive)
+    Get relevant environment variables (non-sensitive).
 
     :return: dict of environment variables
     """
@@ -355,6 +391,9 @@ def get_environment_variables() -> dict[str, str | None]:
 
 
 class PythonPaths(TypedDict):
+    """
+    Python interpreter paths and site-packages locations.
+    """
     sys_executable: str
     sys_path:       list[str]
     site_packages:  list[str]
@@ -364,7 +403,7 @@ class PythonPaths(TypedDict):
 
 def get_python_paths() -> PythonPaths:
     """
-    Get Python-specific paths and configuration
+    Get Python-specific paths and configuration.
 
     :return: dict with Python paths (:class;`PythonPaths`)
     """
@@ -383,6 +422,9 @@ def get_python_paths() -> PythonPaths:
 
 
 class SystemInfo(TypedDict):
+    """
+    Host system platform, architecture, and OS version details.
+    """
     platform:              str
     machine:               str
     processor:             str
@@ -394,7 +436,7 @@ class SystemInfo(TypedDict):
 
 def get_system_info() -> SystemInfo:
     """
-    Get macOS system information
+    Get macOS system information.
 
     :return: dict with system details (:class:`SystemInfo`)
     """
@@ -417,6 +459,9 @@ def get_system_info() -> SystemInfo:
 
 
 class PythonInstallation(TypedDict):
+    """
+    Existence and symlink info for a Python installation at a known path.
+    """
     exists:      bool
     description: str
     is_symlink:  bool | None
@@ -425,7 +470,7 @@ class PythonInstallation(TypedDict):
 
 def check_common_locations() -> dict[str, PythonInstallation]:
     """
-    Check for Python installations in common locations
+    Check for Python installations in common locations.
 
     :return: mapping from paths -> python installation info/existence info (:class:`PythonInstallation`)
     """
@@ -456,6 +501,9 @@ def check_common_locations() -> dict[str, PythonInstallation]:
 
 
 class InstalledPythonVersions(TypedDict):
+    """
+    Installed Python package versions and editable project locations.
+    """
     versions:           dict[str, str]        # package name -> version
     editable_locations: dict[str, str]        # package name -> editable project location (path)
 
@@ -468,7 +516,7 @@ InstalledPythonPackages = Union[
 
 def get_installed_packages() -> InstalledPythonPackages:
     """
-    Get list of installed packages in current environment
+    Get list of installed packages in current environment.
 
     :return: dict containing "versions" (mapping from package name -> version) and "editable_locations" (mapping from
              package name -> editable project location), or dict with single "error" entry if `pip` command fails
@@ -501,6 +549,9 @@ def get_installed_packages() -> InstalledPythonPackages:
 
 
 class Diagnostics(TypedDict):
+    """
+    Complete Python environment diagnostic report.
+    """
     timestamp:             str
     system:                SystemInfo
     python_executables:    dict[str, PythonExecutable]
@@ -514,7 +565,7 @@ class Diagnostics(TypedDict):
 
 def collect_diagnostics() -> Diagnostics:
     """
-    Collect all diagnostic information
+    Collect all diagnostic information.
 
     :return: complete diagnostic data dict (:class:`Diagnostics`)
     """
@@ -533,7 +584,7 @@ def collect_diagnostics() -> Diagnostics:
 
 def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int | None = None) -> str:
     """
-    Format diagnostic data for human-readable output
+    Format diagnostic data for human-readable output.
 
     :param data: diagnostic data dict
     :param max_installed_packages: maximum number of installed python packages to list in "INSTALLED PACKAGES" section
@@ -662,7 +713,7 @@ def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int |
     if path_envvar := data['environment_variables'].get('PATH'):
         lines.extend([
             '\nPATH:',
-            *[f'  {path}' for path in path_envvar.split(':')],
+            *[f'  {path}' for path in path_envvar.split(os.pathsep)],
         ])
 
     """ Python paths from :func:`get_python_paths` """
@@ -715,8 +766,8 @@ def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int |
                 name_vers = f'{name_vers.ljust(col1_width)}        {loc}'
             lines.append(f'  {name_vers}')
 
-        if max_installed_packages and (len(packages) > max_installed_packages):
-            lines.append(f'  ... and {len(packages) - max_installed_packages} more packages')
+        if max_installed_packages and (len(pkg_versions) > max_installed_packages):
+            lines.append(f'  ... and {len(pkg_versions) - max_installed_packages} more packages')
 
     else:
         lines.append(f"  Error: {packages.get('error', 'Unknown error')}")
@@ -737,7 +788,7 @@ def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int |
 
 class Args(argparse.Namespace):
     """
-    Annotated :class:`argparse.Namespace` for script command-line arguments
+    Annotated :class:`argparse.Namespace` for script command-line arguments.
     """
     max_installed_packages: int | None      # --max-installed-packages
     save:                   bool            # -s/--save
@@ -747,7 +798,7 @@ class Args(argparse.Namespace):
 
 def build_parser() -> argparse.ArgumentParser:
     """
-    Build argument parser for script
+    Build argument parser for script.
 
     :return: :class:`argparse.ArgumentParser`
     """
@@ -757,50 +808,65 @@ def build_parser() -> argparse.ArgumentParser:
         add_help=False,
     )
 
-    console_out_opts = parser.add_argument_group('Console output options')
-    console_out_opts.add_argument(
-        '--max-installed-packages',
-        metavar='NUM',
-        type=int,
-        help='Max number of installed python packages to list under "INSTALLED PACKAGES"',
-    )
+    def add_console_out_opts() -> None:
+        """
+        Add console output options group to the argument parser.
+        """
+        console_out_opts = parser.add_argument_group('Console output options')
+        console_out_opts.add_argument(
+            '--max-installed-packages',
+            metavar='NUM',
+            type=int,
+            help='Max number of installed python packages to list under "INSTALLED PACKAGES"',
+        )
+    add_console_out_opts()
 
-    file_out_opts = parser.add_argument_group('File output options')
-    file_out_opts.add_argument(
-        '-s',
-        '--save',
-        action='store_true',
-        help='Save output to file instead of printing',
-    )
-    file_out_opts.add_argument(
-        '-j',
-        '--json',
-        action='store_true',
-        help='Output as JSON format',
-    )
-    file_out_opts.add_argument(
-        '-o',
-        '--output',
-        type=Path,
-        metavar='FILEPATH',
-        help='Output file path (default: python_diagnostic_<timestamp>.txt)',
-    )
+    def add_file_out_opts() -> None:
+        """
+        Add file output options group to the argument parser.
+        """
+        file_out_opts = parser.add_argument_group('File output options')
+        file_out_opts.add_argument(
+            '-s',
+            '--save',
+            action='store_true',
+            help='Save output to file instead of printing',
+        )
+        file_out_opts.add_argument(
+            '-j',
+            '--json',
+            action='store_true',
+            help='Output as JSON format',
+        )
+        file_out_opts.add_argument(
+            '-o',
+            '--output',
+            type=Path,
+            metavar='FILEPATH',
+            help='Output file path (default: python_diagnostic_<timestamp>.txt)',
+        )
+    add_file_out_opts()
 
-    other_group = parser.add_argument_group('Other options')
-    other_group.add_argument(
-        '-h',
-        '--help',
-        action='help',
-        default=argparse.SUPPRESS,
-        help='Show help message and exit',
-    )
+    def add_other_opts() -> None:
+        """
+        Add miscellaneous options group to the argument parser.
+        """
+        other_opts = parser.add_argument_group('Other options')
+        other_opts.add_argument(
+            '-h',
+            '--help',
+            action='help',
+            default=argparse.SUPPRESS,
+            help='Show help message and exit',
+        )
+    add_other_opts()
 
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """
-    Main entry point
+    Main entry point.
 
     :param argv: argument list to parse, defaults to sys.argv[1:]
     :return: int script exit code
