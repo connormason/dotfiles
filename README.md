@@ -275,11 +275,16 @@ dotfiles-personal/
 │   └── configure_network_interfaces.py
 │
 ├── docs/                                   # Documentation
-│   └── RUN_PY_REFERENCE.md                 # Python CLI reference
+│   ├── RUN_PY_REFERENCE.md                 # Python CLI reference
+│   ├── notes/                              # Informal working notes
+│   └── plans/                              # Design docs & implementation plans (YYYY-MM/)
 │
+├── .ctx/                                   # On-demand Claude reference docs (architecture, build, conventions)
 ├── .ansible-lint.yaml                      # Ansible linting rules
 ├── .yamllint.yaml                          # YAML linting rules
-└── .pre-commit-config.yaml                 # Pre-commit hooks configuration
+├── .pre-commit-config.yaml                 # Pre-commit hooks configuration
+├── CLAUDE.md                               # Claude Code project instructions
+└── CLAUDE-LESSONS.md                       # Captured rules to prevent recurring mistakes
 ```
 
 ## Key Features

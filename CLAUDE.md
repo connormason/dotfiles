@@ -9,6 +9,7 @@ For detailed reference, load on-demand:
 - [`.ctx/BUILD.md`](.ctx/BUILD.md) — full command reference (playbooks / `run.py` / make / pre-commit / lint)
 - [`.ctx/CONVENTIONS.md`](.ctx/CONVENTIONS.md) — code style pointers and the "adding a dotfile / role / macOS app" patterns
 - [`.claude/rules/`](.claude/rules) — self-contained Python / script / README style rules for this repo
+- [`CLAUDE-LESSONS.md`](CLAUDE-LESSONS.md) — captured mistakes and rules to prevent recurrence; append new lessons here
 
 ## Entry Points
 

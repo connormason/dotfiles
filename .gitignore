@@ -390,6 +390,8 @@ tags
 !services/compose.base.yml
 !scripts/env/
 
+.reports/
+
 # Inventory private repo
 /inventory/*
 !/inventory/.gitkeep
