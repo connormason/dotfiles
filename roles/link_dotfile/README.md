@@ -2,21 +2,24 @@
 
 ## Purpose
 
-A reusable utility role for safely creating symbolic links from dotfiles in the repository to their target locations
-in the user's home directory. This role handles validation, backup, and idempotent linking operations.
+A reusable utility role for safely creating symbolic links from dotfiles in the repository to their target locations in
+the user's home directory. This role handles validation, backup, and idempotent linking operations.
 
 ## What It Does
 
 1. **Validates inputs**:
+
    - Ensures required variables are defined
    - Verifies source file exists before linking
 
 2. **Handles existing files**:
+
    - Backs up existing non-symlink files with timestamp
    - Removes incorrect symlinks
    - Preserves correct existing symlinks (idempotent)
 
 3. **Creates symlinks**:
+
    - Creates parent directories as needed
    - Links source to destination
    - Reports when files are already correctly linked
@@ -25,15 +28,15 @@ in the user's home directory. This role handles validation, backup, and idempote
 
 This role must be called with two required variables:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `link_dotfile_src` | Absolute path to source file in dotfiles repo | `{{ dotfiles_home }}/roles/git/files/gitconfig` |
-| `link_dotfile_dst` | Absolute path to destination (target location) | `{{ ansible_facts['user_dir'] }}/.gitconfig` |
+| Variable           | Description                                    | Example                                         |
+| ------------------ | ---------------------------------------------- | ----------------------------------------------- |
+| `link_dotfile_src` | Absolute path to source file in dotfiles repo  | `{{ dotfiles_home }}/roles/git/files/gitconfig` |
+| `link_dotfile_dst` | Absolute path to destination (target location) | `{{ ansible_facts['user_dir'] }}/.gitconfig`    |
 
 ## Optional Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
+| Variable           | Description                                | Default               |
+| ------------------ | ------------------------------------------ | --------------------- |
 | `dotfile_dir_mode` | Permissions for created parent directories | `omit` (uses default) |
 
 ## Usage Examples
@@ -43,39 +46,39 @@ This role must be called with two required variables:
 Include the role with required variables:
 
 ```yaml
-- name: Link git config
-  ansible.builtin.include_role:
-    name: roles/link_dotfile
-  vars:
-    link_dotfile_src: "{{ dotfiles_home }}/roles/git/files/gitconfig"
-    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.gitconfig"
+  - name: Link git config
+    ansible.builtin.include_role:
+      name: roles/link_dotfile
+    vars:
+      link_dotfile_src: '{{ dotfiles_home }}/roles/git/files/gitconfig'
+      link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.gitconfig"
 ```
 
 ### Link Multiple Files in a Loop
 
 ```yaml
-- name: Link shell dotfiles
-  ansible.builtin.include_role:
-    name: roles/link_dotfile
-  vars:
-    link_dotfile_src: "{{ dotfiles_home }}/roles/shell/files/{{ item }}"
-    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.{{ item }}"
-  loop:
-    - zshrc
-    - zprofile
-    - zshenv
+  - name: Link shell dotfiles
+    ansible.builtin.include_role:
+      name: roles/link_dotfile
+    vars:
+      link_dotfile_src: '{{ dotfiles_home }}/roles/shell/files/{{ item }}'
+      link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.{{ item }}"
+    loop:
+      - zshrc
+      - zprofile
+      - zshenv
 ```
 
 ### Specify Directory Permissions
 
 ```yaml
-- name: Link config with custom directory mode
-  ansible.builtin.include_role:
-    name: roles/link_dotfile
-  vars:
-    link_dotfile_src: "{{ dotfiles_home }}/roles/app/files/config.yml"
-    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.config/app/config.yml"
-    dotfile_dir_mode: "0700"
+  - name: Link config with custom directory mode
+    ansible.builtin.include_role:
+      name: roles/link_dotfile
+    vars:
+      link_dotfile_src: '{{ dotfiles_home }}/roles/app/files/config.yml'
+      link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.config/app/config.yml"
+      dotfile_dir_mode: '0700'
 ```
 
 ## Behavior Details
@@ -181,17 +184,17 @@ link_dotfile_dst: /Users/username/.config/app/config.yml
 
 ```yaml
 # Good
-- include_role:
-    name: roles/link_dotfile
-  vars:
-    link_dotfile_src: "{{ dotfiles_home }}/files/{{ item }}"
-    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.{{ item }}"
-  loop: [file1, file2, file3]
+  - include_role:
+      name: roles/link_dotfile
+    vars:
+      link_dotfile_src: '{{ dotfiles_home }}/files/{{ item }}'
+      link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.{{ item }}"
+    loop: [file1, file2, file3]
 
 # Bad (repetitive)
-- include_role: ...  # file1
-- include_role: ...  # file2
-- include_role: ...  # file3
+  - include_role: '...' # file1
+  - include_role: '...' # file2
+  - include_role: '...' # file3
 ```
 
 ## Testing

@@ -23,11 +23,13 @@ environment and quickly bootstrap new macOS systems.
 **Purpose**: Command-line tools and utilities
 
 **When to use**:
+
 - CLI tools and utilities (e.g., `git`, `jq`, `ripgrep`)
 - Development tools without GUIs (e.g., `node`, `python`, `hatch`)
 - System utilities (e.g., `direnv`, `autojump`)
 
 **Example packages**:
+
 ```yaml
 brew_packages:
   - bat                    # cat alternative with syntax highlighting
@@ -37,6 +39,7 @@ brew_packages:
 ```
 
 **Special syntax**:
+
 - Standard packages: `package-name`
 - Tap packages: `username/tap-name/package-name` (e.g., `jesseduffield/lazydocker/lazydocker`)
 
@@ -45,12 +48,14 @@ brew_packages:
 **Purpose**: GUI applications distributed outside the Mac App Store
 
 **When to use**:
+
 - Desktop applications with graphical interfaces
 - Developer tools (IDEs, editors)
 - Third-party applications not available in the Mac App Store
 - Applications requiring more frequent updates than App Store allows
 
 **Example packages**:
+
 ```yaml
 brew_cask_packages:
   - google-chrome          # Web browser
@@ -60,6 +65,7 @@ brew_cask_packages:
 ```
 
 **Benefits**:
+
 - No App Store sandboxing restrictions
 - Often more up-to-date than App Store versions
 - Can install beta/nightly builds
@@ -70,12 +76,14 @@ brew_cask_packages:
 **Purpose**: Applications distributed through Apple's Mac App Store
 
 **When to use**:
+
 - Applications only available in the Mac App Store
 - Applications requiring App Store entitlements
 - Apple's own applications
 - Apps where App Store version is preferred
 
 **Example packages**:
+
 ```yaml
 mas_apps:
   - name: Amphetamine      # Keep Mac awake utility
@@ -85,10 +93,12 @@ mas_apps:
 ```
 
 **Requirements**:
+
 - Must be signed into Mac App Store with Apple ID
 - App ID can be found in the App Store URL (e.g., `https://apps.apple.com/app/id937984704`)
 
 **Finding App IDs**:
+
 ```bash
 # Search for an app
 mas search "app name"
@@ -102,7 +112,6 @@ mas list
 All package lists are defined in `roles/macos/defaults/main.yml`:
 
 ```yaml
----
 brew_packages:
   - package1
   - package2
@@ -121,6 +130,7 @@ mas_upgrade_all_apps: false
 ### Current Package Inventory
 
 **CLI Tools** (29 packages):
+
 - Version control: `git-delta`, `git-extras`, `git-lfs`, `gh`, `hub`, `lazygit`
 - Development: `hatch`, `pipx`, `node`, `mermaid-cli`
 - File utilities: `bat`, `ripgrep`, `tree`, `jq`
@@ -130,6 +140,7 @@ mas_upgrade_all_apps: false
 - System tools: `shellcheck`, `nmap`, `mas`, `just`, `moor`
 
 **GUI Applications** (8 packages):
+
 - Browsers: `google-chrome`
 - Development: `pycharm-ce`, `sublime-text`, `macdown`, `iterm2`
 - Automation: `hammerspoon`
@@ -137,6 +148,7 @@ mas_upgrade_all_apps: false
 - Media: `spotify`
 
 **Mac App Store** (3 apps):
+
 - System monitoring: `iStat Menus`
 - Utilities: `Amphetamine`
 - VPN: `Tailscale`
@@ -189,6 +201,7 @@ brew_cask_packages:
 ### Adding Mac App Store Apps
 
 1. Find the app ID from the Mac App Store:
+
    - Visit app page in browser
    - Copy ID from URL: `https://apps.apple.com/app/id123456789`
    - Or use `mas search "app name"`
@@ -257,12 +270,12 @@ ansible-galaxy install -r roles/requirements.yml
 
 All variables defined in `roles/macos/defaults/main.yml`:
 
-| Variable | Type | Description | Default |
-|----------|------|-------------|---------|
-| `brew_packages` | list[string] | Homebrew formulae to install | See defaults file |
-| `brew_cask_packages` | list[string] | Homebrew casks to install | See defaults file |
-| `mas_apps` | list[object] | Mac App Store apps to install | See defaults file |
-| `mas_upgrade_all_apps` | boolean | Whether to upgrade all installed MAS apps | `false` |
+| Variable               | Type         | Description                               | Default           |
+| ---------------------- | ------------ | ----------------------------------------- | ----------------- |
+| `brew_packages`        | list[string] | Homebrew formulae to install              | See defaults file |
+| `brew_cask_packages`   | list[string] | Homebrew casks to install                 | See defaults file |
+| `mas_apps`             | list[object] | Mac App Store apps to install             | See defaults file |
+| `mas_upgrade_all_apps` | boolean      | Whether to upgrade all installed MAS apps | `false`           |
 
 ### Variable Overrides
 
@@ -381,8 +394,8 @@ ansible-playbook playbooks/local_bootstrap.yml \
 ```
 
 Example `custom_packages.yml`:
+
 ```yaml
----
 brew_packages:
   - git
   - vim
@@ -402,6 +415,7 @@ mas_apps: []
 **Cause**: The `mas` CLI tool is installed via `brew_packages` but may not be in PATH yet during the same playbook run.
 
 **Solution**: Run the playbook twice, or install `mas` manually first:
+
 ```bash
 brew install mas
 ```
@@ -411,6 +425,7 @@ brew install mas
 **Cause**: Not signed into Mac App Store with Apple ID.
 
 **Solution**:
+
 1. Open Mac App Store
 2. Sign in with your Apple ID
 3. Re-run the playbook
@@ -420,10 +435,12 @@ brew install mas
 **Cause**: Application was installed manually, conflicts with Homebrew-managed version.
 
 **Solution**: Remove manual installation first:
+
 ```bash
 brew uninstall --cask app-name --force
 rm -rf /Applications/AppName.app
 ```
+
 Then re-run playbook.
 
 #### Issue: Command-line tools installation hangs
@@ -431,6 +448,7 @@ Then re-run playbook.
 **Cause**: Interactive prompts waiting for user input.
 
 **Solution**: Install manually first:
+
 ```bash
 xcode-select --install
 ```
@@ -440,6 +458,7 @@ xcode-select --install
 **Cause**: Homebrew directories have incorrect ownership.
 
 **Solution**: Fix Homebrew permissions:
+
 ```bash
 sudo chown -R $(whoami) $(brew --prefix)/*
 ```
@@ -449,6 +468,7 @@ sudo chown -R $(whoami) $(brew --prefix)/*
 **Cause**: Network issues or slow connection.
 
 **Solution**: Retry the playbook, or install individual package manually:
+
 ```bash
 brew install package-name
 brew install --cask app-name
@@ -458,11 +478,13 @@ mas install app-id
 ### Debugging Tips
 
 1. **Check Homebrew status**:
+
 ```bash
 brew doctor
 ```
 
 2. **List installed packages**:
+
 ```bash
 brew list              # formulae
 brew list --cask       # casks
@@ -470,6 +492,7 @@ mas list               # Mac App Store apps
 ```
 
 3. **Check available updates**:
+
 ```bash
 brew outdated
 brew outdated --cask
@@ -477,11 +500,13 @@ mas outdated
 ```
 
 4. **View Homebrew logs**:
+
 ```bash
 brew install --verbose package-name
 ```
 
 5. **Test playbook with increased verbosity**:
+
 ```bash
 ansible-playbook playbooks/local_bootstrap.yml \
   -i inventory/inventory.yml \
@@ -509,6 +534,7 @@ ansible-playbook playbooks/local_bootstrap.yml \
 ### Keeping Package Lists Updated
 
 1. **Review installed packages**:
+
 ```bash
 brew list | wc -l       # count formulae
 brew list --cask | wc -l  # count casks
@@ -517,11 +543,13 @@ brew list --cask | wc -l  # count casks
 2. **Remove unused packages** from `defaults/main.yml`
 
 3. **Update Homebrew itself**:
+
 ```bash
 brew update
 ```
 
 4. **Upgrade all packages** (outside Ansible):
+
 ```bash
 brew upgrade
 brew upgrade --cask
@@ -546,7 +574,8 @@ When modifying this role:
 2. Add comments for non-obvious package choices
 3. Test changes on a clean macOS system if possible
 4. Update this README if adding new variables or functionality
-5. Run pre-commit hooks before committing:
+5. Run prek hooks before committing:
+
 ```bash
-pre-commit run --all-files
+prek run --all-files
 ```

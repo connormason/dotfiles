@@ -40,6 +40,6 @@ Self-contained Python style for this repository (does not depend on any global `
 
 ## `run.py` patterns
 
-Commands register via the `@command` decorator into a global registry that drives both argparse and Makefile
-generation; subprocess calls go through the typed `shell_command()` wrapper. Match these when adding commands. See
+Commands register via the `@command` decorator into a global registry that drives both argparse and Makefile generation;
+subprocess calls go through the typed `shell_command()` wrapper. Match these when adding commands. See
 [`.ctx/CONVENTIONS.md`](../../.ctx/CONVENTIONS.md).

@@ -17,9 +17,10 @@ agent can fix them.
 - Roles are discovered via `roles_path=./roles:…` (`ansible.cfg`); custom modules via `library=./library:…`.
 - Tasks use **fully-qualified collection names** (`ansible.builtin.file`, `ansible.builtin.template`, …) — the existing
   roles are consistently FQCN.
-- Symlinking dotfiles goes through the reusable **`link_dotfile`** role (`ansible.builtin.include_role: roles/link_dotfile`
-  with `link_dotfile_src`/`link_dotfile_dst`), which already handles source validation, parent-dir creation, timestamped
-  backup of non-symlinks, and idempotent (re)linking. New symlink logic should reuse it, not hand-roll `file`/`command`.
+- Symlinking dotfiles goes through the reusable **`link_dotfile`** role
+  (`ansible.builtin.include_role: roles/link_dotfile` with `link_dotfile_src`/`link_dotfile_dst`), which already handles
+  source validation, parent-dir creation, timestamped backup of non-symlinks, and idempotent (re)linking. New symlink
+  logic should reuse it, not hand-roll `file`/`command`.
 - Tasks carry **tags** (e.g. `configfile`, `preferences`) for selective execution; new tasks/blocks should be tagged
   consistently with their role.
 - `mode:` is typically driven by a role `defaults/` variable (e.g. `git_config_mode`), not a hardcoded literal.

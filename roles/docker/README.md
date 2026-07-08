@@ -37,7 +37,9 @@ The stack is designed to provide a fully automated media server experience with 
 ### Media Services
 
 #### Plex (Port 32400)
+
 **Purpose**: Media streaming server
+
 - **Image**: `linuxserver/plex`
 - **Network Mode**: `host` (temporary workaround for Docker/Plex networking issues)
 - **Storage**: Mounts `/storage/media/tv`, `/storage/media/movies`, `/storage/media/music`
@@ -45,7 +47,9 @@ The stack is designed to provide a fully automated media server experience with 
 - **Configuration**: `/storage/media/config/plex`
 
 #### Autoplex (No exposed ports)
+
 **Purpose**: Automated file organization for Plex
+
 - **Image**: `danielmmetz/autoplex:latest` (custom build)
 - **Functionality**: Monitors Transmission download directory and copies completed files to appropriate media folders
 - **Mode**: Copy mode (preserves original files)
@@ -57,7 +61,9 @@ The stack is designed to provide a fully automated media server experience with 
 ### Media Lookup/Download Services
 
 #### Transmission (Port 9091)
+
 **Purpose**: BitTorrent client
+
 - **Image**: `linuxserver/transmission`
 - **Web UI**: Port 9091
 - **Storage**:
@@ -67,20 +73,26 @@ The stack is designed to provide a fully automated media server experience with 
 - **Dependencies**: Used by Sonarr and Radarr for downloads
 
 #### Prowlarr (Port 9696)
+
 **Purpose**: Torrent indexer aggregator
+
 - **Image**: `linuxserver/prowlarr`
 - **Functionality**: Centralized management of torrent indexers for Sonarr and Radarr
 - **Configuration**: `/storage/media/config/prowlarr`
 - **Dependencies**: Integrates with Flaresolverr for Cloudflare bypass
 
 #### Flaresolverr (No exposed ports)
+
 **Purpose**: Cloudflare protection bypass
+
 - **Image**: `ghcr.io/flaresolverr/flaresolverr`
 - **Functionality**: Proxy service to bypass Cloudflare CAPTCHA challenges
 - **Dependencies**: Used by Prowlarr
 
 #### Sonarr (Port 8989)
+
 **Purpose**: TV show management and automation
+
 - **Image**: `linuxserver/sonarr`
 - **Functionality**:
   - Monitors TV show releases
@@ -94,7 +106,9 @@ The stack is designed to provide a fully automated media server experience with 
 - **Dependencies**: Prowlarr (indexers), Transmission (downloads)
 
 #### Radarr (Port 7878)
+
 **Purpose**: Movie management and automation
+
 - **Image**: `linuxserver/radarr`
 - **Functionality**:
   - Monitors movie releases
@@ -110,7 +124,9 @@ The stack is designed to provide a fully automated media server experience with 
 ### Network Services
 
 #### PiHole (Ports 53/tcp, 53/udp, 67/udp, 8053/tcp)
+
 **Purpose**: Network-wide ad blocking and DNS server
+
 - **Image**: `pihole/pihole:latest`
 - **Ports**:
   - 53/tcp, 53/udp: DNS service
@@ -125,7 +141,9 @@ The stack is designed to provide a fully automated media server experience with 
 ### Home Automation & Dashboards
 
 #### Home Assistant (Port 8123)
+
 **Purpose**: Home automation platform
+
 - **Image**: `homeassistant/home-assistant`
 - **Network Mode**: `host` (required for service discovery)
 - **Configuration**: `./homeassistant` (git repository)
@@ -138,7 +156,9 @@ The stack is designed to provide a fully automated media server experience with 
   - Shared: `./shared`
 
 #### Glance (Port 8080)
+
 **Purpose**: Personal dashboard
+
 - **Image**: `glanceapp/glance`
 - **Configuration**: `./glance/config`, `./glance/assets`
 - **Features**:
@@ -149,14 +169,18 @@ The stack is designed to provide a fully automated media server experience with 
 ### Disabled Services
 
 #### Caddy (Commented out)
+
 **Purpose**: Reverse proxy with automatic HTTPS
+
 - **Image**: `danielmmetz/caddy-dnsimple` (custom build)
 - **Functionality**: Would provide `*.conmason.com` subdomains for services
 - **Configuration**: `Caddyfile` (generated from template)
 - **Note**: Currently disabled in docker-compose.yml
 
 #### PyAutoplex (Commented out)
+
 **Purpose**: Alternative Python-based file organizer
+
 - **Image**: `connormason/pyautoplex:latest` (custom build)
 - **Note**: Replaced by Autoplex (Go implementation)
 
@@ -214,21 +238,25 @@ The stack is designed to provide a fully automated media server experience with 
 ### Data Flow
 
 1. **Content Discovery**:
+
    - User adds TV show to Sonarr or movie to Radarr
    - Sonarr/Radarr searches Prowlarr for available torrents
    - Prowlarr queries configured indexers (using Flaresolverr if needed)
 
 2. **Download**:
+
    - Sonarr/Radarr sends torrent to Transmission
    - Transmission downloads to `/storage/media/downloads`
 
 3. **Organization**:
+
    - Autoplex monitors download completion
    - Copies completed files to appropriate directories:
      - TV shows → `/storage/media/tv`
      - Movies → `/storage/media/movies`
 
 4. **Consumption**:
+
    - Plex scans media directories and makes content available
    - Users stream via Plex clients
 
@@ -277,53 +305,60 @@ The stack is designed to provide a fully automated media server experience with 
 ### Volume Mounts
 
 **Media Services:**
+
 - Plex: Read-only access to `/storage/media/tv`, `/storage/media/movies`, `/storage/media/music`
 - Autoplex: Read from `/storage/media/downloads`, write to `/storage/media/tv` and `/storage/media/movies`
 
 **Download Services:**
+
 - Transmission: Read/write to `/storage/media/downloads` and `/storage/media/watch`
 - Sonarr: Read-only `/storage/media/tv`, read/write `/storage/media/downloads`
 - Radarr: Read-only `/storage/media/movies`, read/write `/storage/media/downloads`
 
 **Configuration Persistence:**
+
 - All services: Config directories under `/storage/media/config/*`
 
 ## Network Configuration
 
 ### Port Mapping
 
-| Service | Port | Protocol | Purpose |
-|---------|------|----------|---------|
-| PiHole | 53 | TCP/UDP | DNS queries |
-| PiHole | 67 | UDP | DHCP server (optional) |
-| PiHole | 8053 | TCP | Web UI |
-| Plex | 32400 | TCP | Media streaming (host network) |
-| Transmission | 9091 | TCP | Web UI |
-| Prowlarr | 9696 | TCP | Web UI |
-| Sonarr | 8989 | TCP | Web UI |
-| Radarr | 7878 | TCP | Web UI |
-| Home Assistant | 8123 | TCP | Web UI (host network) |
-| Glance | 8080 | TCP | Dashboard |
+| Service        | Port  | Protocol | Purpose                        |
+| -------------- | ----- | -------- | ------------------------------ |
+| PiHole         | 53    | TCP/UDP  | DNS queries                    |
+| PiHole         | 67    | UDP      | DHCP server (optional)         |
+| PiHole         | 8053  | TCP      | Web UI                         |
+| Plex           | 32400 | TCP      | Media streaming (host network) |
+| Transmission   | 9091  | TCP      | Web UI                         |
+| Prowlarr       | 9696  | TCP      | Web UI                         |
+| Sonarr         | 8989  | TCP      | Web UI                         |
+| Radarr         | 7878  | TCP      | Web UI                         |
+| Home Assistant | 8123  | TCP      | Web UI (host network)          |
+| Glance         | 8080  | TCP      | Dashboard                      |
 
 ### Network Modes
 
 **Host Mode:**
+
 - **Plex**: Uses host networking to avoid Docker networking complexities with media streaming
 - **Home Assistant**: Uses host networking for service discovery (mDNS, UPnP)
 
 **Bridge Mode (default):**
+
 - All other services use Docker's default bridge network
 - Services communicate via container names (e.g., `sonarr:8989`)
 
 ### Reverse Proxy (Disabled)
 
 The Caddy reverse proxy configuration (currently commented out) would provide:
+
 - HTTPS endpoints: `tv.conmason.com`, `movies.conmason.com`, `transmission.conmason.com`, `prowlarr.conmason.com`,
-`plex.conmason.com`
+  `plex.conmason.com`
 - Automatic HTTPS via DNS-01 challenge with DNSimple
 - TLS certificate management
 
 To enable:
+
 1. Uncomment Caddy service in `roles/docker/files/docker-compose.yml`
 2. Uncomment Caddy setup in `roles/docker/tasks/main.yml`
 3. Ensure `dnsimple_oauth_token` is set in inventory vault
@@ -333,30 +368,36 @@ To enable:
 ### Environment Variables
 
 **Common Variables (LinuxServer.io images):**
+
 - `PUID=1000`: User ID for file permissions
 - `PGID=1000`: Group ID for file permissions
 - `VERSION=docker`: Use Docker-managed version updates
 - `TZ='America/Los_Angeles'`: Timezone setting
 
 **Secrets (from `.env` file):**
+
 - `DNSIMPLE_OAUTH_TOKEN`: DNSimple API token for Caddy ACME DNS-01
 - `FTLCONF_webserver_api_password`: PiHole admin password
 
 **Service-Specific:**
+
 - PiHole: `FTLCONF_dns_listeningMode=ALL` (listen on all interfaces)
 - Autoplex: Command-line arguments for source/destination paths
 
 ### Configuration Files
 
 **Generated from Templates:**
+
 - `.env`: Contains secrets from Ansible Vault
 - `Caddyfile`: Reverse proxy configuration with dynamic IP address
 - `homeassistant/secrets.yaml`: Home Assistant secrets
 
 **Static Files:**
+
 - `docker-compose.yml`: Copied from `roles/docker/files/`
 
 **Git Repositories:**
+
 - Home Assistant config: Cloned from `git@github.com:connormason/homeassistant.git`
 - Autoplex: Cloned from `https://github.com/danielmmetz/autoplex.git`
 - PyAutoplex: Cloned from `git@github.com:connormason/pyautoplex.git`
@@ -365,6 +406,7 @@ To enable:
 ### Lutron Caseta Integration
 
 Home Assistant requires Lutron Caseta certificates for smart home integration:
+
 - Certificates stored in `inventory/group_vars/all/`
 - Copied to `~/docker/homeassistant/` during role execution
 - Files: `caseta.crt`, `caseta.key`, `caseta-bridge.crt`
@@ -374,6 +416,7 @@ Home Assistant requires Lutron Caseta certificates for smart home integration:
 ### Autoplex
 
 **Source**: `https://github.com/danielmmetz/autoplex.git`
+
 - **Language**: Go
 - **Purpose**: File organization service
 - **Build Process**:
@@ -385,6 +428,7 @@ Home Assistant requires Lutron Caseta certificates for smart home integration:
 ### PyAutoplex (Unused)
 
 **Source**: `git@github.com:connormason/pyautoplex.git`
+
 - **Language**: Python
 - **Purpose**: Alternative file organization service
 - **Build Process**: Same as Autoplex
@@ -393,6 +437,7 @@ Home Assistant requires Lutron Caseta certificates for smart home integration:
 ### Caddy DNSimple (Disabled)
 
 **Source**: `https://github.com/danielmmetz/caddy-dnsimple`
+
 - **Purpose**: Caddy reverse proxy with DNSimple DNS integration
 - **Build Process**: Same as Autoplex
 - **Status**: Built but Caddy service commented out
@@ -404,46 +449,46 @@ The role performs the following operations in order:
 ### 1. Docker Installation
 
 ```yaml
-- Setup Docker repository (GPG key, apt repository)
-- Install Docker Engine (docker-ce, docker-ce-cli, containerd.io)
-- Install Docker Compose (both plugin and standalone)
-- Start Docker daemon
+  - Setup Docker repository (GPG key, apt repository)
+  - Install Docker Engine (docker-ce, docker-ce-cli, containerd.io)
+  - Install Docker Compose (both plugin and standalone)
+  - Start Docker daemon
 ```
 
 ### 2. Network Configuration
 
 ```yaml
-- Detect host IP address (used in Caddyfile template)
+  - Detect host IP address (used in Caddyfile template)
 ```
 
 ### 3. Custom Image Builds
 
 ```yaml
-- Clone Caddy DNSimple repository
-- Build caddy-dnsimple Docker image
-- Generate Caddyfile from template
-- Generate .env file from template
+  - Clone Caddy DNSimple repository
+  - Build caddy-dnsimple Docker image
+  - Generate Caddyfile from template
+  - Generate .env file from template
 
-- Clone Autoplex repository
-- Build autoplex Docker image
+  - Clone Autoplex repository
+  - Build autoplex Docker image
 
-- Clone PyAutoplex repository
-- Build pyautoplex Docker image
+  - Clone PyAutoplex repository
+  - Build pyautoplex Docker image
 ```
 
 ### 4. Home Assistant Setup
 
 ```yaml
-- Clone Home Assistant config repository
-- Generate secrets.yaml from template
-- Copy Lutron Caseta certificates from inventory
+  - Clone Home Assistant config repository
+  - Generate secrets.yaml from template
+  - Copy Lutron Caseta certificates from inventory
 ```
 
 ### 5. Docker Compose Deployment
 
 ```yaml
-- Copy docker-compose.yml to ~/docker/
-- Create backup of existing docker-compose.yml if present
+  - Copy docker-compose.yml to ~/docker/
+  - Create backup of existing docker-compose.yml if present
 ```
 
 **Note**: The role does NOT automatically start services (`docker-compose up`). This must be done manually.
@@ -463,6 +508,7 @@ ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-be
 ```
 
 This will:
+
 1. Install Docker
 2. Build custom images
 3. Deploy docker-compose.yml
@@ -701,18 +747,18 @@ docker build --no-cache -t danielmmetz/autoplex:latest .
 Edit `roles/docker/files/docker-compose.yml`:
 
 ```yaml
-  newservice:
-    image: linuxserver/newservice
-    container_name: newservice
-    restart: unless-stopped
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ='America/Los_Angeles'
-    volumes:
-      - /storage/media/config/newservice:/config
-    ports:
-      - "8080:8080"
+newservice:
+  image: linuxserver/newservice
+  container_name: newservice
+  restart: unless-stopped
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ='America/Los_Angeles'
+  volumes:
+    - /storage/media/config/newservice:/config
+  ports:
+    - 8080:8080
 ```
 
 ### Step 2: Add Storage Directories (if needed)
@@ -753,6 +799,7 @@ docker-compose up -d newservice
 ### Step 5: Add to Documentation
 
 Update this README with:
+
 - Service description in [Service Stack](#service-stack)
 - Port mapping in [Network Configuration](#network-configuration)
 - Dependencies in [Architecture](#architecture)
@@ -762,36 +809,39 @@ Update this README with:
 If the service requires a custom image:
 
 1. **Add repository variables** to `roles/docker/defaults/main.yml`:
+
    ```yaml
-   newservice_repo_dest: "{{ docker_dir }}/newservice"
+   newservice_repo_dest: '{{ docker_dir }}/newservice'
    newservice_repo_url: https://github.com/user/newservice.git
    newservice_repo_branch: main
    ```
 
 2. **Add build task** to `roles/docker/tasks/main.yml`:
-   ```yaml
-   - name: Setup newservice
-     block:
-       - name: Clone newservice repo
-         ansible.builtin.git:
-           repo: "{{ newservice_repo_url }}"
-           dest: "{{ newservice_repo_dest }}"
-           version: "{{ newservice_repo_branch }}"
-           clone: true
-           update: true
-           accept_hostkey: true
 
-       - name: Build newservice image
-         community.docker.docker_image:
-           build:
-             path: "{{ newservice_repo_dest }}"
-           name: user/newservice
-           tag: latest
-           source: build
-         become: true
+   ```yaml
+     - name: Setup newservice
+       block:
+         - name: Clone newservice repo
+           ansible.builtin.git:
+             repo: '{{ newservice_repo_url }}'
+             dest: '{{ newservice_repo_dest }}'
+             version: '{{ newservice_repo_branch }}'
+             clone: true
+             update: true
+             accept_hostkey: true
+
+         - name: Build newservice image
+           community.docker.docker_image:
+             build:
+               path: '{{ newservice_repo_dest }}'
+             name: user/newservice
+             tag: latest
+             source: build
+           become: true
    ```
 
 3. **Use custom image** in docker-compose.yml:
+
    ```yaml
    newservice:
      image: user/newservice:latest
@@ -803,16 +853,19 @@ If the service requires a custom image:
 ### Regular Tasks
 
 **Weekly:**
+
 - Check Docker container status: `docker-compose ps`
 - Review service logs for errors: `docker-compose logs --tail=100`
 - Monitor disk usage: `df -h /storage/media`
 
 **Monthly:**
+
 - Update service images: `docker-compose pull && docker-compose up -d`
 - Clean old downloads: `rm -rf /storage/media/downloads/complete/*`
 - Review PiHole statistics for blocked domains
 
 **Quarterly:**
+
 - Review and update service configurations
 - Check for security updates: `apt update && apt list --upgradable`
 - Backup Home Assistant configuration
@@ -821,6 +874,7 @@ If the service requires a custom image:
 ### Backup Strategy
 
 **Configuration Backups:**
+
 ```bash
 # Home Assistant (already in git)
 cd ~/docker/homeassistant
@@ -837,11 +891,13 @@ tar -czf ~/backups/docker-dir-$(date +%Y%m%d).tar.gz ~/docker/
 ```
 
 **Media Library Backups:**
+
 - Media files are large; consider separate backup strategy
 - Metadata can be regenerated by Plex/Sonarr/Radarr
 - Prioritize backing up `/storage/media/config/` over media files
 
 **Database Backups:**
+
 ```bash
 # Sonarr/Radarr databases are in config directories
 # Stop services before backup
@@ -860,6 +916,7 @@ docker-compose start sonarr radarr prowlarr
 ### Monitoring
 
 **Service Health:**
+
 ```bash
 # All container status
 docker-compose ps
@@ -872,6 +929,7 @@ docker-compose ps --format "table {{.Name}}\t{{.Status}}"
 ```
 
 **Disk Usage:**
+
 ```bash
 # Media storage
 du -sh /storage/media/*
@@ -884,6 +942,7 @@ find /storage/media -type f -size +5G
 ```
 
 **Network Monitoring:**
+
 ```bash
 # Port listeners
 sudo netstat -tulpn | grep -E "53|32400|9091|8989|7878"
@@ -911,6 +970,7 @@ Then restart Docker: `sudo systemctl restart docker`
 ### Security Updates
 
 **Update Docker Engine:**
+
 ```bash
 sudo apt update
 sudo apt upgrade docker-ce docker-ce-cli containerd.io
@@ -918,6 +978,7 @@ sudo systemctl restart docker
 ```
 
 **Update Container Images:**
+
 ```bash
 cd ~/docker
 docker-compose pull
@@ -925,6 +986,7 @@ docker-compose up -d
 ```
 
 **Audit Open Ports:**
+
 ```bash
 # Check exposed ports
 sudo ufw status
@@ -935,6 +997,7 @@ sudo ufw allow from 192.168.1.0/24 to any port 8989  # Sonarr from local network
 ```
 
 **Review Credentials:**
+
 - Rotate PiHole admin password in inventory vault
 - Update DNSimple OAuth token if compromised
 - Review Home Assistant user accounts
@@ -942,6 +1005,7 @@ sudo ufw allow from 192.168.1.0/24 to any port 8989  # Sonarr from local network
 ### Performance Optimization
 
 **Docker Storage:**
+
 ```bash
 # Clean unused images, containers, networks
 docker system prune -a
@@ -951,11 +1015,13 @@ docker volume prune
 ```
 
 **Plex Transcoding:**
+
 - Consider hardware transcoding if available
 - Monitor transcoding directory size
 - Optimize library for direct play
 
 **Transmission:**
+
 - Limit active downloads
 - Set bandwidth limits during peak hours
 - Clean completed downloads regularly
@@ -976,6 +1042,7 @@ ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --tags d
 ```
 
 This will:
+
 - Update docker-compose.yml
 - Rebuild custom images (Autoplex, Caddy)
 - Regenerate configuration files (.env, Caddyfile)
@@ -989,26 +1056,26 @@ Note: Does not automatically restart services. Use `docker-compose up -d` after 
 
 Defined in `roles/docker/defaults/main.yml`:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `docker_dir` | `{{ ansible_facts['user_dir'] }}/docker` | Docker Compose project directory |
-| `autoplex_repo_url` | `https://github.com/danielmmetz/autoplex.git` | Autoplex source repository |
-| `autoplex_repo_branch` | `master` | Autoplex git branch |
-| `pyautoplex_repo_url` | `git@github.com:connormason/pyautoplex.git` | PyAutoplex source repository |
-| `pyautoplex_repo_branch` | `main` | PyAutoplex git branch |
-| `caddy_dnsimple_repo_url` | `https://github.com/danielmmetz/caddy-dnsimple` | Caddy DNSimple source |
-| `caddy_dnsimple_repo_branch` | `master` | Caddy DNSimple git branch |
-| `homeassistant_repo_url` | `git@github.com:connormason/homeassistant.git` | Home Assistant config repo |
-| `homeassistant_repo_branch` | `nas_bringup` | Home Assistant git branch |
+| Variable                     | Default                                         | Description                      |
+| ---------------------------- | ----------------------------------------------- | -------------------------------- |
+| `docker_dir`                 | `{{ ansible_facts['user_dir'] }}/docker`        | Docker Compose project directory |
+| `autoplex_repo_url`          | `https://github.com/danielmmetz/autoplex.git`   | Autoplex source repository       |
+| `autoplex_repo_branch`       | `master`                                        | Autoplex git branch              |
+| `pyautoplex_repo_url`        | `git@github.com:connormason/pyautoplex.git`     | PyAutoplex source repository     |
+| `pyautoplex_repo_branch`     | `main`                                          | PyAutoplex git branch            |
+| `caddy_dnsimple_repo_url`    | `https://github.com/danielmmetz/caddy-dnsimple` | Caddy DNSimple source            |
+| `caddy_dnsimple_repo_branch` | `master`                                        | Caddy DNSimple git branch        |
+| `homeassistant_repo_url`     | `git@github.com:connormason/homeassistant.git`  | Home Assistant config repo       |
+| `homeassistant_repo_branch`  | `nas_bringup`                                   | Home Assistant git branch        |
 
 ### Required Variables from Inventory
 
 Must be defined in inventory vault files:
 
-| Variable | Source | Used By |
-|----------|--------|---------|
-| `dnsimple_oauth_token` | Vault | Caddy ACME DNS-01 |
-| `pihole_web_password` | Vault | PiHole web UI |
+| Variable               | Source | Used By           |
+| ---------------------- | ------ | ----------------- |
+| `dnsimple_oauth_token` | Vault  | Caddy ACME DNS-01 |
+| `pihole_web_password`  | Vault  | PiHole web UI     |
 
 Home Assistant secrets (defined in `templates/ha_secrets.yaml.j2`) - refer to Home Assistant repository for details.
 

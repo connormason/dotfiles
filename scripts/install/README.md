@@ -4,9 +4,9 @@ Bulletproof installer scripts for bootstrapping development environments with `u
 
 ## Overview
 
-These scripts provide robust, cross-platform installation of essential Python development tools with comprehensive
-error handling, retry logic, and helpful troubleshooting guidance. Perfect for bootstrapping new systems or onboarding
-new developers.
+These scripts provide robust, cross-platform installation of essential Python development tools with comprehensive error
+handling, retry logic, and helpful troubleshooting guidance. Perfect for bootstrapping new systems or onboarding new
+developers.
 
 ## Scripts
 
@@ -15,6 +15,7 @@ new developers.
 Installs [uv](https://docs.astral.sh/uv/) - the blazing-fast Python package manager and installer from Astral.
 
 **Features:**
+
 - Cross-platform support (Linux, macOS, Windows)
 - Smart executable detection (checks PATH and common install locations)
 - Configurable network retry logic with exponential backoff
@@ -24,6 +25,7 @@ Installs [uv](https://docs.astral.sh/uv/) - the blazing-fast Python package mana
 - Force reinstall option
 
 **Usage:**
+
 ```bash
 # Simple installation
 ./scripts/install/install_uv.py
@@ -45,12 +47,14 @@ Installs [uv](https://docs.astral.sh/uv/) - the blazing-fast Python package mana
 ```
 
 **Options:**
+
 - `--force` - Force reinstall even if UV is already installed
 - `-v, --verbose` - Enable verbose output for debugging
 - `--retries N` - Maximum number of download retry attempts (default: 3)
 - `--retry-delay SECONDS` - Initial delay in seconds between retries with exponential backoff (default: 2)
 
 **What it does:**
+
 1. Checks Python version (requires 3.8+)
 2. Searches for existing `uv` installation in PATH and common locations
 3. Downloads the official installer from https://astral.sh/uv/install.sh
@@ -59,6 +63,7 @@ Installs [uv](https://docs.astral.sh/uv/) - the blazing-fast Python package mana
 6. Cleans up temporary files
 
 **Exit codes:**
+
 - `0` - Success or already installed
 - `2` - Download failed
 - `3` - Installation failed
@@ -71,6 +76,7 @@ Installs [uv](https://docs.astral.sh/uv/) - the blazing-fast Python package mana
 Installs [Hatch](https://hatch.pypa.io/) - the modern Python project manager and build system.
 
 **Features:**
+
 - Cross-platform support (Linux, macOS, Windows)
 - Uses official Hatch universal installer
 - Smart executable detection in multiple common locations
@@ -80,6 +86,7 @@ Installs [Hatch](https://hatch.pypa.io/) - the modern Python project manager and
 - Verbose and force options
 
 **Usage:**
+
 ```bash
 # Simple installation
 ./scripts/install/install_hatch.py
@@ -101,12 +108,14 @@ Installs [Hatch](https://hatch.pypa.io/) - the modern Python project manager and
 ```
 
 **Options:**
+
 - `--force` - Force reinstall even if Hatch is already installed
 - `-v, --verbose` - Enable verbose output for debugging
 - `--retries N` - Maximum number of download retry attempts (default: 3)
 - `--retry-delay SECONDS` - Initial delay in seconds between retries with exponential backoff (default: 2)
 
 **What it does:**
+
 1. Validates Python version (3.8+ required)
 2. Checks for existing Hatch installation
 3. Downloads universal installer from GitHub releases
@@ -115,6 +124,7 @@ Installs [Hatch](https://hatch.pypa.io/) - the modern Python project manager and
 6. Provides shell-specific PATH setup instructions if needed
 
 **Exit codes:**
+
 - `0` - Success or already installed
 - `2` - Download failed
 - `3` - Installation failed
@@ -127,6 +137,7 @@ Installs [Hatch](https://hatch.pypa.io/) - the modern Python project manager and
 Both scripts share a robust architecture:
 
 ### Smart Detection
+
 ```python
 # Checks PATH first
 $ which uv
@@ -139,12 +150,14 @@ $ which uv
 ```
 
 ### Network Resilience
+
 - Configurable retry attempts (default: 3, customize with `--retries`)
 - Configurable initial delay with exponential backoff (default: 2s, customize with `--retry-delay`)
 - 30-second timeout per request
 - Helpful troubleshooting if all retries fail
 
 **Retry behavior:**
+
 ```bash
 # Default: 3 attempts with 2s, 4s, 8s delays
 ./scripts/install/install_uv.py
@@ -157,6 +170,7 @@ $ which uv
 ```
 
 The exponential backoff formula is: `delay = retry_delay * (2 ** (attempt - 2))`
+
 - Attempt 1: No delay
 - Attempt 2: Initial delay (e.g., 2s)
 - Attempt 3: 2× initial delay (e.g., 4s)
@@ -164,7 +178,9 @@ The exponential backoff formula is: `delay = retry_delay * (2 ** (attempt - 2))`
 - And so on...
 
 ### Shell Intelligence
+
 Detects your shell and provides appropriate PATH commands:
+
 - **bash/zsh**: `export PATH="..."`
 - **fish**: `set -gx PATH "..." $PATH`
 - **tcsh/csh**: `setenv PATH "..."`
@@ -172,10 +188,10 @@ Detects your shell and provides appropriate PATH commands:
 ### Platform Support
 
 | Platform | install_uv.py | install_hatch.py |
-|----------|---------------|------------------|
-| macOS    | ✓            | ✓               |
-| Linux    | ✓            | ✓               |
-| Windows  | ✓            | ✓               |
+| -------- | ------------- | ---------------- |
+| macOS    | ✓             | ✓                |
+| Linux    | ✓             | ✓                |
+| Windows  | ✓             | ✓                |
 
 ## Troubleshooting
 
@@ -203,11 +219,13 @@ To make UV available globally, add it to your PATH:
 ### Download failures
 
 Scripts provide actionable troubleshooting:
+
 1. Check internet connection
 2. Verify access to installer URLs
 3. Check if proxy configuration is needed
 
 **For unreliable networks:**
+
 ```bash
 # Increase retry attempts and delay
 ./scripts/install/install_uv.py --retries 10 --retry-delay 5
@@ -219,6 +237,7 @@ Scripts provide actionable troubleshooting:
 ### Verification failures
 
 If installation succeeds but verification fails:
+
 1. Close and reopen terminal
 2. Try `--force` to reinstall
 3. Check official documentation links

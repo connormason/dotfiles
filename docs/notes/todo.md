@@ -1,4 +1,5 @@
 # TODOs
+
 - Use Watchtower for automating Docker container updates (https://containrrr.dev/watchtower/)
 - Portainer? (https://www.portainer.io)
 - lazydocker
@@ -9,7 +10,9 @@
 - remove requirements.txt?
 
 ## Docker Services Modularization
+
 Remaining manual steps (require NAS/GitHub access):
+
 1. Audit existing NAS .env for extra variables
 2. Migrate ~/docker/shared/ to ~/docker/homeassistant/shared/ on NAS
 3. Set up 5 GitHub secrets (Tailscale OAuth, SSH key, NAS host, user)

@@ -1,11 +1,13 @@
 # homeassistant
+
 bae5hau5 HomeAssisant config
 
 ### Necessary Workarounds
-- pylutron appears to have a bug of some sort, preventing the Lutron component from authenticating even after
-generating a cert with [scripts/get_lutron_cert.py](scripts/get_lutron_cert.py). Found a workaround in an
-[open homeassistant issue](https://github.com/home-assistant/home-assistant/issues/15421#issuecomment-459453030),
-which requires changing a line in the pylutron python package:
+
+- pylutron appears to have a bug of some sort, preventing the Lutron component from authenticating even after generating
+  a cert with [scripts/get_lutron_cert.py](scripts/get_lutron_cert.py). Found a workaround in an
+  [open homeassistant issue](https://github.com/home-assistant/home-assistant/issues/15421#issuecomment-459453030),
+  which requires changing a line in the pylutron python package:
 
   ```
   quick fix :

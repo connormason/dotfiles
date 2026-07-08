@@ -19,12 +19,13 @@ different environments: personal macOS machines and home NAS/server infrastructu
 
 The playbook system provides two complete environment bootstraps:
 
-| Playbook | Target | Bootstrap Script | Purpose |
-|----------|--------|------------------|---------|
-| `local_bootstrap.yml` | macOS (localhost) | `local_bootstrap.sh` | Personal Mac configuration with GUI apps, dev tools, and system settings |
-| `nas_bootstrap.yml` | Debian server (nas host) | `nas_bootstrap.sh` | Home NAS with Docker media stack, file sharing, and network services |
+| Playbook              | Target                   | Bootstrap Script     | Purpose                                                                  |
+| --------------------- | ------------------------ | -------------------- | ------------------------------------------------------------------------ |
+| `local_bootstrap.yml` | macOS (localhost)        | `local_bootstrap.sh` | Personal Mac configuration with GUI apps, dev tools, and system settings |
+| `nas_bootstrap.yml`   | Debian server (nas host) | `nas_bootstrap.sh`   | Home NAS with Docker media stack, file sharing, and network services     |
 
 Both playbooks:
+
 - Require inventory from separate git submodule (`inventory/`)
 - Use encrypted Ansible Vault for secrets
 - Support selective execution via tags
@@ -40,28 +41,29 @@ Configures personal macOS machines with development environment, GUI application
 
 **Role execution order:**
 
-1. **zsh** - Shell configuration and plugins
-   - Tags: `zsh`, `configfile`
-2. **macos** - Package manager setup (Homebrew, casks, Mac App Store)
-   - Tags: `macos`
-3. **macos_settings** - System preferences (Finder, Activity Monitor, etc.)
-   - Tags: `macos`, `dock`
-4. **macos_dock** - Dock configuration and layout
-   - Tags: `macos`, `dock`
-5. **git** - Git configuration and gh CLI
-   - Tags: `git`, `configfile`
-6. **hammerspoon** - Window management automation
-   - Tags: `hammerspoon`, `configfile`
-7. **iterm** - iTerm2 terminal configuration
-   - Tags: `iterm`
-8. **ssh** - SSH client configuration
-   - Tags: `ssh`, `configfile`
-9. **starship** - Shell prompt configuration
-   - Tags: `starship`
+01. **zsh** - Shell configuration and plugins
+    - Tags: `zsh`, `configfile`
+02. **macos** - Package manager setup (Homebrew, casks, Mac App Store)
+    - Tags: `macos`
+03. **macos_settings** - System preferences (Finder, Activity Monitor, etc.)
+    - Tags: `macos`, `dock`
+04. **macos_dock** - Dock configuration and layout
+    - Tags: `macos`, `dock`
+05. **git** - Git configuration and gh CLI
+    - Tags: `git`, `configfile`
+06. **hammerspoon** - Window management automation
+    - Tags: `hammerspoon`, `configfile`
+07. **iterm** - iTerm2 terminal configuration
+    - Tags: `iterm`
+08. **ssh** - SSH client configuration
+    - Tags: `ssh`, `configfile`
+09. **starship** - Shell prompt configuration
+    - Tags: `starship`
 10. **python** - Python tooling (pipx, uv, hatch)
     - Tags: `python`
 
 **Variables required:**
+
 - `admin_password` (from `inventory/group_vars/all/vault.yml` or `inventory/group_vars/localhost/vault.yml`)
 
 **Common usage examples:**
@@ -110,6 +112,7 @@ Configures home NAS server running Debian with Docker media stack, ZFS storage, 
    - Tags: `zsh`, `configfile`
 
 **Variables required:**
+
 - `admin_password` (from `inventory/group_vars/all/vault.yml` or `inventory/host_vars/nas/vault.yml`)
 
 **Common usage examples:**
@@ -145,6 +148,7 @@ chmod u+x nas_bootstrap.sh
 ```
 
 **What the scripts do:**
+
 1. Validate repository structure (checks for `run.py`, playbooks, etc.)
 2. Install Homebrew with checksum verification (if not present)
 3. Install Ansible via Homebrew (if not present)
@@ -263,14 +267,16 @@ fi
 ```
 
 **Why:** Protects against:
+
 - Man-in-the-middle attacks
 - DNS hijacking
 - Compromised download sources
 
 **When checksum changes:**
+
 1. Verify new installer at https://github.com/Homebrew/install
 2. Generate new checksum:
-`curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256`
+   `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256`
 3. Update `EXPECTED_CHECKSUM` in both bootstrap scripts
 4. Update "Last updated" comment
 
@@ -287,26 +293,31 @@ set -e  # Exit immediately on any command failure
 **Both scripts follow this pattern:**
 
 1. **Setup**
+
    - Define color codes for output
    - Enable fail-fast (`set -e`)
    - Determine script directory
 
 2. **Validation**
+
    - Check for required files/directories
    - Exit with error if validation fails
 
 3. **Dependency Installation**
+
    - Install Homebrew if missing (with checksum verification)
    - Add Homebrew to PATH
    - Install Ansible via Homebrew if missing
 
 4. **Playbook Execution**
+
    - Run corresponding playbook with:
      - Inventory file: `inventory/inventory.yml`
      - Become password prompt: `--ask-become-pass`
      - Verbose output: `-vv`
 
 5. **Post-Bootstrap** (macOS only)
+
    - Kick off macOS software update
    - Note: System may restart automatically
 
@@ -314,10 +325,10 @@ set -e  # Exit immediately on any command failure
 
 ### Tag Categories
 
-**Role-specific tags:**
-Each role has its own tag matching the role name (e.g., `zsh`, `git`, `macos`).
+**Role-specific tags:** Each role has its own tag matching the role name (e.g., `zsh`, `git`, `macos`).
 
 **Functional tags:**
+
 - `configfile` - All roles that create/link configuration files
 - `macos` - All macOS-specific roles (app installation + settings)
 - `dock` - Dock-related configuration (settings + layout)
@@ -331,13 +342,13 @@ Each role has its own tag matching the role name (e.g., `zsh`, `git`, `macos`).
 Roles can have multiple tags for flexible targeting:
 
 ```yaml
-- include_role:
-    name: roles/zsh
-    apply:
-      tags: zsh
-  tags:
-    - zsh
-    - configfile
+  - include_role:
+      name: roles/zsh
+      apply:
+        tags: zsh
+    tags:
+      - zsh
+      - configfile
 ```
 
 This role runs when either `zsh` OR `configfile` tags are specified.
@@ -368,6 +379,7 @@ This role runs when either `zsh` OR `configfile` tags are specified.
 **All secrets are encrypted using Ansible Vault:**
 
 1. Create `vault_password.txt` in repository root (gitignored):
+
    ```bash
    echo "your-vault-password" > vault_password.txt
    chmod 600 vault_password.txt
@@ -376,11 +388,13 @@ This role runs when either `zsh` OR `configfile` tags are specified.
 2. Ansible automatically uses this file (configured in `ansible.cfg` or inventory)
 
 3. Encrypted vault files in inventory:
+
    - `inventory/group_vars/all/vault.yml` - Shared secrets
    - `inventory/group_vars/localhost/vault.yml` - Mac-specific secrets
    - `inventory/host_vars/nas/vault.yml` - NAS-specific secrets
 
 **Never commit:**
+
 - `vault_password.txt`
 - Decrypted vault contents
 - Plain-text passwords or API keys
@@ -390,15 +404,16 @@ This role runs when either `zsh` OR `configfile` tags are specified.
 Both playbooks set `ansible_become_pass` from vault at the start:
 
 ```yaml
-- name: Set ansible_become_pass
-  ansible.builtin.set_fact:
-    ansible_become_pass: "{{ admin_password }}"
-  no_log: true  # Prevents password from appearing in logs
-  tags:
-    - always
+  - name: Set ansible_become_pass
+    ansible.builtin.set_fact:
+      ansible_become_pass: '{{ admin_password }}'
+    no_log: true # Prevents password from appearing in logs
+    tags:
+      - always
 ```
 
 **Benefits:**
+
 - Only one password prompt (via `--ask-become-pass`)
 - Password available to all roles for privilege escalation
 - Not logged to output (even with `-vvv`)
@@ -408,16 +423,19 @@ Both playbooks set `ansible_become_pass` from vault at the start:
 For remote playbooks (like `nas_bootstrap.yml`):
 
 1. Ensure SSH key access to target host:
+
    ```bash
    ssh-copy-id user@nas-hostname
    ```
 
 2. Verify connection:
+
    ```bash
    ansible nas -i inventory/inventory.yml -m ping
    ```
 
 3. If using custom SSH keys, configure in `inventory/inventory.yml`:
+
    ```yaml
    nas:
      ansible_host: 192.168.1.100
@@ -430,12 +448,13 @@ For remote playbooks (like `nas_bootstrap.yml`):
 ### Inventory Not Found
 
 **Symptom:**
+
 ```
 ERROR! the playbook could not be found
 ```
 
-**Solution:**
-Update inventory submodule:
+**Solution:** Update inventory submodule:
+
 ```bash
 python3 run.py update-inventory
 # Or manually:
@@ -445,11 +464,13 @@ git submodule update --init --recursive
 ### Vault Password Issues
 
 **Symptom:**
+
 ```
 ERROR! Attempting to decrypt but no vault secrets found
 ```
 
 **Solution:**
+
 1. Verify `vault_password.txt` exists in repository root
 2. Ensure file contains correct password
 3. Check file permissions: `chmod 600 vault_password.txt`
@@ -458,11 +479,13 @@ ERROR! Attempting to decrypt but no vault secrets found
 ### Homebrew Checksum Mismatch
 
 **Symptom:**
+
 ```
 WARNING: Homebrew installer checksum mismatch!
 ```
 
 **Solution:**
+
 1. Verify if Homebrew installer was legitimately updated:
    - Check https://github.com/Homebrew/install for recent commits
 2. Generate new checksum:
@@ -476,12 +499,14 @@ WARNING: Homebrew installer checksum mismatch!
 ### Role Failures
 
 **Symptom:**
+
 ```
 TASK [roles/some-role : Some task] *****************************************
 fatal: [localhost]: FAILED! => {...}
 ```
 
 **Solution:**
+
 1. Check verbose output for specific error
 2. Run specific role with extra verbosity:
    ```bash
@@ -496,10 +521,10 @@ fatal: [localhost]: FAILED! => {...}
 
 ### macOS Dock Configuration Not Applying
 
-**Symptom:**
-Dock settings changed by playbook revert after restart
+**Symptom:** Dock settings changed by playbook revert after restart
 
 **Solution:**
+
 1. Kill Dock to force reload:
    ```bash
    killall Dock
@@ -509,10 +534,10 @@ Dock settings changed by playbook revert after restart
 
 ### Docker Stack Issues (NAS)
 
-**Symptom:**
-Docker containers not starting or configuration not applied
+**Symptom:** Docker containers not starting or configuration not applied
 
 **Solution:**
+
 1. Check Docker service status:
    ```bash
    ssh nas "sudo systemctl status docker"
@@ -533,11 +558,13 @@ Docker containers not starting or configuration not applied
 ### Permission Denied Errors
 
 **Symptom:**
+
 ```
 fatal: [localhost]: FAILED! => {"changed": false, "msg": "Permission denied"}
 ```
 
 **Solution:**
+
 1. Verify `--ask-become-pass` flag is used
 2. Check become password is correct in vault
 3. Ensure user has sudo privileges
@@ -555,6 +582,7 @@ fatal: [localhost]: FAILED! => {"changed": false, "msg": "Permission denied"}
 ### Development Workflow
 
 1. **Test with specific tags:**
+
    ```bash
    ansible-playbook playbooks/local_bootstrap.yml \
      -i inventory/inventory.yml \
@@ -565,6 +593,7 @@ fatal: [localhost]: FAILED! => {"changed": false, "msg": "Permission denied"}
    ```
 
 2. **Use check mode for validation:**
+
    ```bash
    ansible-playbook playbooks/local_bootstrap.yml \
      -i inventory/inventory.yml \
@@ -573,6 +602,7 @@ fatal: [localhost]: FAILED! => {"changed": false, "msg": "Permission denied"}
    ```
 
 3. **Run full bootstrap periodically:**
+
    - Weekly for active development machines
    - Monthly for stable production systems
    - After major OS updates
@@ -582,13 +612,13 @@ fatal: [localhost]: FAILED! => {"changed": false, "msg": "Permission denied"}
 1. Create role in `roles/` directory
 2. Add to appropriate playbook:
    ```yaml
-   - include_role:
-       name: roles/new-role
-       apply:
-         tags: new-role
-     tags:
-       - new-role
-       - configfile  # If it creates config files
+     - include_role:
+         name: roles/new-role
+         apply:
+           tags: new-role
+       tags:
+         - new-role
+         - configfile # If it creates config files
    ```
 3. Test with tag:
    ```bash

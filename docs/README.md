@@ -8,16 +8,16 @@ guidance in [`CLAUDE.md`](../CLAUDE.md).
 
 ## Reference
 
-| File                                         | Purpose                                                             |
-| -------------------------------------------- | ------------------------------------------------------------------- |
-| [RUN_PY_REFERENCE.md](RUN_PY_REFERENCE.md)   | Full command reference for the `run.py` repository-management CLI.  |
+| File                                       | Purpose                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------ |
+| [RUN_PY_REFERENCE.md](RUN_PY_REFERENCE.md) | Full command reference for the `run.py` repository-management CLI. |
 
 ## Notes
 
 Informal, working documents — not authoritative.
 
-| File                       | Purpose                                        |
-| -------------------------- | ---------------------------------------------- |
+| File                           | Purpose                                       |
+| ------------------------------ | --------------------------------------------- |
 | [notes/todo.md](notes/todo.md) | Informal backlog of ideas and deferred tasks. |
 
 ## Plans

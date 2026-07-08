@@ -24,7 +24,7 @@ shape for new CLI options.
 ## Conventions
 
 - Route verbose/debug output to **stderr** so it never contaminates stdout.
-- Use emoji-prefixed status lines (🟢 available, 🔴 failed, 🟡 warning, ✅ success) with a reinforcing text color;
-  action messages (🔎 analyzing, 🧹 cleaning, 📦 building) use a cyan-ish accent. Keep it consistent with `run.py`.
+- Use emoji-prefixed status lines (🟢 available, 🔴 failed, 🟡 warning, ✅ success) with a reinforcing text color; action
+  messages (🔎 analyzing, 🧹 cleaning, 📦 building) use a cyan-ish accent. Keep it consistent with `run.py`.
 - Custom **Ansible modules** live in [`library/`](../../library) (e.g. `configure_network_interfaces.py`,
   `osx_pmset.py`); they follow the same Python style rules but are executed by Ansible, not via `uv`.
