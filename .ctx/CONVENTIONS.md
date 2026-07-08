@@ -5,8 +5,8 @@ on demand from [`CLAUDE.md`](../CLAUDE.md).
 
 ## Code Style
 
-Project-scoped style deltas live in [`.claude/rules/`](../.claude/rules) and inherit the global baselines at
-`~/.claude/rules/`:
+Self-contained style rules live in [`.claude/rules/`](../.claude/rules) (they do not depend on any global
+`~/.claude/rules/`):
 
 - [`python-style.md`](../.claude/rules/python-style.md) — ruff line-length 120, target py39, single quotes,
   `force-single-line` imports, **sphinx** docstring convention, interrogate 70%. Always run Python via `uv`; never run
