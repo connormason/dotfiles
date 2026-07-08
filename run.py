@@ -391,12 +391,11 @@ def style(
     def _interpret_color(_color: StyleColor, offset: int = 0) -> str:
         if isinstance(_color, int):
             return f'{38 + offset};5;{_color:d}'
-        elif isinstance(_color, (tuple, list)):
+        if isinstance(_color, (tuple, list)):
             r, g, b = _color
             return f'{38 + offset};2;{r:d};{g:d};{b:d}'
-        else:
-            _color = cast('str', _color)
-            return str(_ansi_colors[_color] + offset)
+        _color = cast('str', _color)
+        return str(_ansi_colors[_color] + offset)
 
     if not isinstance(text, str):
         text = str(text)
@@ -467,7 +466,7 @@ def printf(
 ) -> None:
     if debug and not RUN_DEBUG:
         return
-    elif debug:
+    if debug:
         fg   = fg if fg   is not None else 'bright_white'
         dim  = dim if dim is not None else True
         file = sys.stderr
@@ -644,7 +643,7 @@ def shell_command(
                 **kwargs,
             )
         except subprocess.CalledProcessError as e:
-            raise ShellCommandError(e.returncode, shlex.join(cmd), output=e.output, stderr=e.stderr)
+            raise ShellCommandError(e.returncode, shlex.join(cmd), output=e.output, stderr=e.stderr) from e
         except subprocess.TimeoutExpired as e:
             printf(f'❌ Command timed out after {timeout}s', fg='red', bold=True, indent=indent or 0)
             printf(f'  └─ Command: {shlex.join(cmd)}',       fg='red',            indent=(indent or 0) + 1)
@@ -700,8 +699,7 @@ def shell_command(
 
         if check and (returncode != 0):
             raise ShellCommandError(returncode, shlex.join(cmd), stderr=all_output)
-        else:
-            return subprocess.CompletedProcess(cmd, returncode, stdout=all_output)
+        return subprocess.CompletedProcess(cmd, returncode, stdout=all_output)
 
 
 def detect_ssh_error(e: subprocess.CalledProcessError) -> tuple[bool, str | None]:
@@ -745,55 +743,55 @@ def handle_command_error(e: subprocess.CalledProcessError, context: str, *, sugg
     :param context: description of what operation failed
     :param suggestion: optional helpful suggestion for fixing the issue
     """
-    printf(f'❌ {context}',                      fg='red', bold=True)
-    printf(f'  └─ Exit code: {e.returncode}',    fg='red', indent=1)
-    printf(f'  └─ Command: {shlex.join(e.cmd)}', fg='red', indent=1)
+    printf(f'❌ {context}',                        fg='red', bold=True)
+    printf(f'    └─ Exit code: {e.returncode}',    fg='red')
+    printf(f'    └─ Command: {shlex.join(e.cmd)}', fg='red')
 
     if e.stderr:
         stderr_text = e.stderr if isinstance(e.stderr, str) else e.stderr.decode()
-        printf('  └─ Error output:', fg='red', indent=1)
+        printf('   └─ Error output:', fg='red')
         for line in stderr_text.strip().split('\n')[:10]:
-            printf(f'     {line}',   fg='red', indent=1)
+            printf(f'      {line}',   fg='red')
 
     # Check for SSH-specific errors and provide tailored suggestions
     is_ssh_error, ssh_error_type = detect_ssh_error(e)
     if is_ssh_error and ssh_error_type:
-        printf('  └─ 🔑 SSH Authentication Issue Detected', fg='yellow', bold=True, indent=1)
+        printf('   └─ 🔑 SSH Authentication Issue Detected', fg='yellow', bold=True)
 
         if ssh_error_type == 'permission_denied':
-            printf('  └─ 💡 Your SSH key is not authorized for this repository', fg='yellow', indent=1)
-            printf('     Try these steps:', fg='yellow', indent=1)
-            printf('     1. Check if SSH key exists: ls -la ~/.ssh/', fg='yellow', indent=1)
-            printf('     2. Generate new key if needed: ssh-keygen -t ed25519 -C "your_email@example.com"', fg='yellow', indent=1)
-            printf('     3. Add key to ssh-agent: ssh-add ~/.ssh/id_ed25519', fg='yellow', indent=1)
-            printf('     4. Add public key to GitHub: https://github.com/settings/keys', fg='yellow', indent=1)
-            printf('     5. Test connection: ssh -T git@github.com', fg='yellow', indent=1)
+            printf('   └─ 💡 Your SSH key is not authorized for this repository',                       fg='yellow')
+            printf('      Try these steps:',                                                            fg='yellow')
+            printf('      1. Check if SSH key exists: ls -la ~/.ssh/',                                  fg='yellow')
+            printf('      2. Generate new key if needed: ssh-keygen -t ed25519 -C "email@example.com"', fg='yellow')
+            printf('      3. Add key to ssh-agent: ssh-add ~/.ssh/id_ed25519',                          fg='yellow')
+            printf('      4. Add public key to GitHub: https://github.com/settings/keys',               fg='yellow')
+            printf('      5. Test connection: ssh -T git@github.com',                                   fg='yellow')
 
         elif ssh_error_type == 'host_key_verification':
-            printf('  └─ 💡 GitHub host key not recognized', fg='yellow', indent=1)
-            printf('     Run: ssh-keyscan github.com >> ~/.ssh/known_hosts', fg='yellow', indent=1)
+            printf('   └─ 💡 GitHub host key not recognized',                    fg='yellow')
+            printf('      Run: ssh-keyscan github.com >> ~/.ssh/known_hosts',    fg='yellow')
 
         elif ssh_error_type in ('no_identities', 'key_load_failed'):
-            printf('  └─ 💡 SSH key could not be loaded', fg='yellow', indent=1)
-            printf('     Run: ssh-add ~/.ssh/id_ed25519 (or your key path)', fg='yellow', indent=1)
+            printf('   └─ 💡 SSH key could not be loaded',                       fg='yellow')
+            printf('      Run: ssh-add ~/.ssh/id_ed25519 (or your key path)',    fg='yellow')
 
         elif ssh_error_type == 'connection_refused':
-            printf('  └─ 💡 SSH connection refused', fg='yellow', indent=1)
-            printf('     Check network connectivity and firewall settings', fg='yellow', indent=1)
+            printf('   └─ 💡 SSH connection refused',                            fg='yellow')
+            printf('      Check network connectivity and firewall settings',     fg='yellow')
 
         elif ssh_error_type == 'connection_timeout':
-            printf('  └─ 💡 SSH connection timed out', fg='yellow', indent=1)
-            printf('     Check network connectivity and try again', fg='yellow', indent=1)
+            printf('   └─ 💡 SSH connection timed out',                          fg='yellow')
+            printf('      Check network connectivity and try again',             fg='yellow')
 
         elif ssh_error_type == 'unknown_host':
-            printf('  └─ 💡 Could not resolve hostname',  fg='yellow', indent=1)
-            printf('     Check your internet connection and DNS settings',      fg='yellow', indent=1)
+            printf('   └─ 💡 Could not resolve hostname',                        fg='yellow')
+            printf('      Check your internet connection and DNS settings',      fg='yellow')
 
         else:  # generic SSH error
-            printf('  └─ 💡 Try testing SSH connection: ssh -T git@github.com', fg='yellow', indent=1)
+            printf('   └─ 💡 Try testing SSH connection: ssh -T git@github.com', fg='yellow')
 
     elif suggestion:
-        printf(f'  └─ 💡 {suggestion}', fg='yellow', indent=1)
+        printf(f'   └─ 💡 {suggestion}',                                         fg='yellow')
 
 
 """

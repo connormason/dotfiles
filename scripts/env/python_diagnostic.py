@@ -480,20 +480,19 @@ def get_installed_packages() -> InstalledPythonPackages:
 
     if pip_list.get('error'):
         return ErrorDict(error=pip_list.get('message', 'Unknown error'))
-    elif pip_list.get('returncode') != 0:
+    if pip_list.get('returncode') != 0:
         return ErrorDict(error=f"`pip list` failed: {pip_list.get('stderr', 'Unknown error')}")
+    try:
+        pip_list_packages = json.loads(pip_list['stdout'])
+    except (json.JSONDecodeError, KeyError) as e:
+        return ErrorDict(error=f'Failed to parse `pip list` output: {e}')
     else:
-        try:
-            pip_list_packages = json.loads(pip_list['stdout'])
-        except (json.JSONDecodeError, KeyError) as e:
-            return ErrorDict(error=f'Failed to parse `pip list` output: {e}')
-        else:
-            packages: InstalledPythonVersions = InstalledPythonVersions(versions={}, editable_locations={})
-            for pkg in pip_list_packages:
-                packages['versions'][pkg['name']] = pkg['version']
-                if editable_location := pkg.get('editable_project_location'):
-                    packages['editable_locations'][pkg['name']] = editable_location
-            return packages
+        packages: InstalledPythonVersions = InstalledPythonVersions(versions={}, editable_locations={})
+        for pkg in pip_list_packages:
+            packages['versions'][pkg['name']] = pkg['version']
+            if editable_location := pkg.get('editable_project_location'):
+                packages['editable_locations'][pkg['name']] = editable_location
+        return packages
 
 
 # ============================================
@@ -537,8 +536,8 @@ def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int |
     Format diagnostic data for human-readable output
 
     :param data: diagnostic data dict
-    :param max_installed_packages: maximum number of installed python packages to list in "INSTALLED PACKAGES" section before
-                         truncating list. If None, all installed packages will be outputted
+    :param max_installed_packages: maximum number of installed python packages to list in "INSTALLED PACKAGES" section
+                                   before truncating list. If None, all installed packages will be outputted
     :return: formatted string output
     """
 
@@ -661,9 +660,10 @@ def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int |
             lines.append(f'{var_ljust} {value}')
 
     if path_envvar := data['environment_variables'].get('PATH'):
-        lines.append('\nPATH:')
-        for path in path_envvar.split(':'):
-            lines.append(f'  {path}')
+        lines.extend([
+            '\nPATH:',
+            *[f'  {path}' for path in path_envvar.split(':')],
+        ])
 
     """ Python paths from :func:`get_python_paths` """
 
@@ -673,10 +673,8 @@ def format_diagnostic_output(data: Diagnostics, *, max_installed_packages: int |
         '-' * 80,
         f"sys.executable: {data['python_paths']['sys_executable']}",
         '\nsys.path:',
+        *[f'  {path}' for path in data['python_paths']['sys_path']],
     ])
-
-    for path in data['python_paths']['sys_path']:
-        lines.append(f'  {path}')
 
     """ Common installation locations from :func:`check_common_locations` """
 
@@ -829,7 +827,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path = Path(f'python_diagnostic_{timestamp}.{extension}')
 
         output_path.write_text(output)
-        print('')
+        print()
         print(f'Diagnostic report saved to: {output_path}',     file=sys.stderr)
         print(f'File size: {output_path.stat().st_size} bytes', file=sys.stderr)
     else:

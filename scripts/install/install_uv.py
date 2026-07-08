@@ -90,9 +90,8 @@ def check_python_version() -> bool:
             file=sys.stderr,
         )
         return False
-    else:
-        vprint(f'✅ Python version {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')
-        return True
+    vprint(f'✅ Python version {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')
+    return True
 
 
 def detect_shell() -> str | None:
@@ -103,8 +102,7 @@ def detect_shell() -> str | None:
     """
     if shell := os.environ.get('SHELL', ''):
         return Path(shell).name
-    else:
-        return None
+    return None
 
 
 def get_shell_rc_file() -> Path | None:
@@ -143,12 +141,11 @@ def get_path_export_command(install_dir: Path) -> str | None:
     shell = detect_shell()
     if shell in ('bash', 'zsh'):
         return f'export PATH="{install_dir}:$PATH"'
-    elif shell == 'fish':
+    if shell == 'fish':
         return f'set -gx PATH "{install_dir}" $PATH'
-    elif shell in ('tcsh', 'csh'):
+    if shell in ('tcsh', 'csh'):
         return f'setenv PATH "{install_dir}:$PATH"'
-    else:
-        return None
+    return None
 
 
 # TODO: support brew install location as well
@@ -236,8 +233,7 @@ def is_installed(*, quiet: bool = False) -> bool:
                 print(f'   📍 Found at: {executable}')
                 print('   💡 Note: Consider adding this location to your PATH')
         return True
-    else:
-        return False
+    return False
 
 
 def get_installer_url() -> str:
@@ -250,10 +246,9 @@ def get_installer_url() -> str:
     system = platform.system().lower()
     if system in ('linux', 'darwin'):
         return 'https://astral.sh/uv/install.sh'
-    elif system == 'windows':
+    if system == 'windows':
         return 'https://astral.sh/uv/install.ps1'
-    else:
-        raise OSError(f'Unsupported operating system: {system}')
+    raise OSError(f'Unsupported operating system: {system}')
 
 
 def download_installer(
@@ -284,7 +279,7 @@ def download_installer(
             print(f'⏬ Downloading installer from {url}...')
             vprint(f'   Attempt {attempt}/{retries}')
 
-            with urllib.request.urlopen(url, timeout=timeout) as response:
+            with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310
                 content = response.read()
             with Path(dest).expanduser().open('wb') as f:
                 f.write(content)
@@ -292,7 +287,7 @@ def download_installer(
         except urllib.error.URLError as e:
             print(f'❌ Download failed: {e}', file=sys.stderr)
             if attempt == retries:
-                print('',                                                   file=sys.stderr)
+                print(file=sys.stderr)
                 print('🔧 Troubleshooting:',                                file=sys.stderr)
                 print('   1. Check your internet connection',               file=sys.stderr)
                 print('   2. Verify you can access https://astral.sh',      file=sys.stderr)
@@ -373,11 +368,10 @@ def run_installer(installer_path: PathLike) -> bool:
     system = platform.system().lower()
     if system in ('linux', 'darwin'):
         return run_installer_unix(installer_path)
-    elif system == 'windows':
+    if system == 'windows':
         return run_installer_windows(installer_path)
-    else:
-        print(f'❌ Unsupported platform: {system}', file=sys.stderr)
-        return False
+    print(f'❌ Unsupported platform: {system}', file=sys.stderr)
+    return False
 
 
 def verify_installation() -> bool:
@@ -386,7 +380,7 @@ def verify_installation() -> bool:
 
     :return: True on success, False on failure
     """
-    print('')
+    print()
     print('🔍 Verifying installation...')
     vprint('Checking all known installation locations...')
 
@@ -411,31 +405,30 @@ def verify_installation() -> bool:
         return True
 
     # Tool is installed but not in PATH
+    print(f'📍 Found at: {executable}\n')
+    print('⚠️  UV is installed but not in your PATH')
+
+    install_dir = Path(executable).parent
+    shell       = detect_shell()
+    rc_file     = get_shell_rc_file()
+    export_cmd  = get_path_export_command(install_dir)
+
+    print()
+    print('💡 To make UV available globally, add it to your PATH:\n')
+    if rc_file and export_cmd and shell:
+        print(f'   For {shell}, add this line to {rc_file}:')
+        print(f'   {export_cmd}\n')
+        print('   Then run:')
+        print(f'   source {rc_file}')
     else:
-        print(f'📍 Found at: {executable}\n')
-        print('⚠️  UV is installed but not in your PATH')
+        print(f'   Add {install_dir} to your PATH environment variable')
+        print("   Consult your shell's documentation for instructions")
 
-        install_dir = Path(executable).parent
-        shell       = detect_shell()
-        rc_file     = get_shell_rc_file()
-        export_cmd  = get_path_export_command(install_dir)
+    print()
+    print(f'   Or use the full path: {executable}')
 
-        print('')
-        print('💡 To make UV available globally, add it to your PATH:\n')
-        if rc_file and export_cmd and shell:
-            print(f'   For {shell}, add this line to {rc_file}:')
-            print(f'   {export_cmd}\n')
-            print('   Then run:')
-            print(f'   source {rc_file}')
-        else:
-            print(f'   Add {install_dir} to your PATH environment variable')
-            print("   Consult your shell's documentation for instructions")
-
-        print('')
-        print(f'   Or use the full path: {executable}')
-
-        # Still consider this a success since the tool is installed
-        return True
+    # Still consider this a success since the tool is installed
+    return True
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -619,7 +612,7 @@ def main(argv: list[str] | None = None) -> None:
     if not verify_installation():
         sys.exit(ExitCode.VERIFICATION_FAILED)
 
-    print('')
+    print()
     print('🎉 Installation complete!\n')
     print('📋 Next steps:')
     print('   1. Close and reopen your terminal (or run: source ~/.bashrc)')

@@ -97,7 +97,7 @@ except FileNotFoundError:
 
     oauth_code = re.sub(r'^(.*?code=){0,1}([0-9a-f]*)\s*$', r'\2', redirected_url)
     if oauth_code == '':
-        raise Exception('Invalid code')
+        raise Exception('Invalid code') from None
 
     token = requests.post(
         f'{BASE_URL}oauth/token',
@@ -110,7 +110,7 @@ except FileNotFoundError:
         },
     ).json()
     if token['token_type'] != 'bearer':
-        raise Exception(f'Received invalid token {token}. Try generating a new code (one time use)')
+        raise Exception(f'Received invalid token {token}. Try generating a new code (one time use)') from None
 
     pairing_response = requests.post(
         f'{BASE_URL}api/v1/remotepairing/application/user',

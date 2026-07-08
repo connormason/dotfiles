@@ -47,7 +47,6 @@ class Error(Exception):
     """
     Parsing error raised when a regex match or read operation fails within the :class:`Reader`
     """
-    ...
 
 
 # =======
@@ -243,7 +242,7 @@ def parse_key(reader: Reader) -> str | None:
     char = reader.peek(1)
     if char == '#':
         return None
-    elif char == "'":
+    if char == "'":
         key, *_ = reader.read_regex(_single_quoted_key)
     else:
         key, *_ = reader.read_regex(_unquoted_key)
@@ -269,14 +268,13 @@ def parse_value(reader: Reader) -> str:
     if char == "'":
         value, *_ = reader.read_regex(_single_quoted_value)
         return decode_escapes(_single_quote_escapes, value)
-    elif char == '"':
+    if char == '"':
         value, *_ = reader.read_regex(_double_quoted_value)
         return decode_escapes(_double_quote_escapes, value)
-    elif char in ('', '\n', '\r'):
+    if char in ('', '\n', '\r'):
         return ''
-    else:
-        part, *_ = reader.read_regex(_unquoted_value)
-        return re.sub(r'\s+#.*', '', part).rstrip()
+    part, *_ = reader.read_regex(_unquoted_value)
+    return re.sub(r'\s+#.*', '', part).rstrip()
 
 
 def parse_binding(reader: Reader) -> Binding:
@@ -355,7 +353,7 @@ class Atom(metaclass=abc.ABCMeta):
     Each atom represents either a literal text segment or a variable reference that can be resolved against an
     environment mapping
     """
-    def __ne__(self, other: Any) -> bool:
+    def __ne__(self, other: object) -> bool:
         result = self.__eq__(other)
         if result is NotImplemented:
             return NotImplemented
@@ -390,11 +388,10 @@ class Literal(Atom):
     def __hash__(self) -> int:
         return hash((self.__class__, self.value))
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, self.__class__):
             return self.value == other.value
-        else:
-            return NotImplemented
+        return NotImplemented
 
     def resolve(self, env: Mapping[str, str | None]) -> str:
         """
@@ -426,11 +423,10 @@ class Variable(Atom):
     def __hash__(self) -> int:
         return hash((self.__class__, self.name, self.default))
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, self.__class__):
             return (self.name, self.default) == (other.name, other.default)
-        else:
-            return NotImplemented
+        return NotImplemented
 
     def resolve(self, env: Mapping[str, str | None]) -> str:
         """
@@ -592,8 +588,7 @@ def dotenv_values(
 
     if interpolate:
         return dict(resolve_variables(raw_values, override=override)), has_errors
-    else:
-        return dict(raw_values), has_errors
+    return dict(raw_values), has_errors
 
 
 # =================
@@ -611,8 +606,7 @@ def _shell_escape(value: str) -> str:
     value = value.replace('\\', '\\\\')
     value = value.replace('"', '\\"')
     value = value.replace('$', '\\$')
-    value = value.replace('`', '\\`')
-    return value
+    return value.replace('`', '\\`')
 
 
 def format_json(values: dict[str, str | None], **kwargs: Any) -> str:

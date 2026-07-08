@@ -106,7 +106,7 @@ def run_module() -> None:
     commands: list[Any] = []
     result:   dict[str, Any] = {
         'changed': False,
-        'diff': {
+        'diff':    {
             'before': '',
             'after':  '',
         },
@@ -114,7 +114,7 @@ def run_module() -> None:
 
     def add_diff(block: str, param: str, old_value: Any, new_value: Any) -> None:
         result['diff']['before'] += f'{block}.{param}={old_value}\n'
-        result['diff']['after'] += f'{block}.{param}={new_value}\n'
+        result['diff']['after']  += f'{block}.{param}={new_value}\n'
 
     blocks: list[tuple[str, str, Any]] = [
         ('on_battery', '-b', output['Battery Power']),
@@ -124,7 +124,7 @@ def run_module() -> None:
         for param, value in module.params[block].items():
             if value is None:
                 continue
-            elif param not in current_values:
+            if param not in current_values:
                 module.fail_json(
                     msg=(
                         f'{param} is not present in pmset output. '

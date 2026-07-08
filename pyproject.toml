@@ -299,9 +299,10 @@ ignore = [
 # =========================================
 [tool.ruff.lint.per-file-ignores]
 # keep-sorted start
-"run.py"                   = ["S112"]
-"scripts/env/venvshell.py" = ["RUF001"]
-"tests/**"                 = ["B", "S", "SIM", "PERF"]
+"run.py"                                                   = ["S112"]
+"scripts/env/venvshell.py"                                 = ["RUF001"]
+"services/homeassistant/config/scripts/get_lutron_cert.py" = ["S"]
+"tests/**"                                                 = ["B", "S", "SIM", "PERF"]
 # keep-sorted end
 
 # `ruff check` linter rule group-specific settings
