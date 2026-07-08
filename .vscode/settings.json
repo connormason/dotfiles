@@ -1,0 +1,3 @@
+{
+    "python-envs.workspaceSearchPaths": ["./**/.venv"]
+}
