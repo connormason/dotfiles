@@ -1,0 +1,21 @@
+# Gitleaks configuration for this repository.
+#
+# Extends the built-in default ruleset (see
+# https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml) and layers on a
+# repo-specific allowlist. Gitleaks and the gitleaks-action pick this file up automatically
+# when it lives at the repository root.
+
+title = "dotfiles gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Repo-specific allowlist"
+# The detect-secrets baseline (managed by the `detect-secrets` prek hook) records only SHA1
+# hashes of previously-audited findings, never plaintext secrets. Gitleaks' generic-api-key /
+# high-entropy rules flag those hashes as false positives, so exclude the file from scanning —
+# matching the `should_exclude_file` filter detect-secrets itself applies to this path.
+paths = [
+    '''\.secrets\.baseline$''',
+]
