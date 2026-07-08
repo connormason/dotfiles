@@ -21,7 +21,7 @@ repos:
   # ========================================================================================
 
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.11.22
+    rev: 0.11.28
     hooks:
 
       # Ensure uv.lock is up-to-date
@@ -62,7 +62,7 @@ repos:
         priority: 5
 
   - repo: https://github.com/pre-commit/sync-pre-commit-deps
-    rev: v0.0.3
+    rev: v0.0.4
     hooks:
 
       # Sync pre-commit hook dependencies based on other installed hooks
@@ -283,7 +283,7 @@ repos:
   # ========================================================================================
 
   - repo: https://github.com/google/keep-sorted
-    rev: v0.9.0
+    rev: v0.9.1
     hooks:
 
       # Language-agnostic auto-sorting between two markers
@@ -377,7 +377,7 @@ repos:
       # Check/lint and output errors as junit if running in CI
       - id: ruff
         name: "[lint]   python lint (ruff check) - junit output"
-        stages: [pre-commit, manual]
+        stages: [manual]
         priority: 40
 
       # Python lint check (must happen after --fix-only stage above)
