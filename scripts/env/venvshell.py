@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
@@ -27,7 +28,6 @@ from typing import cast
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from collections.abc import Sequence
 
 
 # ====================
@@ -144,6 +144,37 @@ class Exit(Exception):
 # ==================
 
 
+ANSI_COLORS: dict[str, int] = {
+    'black':   30, 'bright_black':   90,
+    'red':     31, 'bright_red':     91,
+    'green':   32, 'bright_green':   92,
+    'yellow':  33, 'bright_yellow':  93,
+    'blue':    34, 'bright_blue':    94,
+    'magenta': 35, 'bright_magenta': 95,
+    'cyan':    36, 'bright_cyan':    96,
+    'white':   37, 'bright_white':   97,
+    'reset':   39,
+}
+ANSI_RESET_ALL = '\033[0m'
+
+
+def _interpret_color(_color: StyleColor, offset: int = 0) -> str:
+    """
+    Resolve a color name, integer, or RGB tuple to an ANSI SGR parameter string.
+
+    :param _color: color as a name string, 256-color int, or (r, g, b) tuple
+    :param offset: offset to add for background colors (10 for bg, 0 for fg)
+    :return: ANSI SGR parameter string (e.g. ``'38;5;196'``)
+    """
+    if isinstance(_color, int):
+        return f'{38 + offset};5;{_color:d}'
+    if isinstance(_color, (tuple, list)):
+        r, g, b = _color
+        return f'{38 + offset};2;{r:d};{g:d};{b:d}'
+    _color = cast('str', _color)
+    return str(ANSI_COLORS[_color] + offset)
+
+
 def style(
     text: Any,
     *,
@@ -172,36 +203,6 @@ def style(
     """
     if os.environ.get('NO_COLOR') is not None:
         return str(text)
-
-    _ansi_colors: dict[str, int] = {
-        'black':   30, 'bright_black':   90,
-        'red':     31, 'bright_red':     91,
-        'green':   32, 'bright_green':   92,
-        'yellow':  33, 'bright_yellow':  93,
-        'blue':    34, 'bright_blue':    94,
-        'magenta': 35, 'bright_magenta': 95,
-        'cyan':    36, 'bright_cyan':    96,
-        'white':   37, 'bright_white':   97,
-        'reset':   39,
-    }
-    _ansi_reset_all = '\033[0m'
-
-    def _interpret_color(_color: StyleColor, offset: int = 0) -> str:
-        """
-        Resolve a color name, integer, or RGB tuple to an ANSI SGR parameter string.
-
-        :param _color: color as a name string, 256-color int, or (r, g, b) tuple
-        :param offset: offset to add for background colors (10 for bg, 0 for fg)
-        :return: ANSI SGR parameter string (e.g. ``'38;5;196'``)
-        """
-        if isinstance(_color, int):
-            return f'{38 + offset};5;{_color:d}'
-        if isinstance(_color, (tuple, list)):
-            r, g, b = _color
-            return f'{38 + offset};2;{r:d};{g:d};{b:d}'
-        _color = cast('str', _color)
-        return str(_ansi_colors[_color] + offset)
-
     if not isinstance(text, str):
         text = str(text)
 
@@ -227,7 +228,7 @@ def style(
 
     bits.append(text)
     if reset:
-        bits.append(_ansi_reset_all)
+        bits.append(ANSI_RESET_ALL)
     return ''.join(bits)
 
 
@@ -298,7 +299,13 @@ def typestyle(val: Any, **opts: Any) -> str:
         return style(repr(val), fg='bright_cyan', bold=True, **opts)
     if isinstance(val, str):
         return style(repr(val), fg='green', **opts)
-    return str(val)
+    if isinstance(val, Sequence):
+        return ''.join([
+            style('[', fg='bright_white'),
+            ', '.join(typestyle(item, **opts) for item in val),
+            style(']', fg='bright_white'),
+        ])
+    return style(val, **opts)
 
 
 def dim_paren(s: str, *, fg: StyleColor | None = None) -> str:
@@ -318,26 +325,35 @@ def dim_paren(s: str, *, fg: StyleColor | None = None) -> str:
 
 def annotated_opt_help(
     opt_help: str,
-    *,
+    *extra_help_lines: str,
     default: Any | None = None,
     default_fg: StyleColor | None = None,
     envvar: str | None = None,
+    extra_line: bool = True,
 ) -> str:
     """
     Build a styled argparse help string with optional default value and environment variable annotations.
 
-    :param opt_help: base help text for the option
+    :param opt_help: core help text for the option (will be styled "bright_white")
+    :param extra_help_lines: additional help text lines (joined by newlines) for the option. Outputted with no styling
+                             after `opt_help` and before `default`/`envvar`
     :param default: default value to display below the help text
     :param default_fg: explicit foreground color for the default value (overrides :func:`typestyle`)
     :param envvar: environment variable name that can override this option
+    :param extra_line: if True (default), extra blank line included at the end of the option help text (visually spaces
+                       sequential options apart from each other)
     :return: multi-line styled help string with annotations appended
     """
     help_lines: list[str] = style(opt_help, fg='bright_white').splitlines()
+    for extra_help_line in extra_help_lines:
+        help_lines.extend(extra_help_line.splitlines())
     if default is not None:
         help_lines.append(f'  default: {typestyle(default) if default_fg is None else style(default, fg=default_fg)}')
     if envvar is not None:
         help_lines.append(f'  env var: {style(envvar, fg="cyan")}')
-    return '\n'.join([*help_lines, '  '])
+    if extra_line:
+        help_lines.append('  ')
+    return '\n'.join(help_lines)
 
 
 def printf(
@@ -1010,7 +1026,7 @@ def main(argv: list[str] | None = None) -> None:
         cwd = Path.cwd()
         printf(f'No virtual environment found in {pathstyle(cwd)}', error=True)
         printf(' '.join([
-            style('Use', dim=True, fg='bright_white'), optstyle('--path PATH', dim=True),
+            style('Use',   dim=True, fg='bright_white'), optstyle('--path PATH', dim=True),
             *([style('or', dim=True, fg='bright_white'), optstyle('--hatch ENV', dim=True)] if HATCH_ENABLED else []),
             style('to specify an environment', dim=True, fg='bright_white'),
         ]), file=sys.stderr, indent=10)
