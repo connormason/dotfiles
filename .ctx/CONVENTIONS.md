@@ -14,7 +14,7 @@ Self-contained style rules live in [`.claude/rules/`](../.claude/rules) (they do
 - [`script-style.md`](../.claude/rules/script-style.md) — `run.py` is the reference implementation of the styling
   contract.
 - [`readme-guidelines.md`](../.claude/rules/readme-guidelines.md) — per-directory READMEs with breadcrumbs;
-  hand-maintained (no mdformat hook in this repo).
+  auto-formatted with mdformat via prek (`.ctx/` and `docs/plans/` excluded).
 
 ## Adding a New Dotfile
 

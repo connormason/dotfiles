@@ -30,7 +30,7 @@ python3 run.py update-inventory
 # Clean build artifacts and caches
 python3 run.py clean
 
-# Run pre-commit hooks on all files
+# Run prek (pre-commit) hooks on all files
 python3 run.py pre
 
 # Install Python tooling
@@ -53,27 +53,30 @@ make clean
 make pre
 ```
 
-## Pre-commit Hooks
+## Git Hooks (prek)
 
-Configured in `.pre-commit-config.yaml`:
+Hooks run via [prek](https://github.com/j178/prek) (a faster pre-commit reimplementation), configured in
+`.pre-commit-config.yaml`. Hooks are ordered by `priority`: dependency syncing (0–6) → read-only checks (10) →
+whitespace fixers (20s) → formatters (30) → linters (40).
 
-- **File integrity**: Large files, merge conflicts, private keys, symlinks
-- **Python**: AST validation, debug statements, ruff linting, mypy type checking, interrogate docstring coverage
-- **Data formats**: JSON, YAML, TOML, XML validation
-- **YAML**: yamllint with custom config (`.yamllint.yaml`)
-- **Fixers**: Whitespace, line endings, UTF-8 BOM
+- **Dependency sync**: `uv-lock`, `uv-sync`, `uv-export` (requirements.txt), `sync-with-uv`, `sync-pre-commit-deps`
+- **Checks**: filesystem safety, large files, merge conflicts, private keys, `detect-secrets`, submodule ban,
+  shebang/executable, TOML/XML/YAML/JSON syntax, `validate-pyproject`, Python AST/debug/test-naming
+- **Formatters**: JSON (`.claude`), shell (`shfmt`), TOML (`taplo`), markdown (`mdformat`), Python (`ruff --fix-only`)
+- **Linters**: `ruff check`, `mypy`, `interrogate`, `shellcheck`, `yamllint`, `codespell`
 
 ```bash
 # All files
-pre-commit run --all-files
+prek run --all-files
 
 # Or via the run.py wrapper
 python3 run.py pre
+
+# Install / update the git hook shims
+python3 run.py install-hooks
 ```
 
 ## Ansible Linting
 
-Commented out in the pre-commit config but available:
-
-- `ansible-lint` with `.ansible-lint.yaml` configuration
-- `shellcheck` for shell script validation
+`ansible-lint` (with `.ansible-lint.yaml`) is available but commented out in `.pre-commit-config.yaml`; enable when
+ready. `shellcheck` is already enabled as a prek linter (priority 40).

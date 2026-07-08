@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch clean pre makefile
+.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch clean pre install-hooks uninstall-hooks makefile
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -26,7 +26,9 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Codebase:$(NC)"
 	@echo "  $(YELLOW)clean           $(NC) Remove all environments, build artifacts, and caches"
-	@echo "  $(YELLOW)pre             $(NC) Run pre-commit hooks on all project files"
+	@echo "  $(YELLOW)pre             $(NC) Run prek (pre-commit) hooks on all project files"
+	@echo "  $(YELLOW)install-hooks   $(NC) Install prek git hook shims (overwrites any existing shims)"
+	@echo "  $(YELLOW)uninstall-hooks $(NC) Uninstall prek git hook shims"
 	@echo "  $(YELLOW)makefile        $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
 	@echo ""
 
@@ -57,8 +59,14 @@ install-hatch: ## Install [95mhatch[0m Python project manager
 clean: ## Remove all environments, build artifacts, and caches
 	@python3 run.py clean
 
-pre: ## Run pre-commit hooks on all project files
+pre: ## Run prek (pre-commit) hooks on all project files
 	@python3 run.py pre
+
+install-hooks: ## Install prek git hook shims (overwrites any existing shims)
+	@python3 run.py install-hooks
+
+uninstall-hooks: ## Uninstall prek git hook shims
+	@python3 run.py uninstall-hooks
 
 makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
 	@python3 run.py makefile

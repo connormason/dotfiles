@@ -17,7 +17,7 @@ Command Categories
 -----------------
 - **Inventory**: Manage the standalone inventory git repository
 - **Tool Installation**: Install Python tooling (uv, hatch) with retry logic
-- **Codebase**: Clean build artifacts, run pre-commit hooks, generate Makefile
+- **Codebase**: Clean build artifacts, run prek hooks, generate Makefile
 
 Key Features
 -----------
@@ -1370,7 +1370,7 @@ Codebase commands
 
 General repository maintenance commands:
 - clean: Remove build artifacts, caches, and temporary files
-- pre: Run pre-commit hooks on all files
+- pre: Run prek hooks on all files
 - makefile: Generate Makefile targets from @command-registered functions
   - Parses all registered commands and creates equivalent Make targets
   - Organizes targets by command group
@@ -1408,11 +1408,37 @@ def cmd_clean(args: argparse.Namespace) -> None:
 @command(group='Codebase')
 def cmd_pre(args: argparse.Namespace) -> None:
     """
-    Run pre-commit hooks on all project files
+    Run prek (pre-commit) hooks on all project files
     """
-    printf('🕝 Running pre-commit hooks on all project files...', fg='bright_cyan')
+    printf('🕝 Running prek hooks on all project files...', fg='bright_cyan')
     shell_command(
-        ['pre-commit', 'run', '--all-files'],
+        ['prek', 'run', '--all-files'],
+        indent=3,
+        check=False,
+    )
+
+
+@command(group='Codebase')
+def cmd_install_hooks(args: argparse.Namespace) -> None:
+    """
+    Install prek git hook shims (overwrites any existing shims)
+    """
+    printf('🪝 Installing prek git hook shims...', fg='bright_cyan')
+    shell_command(
+        ['prek', 'install', '-f'],
+        indent=3,
+        check=False,
+    )
+
+
+@command(group='Codebase')
+def cmd_uninstall_hooks(args: argparse.Namespace) -> None:
+    """
+    Uninstall prek git hook shims
+    """
+    printf('🪝 Uninstalling prek git hook shims...', fg='bright_cyan')
+    shell_command(
+        ['prek', 'uninstall'],
         indent=3,
         check=False,
     )

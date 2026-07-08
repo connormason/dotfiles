@@ -5,9 +5,11 @@ dotfiles, applications, system settings, and home infrastructure (a NAS with a m
 
 For detailed reference, load on-demand:
 
-- [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) — bootstrap flow, inventory, role system, `run.py`, Docker stack, macOS layers
-- [`.ctx/BUILD.md`](.ctx/BUILD.md) — full command reference (playbooks / `run.py` / make / pre-commit / lint)
-- [`.ctx/CONVENTIONS.md`](.ctx/CONVENTIONS.md) — code style pointers and the "adding a dotfile / role / macOS app" patterns
+- [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) — bootstrap flow, inventory, role system, `run.py`, Docker stack, macOS
+  layers
+- [`.ctx/BUILD.md`](.ctx/BUILD.md) — full command reference (playbooks / `run.py` / make / prek / lint)
+- [`.ctx/CONVENTIONS.md`](.ctx/CONVENTIONS.md) — code style pointers and the "adding a dotfile / role / macOS app"
+  patterns
 - [`.claude/rules/`](.claude/rules) — self-contained Python / script / README style rules for this repo
 - [`CLAUDE-LESSONS.md`](CLAUDE-LESSONS.md) — captured mistakes and rules to prevent recurrence; append new lessons here
 
@@ -19,8 +21,8 @@ For detailed reference, load on-demand:
    (`make help`). Full command reference in [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 
 Both bootstrap scripts validate the repo, install Homebrew (checksum-verified) and Ansible, then run their playbook. See
-[`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flow and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation
-(tags / extra-vars).
+[`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flow and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation (tags /
+extra-vars).
 
 ## Inventory
 
