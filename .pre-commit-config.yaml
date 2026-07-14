@@ -356,7 +356,7 @@ repos:
           - mdformat-toc
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.20
+    rev: v0.15.21
     hooks:
 
       # Python lint auto-fixes
@@ -373,7 +373,7 @@ repos:
   # ========================================================================================
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.20
+    rev: v0.15.21
     hooks:
 
       # Python lint check (must happen after --fix-only stage above)
@@ -392,7 +392,7 @@ repos:
         priority: 40
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.2.0
+    rev: v2.3.0
     hooks:
 
       # Python static type checking
