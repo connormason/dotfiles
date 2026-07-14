@@ -233,6 +233,28 @@ repos:
         priority: 10
         args: [--pytest-test-first]
 
+  - repo: local
+    hooks:
+
+      # Validate JSON5 file syntax (PEP 723 script; pyjson5 resolved at runtime)
+      - id: check-json5
+        name: "[check]  json5 syntax"
+        stages: [pre-commit, manual]
+        priority: 10
+        entry: scripts/hooks/check-json5.py
+        language: python
+        files: .*\.json5$
+
+      # Validate Pkl file syntax via `pkl eval` (no-op if `pkl` is not installed)
+      - id: check-pkl
+        name: "[check]  pkl syntax"
+        stages: [pre-commit, manual]
+        priority: 10
+        entry: scripts/hooks/check-pkl.py
+        language: python
+        files: .*\.pkl$
+        types: [file]
+
   # ========================================================================================
   # Text/whitespace fixers
   #
@@ -279,6 +301,7 @@ repos:
   #   - Priority 35    shell scripts                  shfmt
   #                    json (.claude)                 pretty-format-json
   #                    toml                           taplo
+  #                    pkl                            format-pkl
   #                    markdown                       mdformat
   #                    python                         ruff --fix-only
   #
@@ -290,8 +313,8 @@ repos:
 
       # Language-agnostic auto-sorting between two markers
       - id: keep-sorted
-        stages: [pre-commit]
         name: "[format] sorting (keep-sorted)"
+        stages: [pre-commit]
         priority: 30
 
   - repo: https://github.com/scop/pre-commit-shfmt
@@ -330,6 +353,19 @@ repos:
         name: "[format] toml (taplo)"
         stages: [pre-commit]
         priority: 35
+
+  - repo: local
+    hooks:
+
+      # Pkl file auto-formatting (no-op if `pkl` is not installed); not run in CI
+      - id: format-pkl
+        name: "[format] pkl (pkl format)"
+        stages: [pre-commit]
+        priority: 35
+        entry: scripts/hooks/format-pkl.py
+        language: python
+        files: .*\.pkl$
+        types: [file]
 
   - repo: https://github.com/hukkin/mdformat
     rev: 1.0.0
