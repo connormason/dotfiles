@@ -222,14 +222,14 @@ class Args(argparse.Namespace):
     """
     :class:`argparse.Namespace` annotated with args supported by this script.
     """
-    filenames:   Sequence[str]
-    require_pkl: bool
-    executable:  str
-    verbose:     bool
-    dump_yaml:   bool
-    color:       ColorOption | None
-    timeout:     float | None
-    no_cache:    bool
+    filenames:   Sequence[str]              # positional arg(s)
+    require_pkl: bool                       # --require-pkl
+    executable:  str                        # --executable
+    verbose:     bool                       # --verbose
+    dump_yaml:   bool                       # --dump-yaml
+    color:       ColorOption | None         # --color
+    timeout:     float | None               # --timeout
+    no_cache:    bool                       # --no-cache
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:

@@ -218,8 +218,8 @@ class Args(argparse.Namespace):
     """
     :class:`argparse.Namespace` annotated with args supported by this script.
     """
-    filenames: Sequence[str]
-    verbose:   bool
+    filenames: Sequence[str]        # positional arg(s)
+    verbose:   bool                 # --verbose
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:

@@ -223,11 +223,11 @@ class Args(argparse.Namespace):
     """
     :class:`argparse.Namespace` annotated with args supported by this script.
     """
-    filenames:       Sequence[str]
-    require_pkl:     bool
-    executable:      str
-    grammar_version: GrammarVersion
-    verbose:         bool
+    filenames:       Sequence[str]          # positional arg(s)
+    require_pkl:     bool                   # --require-pkl
+    executable:      str                    # --executable
+    grammar_version: GrammarVersion         # --grammar-version
+    verbose:         bool                   # --verbose
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:
