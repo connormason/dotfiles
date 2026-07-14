@@ -1,11 +1,13 @@
 ---
 # prek/pre-commit configuration
 # https://prek.j178.dev/configuration/
+
 default_install_hook_types:
   - pre-commit
   - post-checkout
   - post-merge
   - post-rewrite
+
 exclude: ^archive/
 
 repos:
@@ -353,10 +355,11 @@ repos:
           - mdformat-simple-breaks
           - mdformat-toc
 
-  # Python lint auto-fixes
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.20
     hooks:
+
+      # Python lint auto-fixes
       - id: ruff
         name: "[fix]    python lint (ruff check --fix-only)"
         stages: [pre-commit]
@@ -379,6 +382,7 @@ repos:
         name: "[lint]   python lint (ruff check) - junit output"
         stages: [manual]
         priority: 40
+        args: [--output-format, junit, --output-file, .reports/ruff.xml]
 
       # Python lint check (must happen after --fix-only stage above)
       # Always check/lint (local or CI), output errors to stdout
@@ -396,12 +400,12 @@ repos:
         name: "[lint]   python typing (mypy)"
         stages: [pre-commit, manual]
         priority: 40
+        args: [--config-file, pyproject.toml, --junit-xml, .reports/mypy.xml]
         additional_dependencies:
           - "--index-url=https://pypi.org/simple"
           - types-PyYAML
           - types-requests
           - types-toml
-        args: [--config-file, pyproject.toml, --junit-xml, .reports/mypy.xml]
         exclude: ^services/homeassistant/config/
 
   - repo: https://github.com/econchick/interrogate
@@ -478,7 +482,7 @@ repos:
 
       # Fix common misspellings in text files
       - id: codespell
-        name: "[check]  spelling mistakes"
+        name: "[fix]    spelling mistakes"
         stages: [pre-commit, manual]
         priority: 40
         pass_filenames: false
