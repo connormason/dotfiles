@@ -23,6 +23,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       # The runner has no git identity, so the script is called directly instead of through prek's --identity hook
       - name: Scan tracked files
+        shell: bash
         run: git ls-files -z | xargs -0 uv run --no-project scripts/hooks/check-leaks.py
       - name: Scan commit identities
         env:
