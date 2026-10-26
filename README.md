@@ -73,7 +73,6 @@ Configures home NAS server with:
 - **[Python CLI Reference](docs/RUN_PY_REFERENCE.md)** - Complete `run.py` command reference
 
   - Inventory management (list-hosts, update-inventory)
-  - Tool installation (install-uv, install-hatch)
   - Codebase maintenance (clean, pre, makefile)
   - Architecture details and extension guide
 
@@ -123,12 +122,6 @@ Configures home NAS server with:
   - 4 themes and 4 layouts
   - Customization guide
   - Development guide
-
-- **[Installer Scripts](scripts/install/README.md)** - Python tool installers
-
-  - uv and hatch installation
-  - Retry logic and security features
-  - Extension guide
 
 ### Configuration Files
 
@@ -278,9 +271,7 @@ dotfiles-personal/
 │   └── host_vars/                          # Host-specific variables and vault files
 │
 ├── scripts/                                # Utility scripts
-│   └── install/                            # Tool installation scripts
-│       ├── install_uv.py                   # uv Python package manager installer
-│       └── install_hatch.py                # hatch Python project manager installer
+│   └── hooks/                              # Custom prek hook scripts
 │
 ├── library/                                # Custom Ansible modules
 │   └── configure_network_interfaces.py

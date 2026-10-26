@@ -1,7 +1,7 @@
 # run.py - Command Reference
 
-Python CLI tool for managing the dotfiles repository. Provides commands for inventory management, tool installation, and
-codebase maintenance with ANSI styling and retry logic for robustness.
+Python CLI tool for managing the dotfiles repository. Provides commands for inventory management and codebase
+maintenance with ANSI styling and retry logic for robustness.
 
 ## Quick Start
 
@@ -78,55 +78,6 @@ python3 run.py update-inventory
 
 - Repository URL: `DOTFILES_INVENTORY_REPO_URL` environment variable
 - Default: `git@github.com:connormason/dotfiles-inventory.git`
-
-### Tool Installation
-
-Commands for installing Python development tools with robust error handling.
-
-#### `install-uv`
-
-Install the `uv` Python package manager.
-
-```bash
-# Basic installation
-python3 run.py install-uv
-
-# Force reinstall even if already installed
-python3 run.py install-uv --force
-
-# Verbose output for debugging
-python3 run.py install-uv --verbose
-
-# Custom retry behavior
-python3 run.py install-uv --retries 5 --retry-delay 3
-```
-
-**Options:**
-
-- `-f, --force`: Force reinstall even if `uv` already installed
-- `-v, --verbose`: Enable verbose output for debugging
-- `--retries N`: Maximum number of download retry attempts
-- `--retry-delay SECONDS`: Initial delay in seconds between retries with exponential backoff
-
-**Implementation:** Delegates to `scripts/install/install_uv.py` (see
-[scripts/install/README.md](../scripts/install/README.md) for details).
-
-#### `install-hatch`
-
-Install the `hatch` Python project manager.
-
-```bash
-# Basic installation
-python3 run.py install-hatch
-
-# With options (same as install-uv)
-python3 run.py install-hatch --force --verbose
-```
-
-**Options:** Same as `install-uv` (see above).
-
-**Implementation:** Delegates to `scripts/install/install_hatch.py` (see
-[scripts/install/README.md](../scripts/install/README.md) for details).
 
 ### Codebase Maintenance
 
@@ -226,7 +177,7 @@ make pre
 **Auto-generated structure:**
 
 ```makefile
-.PHONY: help list-hosts update-inventory install-uv ...
+.PHONY: help list-hosts update-inventory clean ...
 
 # Inventory
 list-hosts: ## List available bootstrap targets from inventory
@@ -234,10 +185,6 @@ list-hosts: ## List available bootstrap targets from inventory
 
 update-inventory: ## Update inventory repo
 	@python3 run.py update-inventory
-
-# Tool Installation
-install-uv: ## Install uv Python project manager
-	@python3 run.py install-uv
 ...
 ```
 
@@ -395,7 +342,6 @@ MAKEFILE_PATH   = DOTFILES_DIR / 'Makefile'
 INVENTORY_DIR   = DOTFILES_DIR / 'inventory'
 INVENTORY_FILE  = INVENTORY_DIR / 'inventory.yml'
 PLAYBOOKS_DIR   = DOTFILES_DIR / 'playbooks'
-SCRIPTS_DIR     = DOTFILES_DIR / 'scripts'
 ```
 
 **Environment variables:**
@@ -493,9 +439,6 @@ python3 run.py list-hosts
 
 # Update inventory with debug output
 python3 run.py --debug update-inventory
-
-# Install uv with custom retry behavior
-python3 run.py install-uv --retries 5 --retry-delay 3
 
 # Clean and run prek
 python3 run.py clean
@@ -687,23 +630,6 @@ python3 -c "import yaml; yaml.safe_load(open('inventory/inventory.yml'))"
 
 # Check for common issues
 yamllint inventory/inventory.yml
-```
-
-### Tool Installation Issues
-
-**Symptom:** `install-uv` or `install-hatch` fails
-
-**Solution:**
-
-```bash
-# Run with verbose output
-python3 run.py install-uv --verbose
-
-# Force clean reinstall
-python3 run.py install-uv --force
-
-# Increase retry attempts
-python3 run.py install-uv --retries 10 --retry-delay 5
 ```
 
 ### Pre-commit Hook Failures

@@ -21,8 +21,8 @@ Self-contained conventions for per-directory `README.md` files (does not depend 
 - Up-breadcrumb at the very top (repo root has none):
   `[Project Root](../README.md) > [Parent](../README.md) > **This Module**`
 - Down-links: a section listing each immediate child directory that has a README.
-- Every source/module directory carries its own `README.md` — `roles/`, `services/`, `playbooks/`, `scripts/install/`,
-  and `docs/` already follow this.
+- Every source/module directory carries its own `README.md` — `roles/`, `services/`, `playbooks/`, `scripts/hooks/`, and
+  `docs/` already follow this.
 
 ## Repo specifics
 
