@@ -157,6 +157,31 @@ class TestPrivatePatterns:
         with pytest.raises(check_leaks.LeakGuardError):
             check_leaks.load_patterns(patterns_file, required=True)
 
+    def test_dangling_symlink_default_file_exits_2(self, tmp_path: Path) -> None:
+        """
+        Test that a dangling symlink at the default path fails closed instead of using the baseline
+        """
+        default = check_leaks.default_patterns_file()
+        default.parent.mkdir(parents=True)
+        default.symlink_to(tmp_path / 'nowhere.txt')
+        assert check_leaks.main([]) == 2
+
+    def test_directory_default_file_exits_2(self) -> None:
+        """
+        Test that a directory at the default path fails closed instead of using the baseline
+        """
+        check_leaks.default_patterns_file().mkdir(parents=True)
+        assert check_leaks.main([]) == 2
+
+    def test_non_utf8_file_raises(self, tmp_path: Path) -> None:
+        """
+        Test that an undecodable pattern file fails closed rather than escaping as a traceback
+        """
+        patterns_file = tmp_path / 'leak-patterns.txt'
+        patterns_file.write_bytes(b'\xff\xfe\x00bad\n')
+        with pytest.raises(check_leaks.LeakGuardError):
+            check_leaks.load_patterns(patterns_file, required=True)
+
     def test_env_var_invalid_file_exits_2(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """
         Test that main() returns a configuration error for a bad file named by the env var

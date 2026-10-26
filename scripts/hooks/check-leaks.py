@@ -297,20 +297,24 @@ def load_patterns(patterns_file: Path | None, *, required: bool) -> list[re.Patt
     Compile the baseline patterns plus any private patterns.
 
     :param patterns_file: private pattern file (one regex per line; blank lines and ``#`` comments are ignored)
-    :param required: raise when ``patterns_file`` does not exist instead of falling back to the baseline
-    :raises LeakGuardError: if a required file is missing, the file is unreadable, or a pattern is invalid
+    :param required: raise when ``patterns_file`` does not exist instead of falling back to the baseline. A path that
+        exists but is not a readable regular file (dangling symlink, directory) always raises
+    :raises LeakGuardError: if a required file is missing, the file is unreadable or not UTF-8, or a pattern is invalid
     :return: compiled, case-insensitive patterns
     """
     sources: list[str] = list(BASELINE_PATTERNS)
     if patterns_file is not None:
-        if patterns_file.is_file():
+        if not os.path.lexists(patterns_file):
+            if required:
+                raise LeakGuardError(f'Pattern file not found: {folduser(patterns_file)}')
+        elif not patterns_file.is_file():
+            raise LeakGuardError(f'Pattern file is not a regular file: {folduser(patterns_file)}')
+        else:
             try:
                 lines = patterns_file.read_text(encoding='utf-8').splitlines()
-            except OSError as exc:
+            except (OSError, UnicodeDecodeError) as exc:
                 raise LeakGuardError(f'Unable to read {folduser(patterns_file)}: {exc!s}') from exc
             sources.extend(line.strip() for line in lines if line.strip() and not line.lstrip().startswith('#'))
-        elif required:
-            raise LeakGuardError(f'Pattern file not found: {folduser(patterns_file)}')
 
     compiled: list[re.Pattern[str]] = []
     for source in sources:

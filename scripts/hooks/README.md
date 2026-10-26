@@ -259,10 +259,12 @@ the whole path string.
    skipped when absent. The baseline always applies in addition.
 
 **Fail-closed rules.** A guard that quietly stops guarding is worse than none, so configuration problems abort with exit
-`2` instead of degrading: a pattern file that is missing (when explicit: `--patterns-file` or the environment variable)
-or unreadable (explicit or the default location), an invalid regex, a pattern that matches the empty string (it would
-flag every line), a failed `git var`, or an unreadable/undecodable `--identities-from` file. A target file that cannot
-be read is reported and yields exit `1`.
+`2` instead of degrading: a pattern file that is missing (when explicit: `--patterns-file` or the environment variable),
+a pattern path that exists but is not a readable UTF-8 regular file (explicit or the default location, so a dangling
+symlink or a directory at the default path aborts rather than silently reverting to the baseline), an invalid regex, a
+pattern that matches the empty string (it would flag every line), a failed `git var`, or an unreadable/undecodable
+`--identities-from` file. Only an absent default file is skipped silently. A target file that cannot be read is reported
+and yields exit `1`.
 
 **Scanning.** A file is scanned by path first, then by content unless a NUL byte appears in its first 8 KiB (treated as
 binary; its path is still checked). Invalid UTF-8 is decoded with replacement characters rather than skipped.
