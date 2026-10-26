@@ -65,7 +65,9 @@ isolation. [`uv-public.sh`](#uv-publicsh) is the exception: a shell wrapper arou
 > [!NOTE]
 > this repository does not currently contain any `.json5`, `.pkl`, or `keybindings.json` files, so the JSON5, Pkl, and
 > sort hooks are staged for future use. Each is scoped so it matches nothing today and fires automatically the moment a
-> matching file lands. `check-leaks` and `uv-public.sh` are active on every commit.
+> matching file lands. `check-leaks` runs on every commit; the `uv-*` hooks run through `uv-public.sh` but fire only on
+> their own triggers (`uv-lock` when `uv.lock`, `pyproject.toml`, or `uv.toml` is staged; `uv-sync` after checkout,
+> merge, or rewrite).
 
 ## Pre-Commit Wiring<a name="pre-commit-wiring"></a>
 
@@ -257,9 +259,10 @@ the whole path string.
    skipped when absent. The baseline always applies in addition.
 
 **Fail-closed rules.** A guard that quietly stops guarding is worse than none, so configuration problems abort with exit
-`2` instead of degrading: an explicit pattern file that is missing or unreadable, an invalid regex, a pattern that
-matches the empty string (it would flag every line), a failed `git var`, or an unreadable/undecodable
-`--identities-from` file. A target file that cannot be read is reported and yields exit `1`.
+`2` instead of degrading: a pattern file that is missing (when explicit: `--patterns-file` or the environment variable)
+or unreadable (explicit or the default location), an invalid regex, a pattern that matches the empty string (it would
+flag every line), a failed `git var`, or an unreadable/undecodable `--identities-from` file. A target file that cannot
+be read is reported and yields exit `1`.
 
 **Scanning.** A file is scanned by path first, then by content unless a NUL byte appears in its first 8 KiB (treated as
 binary; its path is still checked). Invalid UTF-8 is decoded with replacement characters rather than skipped.
@@ -273,8 +276,10 @@ be quoted in tracked files.
 be waived.
 
 **Masking.** Findings never re-publish a leak. Each match is printed with only its first and last characters visible,
-and every header and message (including file paths and OS error text) has pattern matches masked the same way. At most 5
-findings are listed per source, followed by `... and N more`.
+and scanned data echoed back (file paths, identities, OS error text for unreadable targets) has pattern matches masked
+the same way. Configuration errors (exit `2`) are printed as-is, since they describe the setup rather than scanned data:
+the pattern-file path, or the stderr of a failed `git var`. At most 5 findings are listed per source, followed by
+`... and N more`.
 
 **Identity checks.** `--identity` resolves what git will record for the commit via `git var GIT_AUTHOR_IDENT` and
 `git var GIT_COMMITTER_IDENT`. `--identities-from` takes identities from a file or standard input instead, which suits
@@ -282,9 +287,10 @@ CI where the identities of past commits are fed in via `git log --format`. The t
 
 **CI.** The `leak guard` job in [`.github/workflows/leaks.yml`](../../.github/workflows/leaks.yml) checks out the full
 history, runs the script over every tracked file (the baseline only; the runner has no private pattern file), and then
-feeds the author/committer identities of the pushed or pull-request commit range through `--identities-from -`. The
-runner has no git identity, so `--identity` is not used there. Unit tests run in the `pytest` job of
-[`.github/workflows/lint.yml`](../../.github/workflows/lint.yml).
+feeds the author/committer identities of the commit range through `--identities-from -`. Pull requests cover the full
+base-to-head range; a push covers the range since the previous tip, but a new-branch push (all-zero `before` SHA) or a
+manual `workflow_dispatch` run checks only the tip commit. The runner has no git identity, so `--identity` is not used
+there. Unit tests run in the `pytest` job of [`.github/workflows/lint.yml`](../../.github/workflows/lint.yml).
 
 ### Exit Codes<a name="exit-codes-1"></a>
 
@@ -305,8 +311,9 @@ runner has no git identity, so `--identity` is not used there. Unit tests run in
     stages: [pre-commit]
 ```
 
-`always_run: true` keeps the identity check firing even for commits that stage no text files; `types: [text]` leaves
-binaries to the path check alone. The hook runs only at the `pre-commit` stage; CI scans the full tree separately.
+`always_run: true` keeps the identity check firing even for commits that stage no text files. `types: [text]` makes prek
+skip binary files entirely, so locally neither their paths nor contents are checked; they are covered only by the CI
+scan of every tracked file (`git ls-files`). The hook runs only at the `pre-commit` stage.
 `prek run check-leaks --all-files` audits every tracked file on demand.
 
 ---
