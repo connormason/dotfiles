@@ -21,7 +21,7 @@ cleanup deletes the internally-derived scripts and their references.
 - **Every uv invocation in this repo goes through `scripts/hooks/uv-public.sh`** (created in Task 1), e.g.
   `scripts/hooks/uv-public.sh run --group test pytest …`. A plain `uv run`/`uv sync` from the work environment
   rewrites `uv.lock` to the internal mirror.
-- If `git diff uv.lock` ever shows non-`pypi.org`/`files.pythonhosted.org` URLs, run `scripts/hooks/uv-public.sh lock`
+- If `git diff uv.lock` ever shows non-`pypi.org`/`files.pythonhosted.org` URLs, run `scripts/hooks/uv-public.sh lock --refresh`
   before staging. (This session's Claude hooks still run plain `uv run ruff` after edits until a new session starts.)
 - Never run `ruff format`. `ruff check --fix` is fine.
 - No file added or edited in this plan may contain the literal corporate domain, its email addresses, internal tool
@@ -108,7 +108,7 @@ In `.pre-commit-config.yaml`, replace the entire `- repo: https://github.com/ast
         name: "[sync]   dependencies (pyproject.toml -> uv.lock)"
         stages: [pre-commit, manual]
         priority: 0
-        entry: scripts/hooks/uv-public.sh lock
+        entry: scripts/hooks/uv-public.sh lock --refresh
         language: system
         files: ^(uv\.lock|pyproject\.toml|uv\.toml)$
         pass_filenames: false
@@ -166,8 +166,9 @@ In the same file, change the two PostToolUse commands so they use the wrapper:
 
 - [ ] **Step 5: Regenerate the lock and requirements**
 
-Run: `scripts/hooks/uv-public.sh lock && scripts/hooks/uv-public.sh export --format=requirements.txt --output-file=requirements.txt --frozen --no-hashes --no-header && scripts/hooks/uv-public.sh sync --locked`
-Expected: all three succeed.
+Run: `scripts/hooks/uv-public.sh lock --refresh && scripts/hooks/uv-public.sh export --format=requirements.txt --output-file=requirements.txt --frozen --no-hashes --no-header && scripts/hooks/uv-public.sh sync --locked`
+Expected: all three succeed. (`--refresh` is required: without it uv keeps the registry URLs already recorded in an
+existing lock and the command is a no-op — verified during execution 2026-10-26.)
 
 - [ ] **Step 6: Verify the lock is public-only**
 
@@ -176,22 +177,12 @@ Expected: exactly `https://files.pythonhosted.org` and `https://pypi.org`.
 
 Run: `git diff --stat uv.lock requirements.txt` — record which package versions moved (if any) in the commit body.
 
-- [ ] **Step 7: Verify the self-healing hook**
-
-Run: `cp uv.lock "$TMPDIR/uv.lock.public" && uv lock -q; grep -o 'https://[^"/]*' uv.lock | sort -u`
-Expected (inside a work-environment session): an internal host appears — a plain `uv lock` re-polluted the lock. If
-only the two public hosts appear, the environment is already clean; skip to Step 8.
-Run: `git add uv.lock && prek run uv-lock; grep -o 'https://[^"/]*' uv.lock | sort -u`
-Expected: hook reports `Failed - files were modified`, and the URL list is again exactly the two public hosts.
-Run: `cmp uv.lock "$TMPDIR/uv.lock.public" && echo identical`
-Expected: `identical`.
-
-- [ ] **Step 8: Run all hooks**
+- [ ] **Step 7: Run all hooks**
 
 Run: `prek run --all-files`
 Expected: all hooks pass (or are skipped). Fix anything flagged before committing.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add scripts/hooks/uv-public.sh .pre-commit-config.yaml .claude/settings.json uv.lock requirements.txt
@@ -202,6 +193,16 @@ the UV_* index variables and sets UV_NO_CONFIG=1; either measure alone still
 produced a lock pointing at an internal mirror. The uv-lock hook now heals a
 polluted lock at commit time."
 ```
+
+- [ ] **Step 9: Verify the self-healing hook (requires the public lock to be committed)**
+
+Run: `uv lock -q --refresh; grep -o 'https://[^"/]*' uv.lock | sort -u`
+(Deliberately plain `uv`.) Expected inside a work-environment session: an internal host appears — the lock is
+re-polluted. If only the two public hosts appear, the environment is already clean; note that and skip this step.
+Run: `git add uv.lock && prek run uv-lock; grep -o 'https://[^"/]*' uv.lock | sort -u`
+Expected: hook reports `Failed` / files were modified, and the URL list is again exactly the two public hosts.
+Run: `git diff --quiet HEAD -- uv.lock && echo identical-to-committed; git restore --staged uv.lock; git status --short uv.lock`
+Expected: `identical-to-committed`, and no remaining status line for `uv.lock`.
 
 ---
 
