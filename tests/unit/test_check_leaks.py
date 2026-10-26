@@ -60,10 +60,10 @@ class TestBaselinePatterns:
     @pytest.mark.parametrize(
         'text',
         [
-            f'url = "https://pypi.{CORP_DOMAIN}/simple"',
+            f'url = "https://pkgs.{CORP_DOMAIN}/simple"',
             f'Author: Jane Doe <jane@{CORP_DOMAIN}>',
-            f'host github.pie.{CORP_DOMAIN}',
-            f'www.pie.{CORP_DOMAIN}',
+            f'host git.internal.{CORP_DOMAIN}',
+            f'www.internal.{CORP_DOMAIN}',
             f'developer.internal.{CORP_DOMAIN}',
             f'apps.x.{CORP_DOMAIN}',
             f'support.y.{CORP_DOMAIN}',
