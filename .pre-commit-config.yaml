@@ -4,6 +4,7 @@
 
 default_install_hook_types:
   - pre-commit
+  - commit-msg
   - post-checkout
   - post-merge
   - post-rewrite
@@ -278,6 +279,14 @@ repos:
         language: python
         types: [text]
         always_run: true
+
+      # Same scan applied to the commit message (prek passes the message file as the filename). Identity is already
+      # checked by the pre-commit entry above
+      - id: check-leaks-msg
+        name: "[check]  internal identifiers in commit message"
+        stages: [commit-msg]
+        entry: scripts/hooks/check-leaks.py
+        language: python
 
   # ========================================================================================
   # Text/whitespace fixers

@@ -1,4 +1,4 @@
-[Project Root](../../README.md) > [Scripts](../README.md) > **Hook Scripts**
+[Project Root](../../README.md) > **Hook Scripts**
 
 ---
 
@@ -53,14 +53,14 @@ isolation. [`uv-public.sh`](#uv-publicsh) is the exception: a shell wrapper arou
 
 ## Scripts<a name="scripts"></a>
 
-| Script                                     | What it does                                                            | Hook id           | Priority          |
-| ------------------------------------------ | ----------------------------------------------------------------------- | ----------------- | ----------------- |
-| [`check-json5.py`](#check-json5py)         | Validate JSON5 file syntax via `pyjson5`                                | `check-json5`     | 10 (check phase)  |
-| [`check-leaks.py`](#check-leakspy)         | Block employer-internal identifiers (content, paths, git identity)      | `check-leaks`     | 10 (check phase)  |
-| [`check-pkl.py`](#check-pklpy)             | Validate Pkl files by running `pkl eval --format yaml`                  | `check-pkl`       | 10 (check phase)  |
-| [`format-pkl.py`](#format-pklpy)           | Auto-format Pkl files via `pkl format`                                  | `format-pkl`      | 35 (format phase) |
-| [`sort-json-array.py`](#sort-json-arraypy) | Sort a top-level JSON array of objects by a key                         | `sort-json-array` | 30 (sort phase)   |
-| [`uv-public.sh`](#uv-publicsh)             | Run uv against public PyPI only (wraps `uv-lock`/`uv-sync`/`uv-export`) | `uv-*`            | 0–5 (sync phase)  |
+| Script                                     | What it does                                                            | Hook id                          | Priority          |
+| ------------------------------------------ | ----------------------------------------------------------------------- | -------------------------------- | ----------------- |
+| [`check-json5.py`](#check-json5py)         | Validate JSON5 file syntax via `pyjson5`                                | `check-json5`                    | 10 (check phase)  |
+| [`check-leaks.py`](#check-leakspy)         | Block employer-internal identifiers (content, paths, git identity)      | `check-leaks`, `check-leaks-msg` | 10 (check phase)  |
+| [`check-pkl.py`](#check-pklpy)             | Validate Pkl files by running `pkl eval --format yaml`                  | `check-pkl`                      | 10 (check phase)  |
+| [`format-pkl.py`](#format-pklpy)           | Auto-format Pkl files via `pkl format`                                  | `format-pkl`                     | 35 (format phase) |
+| [`sort-json-array.py`](#sort-json-arraypy) | Sort a top-level JSON array of objects by a key                         | `sort-json-array`                | 30 (sort phase)   |
+| [`uv-public.sh`](#uv-publicsh)             | Run uv against public PyPI only (wraps `uv-lock`/`uv-sync`/`uv-export`) | `uv-*`                           | 0–5 (sync phase)  |
 
 > [!NOTE]
 > this repository does not currently contain any `.json5`, `.pkl`, or `keybindings.json` files, so the JSON5, Pkl, and
@@ -102,6 +102,12 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
         types: [text]
         always_run: true
 
+      - id: check-leaks-msg
+        name: '[check]  internal identifiers in commit message'
+        stages: [commit-msg]
+        entry: scripts/hooks/check-leaks.py
+        language: python
+
   - repo: local
     hooks:
       - id: sort-json-array
@@ -136,9 +142,10 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
 | 40            | Linters           | `ruff`, `mypy`, `yamllint`, `shellcheck`, `codespell`                                          |
 
 The `format-pkl` hook carries `stages: [pre-commit]` so it is skipped when the config is run in CI (`manual` stage).
-`check-pkl` and `check-json5` run in all stages (`check-leaks` is `pre-commit` only; CI runs its own job).
-`sort-json-array` runs at priority 30 (before the priority-35 `pretty-format-json` formatter) so a reordered array is
-normalized once and surfaces in the diff to re-stage rather than landing silently.
+`check-pkl` and `check-json5` run in all stages (`check-leaks` is `pre-commit` only and `check-leaks-msg` is
+`commit-msg` only; CI runs its own job). `sort-json-array` runs at priority 30 (before the priority-35
+`pretty-format-json` formatter) so a reordered array is normalized once and surfaces in the diff to re-stage rather than
+landing silently.
 
 Both Pkl hooks are tolerant of environments where `pkl` is not installed: by default they print a warning and exit `0`.
 Pass `--require-pkl` to make the missing binary a hard failure.
@@ -288,11 +295,18 @@ the pattern-file path, or the stderr of a failed `git var`. At most 5 findings a
 CI where the identities of past commits are fed in via `git log --format`. The two flags can be combined.
 
 **CI.** The `leak guard` job in [`.github/workflows/leaks.yml`](../../.github/workflows/leaks.yml) checks out the full
-history, runs the script over every tracked file (the baseline only; the runner has no private pattern file), and then
-feeds the author/committer identities of the commit range through `--identities-from -`. Pull requests cover the full
-base-to-head range; a push covers the range since the previous tip, but a new-branch push (all-zero `before` SHA) or a
-manual `workflow_dispatch` run checks only the tip commit. The runner has no git identity, so `--identity` is not used
-there. Unit tests run in the `pytest` job of [`.github/workflows/lint.yml`](../../.github/workflows/lint.yml).
+history and runs three scans (the baseline only; the runner has no private pattern file):
+
+1. Every tracked file (`git ls-files -z | xargs -0 ... --`).
+2. Commit **messages of new commits only**, written to a temporary file and scanned like any other file. Older history
+   predates the guard (a few early messages contain the corporate domain) and is deliberately not rescanned. Pull
+   requests cover `base..head`; a push covers `before..sha`. A new-branch push (all-zero `before` SHA), a `before` SHA
+   that is not reachable in the clone, or a manual `workflow_dispatch` run falls back to the tip commit only.
+3. The author/committer identities of **all reachable history** through `--identities-from -` (history is clean, so no
+   range is needed).
+
+The runner has no git identity, so `--identity` is not used there. Unit tests run in the `pytest` job of
+[`.github/workflows/lint.yml`](../../.github/workflows/lint.yml).
 
 ### Exit Codes<a name="exit-codes-1"></a>
 
@@ -311,12 +325,22 @@ there. Unit tests run in the `pytest` job of [`.github/workflows/lint.yml`](../.
     types: [text]
     always_run: true
     stages: [pre-commit]
+
+  - id: check-leaks-msg
+    entry: scripts/hooks/check-leaks.py
+    language: python
+    stages: [commit-msg]
 ```
 
 `always_run: true` keeps the identity check firing even for commits that stage no text files. `types: [text]` makes prek
 skip binary files entirely, so locally neither their paths nor contents are checked; they are covered only by the CI
-scan of every tracked file (`git ls-files`). The hook runs only at the `pre-commit` stage.
+scan of every tracked file (`git ls-files`). The `check-leaks` hook runs only at the `pre-commit` stage.
 `prek run check-leaks --all-files` audits every tracked file on demand.
+
+`check-leaks-msg` runs at the `commit-msg` stage, where prek passes the path of the commit message file as the filename,
+so the unmodified script scans the message like any other file (the identity is already covered by `check-leaks`).
+`commit-msg` is listed in `default_install_hook_types`, so `prek install` installs its shim. A rejected message aborts
+the commit; amend the wording and commit again.
 
 ---
 
@@ -555,8 +579,9 @@ scripts/hooks/uv-public.sh <uv arguments...>
 
 The wrapper neutralizes the internal index through **both** channels it arrives by, then `exec`s `uv`:
 
-1. `unset UV_INDEX_URL UV_DEFAULT_INDEX UV_EXTRA_INDEX_URL UV_INDEX` removes index settings injected via environment
-   variables.
+1. `unset UV_INDEX_URL UV_DEFAULT_INDEX UV_EXTRA_INDEX_URL UV_INDEX UV_CONFIG_FILE UV_FIND_LINKS` removes index settings
+   injected via environment variables, plus an explicit config path and extra package source that could smuggle the same
+   index in.
 2. `export UV_NO_CONFIG=1` makes uv ignore user-level and system `uv.toml` files, where an extra index URL may also be
    configured (uv consults them ahead of any project default index).
 
