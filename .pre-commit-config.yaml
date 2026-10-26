@@ -268,6 +268,17 @@ repos:
         files: .*\.pkl$
         types: [file]
 
+      # Block employer-internal identifiers in staged content/paths and in the commit identity (public baseline +
+      # optional private patterns from ~/.config/dotfiles/leak-patterns.txt). CI scans the full tree separately
+      - id: check-leaks
+        name: "[check]  internal identifiers (leak guard)"
+        stages: [pre-commit]
+        priority: 10
+        entry: scripts/hooks/check-leaks.py --identity
+        language: python
+        types: [text]
+        always_run: true
+
   # ========================================================================================
   # Text/whitespace fixers
   #

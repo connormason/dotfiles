@@ -13,3 +13,31 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_NOTIFY_USER_LIST: "@connormason"
+  leak-guard:
+    name: leak guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      # The runner has no git identity, so the script is called directly instead of through prek's --identity hook
+      - name: Scan tracked files
+        run: git ls-files -z | xargs -0 uv run --no-project scripts/hooks/check-leaks.py
+      - name: Scan commit identities
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            range="$PUSH_BEFORE..$GITHUB_SHA"
+          else
+            range="-1 $GITHUB_SHA"
+          fi
+          # shellcheck disable=SC2086  # $range intentionally splits into "-1 <sha>"
+          git log --format='%an <%ae>%n%cn <%ce>' $range \
+            | uv run --no-project scripts/hooks/check-leaks.py --identities-from -
