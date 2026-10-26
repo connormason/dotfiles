@@ -22,22 +22,31 @@ repos:
   #
   # ========================================================================================
 
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.11.28
+  - repo: local
     hooks:
 
-      # Ensure uv.lock is up-to-date
+      # Ensure uv.lock is up-to-date. Runs through uv-public.sh, so a lock polluted by a plain `uv run` from a work
+      # environment is rewritten back to public PyPI whenever uv.lock is staged
       # pyproject.toml -> uv.lock
       - id: uv-lock
         name: "[sync]   dependencies (pyproject.toml -> uv.lock)"
         stages: [pre-commit, manual]
         priority: 0
+        entry: scripts/hooks/uv-public.sh lock --refresh
+        language: system
+        files: ^(uv\.lock|pyproject\.toml|uv\.toml)$
+        pass_filenames: false
 
       # Sync .venv/ with uv.lock on checkout/pull/rebase
       # uv.lock -> .venv/
       - id: uv-sync
         name: "[sync]   dependencies (uv.lock -> .venv)"
+        stages: [post-checkout, post-merge, post-rewrite]
         priority: 5
+        entry: scripts/hooks/uv-public.sh sync --no-active --locked
+        language: system
+        always_run: true
+        pass_filenames: false
 
       # Export locked package requirements to requirements.txt
       # uv.lock -> requirements.txt
@@ -45,6 +54,10 @@ repos:
         name: "[sync]   dependencies (uv.lock -> requirements.txt)"
         stages: [pre-commit, manual]
         priority: 5
+        entry: scripts/hooks/uv-public.sh export
+        language: system
+        files: ^uv\.lock$
+        pass_filenames: false
         args:
           - "--format=requirements.txt"
           - "--output-file=requirements.txt"

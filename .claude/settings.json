@@ -1,5 +1,10 @@
 {
   "defaultMode": "acceptEdits",
+  "env": {
+    "UV_DEFAULT_INDEX": "https://pypi.org/simple",
+    "UV_INDEX_URL": "https://pypi.org/simple",
+    "UV_NO_CONFIG": "1"
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -7,11 +12,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [[ \"$CLAUDE_TOOL_ARG_FILE_PATH\" == *.py ]]; then uv run ruff check --fix-only \"$CLAUDE_TOOL_ARG_FILE_PATH\" 2>/dev/null; fi; exit 0"
+            "command": "if [[ \"$CLAUDE_TOOL_ARG_FILE_PATH\" == *.py ]]; then \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/uv-public.sh run ruff check --fix-only \"$CLAUDE_TOOL_ARG_FILE_PATH\" 2>/dev/null; fi; exit 0"
           },
           {
             "type": "command",
-            "command": "f=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; if [[ \"$f\" == *.yml || \"$f\" == *.yaml ]]; then uv run yamllint \"$f\" 2>&1 || true; fi; exit 0"
+            "command": "f=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; if [[ \"$f\" == *.yml || \"$f\" == *.yaml ]]; then \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/uv-public.sh run yamllint \"$f\" 2>&1 || true; fi; exit 0"
           }
         ]
       }
