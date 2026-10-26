@@ -63,6 +63,10 @@ class TestBaselinePatterns:
             f'url = "https://pypi.{CORP_DOMAIN}/simple"',
             f'Author: Jane Doe <jane@{CORP_DOMAIN}>',
             f'host github.pie.{CORP_DOMAIN}',
+            f'www.pie.{CORP_DOMAIN}',
+            f'developer.internal.{CORP_DOMAIN}',
+            f'apps.x.{CORP_DOMAIN}',
+            f'support.y.{CORP_DOMAIN}',
             f'bare {CORP_DOMAIN.upper()} mention',
             f'see {TRACKER_URL}',
             'see ' + 'Radar' + ':' + '//' + '42',
@@ -141,6 +145,15 @@ class TestPrivatePatterns:
         """
         patterns_file = tmp_path / 'leak-patterns.txt'
         patterns_file.write_text('unclosed(group\n', encoding='utf-8')
+        with pytest.raises(check_leaks.LeakGuardError):
+            check_leaks.load_patterns(patterns_file, required=True)
+
+    def test_empty_matching_pattern_raises(self, tmp_path: Path) -> None:
+        """
+        Test that a private regex able to match the empty string fails closed
+        """
+        patterns_file = tmp_path / 'leak-patterns.txt'
+        patterns_file.write_text('foo|\n', encoding='utf-8')
         with pytest.raises(check_leaks.LeakGuardError):
             check_leaks.load_patterns(patterns_file, required=True)
 
@@ -233,6 +246,12 @@ class TestIdentity:
         identities.write_text(f'Jane Doe <jane@example.org>\nJane Doe <jane@{CORP_DOMAIN}>\n', encoding='utf-8')
         assert check_leaks.main(['--identities-from', str(identities)]) == 1
 
+    def test_missing_identities_file_exits_2(self, tmp_path: Path) -> None:
+        """
+        Test that an unreadable identities file is a configuration error, not a traceback
+        """
+        assert check_leaks.main(['--identities-from', str(tmp_path / 'missing.txt')]) == 2
+
 
 class TestOutput:
     """
@@ -262,6 +281,23 @@ class TestOutput:
         out = capsys.readouterr().out
         assert CORP_DOMAIN not in out
         assert 'and 2 more' in out
+
+    def test_report_masks_matches_in_path(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that a leaked identifier in a file name is masked in the report header
+        """
+        target = tmp_path / f'jane@{CORP_DOMAIN}.txt'
+        target.write_text('clean\n', encoding='utf-8')
+        assert check_leaks.main([str(target)]) == 1
+        assert CORP_DOMAIN not in capsys.readouterr().out
+
+    def test_unreadable_file_header_masks_matches(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that the unreadable-file header masks a leaked identifier in the path
+        """
+        missing = tmp_path / f'jane@{CORP_DOMAIN}.txt'
+        assert check_leaks.main([str(missing)]) == 1
+        assert CORP_DOMAIN not in capsys.readouterr().out
 
     def test_clean_file_exits_0(self, tmp_path: Path) -> None:
         """

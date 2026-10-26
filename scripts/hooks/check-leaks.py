@@ -44,8 +44,8 @@ _PUBLIC_HOSTS_ALT:   str             = '|'.join(PUBLIC_VENDOR_HOSTS)
 # Written so their own source text can never match them (escaped dot before the TLD, `/{2}` in place of a literal
 # double slash), which lets this file be scanned like any other without an exclusion
 BASELINE_PATTERNS: tuple[str, ...] = (
-    # Corporate domain, any subdomain, and email addresses at it -- except the public vendor hosts above
-    rf'(?<![\w.-])(?!(?:{_PUBLIC_HOSTS_ALT})\.)(?:[\w-]+\.)*apple\.com\b',
+    # Corporate domain, any subdomain, and email addresses at it -- except the bare public vendor hosts above
+    rf'(?<![\w.-])(?!(?:{_PUBLIC_HOSTS_ALT})\.apple\.com\b)(?:[\w-]+\.)*apple\.com\b',
     # Internal bug-tracker URL schemes
     r'\b(?:rdar|radar):/{2}',
 )
@@ -318,7 +318,22 @@ def load_patterns(patterns_file: Path | None, *, required: bool) -> list[re.Patt
             compiled.append(re.compile(source, re.IGNORECASE))
         except re.error as exc:
             raise LeakGuardError(f'Invalid pattern {mask(source)!r}: {exc!s}') from exc
+        if compiled[-1].search(''):
+            raise LeakGuardError(f'Pattern {mask(source)!r} matches the empty string (it would flag every line)')
     return compiled
+
+
+def mask_matches(text: str, patterns: Sequence[re.Pattern[str]]) -> str:
+    """
+    Mask every pattern match inside a string so headers and error messages never re-publish a leak.
+
+    :param text: string that may contain matches (e.g. a file path or an OS error message)
+    :param patterns: compiled patterns
+    :return: ``text`` with each match replaced by :func:`mask` of itself
+    """
+    for pattern in patterns:
+        text = pattern.sub(lambda match: mask(match.group(0)), text)
+    return text
 
 
 def scan_text(text: str, patterns: Sequence[re.Pattern[str]]) -> list[tuple[int, str]]:
@@ -393,18 +408,19 @@ def scan_identities(identities: Iterable[str], patterns: Sequence[re.Pattern[str
     ]
 
 
-def report(findings: Sequence[Finding]) -> None:
+def report(findings: Sequence[Finding], patterns: Sequence[re.Pattern[str]]) -> None:
     """
     Print findings grouped by source, masked, capped at :data:`MAX_FINDINGS_PER_FILE` per source.
 
     :param findings: findings to print
+    :param patterns: compiled patterns, used to mask matches inside source paths
     """
     by_source: dict[str, list[Finding]] = {}
     for finding in findings:
         by_source.setdefault(finding.source, []).append(finding)
 
     for source, items in by_source.items():
-        printf(f'{ERROR}   {style(source, fg="bright_white")}')
+        printf(f'{ERROR}   {style(mask_matches(source, patterns), fg="bright_white")}')
         for item in items[:MAX_FINDINGS_PER_FILE]:
             if item.line:
                 label = f'line {item.line}'
@@ -442,8 +458,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             findings.extend(scan_file(Path(filename), patterns))
         except OSError as exc:
-            printf(f'{ERROR}   {style(filename, fg="bright_white")}')
-            printf(f'Unable to read file: {exc!s}', fg='bright_red', indent=8)
+            printf(f'{ERROR}   {style(mask_matches(filename, patterns), fg="bright_white")}')
+            printf(f'Unable to read file: {mask_matches(str(exc), patterns)}', fg='bright_red', indent=8)
             retval = 1
 
     identities: list[str] = []
@@ -454,14 +470,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             printf(f'{ERROR}   {exc!s}')
             return 2
     if args.identities_from:
-        if args.identities_from == '-':
-            identities.extend(sys.stdin.read().splitlines())
-        else:
-            identities.extend(Path(args.identities_from).read_text(encoding='utf-8').splitlines())
+        try:
+            if args.identities_from == '-':
+                identities.extend(sys.stdin.read().splitlines())
+            else:
+                identities.extend(Path(args.identities_from).read_text(encoding='utf-8').splitlines())
+        except (OSError, UnicodeDecodeError) as exc:
+            printf(f'{ERROR}   Unable to read identities: {mask_matches(str(exc), patterns)}')
+            return 2
     findings.extend(scan_identities(identities, patterns))
 
     if findings:
-        report(findings)
+        report(findings, patterns)
         return 1
 
     printf(f'{INFO}    No internal identifiers found ({len(patterns)} patterns)', verbose=True)
