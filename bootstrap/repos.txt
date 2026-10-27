@@ -1,0 +1,7 @@
+# bootstrap/repos.txt — git repositories cloned by the 80-repos bootstrap stage.
+#
+# One repository per line: a name and a clone URL separated by whitespace. 80-repos clones each into $HOME/<name>
+# unless that path already exists (existing clones are never touched). `#` starts a comment. Overlays add their own
+# bootstrap/repos.txt.
+#
+# name  url

@@ -24,6 +24,8 @@ _SCRUBBED_VARS = (
 )
 
 
+# Overlay test stages must use numbers no base stage uses (a reused number is fatal); 98 and 99 sort after every base
+# stage, and tests that need another stage pick a free number below 95.
 @pytest.fixture
 def overlay(tmp_path: Path) -> Path:
     """
@@ -160,14 +162,14 @@ class TestStageExecution:
         Test that stages run under the bash that runs the driver, not whichever bash is first on PATH
         """
         probe = tmp_path / 'bash-version'
-        (overlay / 'bootstrap' / '97-selftest-bash.sh').write_text(
+        (overlay / 'bootstrap' / '93-selftest-bash.sh').write_text(
             f'printf "%s" "${{BASH_VERSINFO[0]}}" > "{probe}"\n',
             encoding='utf-8',
         )
         expected = subprocess.run(
             [shell, '-c', 'printf "%s" "${BASH_VERSINFO[0]}"'], capture_output=True, text=True, check=True,
         ).stdout
-        result = _drive(shell, env, '--dry-run', '--no-log', '--only', '97-selftest-bash')
+        result = _drive(shell, env, '--dry-run', '--no-log', '--only', '93-selftest-bash')
         assert result.returncode == 0, result.stderr
         assert probe.read_text(encoding='utf-8') == expected
         if shell == '/bin/bash' and sys.platform == 'darwin':
@@ -187,16 +189,15 @@ class TestStageExecution:
         assert '77-impostor' not in result.stdout
         assert result.stdout.splitlines()[0] == '00-preflight'
 
-    def test_stages_run_in_number_order(self, shell: str, env: dict[str, str], overlay: Path, tmp_path: Path) -> None:
+    def test_stages_run_in_number_order(self, shell: str, env: dict[str, str]) -> None:
         """
         Test that --from runs the named stage and everything after it, in order
         """
-        (overlay / 'bootstrap' / '97-selftest-first.sh').write_text('#!/usr/bin/env bash\ntrue\n', encoding='utf-8')
-        result = _drive(shell, env, '--dry-run', '--no-log', '--from', '97-selftest-first')
+        result = _drive(shell, env, '--dry-run', '--no-log', '--from', '98-selftest-ok')
         output = result.stdout
         assert result.returncode != 0
-        assert '00-preflight' not in output
-        assert output.index('=== stage: 97-selftest-first') < output.index('=== stage: 98-selftest-ok')
+        assert '=== stage: 00-preflight' not in output
+        assert '=== stage: 97-render' not in output
         assert output.index('=== stage: 98-selftest-ok') < output.index('=== stage: 99-selftest-fail')
 
     def test_failing_stage_reports_and_hints_resume(self, shell: str, env: dict[str, str]) -> None:
@@ -213,11 +214,12 @@ class TestStageExecution:
         """
         Test that stages after a failing one are not run and the stage's exit status is propagated
         """
-        early_fail = overlay / 'bootstrap' / '96-selftest-early-fail.sh'
+        early_fail = overlay / 'bootstrap' / '94-selftest-early-fail.sh'
         early_fail.write_text('#!/usr/bin/env bash\nexit 3\n', encoding='utf-8')
-        result = _drive(shell, env, '--dry-run', '--no-log', '--from', '96-selftest-early-fail')
+        result = _drive(shell, env, '--dry-run', '--no-log', '--from', '94-selftest-early-fail')
         assert result.returncode == 3
-        assert 'failed at stage: 96-selftest-early-fail' in result.stderr
+        assert 'failed at stage: 94-selftest-early-fail' in result.stderr
+        assert '=== stage: 95-dotfiles' not in result.stdout
         assert '=== stage: 98-selftest-ok' not in result.stdout
         assert not Path(env['PROBE_FILE']).exists()
 

@@ -55,6 +55,30 @@ source them through the exported base root: `source "$DOTFILES_REPO/bootstrap/li
 
 ## Stages
 
-| Stage        | Purpose                            | Layer |
-| ------------ | ---------------------------------- | ----- |
-| 00-preflight | macOS + Command Line Tools present | base  |
+Base stages, in run order. Overlays interleave their own stages by number. Every mutation goes through `run`/`try`, so
+`--dry-run` prints it instead; the exceptions are read-only previews noted below.
+
+| Stage        | Purpose                                                                                                       | Layer |
+| ------------ | ------------------------------------------------------------------------------------------------------------- | ----- |
+| 00-preflight | macOS + Command Line Tools present                                                                            | base  |
+| 20-ssh-key   | `~/.ssh` (mode 700) and an ed25519 key; if `ssh -T git@github.com` fails, print the key to register           | base  |
+| 50-brew      | Install Homebrew if absent (checksum-verified installer), then `brew bundle` each layer's `Brewfile`          | base  |
+| 60-macos     | macOS preferences (`defaults write`, `chflags`), then restart Dock/Finder/SystemUIServer                      | base  |
+| 72-vscode    | Install missing VS Code extensions from the union of every layer's `vscode-extensions.txt`                    | base  |
+| 80-repos     | Clone each `name url` line of every layer's `repos.txt` into `$HOME/<name>` unless that path exists           | base  |
+| 90-python    | Install missing uv tools from every layer's `uv-tools.txt` (a later layer's line replaces the earlier one)    | base  |
+| 95-dotfiles  | `stow.sh --backup-conflicts` (dry run: `stow.sh -n` preview), oh-my-zsh, and its custom plugins               | base  |
+| 96-iterm2    | Point iTerm2 at the stowed prefs folder `~/.config/iterm2` (after 95-dotfiles creates it)                     | base  |
+| 97-render    | `render.py`: 0 ok, 1 drift refused (warn), 2 config/I/O error (fail); dry run: `render.py --check`, warn only | base  |
+
+## Manifests
+
+| File                                             | Format                                                       | Read by     |
+| ------------------------------------------------ | ------------------------------------------------------------ | ----------- |
+| [`Brewfile`](Brewfile)                           | `brew bundle` syntax                                         | `50-brew`   |
+| [`vscode-extensions.txt`](vscode-extensions.txt) | One `publisher.name` extension ID per line                   | `72-vscode` |
+| [`repos.txt`](repos.txt)                         | `name url`, separated by spaces or tabs                      | `80-repos`  |
+| [`uv-tools.txt`](uv-tools.txt)                   | Package name, optionally followed by `uv tool install` flags | `90-python` |
+
+`#` starts a comment in the three text manifests. Each stage reads the base copy first, then every overlay's copy in
+layer order.

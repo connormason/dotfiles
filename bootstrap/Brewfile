@@ -1,0 +1,98 @@
+# bootstrap/Brewfile — base Homebrew packages, applied by the 50-brew bootstrap stage.
+#
+# 50-brew runs `brew bundle --file` on this file, then on every overlay's bootstrap/Brewfile in layer order.
+# Apply by hand with: brew bundle --file bootstrap/Brewfile
+
+# Taps providing formulae/casks used below
+# keep-sorted start
+tap "Adembc/homebrew-tap"
+tap "gu1llaum-3/sshm"
+tap "jesseduffield/lazydocker"
+# keep-sorted end
+
+# Formulae
+# keep-sorted start
+brew "Adembc/homebrew-tap/lazyssh"
+brew "autojump"
+brew "bat"
+brew "btop"
+brew "cmake"
+brew "direnv"
+brew "docker"
+brew "docker-compose"
+brew "eza"
+brew "fastfetch"
+brew "ffmpegthumbnailer"
+brew "fish"
+brew "forgit"
+brew "fzf"
+brew "fzf-make"
+brew "fzf-tab"
+brew "gh"
+brew "ghq"
+brew "git"
+brew "git-delta"
+brew "git-extras"
+brew "git-lfs"
+brew "gitui"
+brew "go-task"
+brew "graphviz"
+brew "gu1llaum-3/sshm/sshm"
+brew "hatch"
+brew "hk"
+brew "htop"
+brew "hub"
+brew "jesseduffield/lazydocker/lazydocker"
+brew "jq"
+brew "just"
+brew "lazygit"
+brew "libmagic"
+brew "libssh2"
+brew "markdownlint-cli2"
+brew "mas"
+brew "mermaid-cli"
+brew "micro"
+brew "mise"
+brew "moor"
+brew "nmap"
+brew "node"
+brew "pkl"
+brew "postgresql"
+brew "ripgrep"
+brew "shellcheck"
+brew "starship"
+brew "stow"
+brew "tmux"
+brew "todoist-cli-go"
+brew "tree"
+brew "uv"
+brew "worktrunk"
+brew "zoxide"
+brew "zsh"
+brew "zsh-autosuggestions"
+brew "zsh-completions"
+brew "zsh-syntax-highlighting"
+# keep-sorted end
+
+# Casks
+# keep-sorted start
+cask "claude-devtools"
+cask "google-chrome"
+cask "hammerspoon"
+cask "iterm2"
+cask "pycharm"
+cask "signal"
+cask "slack"
+cask "sublime-text"
+cask "todoist-app"
+cask "visual-studio-code"
+cask "zed"
+# keep-sorted end
+
+# Fonts (Nerd Fonts live in the main homebrew/cask repo; the homebrew/cask-fonts tap is deprecated)
+cask "font-fira-code-nerd-font"
+
+# Mac App Store (requires `mas` and an authenticated App Store session)
+# keep-sorted start
+mas "Amphetamine", id: 937984704
+# keep-sorted end
