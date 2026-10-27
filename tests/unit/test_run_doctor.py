@@ -125,6 +125,22 @@ class TestDoctorChecks:
         assert check.ok
         assert '2 layer(s)' in check.detail
 
+    def test_layers_count_ignores_env_sh_output(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that text an overlay env.sh prints while lib.sh loads is not counted as a layer
+        """
+        overlay = tmp_path / 'overlay'
+        (overlay / 'bootstrap').mkdir(parents=True)
+        (overlay / 'bootstrap' / 'env.sh').write_text('echo NOT-A-LAYER\n', encoding='utf-8')
+        registry = tmp_path / 'overlays'
+        registry.write_text(f'{overlay}\n', encoding='utf-8')
+        monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+        monkeypatch.setenv('DOTFILES_OVERLAYS_FILE', str(registry))
+        monkeypatch.delenv('DOTFILES_BREW_PREFIXES', raising=False)
+        check = run.check_layers()
+        assert check.ok, check.detail
+        assert check.detail == '2 layer(s): base + 1 overlay(s)'
+
     def test_tools_reports_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Test that a missing required tool fails the tools check and is named

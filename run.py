@@ -1473,8 +1473,9 @@ def check_layers() -> DoctorCheck:
     """
     Check that every registered overlay exists
     """
-    # DOTFILES_REPO is pinned to this checkout so an inherited value from another one cannot redirect the base layer
-    script = 'export DOTFILES_REPO="$1"; source "$1/bootstrap/lib.sh" && dotfiles_layers'
+    # DOTFILES_REPO is pinned to this checkout so an inherited value from another one cannot redirect the base layer.
+    # Anything lib.sh or a layer env.sh prints while loading goes to stderr so it cannot be counted as a layer.
+    script = 'export DOTFILES_REPO="$1"; source "$1/bootstrap/lib.sh" >&2 && dotfiles_layers'
     result = _capture(['bash', '-c', script, 'doctor', str(DOTFILES_DIR)])
     if result.returncode != 0:
         return DoctorCheck('layers', False, _first_line(result.stderr, 'overlay registry error'))
