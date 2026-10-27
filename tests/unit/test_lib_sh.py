@@ -156,6 +156,27 @@ class TestDotfilesLayers:
         assert result.returncode != 0
         assert f'cannot read overlays registry: {registry}' in result.stderr
 
+    def test_same_overlay_twice_fails(self, bash: BashRunner, env: dict[str, str], tmp_path: Path) -> None:
+        """
+        Test that an overlay registered twice (once through a symlink) is rejected by its canonical path
+        """
+        overlay = _overlay(tmp_path, 'twice')
+        alias   = tmp_path / 'alias'
+        alias.symlink_to(overlay)
+        _register(env, f'{overlay}\n{alias}\n')
+        result = bash('true')
+        assert result.returncode != 0
+        assert f'layer listed twice: {overlay.resolve()}' in result.stderr
+
+    def test_repo_root_as_overlay_fails(self, bash: BashRunner, env: dict[str, str]) -> None:
+        """
+        Test that registering the base repository itself as an overlay is rejected
+        """
+        _register(env, f'{REPO_ROOT}\n')
+        result = bash('true')
+        assert result.returncode != 0
+        assert f'layer listed twice: {REPO_ROOT}' in result.stderr
+
     def test_repo_root_is_canonical_through_symlink(
         self, shell: str, env: dict[str, str], tmp_path: Path,
     ) -> None:

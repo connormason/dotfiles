@@ -105,11 +105,13 @@ dotfiles_overlays_file() {
 }
 
 # Print the repo root, then each registered overlay root (absolute), one per line. Dies on a missing or unresolvable
-# overlay. Callers capture this with "$(dotfiles_layers)" || ..., where errexit is off, so every step that can fail
-# must fail explicitly.
+# overlay, and on a layer listed twice (compared by canonical path, so the repo root cannot also be an overlay).
+# Callers capture this with "$(dotfiles_layers)" || ..., where errexit is off, so every step that can fail must fail
+# explicitly.
 dotfiles_layers() {
-    local registry line raw real
+    local registry line raw real seen nl=$'\n'
     registry="$(dotfiles_overlays_file)" || return 1
+    seen="$(cd "$DOTFILES_REPO" && pwd -P)" || die "cannot resolve repo root: $DOTFILES_REPO"
     printf '%s\n' "$DOTFILES_REPO"
     if [ ! -f "$registry" ]; then
         return 0
@@ -136,6 +138,10 @@ dotfiles_layers() {
             die "overlay not found: $line (listed in $registry)"
         fi
         real="$(cd "$line" && pwd -P)" || die "cannot resolve overlay: $line (listed in $registry)"
+        case "$nl$seen$nl" in
+        *"$nl$real$nl"*) die "layer listed twice: $real (listed in $registry)" ;;
+        esac
+        seen="$seen$nl$real"
         printf '%s\n' "$real"
     done <"$registry"
 }

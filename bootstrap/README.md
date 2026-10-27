@@ -31,8 +31,9 @@ sudo. Outside dry-run, sudo is primed once by the driver and kept alive for the 
 
 An overlay is a directory listed in the overlays registry
 (`${DOTFILES_OVERLAYS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/overlays}`, one absolute or `~/`-prefixed path
-per line, `#` comments and blank lines ignored). Layers are ordered: the repo root first, then overlays in file order.
-An overlay contributes through its own `bootstrap/` directory:
+per line, `#` comments and blank lines ignored). Layers are ordered: the repo root first, then overlays in file order. A
+listed path that is missing or cannot be entered is fatal, as is a layer listed twice (compared by canonical path, so
+the repo root cannot also be registered as an overlay). An overlay contributes through its own `bootstrap/` directory:
 
 | Part                                                             | Behavior                                                                                                                        |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
