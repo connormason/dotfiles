@@ -10,7 +10,7 @@ This directory contains detailed implementation plans for improving the personal
 | 02 | [Unified Bootstrap Script](02-unified-bootstrap-script.md) | High | Medium | 01 |
 | 03 | [Docker Security & Env Vars](03-docker-security-env-vars.md) | High | Medium | None |
 | 04 | [Bootstrap Security Hardening](04-bootstrap-security-hardening.md) | Medium | Low | 02 |
-| 05 | [Repo Integration Strategy](05-repo-integration-strategy.md) | Medium | High | 01, 02 |
+| 05 | [Repo Integration Strategy](05-repo-integration-strategy.md) (superseded) | Medium | High | 01, 02 |
 | 06 | [Pre-commit & Code Quality](06-precommit-code-quality.md) | Low | Low | None |
 | 07 | [Role Documentation](07-role-documentation-dependencies.md) | Low | Low | None |
 

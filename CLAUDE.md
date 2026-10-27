@@ -17,8 +17,8 @@ For detailed reference, load on-demand:
 
 1. **`local_bootstrap.sh`** → `playbooks/local_bootstrap.yml` — personal Mac configuration.
 2. **`nas_bootstrap.sh`** → `playbooks/nas_bootstrap.yml` — home NAS / server configuration.
-3. **`run.py`** — repository-management CLI (inventory pull, tool installers, codebase chores). `Makefile` wraps these
-   (`make help`). Full command reference in [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
+3. **`run.py`** — repository-management CLI (inventory pull, codebase chores). `Makefile` wraps these (`make help`).
+   Full command reference in [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 
 Both bootstrap scripts validate the repo, install Homebrew (checksum-verified) and Ansible, then run their playbook. See
 [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flow and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation (tags /

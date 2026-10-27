@@ -388,7 +388,6 @@ tags
 # End of https://www.toptal.com/developers/gitignore/api/macos,python,git,ansible,pycharm+all,vim,VisualStudioCode,sublimetext
 
 !services/compose.base.yml
-!scripts/env/
 
 .reports/
 

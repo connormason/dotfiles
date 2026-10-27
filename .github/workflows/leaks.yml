@@ -1,7 +1,8 @@
----
 name: gitleaks
 on: [pull_request, push, workflow_dispatch]
+
 jobs:
+
   scan:
     name: gitleaks
     runs-on: ubuntu-latest
@@ -13,3 +14,46 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_NOTIFY_USER_LIST: "@connormason"
+
+  leak-guard:
+    name: leak guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+
+      # The runner has no git identity, so the script is called directly instead of through prek's --identity hook
+      - name: Scan tracked files
+        shell: bash
+        run: git ls-files -z | xargs -0 uv run --no-project scripts/hooks/check-leaks.py --
+
+      # Commit messages are scanned only for new commits (the pushed or PR range): older history predates the guard.
+      # A new-branch push (all-zero or unreachable "before" SHA) and workflow_dispatch fall back to the tip commit
+      - name: Scan new commit messages
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        shell: bash
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git log --format=%B "$PR_BASE..$PR_HEAD" > "$RUNNER_TEMP/commit-messages.txt"
+          elif [ "$EVENT_NAME" = "push" ] \
+            && [ -n "$PUSH_BEFORE" ] \
+            && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "$PUSH_BEFORE^{commit}"; then
+            git log --format=%B "$PUSH_BEFORE..$GITHUB_SHA" > "$RUNNER_TEMP/commit-messages.txt"
+          else
+            git log -1 --format=%B "$GITHUB_SHA" > "$RUNNER_TEMP/commit-messages.txt"
+          fi
+          uv run --no-project scripts/hooks/check-leaks.py "$RUNNER_TEMP/commit-messages.txt"
+
+      # Identities of every reachable commit (history already passes the baseline)
+      - name: Scan commit identities
+        shell: bash
+        run: |
+          git log --format='%an <%ae>%n%cn <%ce>' "$GITHUB_SHA" \
+            | uv run --no-project scripts/hooks/check-leaks.py --identities-from -

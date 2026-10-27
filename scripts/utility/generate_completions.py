@@ -8,13 +8,13 @@ well-known factory functions (``build_parser``, ``get_parser``, etc.) or module-
 Usage::
 
     # Auto-detect parser factory in a script
-    python scripts/utility/generate_completions.py scripts/maintain/update_prek.py zsh
+    python scripts/utility/generate_completions.py scripts/hooks/sort-json-array.py zsh
 
     # Explicit parser factory function name
-    python scripts/utility/generate_completions.py scripts/maintain/update_prek.py zsh --parser build_parser
+    python scripts/utility/generate_completions.py scripts/hooks/sort-json-array.py zsh --parser build_parser
 
     # Override the command name used in the completion script
-    python scripts/utility/generate_completions.py scripts/maintain/update_prek.py zsh --name update_prek
+    python scripts/utility/generate_completions.py scripts/hooks/sort-json-array.py zsh --name sort_json_array
 
 """
 from __future__ import annotations
@@ -238,7 +238,7 @@ class CompletionConfig:
     """
     Configuration for completion script generation.
 
-    :param command_name: command name for the completion function (e.g. ``update_prek.py``)
+    :param command_name: command name for the completion function (e.g. ``sort_json_array.py``)
     :param script_path: display path to the script (for header comments)
     :param project_name: project name (for header comments)
     """
@@ -704,9 +704,9 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
         add_help=False,
         epilog='\n'.join([
             'examples:',
-            '  %(prog)s scripts/maintain/update_prek.py zsh',
-            '  %(prog)s scripts/maintain/update_prek.py bash --parser build_parser',
-            '  %(prog)s scripts/maintain/update_prek.py fish --name update_prek',
+            '  %(prog)s scripts/hooks/sort-json-array.py zsh',
+            '  %(prog)s scripts/hooks/sort-json-array.py bash --parser build_parser',
+            '  %(prog)s scripts/hooks/sort-json-array.py fish --name sort_json_array',
         ]),
     )
 

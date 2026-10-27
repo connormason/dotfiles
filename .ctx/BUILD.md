@@ -33,10 +33,6 @@ python3 run.py clean
 # Run prek (pre-commit) hooks on all files
 python3 run.py pre
 
-# Install Python tooling
-python3 run.py install-uv
-python3 run.py install-hatch
-
 # Generate Makefile from run.py commands
 python3 run.py makefile
 ```

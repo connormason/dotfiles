@@ -4,6 +4,7 @@
 
 default_install_hook_types:
   - pre-commit
+  - commit-msg
   - post-checkout
   - post-merge
   - post-rewrite
@@ -22,22 +23,31 @@ repos:
   #
   # ========================================================================================
 
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.11.28
+  - repo: local
     hooks:
 
-      # Ensure uv.lock is up-to-date
+      # Ensure uv.lock is up-to-date. Runs through uv-public.sh, so a lock polluted by a plain `uv run` from a work
+      # environment is rewritten back to public PyPI whenever uv.lock is staged
       # pyproject.toml -> uv.lock
       - id: uv-lock
         name: "[sync]   dependencies (pyproject.toml -> uv.lock)"
         stages: [pre-commit, manual]
         priority: 0
+        entry: scripts/hooks/uv-public.sh lock --refresh
+        language: system
+        files: ^(uv\.lock|pyproject\.toml|uv\.toml)$
+        pass_filenames: false
 
       # Sync .venv/ with uv.lock on checkout/pull/rebase
       # uv.lock -> .venv/
       - id: uv-sync
         name: "[sync]   dependencies (uv.lock -> .venv)"
+        stages: [post-checkout, post-merge, post-rewrite]
         priority: 5
+        entry: scripts/hooks/uv-public.sh sync --no-active --locked
+        language: system
+        always_run: true
+        pass_filenames: false
 
       # Export locked package requirements to requirements.txt
       # uv.lock -> requirements.txt
@@ -45,6 +55,10 @@ repos:
         name: "[sync]   dependencies (uv.lock -> requirements.txt)"
         stages: [pre-commit, manual]
         priority: 5
+        entry: scripts/hooks/uv-public.sh export
+        language: system
+        files: ^uv\.lock$
+        pass_filenames: false
         args:
           - "--format=requirements.txt"
           - "--output-file=requirements.txt"
@@ -254,6 +268,25 @@ repos:
         language: python
         files: .*\.pkl$
         types: [file]
+
+      # Block employer-internal identifiers in staged content/paths and in the commit identity (public baseline +
+      # optional private patterns from ~/.config/dotfiles/leak-patterns.txt). CI scans the full tree separately
+      - id: check-leaks
+        name: "[check]  internal identifiers (leak guard)"
+        stages: [pre-commit]
+        priority: 10
+        entry: scripts/hooks/check-leaks.py --identity
+        language: python
+        types: [text]
+        always_run: true
+
+      # Same scan applied to the commit message (prek passes the message file as the filename). Identity is already
+      # checked by the pre-commit entry above
+      - id: check-leaks-msg
+        name: "[check]  internal identifiers in commit message"
+        stages: [commit-msg]
+        entry: scripts/hooks/check-leaks.py
+        language: python
 
   # ========================================================================================
   # Text/whitespace fixers

@@ -93,7 +93,6 @@ Usage details and the include-role snippet live in [`CONVENTIONS.md`](CONVENTION
 **Command categories**:
 
 - **Inventory**: `list-hosts`, `update-inventory`
-- **Tool Installation**: `install-uv`, `install-hatch`
 - **Codebase**: `clean`, `pre`, `makefile`
 
 **Key features**:

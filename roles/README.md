@@ -849,7 +849,6 @@ ERROR! Attempting to decrypt but no vault secrets found
 ## Related Documentation
 
 - **[roles/link_dotfile/README.md](link_dotfile/README.md)** - Comprehensive dotfile linking guide (214 lines)
-- **[scripts/installers/README.md](../scripts/install/README.md)** - Bulletproof installer scripts reference (275 lines)
 - **[playbooks/](../playbooks/)** - Playbook documentation and usage examples
 - **[inventory/](../inventory/)** - Inventory structure and variable definitions
 

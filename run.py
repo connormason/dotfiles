@@ -2,8 +2,8 @@
 """
 run.py - CLI interface for Connor's personal dotfiles repository
 
-This script provides a command-line interface for managing the dotfiles repository, including inventory management,
-tool installation, and codebase maintenance tasks.
+This script provides a command-line interface for managing the dotfiles repository, including inventory management
+and codebase maintenance tasks.
 
 Architecture
 -----------
@@ -16,7 +16,6 @@ The script uses a decorator-based command registration system (@command) that:
 Command Categories
 -----------------
 - **Inventory**: Manage the standalone inventory git repository
-- **Tool Installation**: Install Python tooling (uv, hatch) with retry logic
 - **Codebase**: Clean build artifacts, run prek hooks, generate Makefile
 
 Key Features
@@ -100,7 +99,6 @@ INVENTORY_DIR:  Path = DOTFILES_DIR  / 'inventory'
 INVENTORY_FILE: Path = INVENTORY_DIR / 'inventory.yml'
 VAULT_PASSWORD: Path = DOTFILES_DIR  / 'vault_password.txt'
 PLAYBOOKS_DIR:  Path = DOTFILES_DIR  / 'playbooks'
-SCRIPTS_DIR:    Path = DOTFILES_DIR  / 'scripts'
 
 # Glob patterns for finding vault files within inventory
 VAULT_FILE_PATTERNS: list[str] = [
@@ -1266,103 +1264,6 @@ def cmd_vault_encrypt(args: argparse.Namespace) -> None:
         sys.exit(1)
     else:
         printf('✅ All vault files encrypted', fg='bright_green')
-
-
-"""
-Tool installation commands
-
-Commands for installing Python tooling with enhanced reliability.
-
-Both uv and hatch installation commands delegate to dedicated installer scripts
-in scripts/installers/ that handle:
-- Download and installation logic
-- Checksum verification
-- Retry logic for network resilience
-- Force reinstall support
-- Verbose output for debugging
-
-The commands here simply build the appropriate CLI args and invoke the scripts.
-"""
-
-
-def installer_script_args(tool_name: str) -> Callable[[argparse.ArgumentParser], None]:
-    def args_install_tool(parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            '-f',
-            '--force',
-            action='store_true',
-            help=f'Force reinstall even if {style(tool_name, fg="bright_magenta")} is already installed',
-        )
-        parser.add_argument(
-            '-v',
-            '--verbose',
-            action='store_true',
-            help='Enable verbose output for debugging',
-        )
-        parser.add_argument(
-            '--retries',
-            type=int,
-            metavar='N',
-            help='Maximum number of download retry attempts',
-        )
-        parser.add_argument(
-            '--retry-delay',
-            type=int,
-            metavar='SECONDS',
-            help='Initial delay in seconds between retries with exponential backoff',
-        )
-
-    return args_install_tool
-
-
-@command(
-    group='Tool Installation',
-    add_arguments=installer_script_args('uv'),
-    description=f'Install {style("uv", fg="bright_magenta")} Python project manager',
-)
-def cmd_install_uv(args: argparse.Namespace) -> None:
-    """
-    Install `uv` Python package manager
-    """
-    cmd: list[str] = [str(SCRIPTS_DIR / 'installers' / 'install_uv.py')]
-    if args.force:
-        cmd.append('--force')
-    if args.verbose:
-        cmd.append('--verbose')
-    if args.retries is not None:
-        cmd.extend(['--retries', str(args.retries)])
-    if args.retry_delay is not None:
-        cmd.extend(['--retry-delay', str(args.retry_delay)])
-
-    try:
-        shell_command(cmd)
-    except subprocess.CalledProcessError:
-        sys.exit(1)
-
-
-@command(
-    group='Tool Installation',
-    add_arguments=installer_script_args('hatch'),
-    description=f'Install {style("hatch", fg="bright_magenta")} Python project manager',
-)
-def cmd_install_hatch(args: argparse.Namespace) -> None:
-    """
-    Install `hatch` Python project manager
-    """
-    cmd: list[str] = [str(SCRIPTS_DIR / 'installers' / 'install_hatch.py')]
-    if args.force:
-        cmd.append('--force')
-    if args.verbose:
-        cmd.append('--verbose')
-    if args.retries is not None:
-        cmd.extend(['--retries', str(args.retries)])
-    if args.retry_delay is not None:
-        cmd.extend(['--retry-delay', str(args.retry_delay)])
-
-    try:
-        shell_command(cmd)
-    except subprocess.CalledProcessError:
-        sys.exit(1)
 
 
 """
