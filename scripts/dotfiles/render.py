@@ -16,12 +16,15 @@ import difflib
 import functools
 import json
 import os
-import shutil
+import re
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from typing import NamedTuple
 
 # ==========================
 # Constants/defaults/globals
@@ -31,6 +34,13 @@ from pathlib import Path
 VERBOSE:       bool = False
 UNMANAGED_KEY: str  = '$unmanaged'
 DEFAULT_REPO:  Path = Path(__file__).resolve().parents[2]
+
+DEFAULT_FILE_MODE:  int = 0o644
+DEFAULT_STATE_MODE: int = 0o600
+BACKUP_FILE_MODE:   int = 0o600
+BACKUP_DIR_MODE:    int = 0o700
+
+ANSI_ESCAPE = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 
 TARGETS: dict[str, str] = {
     'claude': '~/.claude/settings.json',
@@ -49,6 +59,15 @@ class RenderError(Exception):
     """
 
 
+class Prepared(NamedTuple):
+    """
+    A target whose fragments have been found and composed successfully.
+    """
+    target:    str
+    managed:   dict[str, object]
+    unmanaged: list[str]
+
+
 # ==================
 # Formatting/logging
 # ==================
@@ -61,6 +80,15 @@ def info(message: str) -> None:
     :param message: text to print
     """
     print(f'render: {message}')
+
+
+def warn(message: str) -> None:
+    """
+    Print a warning line to stderr.
+
+    :param message: text to print
+    """
+    print(f'render: WARNING: {message}', file=sys.stderr)
 
 
 def error(message: str) -> None:
@@ -136,9 +164,10 @@ def merge(base: object, overlay: object) -> object:
         combined = list(base)
         seen     = {canonical(item) for item in combined}
         for item in overlay:
-            key = canonical(item)
+            cleaned = _drop_nulls(item)
+            key     = canonical(cleaned)
             if key not in seen:
-                combined.append(item)
+                combined.append(cleaned)
                 seen.add(key)
         return combined
     return _drop_nulls(overlay)
@@ -148,25 +177,43 @@ def layers(repo: Path) -> list[Path]:
     """
     Resolve layer roots via ``bootstrap/lib.sh`` so shell and Python agree on one registry.
 
+    Anything lib.sh or a layer's ``env.sh`` prints while being sourced is routed to stderr so it cannot be mistaken for
+    a layer root.
+
     :param repo: base repository root
-    :raises RenderError: if the registry names a missing overlay or lib.sh fails
+    :raises RenderError: if bash cannot run, the registry names a missing overlay, lib.sh fails, or a non-absolute
+        layer path is produced
     :return: layer roots, base first
     """
-    result = subprocess.run(
-        ['bash', '-c', 'source "$1/bootstrap/lib.sh" && dotfiles_layers', '_', str(repo)],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, 'DOTFILES_REPO': str(repo)},
-    )
+    try:
+        result = subprocess.run(
+            ['bash', '-c', 'source "$1/bootstrap/lib.sh" >&2 && dotfiles_layers', '_', str(repo)],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, 'DOTFILES_REPO': str(repo)},
+        )
+    except OSError as exc:
+        raise RenderError(f'cannot run bash to resolve layers: {exc!s}') from exc
     if result.returncode != 0:
-        raise RenderError(result.stderr.strip() or 'dotfiles_layers failed')
-    return [Path(line) for line in result.stdout.splitlines() if line]
+        raise RenderError(ANSI_ESCAPE.sub('', result.stderr).strip() or 'dotfiles_layers failed')
+    roots = []
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+        root = Path(line)
+        if not root.is_absolute():
+            raise RenderError(f'dotfiles_layers produced a non-absolute layer path: {ANSI_ESCAPE.sub("", line)!r}')
+        roots.append(root)
+    return roots
 
 
 def compose(fragments: Sequence[Path]) -> tuple[dict[str, object], list[str]]:
     """
     Merge fragments in order and split out the unmanaged-key list.
+
+    A key that a fragment sets but that is also listed as unmanaged is dropped from the managed settings (the app or
+    installer owns it) with a warning.
 
     :param fragments: fragment files, base first
     :raises RenderError: on unreadable/invalid JSON, a non-object fragment, or a malformed ``$unmanaged``
@@ -188,7 +235,29 @@ def compose(fragments: Sequence[Path]) -> tuple[dict[str, object], list[str]]:
         merged = merge(merged, data)
     if not isinstance(merged, dict):
         raise RenderError('merged settings must be an object')
+    overlap = [k for k in unmanaged if k in merged]
+    if overlap:
+        warn(f'fragment value(s) ignored for key(s) listed in {UNMANAGED_KEY}: {", ".join(overlap)}')
     return {k: v for k, v in merged.items() if k not in unmanaged}, unmanaged
+
+
+def prepare(target: str, roots: Sequence[Path]) -> Prepared | None:
+    """
+    Find and compose the fragments of one target.
+
+    :param target: target id from :data:`TARGETS`
+    :param roots: layer roots, base first
+    :raises RenderError: on invalid fragments
+    :return: the composed target, or ``None`` if no layer provides a fragment
+    """
+    fragments = [root / 'render' / f'{target}.json' for root in roots]
+    fragments = [f for f in fragments if f.is_file()]
+    if not fragments:
+        if VERBOSE:
+            info(f'{target}: no fragments in any layer; skipped')
+        return None
+    managed, unmanaged = compose(fragments)
+    return Prepared(target, managed, unmanaged)
 
 
 def state_path(target: str) -> Path:
@@ -200,6 +269,55 @@ def state_path(target: str) -> Path:
     """
     state_home = os.environ.get('XDG_STATE_HOME') or str(Path.home() / '.local' / 'state')
     return Path(state_home) / 'dotfiles' / 'render' / f'{target}.json'
+
+
+def read_state(state: Path) -> dict[str, object] | None:
+    """
+    Load the last managed render, treating a missing or unusable state file as absent.
+
+    :param state: state file path
+    :return: the stored managed settings, or ``None`` if absent or unusable (a warning is printed for the latter)
+    """
+    if not state.is_file():
+        return None
+    try:
+        data = json.loads(state.read_text(encoding='utf-8'))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        warn(f'ignoring unusable state file {state} ({exc!s}); treating it as absent')
+        return None
+    if not isinstance(data, dict):
+        warn(f'ignoring unusable state file {state} (not a JSON object); treating it as absent')
+        return None
+    return data
+
+
+def atomic_write(path: Path, text: str, default_mode: int) -> None:
+    """
+    Write text to path through a temp file in the same directory and ``os.replace``.
+
+    An existing file's mode is preserved; for a symlink the mode of its target is used. A symlink itself is replaced,
+    never written through.
+
+    :param path: destination path
+    :param text: file content
+    :param default_mode: mode used when no existing file supplies one
+    """
+    try:
+        mode = stat.S_IMODE(path.stat().st_mode)
+    except OSError:
+        mode = default_mode
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        tmp.chmod(mode)
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _diff(old: str, new: str, old_label: str, new_label: str) -> str:
@@ -219,6 +337,8 @@ def _backup(dest: Path) -> Path:
     """
     Copy the live file's content to ~/.dotfiles-backup/<timestamp>/<path relative to HOME>.
 
+    Directories are created 0700 and the backup file 0600.
+
     :param dest: live target path
     :return: backup path
     """
@@ -228,45 +348,47 @@ def _backup(dest: Path) -> Path:
     except ValueError:
         relative = Path(dest.name)
     backup = home / '.dotfiles-backup' / time.strftime('%Y%m%d-%H%M%S') / relative
-    backup.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(dest, backup)
+    current = home
+    for part in backup.parent.relative_to(home).parts:
+        current = current / part
+        current.mkdir(mode=BACKUP_DIR_MODE, exist_ok=True)
+    fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, BACKUP_FILE_MODE)
+    with os.fdopen(fd, 'wb') as handle:
+        handle.write(dest.read_bytes())
+    backup.chmod(BACKUP_FILE_MODE)
     return backup
 
 
-def render_target(target: str, repo: Path, *, mode: str, force: bool) -> int:
+def render_target(prepared: Prepared, *, mode: str, force: bool) -> int:
     """
-    Render, check, or diff one target.
+    Render, check, or diff one composed target.
 
-    :param target: target id from :data:`TARGETS`
-    :param repo: base repository root
+    :param prepared: composed target
     :param mode: ``'render'``, ``'check'``, or ``'diff'``
     :param force: overwrite despite drift (after backing up)
-    :raises RenderError: on configuration errors
+    :raises OSError: on I/O failures reading or writing the target, its state, or backups
     :return: 0 ok / in sync, 1 drift refused / out of sync
     """
-    fragments = [layer / 'render' / f'{target}.json' for layer in layers(repo)]
-    fragments = [f for f in fragments if f.is_file()]
-    if not fragments:
-        if VERBOSE:
-            info(f'{target}: no fragments in any layer; skipped')
-        return 0
+    target, managed, unmanaged = prepared
+    new_text = dumps(managed)
+    dest     = Path(TARGETS[target]).expanduser()
+    state    = state_path(target)
+    last     = read_state(state)
 
-    managed, unmanaged = compose(fragments)
-    new_text  = dumps(managed)
-    dest      = Path(TARGETS[target]).expanduser()
-    state     = state_path(target)
-    last_text = state.read_text(encoding='utf-8') if state.is_file() else None
-
-    live: dict[str, object] | None = None
-    live_ok = True
+    live:         dict[str, object] | None = None
+    live_problem: str | None               = None
     if dest.exists():
         try:
             parsed = json.loads(dest.read_text(encoding='utf-8'))
-            live   = parsed if isinstance(parsed, dict) else None
-            live_ok = live is not None
         except (UnicodeDecodeError, json.JSONDecodeError):
-            live_ok = False
-    live_managed_text = dumps({k: v for k, v in live.items() if k not in unmanaged}) if live is not None else None
+            live_problem = 'is not valid JSON'
+        else:
+            if isinstance(parsed, dict):
+                live = parsed
+            else:
+                live_problem = 'is not a JSON object'
+    live_managed = {k: v for k, v in live.items() if k not in unmanaged} if live is not None else None
+    live_managed_text = dumps(live_managed) if live_managed is not None else None
 
     if mode == 'diff':
         print(_diff(live_managed_text or '', new_text, f'{dest} (live)', f'{dest} (rendered)'), end='')
@@ -279,13 +401,15 @@ def render_target(target: str, repo: Path, *, mode: str, force: bool) -> int:
 
     current = live_managed_text == new_text
     in_sync = False
-    if last_text is not None and live_managed_text is not None:
-        in_sync = canonical(json.loads(last_text)) == canonical(json.loads(live_managed_text))
+    if last is not None and live_managed is not None:
+        in_sync = canonical(last) == canonical(live_managed)
     drifted = dest.exists() and not current and not in_sync
     if drifted and not force:
-        reason = 'is not valid JSON' if not live_ok else 'was edited since the last render'
+        reason = live_problem or 'was edited since the last render'
         error(f'{target}: {dest} {reason}; move the change into a render fragment, or re-run with --force')
-        print(_diff(last_text or '', live_managed_text or '', 'last render', f'{dest} (live)'), end='', file=sys.stderr)
+        if live_managed_text is not None:
+            old_text = dumps(last) if last is not None else ''
+            print(_diff(old_text, live_managed_text, 'last render', f'{dest} (live)'), end='', file=sys.stderr)
         return 1
 
     output = dict(managed)
@@ -296,15 +420,13 @@ def render_target(target: str, repo: Path, *, mode: str, force: bool) -> int:
     if dest.exists() and force and drifted:
         info(f'{target}: backed up live file to {_backup(dest)}')
     if dest.is_symlink():
-        dest.unlink()
-    if not dest.exists() or dest.read_text(encoding='utf-8') != output_text:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(output_text, encoding='utf-8')
+        info(f'{target}: replacing symlink {dest} -> {dest.readlink()} with a regular file')
+    if dest.is_symlink() or not dest.exists() or dest.read_text(encoding='utf-8') != output_text:
+        atomic_write(dest, output_text, DEFAULT_FILE_MODE)
         info(f'{target}: rendered {dest}')
     elif VERBOSE:
         info(f'{target}: already current')
-    state.parent.mkdir(parents=True, exist_ok=True)
-    state.write_text(new_text, encoding='utf-8')
+    atomic_write(state, new_text, DEFAULT_STATE_MODE)
     return 0
 
 
@@ -354,8 +476,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     Render, check, or diff settings targets.
 
+    All requested targets are composed and validated before any is written, so a bad fragment never leaves a partial
+    render behind.
+
     :param argv: command-line arguments (default: ``sys.argv[1:]``)
-    :return: 0 ok, 1 drift refused / out of sync, 2 configuration error
+    :return: 0 ok, 1 drift refused / out of sync, 2 configuration or I/O error
     """
     args    = parse_args(argv)
     mode    = 'diff' if args.diff else 'check' if args.check else 'render'
@@ -365,13 +490,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         error(f'unknown target(s): {", ".join(unknown)} (known: {", ".join(TARGETS)})')
         return 2
 
+    try:
+        roots    = layers(Path(args.repo))
+        composed = [p for p in (prepare(target, roots) for target in targets) if p is not None]
+    except RenderError as exc:
+        error(str(exc))
+        return 2
+
     retval = 0
-    for target in targets:
-        try:
-            retval = max(retval, render_target(target, Path(args.repo), mode=mode, force=args.force))
-        except RenderError as exc:
-            error(str(exc))
-            return 2
+    try:
+        for prepared in composed:
+            retval = max(retval, render_target(prepared, mode=mode, force=args.force))
+    except OSError as exc:
+        error(str(exc))
+        return 2
     return retval
 
 

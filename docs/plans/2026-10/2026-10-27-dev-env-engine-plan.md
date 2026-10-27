@@ -1844,13 +1844,16 @@ git commit -m "feat(bootstrap): layered stage driver merging stages across overl
   - `UNMANAGED_KEY = '$unmanaged'`
   - `class RenderError(Exception)`
   - `merge(base: object, overlay: object) -> object`
-  - `layers(repo: Path) -> list[Path]`
+  - `layers(repo: Path) -> list[Path]` — lib.sh output is routed to stderr; non-absolute lines are rejected
+  - `prepare(target: str, roots: Sequence[Path]) -> Prepared | None` — find + compose one target's fragments
+  - `atomic_write(path: Path, text: str, default_mode: int) -> None` — temp file + `Path.replace`, mode preserved
   - `compose(fragments: Sequence[Path]) -> tuple[dict[str, object], list[str]]` — merged managed settings + the
     unmanaged top-level keys
   - `dumps(data: object) -> str` — deterministic JSON text (sorted keys, 2-space indent, trailing newline)
   - `main(argv: Sequence[str] | None = None) -> int`
   - CLI: `render.py [TARGET…] [--diff | --check] [--force] [--repo PATH] [-v]`; exit 0 ok / in sync, 1 drift refused
-    or out of sync, 2 configuration error
+    or out of sync, 2 configuration or I/O error (bad fragment, unknown target, missing overlay, unreadable/unwritable
+    path, bash unavailable)
 - Semantics (binding): objects deep-merge; arrays concatenate with order-preserving de-duplication (by canonical JSON);
   scalars — later layer wins; `null` in a later layer deletes the key; a fragment's top-level `"$unmanaged"` (list of
   top-level key names, merged across layers) marks keys owned by the app/installer: they are never written from
@@ -1858,7 +1861,12 @@ git commit -m "feat(bootstrap): layered stage driver merging stages across overl
   managed render is stored as `${XDG_STATE_HOME:-~/.local/state}/dotfiles/render/<id>.json`; drift = live managed
   content differs from both the stored last render and the new render. `--force` backs the live file up to
   `~/.dotfiles-backup/<YYYYmmdd-HHMMSS>/<path relative to HOME>` first. A symlink at the target is replaced by a real
-  file (the symlink's target is never written).
+  file (the symlink's target is never written; its former target is reported, and its target's mode is inherited).
+  Writes (target and state) are atomic via a same-directory temp file + replace, preserving an existing file's mode.
+  A missing/corrupt/empty/non-object state file is treated as absent with a warning. All requested targets are
+  composed and validated before any is written (a bad fragment exits 2 with nothing written). `--force` backs up only
+  when drift exists; backup dirs are 0700 and files 0600. A key set by a fragment but listed in `$unmanaged` is
+  dropped with a warning. A live file that is not valid JSON / not a JSON object is refused with a matching message.
 
 (The spec named a SHA-256 state file; storing the last managed render itself is a superset that makes the drift diff
 exact.)
@@ -1875,7 +1883,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
+import stat
+import subprocess
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -1887,6 +1898,14 @@ if TYPE_CHECKING:
 
 REPO_ROOT   = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / 'scripts' / 'dotfiles' / 'render.py'
+
+# Inherited variables that would leak the developer's own configuration into the tests
+_SCRUBBED_VARS = (
+    'DOTFILES_REPO',
+    'DOTFILES_BREW_PREFIXES',
+    'DOTFILES_LEAK_PATTERNS',
+    'DOTFILES_OVERLAYS_FILE',
+)
 
 
 def _load_module() -> ModuleType:
@@ -1910,6 +1929,8 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     """
     Fixture repo with lib.sh, an overlay, an isolated HOME and state dir
     """
+    for var in _SCRUBBED_VARS:
+        monkeypatch.delenv(var, raising=False)
     repo = tmp_path / 'repo'
     (repo / 'bootstrap').mkdir(parents=True)
     (repo / 'render').mkdir()
@@ -1924,7 +1945,6 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     monkeypatch.setenv('XDG_CONFIG_HOME', str(home / '.config'))
     monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path / 'state'))
     monkeypatch.setenv('DOTFILES_OVERLAYS_FILE', str(registry))
-    monkeypatch.delenv('DOTFILES_REPO', raising=False)
     return {'repo': repo, 'overlay': overlay, 'home': home, 'state': tmp_path / 'state'}
 
 
@@ -1964,6 +1984,8 @@ class TestMerge:
             ([1, 2],                  [2, 3],            [1, 2, 3]),
             ([{'m': 'x'}],            [{'m': 'x'}, {'m': 'y'}], [{'m': 'x'}, {'m': 'y'}]),
             ({'a': [1]},              {'a': 'scalar'},   {'a': 'scalar'}),
+            ([1],                     [{'a': None, 'b': 1}], [1, {'b': 1}]),
+            ([{'b': 1}],              [{'a': None, 'b': 1}], [{'b': 1}]),
         ],
     )
     def test_merge(self, base: object, overlay: object, expected: object) -> None:
@@ -2003,6 +2025,18 @@ class TestCompose:
             render.compose([world['repo'] / 'render' / 'claude.json'])
 
 
+class TestLayers:
+    """
+    Tests for layer resolution through lib.sh
+    """
+    def test_base_first_then_overlays(self, world: dict[str, Path]) -> None:
+        """
+        Test that the base repo precedes the registered overlay
+        """
+        resolved = [path.resolve() for path in render.layers(world['repo'])]
+        assert resolved == [world['repo'].resolve(), world['overlay'].resolve()]
+
+
 class TestRender:
     """
     Tests for rendering, drift guard, and modes
@@ -2014,9 +2048,10 @@ class TestRender:
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         assert _run(world, 'claude') == 0
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'dark'}
-        assert (world['state'] / 'dotfiles' / 'render' / 'claude.json').is_file()
+        state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
+        assert state.read_text(encoding='utf-8') == render.dumps({'theme': 'dark'})
 
-    def test_in_app_edit_is_refused(self, world: dict[str, Path]) -> None:
+    def test_in_app_edit_is_refused(self, world: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
         """
         Test that a live edit since the last render blocks rendering and leaves the file untouched
         """
@@ -2024,8 +2059,13 @@ class TestRender:
         assert _run(world, 'claude') == 0
         _claude(world).write_text('{"theme": "edited"}\n', encoding='utf-8')
         _fragment(world['repo'], 'claude', {'theme': 'dark', 'verbose': True})
+        capsys.readouterr()
         assert _run(world, 'claude') == 1
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'edited'}
+        err = capsys.readouterr().err
+        assert 'ERROR' in err
+        assert '-  "theme": "dark"' in err
+        assert '+  "theme": "edited"' in err
 
     def test_force_backs_up_and_overwrites(self, world: dict[str, Path]) -> None:
         """
@@ -2061,6 +2101,9 @@ class TestRender:
         _claude(world).parent.mkdir(parents=True)
         _claude(world).write_text('{"theme": "dark"}', encoding='utf-8')
         assert _run(world, 'claude') == 0
+        state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
+        assert state.read_text(encoding='utf-8') == render.dumps({'theme': 'dark'})
+        assert not (world['home'] / '.dotfiles-backup').exists()
 
     def test_symlink_target_is_replaced_not_followed(self, world: dict[str, Path], tmp_path: Path) -> None:
         """
@@ -2073,7 +2116,11 @@ class TestRender:
         _fragment(world['repo'], 'claude', {'theme': 'dark', 'verbose': True})
         assert _run(world, 'claude', '--force') == 0
         assert not _claude(world).is_symlink()
+        assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'dark', 'verbose': True}
         assert json.loads(other.read_text(encoding='utf-8')) == {'theme': 'dark'}
+        backups = list((world['home'] / '.dotfiles-backup').glob('*/.claude/settings.json'))
+        assert len(backups) == 1
+        assert json.loads(backups[0].read_text(encoding='utf-8')) == {'theme': 'dark'}
 
     def test_check_and_diff_do_not_write(self, world: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
         """
@@ -2114,6 +2161,287 @@ class TestRender:
         (tmp_path / 'overlays').write_text(f'{tmp_path / "gone"}\n', encoding='utf-8')
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         assert _run(world, 'claude') == 2
+
+
+class TestLayerResolution:
+    """
+    Tests for resolving layers through lib.sh robustly
+    """
+    def test_env_sh_output_is_not_a_layer(self, world: dict[str, Path]) -> None:
+        """
+        Test that text echoed by a layer env.sh never becomes a layer root
+        """
+        (world['overlay'] / 'bootstrap').mkdir()
+        (world['overlay'] / 'bootstrap' / 'env.sh').write_text('echo NOT-A-LAYER\n', encoding='utf-8')
+        resolved = [path.resolve() for path in render.layers(world['repo'])]
+        assert resolved == [world['repo'].resolve(), world['overlay'].resolve()]
+
+    def test_non_absolute_layer_line_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that a relative path in the layer list raises RenderError
+        """
+        fake = subprocess.CompletedProcess(args=[], returncode=0, stdout='relative/path\n', stderr='')
+        monkeypatch.setattr(render.subprocess, 'run', lambda *_args, **_kwargs: fake)
+        with pytest.raises(render.RenderError):
+            render.layers(Path('/repo'))
+
+    def test_error_text_is_stripped_of_ansi(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that escape sequences in lib.sh errors do not reach the terminal
+        """
+        fake = subprocess.CompletedProcess(args=[], returncode=1, stdout='', stderr='\x1b[31mboom\x1b[0m\n')
+        monkeypatch.setattr(render.subprocess, 'run', lambda *_args, **_kwargs: fake)
+        with pytest.raises(render.RenderError) as exc_info:
+            render.layers(Path('/repo'))
+        assert str(exc_info.value) == 'boom'
+
+    def test_missing_bash_is_config_error(self, world: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that failing to launch bash exits 2 instead of raising
+        """
+        def _boom(*_args: object, **_kwargs: object) -> None:
+            raise FileNotFoundError('bash')
+
+        monkeypatch.setattr(render.subprocess, 'run', _boom)
+        assert _run(world, 'claude') == 2
+
+
+class TestAtomicWrites:
+    """
+    Tests for atomic, mode-preserving writes
+    """
+    def test_regular_file_mode_is_preserved(self, world: dict[str, Path]) -> None:
+        """
+        Test that re-rendering keeps a restrictive mode on an existing file
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        assert _run(world, 'claude') == 0
+        _claude(world).chmod(0o600)
+        _fragment(world['repo'], 'claude', {'theme': 'light'})
+        assert _run(world, 'claude') == 0
+        assert stat.S_IMODE(_claude(world).stat().st_mode) == 0o600
+        assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'light'}
+
+    def test_symlink_target_mode_is_inherited(self, world: dict[str, Path], tmp_path: Path) -> None:
+        """
+        Test that replacing a symlink adopts the mode of the file it pointed to
+        """
+        other = tmp_path / 'elsewhere.json'
+        other.write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
+        other.chmod(0o600)
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).symlink_to(other)
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        assert _run(world, 'claude') == 0
+        assert not _claude(world).is_symlink()
+        assert stat.S_IMODE(_claude(world).stat().st_mode) == 0o600
+        assert other.read_text(encoding='utf-8') == render.dumps({'theme': 'dark'})
+
+    def test_no_temp_files_are_left_behind(self, world: dict[str, Path]) -> None:
+        """
+        Test that only the target remains in its directory after a render
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        assert _run(world, 'claude') == 0
+        assert [path.name for path in _claude(world).parent.iterdir()] == ['settings.json']
+
+
+class TestResilientState:
+    """
+    Tests for corrupt or unreadable state files
+    """
+    @pytest.mark.parametrize('content', ['{corrupt', '', '[1, 2]'])
+    def test_bad_state_adopts_identical_live_file(
+        self, world: dict[str, Path], capsys: pytest.CaptureFixture[str], content: str,
+    ) -> None:
+        """
+        Test that an unusable state file is ignored with a warning and the render proceeds
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
+        state.parent.mkdir(parents=True)
+        state.write_text(content, encoding='utf-8')
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
+        assert _run(world, 'claude') == 0
+        assert 'state' in capsys.readouterr().err
+        assert state.read_text(encoding='utf-8') == render.dumps({'theme': 'dark'})
+
+    @pytest.mark.parametrize('content', ['{corrupt', ''])
+    def test_bad_state_with_differing_live_file_is_drift(self, world: dict[str, Path], content: str) -> None:
+        """
+        Test that an unusable state plus a differing live file is refused as drift, not a traceback
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
+        state.parent.mkdir(parents=True)
+        state.write_text(content, encoding='utf-8')
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).write_text('{"theme": "edited"}\n', encoding='utf-8')
+        assert _run(world, 'claude') == 1
+        assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'edited'}
+
+
+class TestIoErrors:
+    """
+    Tests that I/O problems exit 2 with an error line instead of a traceback
+    """
+    def test_destination_is_directory(self, world: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that a directory at the target path exits 2
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        _claude(world).mkdir(parents=True)
+        assert _run(world, 'claude') == 2
+        assert 'ERROR' in capsys.readouterr().err
+
+    @pytest.mark.skipif(os.geteuid() == 0, reason='root ignores directory permissions')
+    def test_read_only_destination_directory(self, world: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that an unwritable destination directory exits 2
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).parent.chmod(0o500)
+        try:
+            assert _run(world, 'claude') == 2
+        finally:
+            _claude(world).parent.chmod(0o700)
+        assert 'ERROR' in capsys.readouterr().err
+        assert not _claude(world).exists()
+
+
+class TestRiskPaths:
+    """
+    Tests for live-file edge cases, backups, warnings, and multi-target behavior
+    """
+    def test_invalid_live_json_is_refused(self, world: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that an unparsable live file is refused and left untouched
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).write_text('{nope', encoding='utf-8')
+        assert _run(world, 'claude') == 1
+        assert _claude(world).read_text(encoding='utf-8') == '{nope'
+        assert 'is not valid JSON' in capsys.readouterr().err
+
+    def test_non_object_live_json_is_refused(self, world: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that a live file holding a non-object is refused with an accurate message
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).write_text('[1, 2]', encoding='utf-8')
+        assert _run(world, 'claude') == 1
+        assert _claude(world).read_text(encoding='utf-8') == '[1, 2]'
+        err = capsys.readouterr().err
+        assert 'is not a JSON object' in err
+        assert 'is not valid JSON' not in err
+
+    def test_in_sync_symlink_is_replaced_without_force(self, world: dict[str, Path], tmp_path: Path) -> None:
+        """
+        Test that a symlink whose content equals the render becomes a real file without --force
+        """
+        other = tmp_path / 'elsewhere.json'
+        other.write_text('{"theme": "dark"}', encoding='utf-8')
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).symlink_to(other)
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        assert _run(world, 'claude') == 0
+        assert not _claude(world).is_symlink()
+        assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'dark'}
+        assert other.read_text(encoding='utf-8') == '{"theme": "dark"}'
+        assert not (world['home'] / '.dotfiles-backup').exists()
+
+    def test_dangling_symlink_is_replaced_and_reported(
+        self, world: dict[str, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that a dangling symlink is replaced by a real file and its former target is reported
+        """
+        missing = tmp_path / 'missing.json'
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).symlink_to(missing)
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        assert _run(world, 'claude') == 0
+        assert not _claude(world).is_symlink()
+        assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'dark'}
+        assert not missing.exists()
+        assert str(missing) in capsys.readouterr().out
+
+    def test_force_without_drift_makes_no_backup(self, world: dict[str, Path]) -> None:
+        """
+        Test that --force on an undrifted file does not create a backup
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        assert _run(world, 'claude') == 0
+        _fragment(world['repo'], 'claude', {'theme': 'light'})
+        assert _run(world, 'claude', '--force') == 0
+        assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'light'}
+        assert not (world['home'] / '.dotfiles-backup').exists()
+
+    def test_backups_are_private(self, world: dict[str, Path]) -> None:
+        """
+        Test that backup directories are 0700 and backup files are 0600
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).write_text('{"theme": "hand-made"}\n', encoding='utf-8')
+        _claude(world).chmod(0o644)
+        assert _run(world, 'claude', '--force') == 0
+        root = world['home'] / '.dotfiles-backup'
+        (backup,) = root.glob('*/.claude/settings.json')
+        assert stat.S_IMODE(backup.stat().st_mode) == 0o600
+        for directory in (root, backup.parent.parent, backup.parent):
+            assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+
+    def test_check_ignores_changed_unmanaged_keys(self, world: dict[str, Path]) -> None:
+        """
+        Test that --check stays in sync when only an unmanaged key changes
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark', '$unmanaged': ['installerHash']})
+        assert _run(world, 'claude') == 0
+        live = json.loads(_claude(world).read_text(encoding='utf-8'))
+        live['installerHash'] = 'changed'
+        _claude(world).write_text(json.dumps(live), encoding='utf-8')
+        assert _run(world, 'claude', '--check') == 0
+
+    def test_fragment_value_for_unmanaged_key_warns(
+        self, world: dict[str, Path], capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that a key both set by a fragment and listed as unmanaged is dropped with a warning
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark', 'owned': 'x', '$unmanaged': ['owned']})
+        managed, _unmanaged = render.compose([world['repo'] / 'render' / 'claude.json'])
+        assert managed == {'theme': 'dark'}
+        err = capsys.readouterr().err
+        assert 'owned' in err
+        assert 'WARNING' in err
+
+    def test_multi_target_exit_code_is_the_maximum(self, world: dict[str, Path]) -> None:
+        """
+        Test that a refused target yields exit 1 while other targets still render
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        _fragment(world['repo'], 'vscode', {'editor.fontSize': 12})
+        assert _run(world, 'claude') == 0
+        _claude(world).write_text('{"theme": "edited"}\n', encoding='utf-8')
+        assert _run(world, 'claude', 'vscode') == 1
+        vscode = world['home'] / 'Library' / 'Application Support' / 'Code' / 'User' / 'settings.json'
+        assert json.loads(vscode.read_text(encoding='utf-8')) == {'editor.fontSize': 12}
+        assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'edited'}
+
+    def test_bad_fragment_blocks_all_targets(self, world: dict[str, Path]) -> None:
+        """
+        Test that one malformed fragment exits 2 before any target is written
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        (world['repo'] / 'render' / 'vscode.json').write_text('{nope', encoding='utf-8')
+        assert _run(world) == 2
+        assert not _claude(world).exists()
+        assert not (world['state'] / 'dotfiles' / 'render').exists()
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -2143,12 +2471,15 @@ import difflib
 import functools
 import json
 import os
-import shutil
+import re
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from typing import NamedTuple
 
 # ==========================
 # Constants/defaults/globals
@@ -2158,6 +2489,13 @@ from pathlib import Path
 VERBOSE:       bool = False
 UNMANAGED_KEY: str  = '$unmanaged'
 DEFAULT_REPO:  Path = Path(__file__).resolve().parents[2]
+
+DEFAULT_FILE_MODE:  int = 0o644
+DEFAULT_STATE_MODE: int = 0o600
+BACKUP_FILE_MODE:   int = 0o600
+BACKUP_DIR_MODE:    int = 0o700
+
+ANSI_ESCAPE = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 
 TARGETS: dict[str, str] = {
     'claude': '~/.claude/settings.json',
@@ -2176,6 +2514,15 @@ class RenderError(Exception):
     """
 
 
+class Prepared(NamedTuple):
+    """
+    A target whose fragments have been found and composed successfully.
+    """
+    target:    str
+    managed:   dict[str, object]
+    unmanaged: list[str]
+
+
 # ==================
 # Formatting/logging
 # ==================
@@ -2188,6 +2535,15 @@ def info(message: str) -> None:
     :param message: text to print
     """
     print(f'render: {message}')
+
+
+def warn(message: str) -> None:
+    """
+    Print a warning line to stderr.
+
+    :param message: text to print
+    """
+    print(f'render: WARNING: {message}', file=sys.stderr)
 
 
 def error(message: str) -> None:
@@ -2263,9 +2619,10 @@ def merge(base: object, overlay: object) -> object:
         combined = list(base)
         seen     = {canonical(item) for item in combined}
         for item in overlay:
-            key = canonical(item)
+            cleaned = _drop_nulls(item)
+            key     = canonical(cleaned)
             if key not in seen:
-                combined.append(item)
+                combined.append(cleaned)
                 seen.add(key)
         return combined
     return _drop_nulls(overlay)
@@ -2275,25 +2632,43 @@ def layers(repo: Path) -> list[Path]:
     """
     Resolve layer roots via ``bootstrap/lib.sh`` so shell and Python agree on one registry.
 
+    Anything lib.sh or a layer's ``env.sh`` prints while being sourced is routed to stderr so it cannot be mistaken for
+    a layer root.
+
     :param repo: base repository root
-    :raises RenderError: if the registry names a missing overlay or lib.sh fails
+    :raises RenderError: if bash cannot run, the registry names a missing overlay, lib.sh fails, or a non-absolute
+        layer path is produced
     :return: layer roots, base first
     """
-    result = subprocess.run(
-        ['bash', '-c', 'source "$1/bootstrap/lib.sh" && dotfiles_layers', '_', str(repo)],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, 'DOTFILES_REPO': str(repo)},
-    )
+    try:
+        result = subprocess.run(
+            ['bash', '-c', 'source "$1/bootstrap/lib.sh" >&2 && dotfiles_layers', '_', str(repo)],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, 'DOTFILES_REPO': str(repo)},
+        )
+    except OSError as exc:
+        raise RenderError(f'cannot run bash to resolve layers: {exc!s}') from exc
     if result.returncode != 0:
-        raise RenderError(result.stderr.strip() or 'dotfiles_layers failed')
-    return [Path(line) for line in result.stdout.splitlines() if line]
+        raise RenderError(ANSI_ESCAPE.sub('', result.stderr).strip() or 'dotfiles_layers failed')
+    roots = []
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+        root = Path(line)
+        if not root.is_absolute():
+            raise RenderError(f'dotfiles_layers produced a non-absolute layer path: {ANSI_ESCAPE.sub("", line)!r}')
+        roots.append(root)
+    return roots
 
 
 def compose(fragments: Sequence[Path]) -> tuple[dict[str, object], list[str]]:
     """
     Merge fragments in order and split out the unmanaged-key list.
+
+    A key that a fragment sets but that is also listed as unmanaged is dropped from the managed settings (the app or
+    installer owns it) with a warning.
 
     :param fragments: fragment files, base first
     :raises RenderError: on unreadable/invalid JSON, a non-object fragment, or a malformed ``$unmanaged``
@@ -2313,8 +2688,31 @@ def compose(fragments: Sequence[Path]) -> tuple[dict[str, object], list[str]]:
             raise RenderError(f'{fragment}: {UNMANAGED_KEY} must be a list of key names')
         unmanaged.extend(k for k in keys if k not in unmanaged)
         merged = merge(merged, data)
-    assert isinstance(merged, dict)
+    if not isinstance(merged, dict):
+        raise RenderError('merged settings must be an object')
+    overlap = [k for k in unmanaged if k in merged]
+    if overlap:
+        warn(f'fragment value(s) ignored for key(s) listed in {UNMANAGED_KEY}: {", ".join(overlap)}')
     return {k: v for k, v in merged.items() if k not in unmanaged}, unmanaged
+
+
+def prepare(target: str, roots: Sequence[Path]) -> Prepared | None:
+    """
+    Find and compose the fragments of one target.
+
+    :param target: target id from :data:`TARGETS`
+    :param roots: layer roots, base first
+    :raises RenderError: on invalid fragments
+    :return: the composed target, or ``None`` if no layer provides a fragment
+    """
+    fragments = [root / 'render' / f'{target}.json' for root in roots]
+    fragments = [f for f in fragments if f.is_file()]
+    if not fragments:
+        if VERBOSE:
+            info(f'{target}: no fragments in any layer; skipped')
+        return None
+    managed, unmanaged = compose(fragments)
+    return Prepared(target, managed, unmanaged)
 
 
 def state_path(target: str) -> Path:
@@ -2326,6 +2724,55 @@ def state_path(target: str) -> Path:
     """
     state_home = os.environ.get('XDG_STATE_HOME') or str(Path.home() / '.local' / 'state')
     return Path(state_home) / 'dotfiles' / 'render' / f'{target}.json'
+
+
+def read_state(state: Path) -> dict[str, object] | None:
+    """
+    Load the last managed render, treating a missing or unusable state file as absent.
+
+    :param state: state file path
+    :return: the stored managed settings, or ``None`` if absent or unusable (a warning is printed for the latter)
+    """
+    if not state.is_file():
+        return None
+    try:
+        data = json.loads(state.read_text(encoding='utf-8'))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        warn(f'ignoring unusable state file {state} ({exc!s}); treating it as absent')
+        return None
+    if not isinstance(data, dict):
+        warn(f'ignoring unusable state file {state} (not a JSON object); treating it as absent')
+        return None
+    return data
+
+
+def atomic_write(path: Path, text: str, default_mode: int) -> None:
+    """
+    Write text to path through a temp file in the same directory and ``os.replace``.
+
+    An existing file's mode is preserved; for a symlink the mode of its target is used. A symlink itself is replaced,
+    never written through.
+
+    :param path: destination path
+    :param text: file content
+    :param default_mode: mode used when no existing file supplies one
+    """
+    try:
+        mode = stat.S_IMODE(path.stat().st_mode)
+    except OSError:
+        mode = default_mode
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        tmp.chmod(mode)
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _diff(old: str, new: str, old_label: str, new_label: str) -> str:
@@ -2345,6 +2792,8 @@ def _backup(dest: Path) -> Path:
     """
     Copy the live file's content to ~/.dotfiles-backup/<timestamp>/<path relative to HOME>.
 
+    Directories are created 0700 and the backup file 0600.
+
     :param dest: live target path
     :return: backup path
     """
@@ -2354,45 +2803,47 @@ def _backup(dest: Path) -> Path:
     except ValueError:
         relative = Path(dest.name)
     backup = home / '.dotfiles-backup' / time.strftime('%Y%m%d-%H%M%S') / relative
-    backup.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(dest, backup)
+    current = home
+    for part in backup.parent.relative_to(home).parts:
+        current = current / part
+        current.mkdir(mode=BACKUP_DIR_MODE, exist_ok=True)
+    fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, BACKUP_FILE_MODE)
+    with os.fdopen(fd, 'wb') as handle:
+        handle.write(dest.read_bytes())
+    backup.chmod(BACKUP_FILE_MODE)
     return backup
 
 
-def render_target(target: str, repo: Path, *, mode: str, force: bool) -> int:
+def render_target(prepared: Prepared, *, mode: str, force: bool) -> int:
     """
-    Render, check, or diff one target.
+    Render, check, or diff one composed target.
 
-    :param target: target id from :data:`TARGETS`
-    :param repo: base repository root
+    :param prepared: composed target
     :param mode: ``'render'``, ``'check'``, or ``'diff'``
     :param force: overwrite despite drift (after backing up)
-    :raises RenderError: on configuration errors
+    :raises OSError: on I/O failures reading or writing the target, its state, or backups
     :return: 0 ok / in sync, 1 drift refused / out of sync
     """
-    fragments = [layer / 'render' / f'{target}.json' for layer in layers(repo)]
-    fragments = [f for f in fragments if f.is_file()]
-    if not fragments:
-        if VERBOSE:
-            info(f'{target}: no fragments in any layer; skipped')
-        return 0
+    target, managed, unmanaged = prepared
+    new_text = dumps(managed)
+    dest     = Path(TARGETS[target]).expanduser()
+    state    = state_path(target)
+    last     = read_state(state)
 
-    managed, unmanaged = compose(fragments)
-    new_text  = dumps(managed)
-    dest      = Path(os.path.expanduser(TARGETS[target]))
-    state     = state_path(target)
-    last_text = state.read_text(encoding='utf-8') if state.is_file() else None
-
-    live: dict[str, object] | None = None
-    live_ok = True
+    live:         dict[str, object] | None = None
+    live_problem: str | None               = None
     if dest.exists():
         try:
             parsed = json.loads(dest.read_text(encoding='utf-8'))
-            live   = parsed if isinstance(parsed, dict) else None
-            live_ok = live is not None
         except (UnicodeDecodeError, json.JSONDecodeError):
-            live_ok = False
-    live_managed_text = dumps({k: v for k, v in live.items() if k not in unmanaged}) if live is not None else None
+            live_problem = 'is not valid JSON'
+        else:
+            if isinstance(parsed, dict):
+                live = parsed
+            else:
+                live_problem = 'is not a JSON object'
+    live_managed = {k: v for k, v in live.items() if k not in unmanaged} if live is not None else None
+    live_managed_text = dumps(live_managed) if live_managed is not None else None
 
     if mode == 'diff':
         print(_diff(live_managed_text or '', new_text, f'{dest} (live)', f'{dest} (rendered)'), end='')
@@ -2403,15 +2854,17 @@ def render_target(target: str, repo: Path, *, mode: str, force: bool) -> int:
         error(f'{target}: {dest} is not in sync with its fragments (run: run.py render)')
         return 1
 
-    current  = live_managed_text == new_text
-    in_sync  = last_text is not None and live_managed_text is not None and canonical(json.loads(last_text)) == canonical(
-        json.loads(live_managed_text),
-    )
+    current = live_managed_text == new_text
+    in_sync = False
+    if last is not None and live_managed is not None:
+        in_sync = canonical(last) == canonical(live_managed)
     drifted = dest.exists() and not current and not in_sync
     if drifted and not force:
-        reason = 'is not valid JSON' if not live_ok else 'was edited since the last render'
+        reason = live_problem or 'was edited since the last render'
         error(f'{target}: {dest} {reason}; move the change into a render fragment, or re-run with --force')
-        print(_diff(last_text or '', live_managed_text or '', 'last render', f'{dest} (live)'), end='', file=sys.stderr)
+        if live_managed_text is not None:
+            old_text = dumps(last) if last is not None else ''
+            print(_diff(old_text, live_managed_text, 'last render', f'{dest} (live)'), end='', file=sys.stderr)
         return 1
 
     output = dict(managed)
@@ -2422,15 +2875,13 @@ def render_target(target: str, repo: Path, *, mode: str, force: bool) -> int:
     if dest.exists() and force and drifted:
         info(f'{target}: backed up live file to {_backup(dest)}')
     if dest.is_symlink():
-        dest.unlink()
-    if not dest.exists() or dest.read_text(encoding='utf-8') != output_text:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(output_text, encoding='utf-8')
+        info(f'{target}: replacing symlink {dest} -> {dest.readlink()} with a regular file')
+    if dest.is_symlink() or not dest.exists() or dest.read_text(encoding='utf-8') != output_text:
+        atomic_write(dest, output_text, DEFAULT_FILE_MODE)
         info(f'{target}: rendered {dest}')
     elif VERBOSE:
         info(f'{target}: already current')
-    state.parent.mkdir(parents=True, exist_ok=True)
-    state.write_text(new_text, encoding='utf-8')
+    atomic_write(state, new_text, DEFAULT_STATE_MODE)
     return 0
 
 
@@ -2480,8 +2931,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     Render, check, or diff settings targets.
 
+    All requested targets are composed and validated before any is written, so a bad fragment never leaves a partial
+    render behind.
+
     :param argv: command-line arguments (default: ``sys.argv[1:]``)
-    :return: 0 ok, 1 drift refused / out of sync, 2 configuration error
+    :return: 0 ok, 1 drift refused / out of sync, 2 configuration or I/O error
     """
     args    = parse_args(argv)
     mode    = 'diff' if args.diff else 'check' if args.check else 'render'
@@ -2491,13 +2945,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         error(f'unknown target(s): {", ".join(unknown)} (known: {", ".join(TARGETS)})')
         return 2
 
+    try:
+        roots    = layers(Path(args.repo))
+        composed = [p for p in (prepare(target, roots) for target in targets) if p is not None]
+    except RenderError as exc:
+        error(str(exc))
+        return 2
+
     retval = 0
-    for target in targets:
-        try:
-            retval = max(retval, render_target(target, Path(args.repo), mode=mode, force=args.force))
-        except RenderError as exc:
-            error(str(exc))
-            return 2
+    try:
+        for prepared in composed:
+            retval = max(retval, render_target(prepared, mode=mode, force=args.force))
+    except OSError as exc:
+        error(str(exc))
+        return 2
     return retval
 
 
@@ -2515,7 +2976,7 @@ example fragment pair (base + overlay → result).
 
 Run: `scripts/hooks/uv-public.sh run --group test pytest tests/unit/test_render.py` → PASS.
 Run: `scripts/hooks/uv-public.sh run ruff check scripts/dotfiles tests/unit/test_render.py && scripts/hooks/uv-public.sh run mypy scripts/dotfiles/render.py`
-→ clean (simplify the long `in_sync` expression into two statements if ruff flags line length).
+→ clean.
 
 - [ ] **Step 5: Commit**
 

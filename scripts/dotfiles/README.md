@@ -34,15 +34,27 @@ Output is deterministic: sorted keys, 2-space indent, trailing newline.
 
 A fragment's top-level `"$unmanaged"` is a list of top-level key names owned by the app or an installer. The lists merge
 across layers. Those keys are never written from fragments, are preserved from the live file on render, and are ignored
-by drift and `--check` comparison.
+by drift and `--check` comparison. A key that a fragment sets but that is also listed in `$unmanaged` is dropped from
+the render with a warning on stderr.
 
 ### Drift guard
 
-The last managed render is stored as `${XDG_STATE_HOME:-~/.local/state}/dotfiles/render/<target>.json`. Drift means the
-live managed content differs from **both** the stored last render and the new render. A drifted target is refused (with
-a diff on stderr) unless `--force` is given, which first copies the live file to
-`~/.dotfiles-backup/<YYYYmmdd-HHMMSS>/<path relative to HOME>`. A pre-existing file equal to the new render is adopted
-without `--force`. A symlink at the target is replaced by a real file; the symlink's target is never written.
+The last managed render is stored as `${XDG_STATE_HOME:-~/.local/state}/dotfiles/render/<target>.json`. A missing,
+empty, corrupt, or non-object state file is treated as absent (with a warning on stderr), so it can never wedge a
+render. Drift means the live managed content differs from **both** the stored last render and the new render. A drifted
+target is refused (with a diff on stderr) unless `--force` is given, which first copies the live file to
+`~/.dotfiles-backup/<YYYYmmdd-HHMMSS>/<path relative to HOME>` (directories `0700`, files `0600`; no backup is made when
+there is no drift). A live file that is not valid JSON, or is valid JSON but not an object, is refused with a matching
+message. A pre-existing file equal to the new render is adopted without `--force`.
+
+### Writes
+
+The target and its state file are written atomically through a temp file in the same directory followed by a replace. An
+existing file's mode is preserved. A symlink at the target is replaced by a real file (the symlink's target is never
+written); the former link destination is reported and the mode of the link's target is inherited when it exists.
+
+All requested targets are composed and validated before any is written: one malformed fragment exits `2` with nothing
+rendered.
 
 ### Usage
 
@@ -58,8 +70,8 @@ render.py [TARGET…] [--diff | --check] [--force] [--repo PATH] [-v]
 | `--repo`  | Base repository root (default: the repo containing this script) |
 | `-v`      | Report skipped and already-current targets                      |
 
-Exit codes: `0` ok / in sync, `1` drift refused or out of sync, `2` configuration error (bad fragment, unknown target,
-missing overlay).
+Exit codes: `0` ok / in sync, `1` drift refused or out of sync (the maximum across targets), `2` configuration or I/O
+error (bad fragment, unknown target, missing overlay, unreadable or unwritable path, bash unavailable).
 
 ### Worked example
 
