@@ -508,7 +508,12 @@ repos:
           - types-PyYAML
           - types-requests
           - types-toml
-        exclude: ^services/homeassistant/config/
+        exclude: |
+          (?x)(
+              ^services/homeassistant/config/|
+              # vendored from upstream ranger (GPL-3.0), kept as shipped
+              ^stow/os_tools/\.config/ranger/
+          )
 
   - repo: https://github.com/econchick/interrogate
     rev: 1.7.0
@@ -549,7 +554,9 @@ repos:
         exclude: |
           (?x)(
               \.zsh$|
-              ^stow/[^/]+/\.(zshrc|zprofile|zshenv|zlogin)$
+              ^stow/[^/]+/\.(zshrc|zprofile|zshenv|zlogin)$|
+              # vendored from upstream ranger (GPL-3.0), kept as shipped
+              ^stow/os_tools/\.config/ranger/scope\.sh$
           )
 
   # - repo: https://github.com/DavidAnson/markdownlint-cli2

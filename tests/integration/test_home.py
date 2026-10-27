@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import time
 from dataclasses import dataclass
@@ -100,6 +101,7 @@ def home(tmp_path_factory: pytest.TempPathFactory) -> Home:
         'HOME': str(path),
         'PATH': os.environ['PATH'],
         'TERM': 'dumb',
+        'DOTFILES_NO_BANNER': '1',  # the banner slows and pollutes terminal runs; banner tests opt back in
         'GIT_CONFIG_NOSYSTEM': '1',  # keep the machine's system gitconfig out of git assertions
         'XDG_CONFIG_HOME': str(path / '.config'),
         'XDG_STATE_HOME': str(path / '.local' / 'state'),
@@ -666,3 +668,193 @@ class TestTerminalEditor:
         path_len, path_unique, fpath_len, fpath_unique = result.stdout.split()
         assert path_len == path_unique
         assert fpath_len == fpath_unique
+
+
+class TestOsTools:
+    """
+    Tests for the os_tools package
+    """
+    @pytest.mark.parametrize(
+        'relpath',
+        [
+            '.config/btop/btop.conf',
+            '.config/eza/theme.yml',
+            '.config/fastfetch/config.jsonc',
+            '.config/htop/htoprc',
+            '.config/ranger/commands.py',
+            '.config/ranger/commands_full.py',
+            '.config/ranger/rc.conf',
+            '.config/ranger/rifle.conf',
+            '.config/ranger/scope.sh',
+            '.config/sshm/config.json',
+            '.config/zsh/conf.d/49-os_tools.zsh',
+            '.config/zsh/conf.d/90-banner.zsh',
+        ],
+    )
+    def test_key_files_are_linked(self, home: Home, relpath: str) -> None:
+        """
+        Test that each os_tools file is stowed as a symlink
+        """
+        assert (home.path / relpath).is_symlink()
+
+    def test_ssh_host_aliases_are_not_shipped(self, home: Home) -> None:
+        """
+        Test that host aliases live in ssh config.d files, not in a shell snippet
+        """
+        assert not (home.path / '.config' / 'zsh' / 'conf.d' / '60-ssh-hosts.zsh').exists()
+
+    def test_eza_config_dir_is_exported_and_holds_the_theme(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that EZA_CONFIG_DIR is an exported absolute directory containing theme.yml
+        """
+        eza = tmp_path / 'bin' / 'eza'
+        eza.parent.mkdir()
+        eza.write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
+        eza.chmod(0o755)
+        env    = {**home.env, 'PATH': f'{eza.parent}:{home.env["PATH"]}'}
+        result = subprocess.run(
+            ['zsh', '-i', '-c', 'print -r -- "${(t)EZA_CONFIG_DIR} $EZA_CONFIG_DIR"'],
+            capture_output=True, text=True, check=False, env=env, cwd=home.path,
+        )
+        assert result.returncode == 0
+        assert result.stderr == ''
+        kind, _, value = result.stdout.strip().partition(' ')
+        assert kind == 'scalar-export'
+        assert Path(value) == home.path / '.config' / 'eza'
+        assert (Path(value) / 'theme.yml').is_file()
+
+    def test_ls_aliases_require_eza(self, home: Home) -> None:
+        """
+        Test that `ls` is only aliased to eza when eza is installed
+        """
+        env    = {**home.env, 'PATH': '/usr/bin:/bin', 'DOTFILES_BREW_PROBE': '0'}
+        result = subprocess.run(
+            ['zsh', '-i', '-c', 'print -r -- "${aliases[ls]-unset}"'],
+            capture_output=True, text=True, check=False, env=env, cwd=home.path,
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == 'unset'
+
+    @staticmethod
+    def _fake_fastfetch(root: Path) -> Path:
+        """
+        Create a fastfetch stand-in that prints a marker, returning its directory
+        """
+        tool = root / 'ffbin' / 'fastfetch'
+        tool.parent.mkdir()
+        tool.write_text('#!/bin/sh\necho FASTFETCH-BANNER\n', encoding='utf-8')
+        tool.chmod(0o755)
+        return tool.parent
+
+    @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
+    @pytest.mark.parametrize(
+        ('extra_env', 'shown'),
+        [
+            ({'DOTFILES_NO_BANNER': ''},  True),
+            ({'DOTFILES_NO_BANNER': '1'}, False),
+        ],
+    )
+    def test_banner_on_a_terminal_honors_the_opt_out(
+        self, home: Home, tmp_path: Path, extra_env: dict[str, str], shown: bool
+    ) -> None:
+        """
+        Test that the banner appears on a terminal unless DOTFILES_NO_BANNER is set
+        """
+        path       = f'{self._fake_fastfetch(tmp_path)}:{home.env["PATH"]}'
+        result, _  = run_zsh_with_tty(home, 'exit', {'PATH': path, **extra_env})
+        assert result.returncode == 0
+        assert (b'FASTFETCH-BANNER' in result.stdout) is shown
+
+    def test_banner_skips_shells_without_a_terminal(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that a shell whose stdout is a pipe never runs fastfetch, even when the opt-out is unset
+        """
+        env    = {**home.env, 'PATH': f'{self._fake_fastfetch(tmp_path)}:{home.env["PATH"]}', 'DOTFILES_NO_BANNER': ''}
+        result = subprocess.run(
+            ['zsh', '-i', '-c', 'exit'], capture_output=True, text=True, check=False, env=env, cwd=home.path
+        )
+        assert result.returncode == 0
+        assert result.stdout == ''
+        assert result.stderr == ''
+
+    @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
+    def test_banner_skips_nested_shells(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that the banner is limited to the outermost shell (SHLVL 1)
+        """
+        path      = f'{self._fake_fastfetch(tmp_path)}:{home.env["PATH"]}'
+        result, _ = run_zsh_with_tty(home, 'exit', {'PATH': path, 'DOTFILES_NO_BANNER': '', 'SHLVL': '2'})
+        assert result.returncode == 0
+        assert b'FASTFETCH-BANNER' not in result.stdout
+
+
+class TestSsh:
+    """
+    Tests for ssh config composition
+    """
+    def test_config_includes_config_d(self, home: Home) -> None:
+        """
+        Test that the base ssh config includes per-layer config.d files
+        """
+        config = (home.path / '.ssh' / 'config').read_text(encoding='utf-8')
+        assert config.splitlines()[1] == 'Include ~/.ssh/config.d/*'
+
+    def test_base_and_overlay_hosts_share_config_d(self, home: Home) -> None:
+        """
+        Test that base and overlay host files are stowed into one real config.d directory
+        """
+        config_d = home.path / '.ssh' / 'config.d'
+        assert config_d.is_dir()
+        assert not config_d.is_symlink()
+        assert (config_d / 'personal').is_symlink()
+        assert (config_d / 'fixture').is_symlink()
+
+    def test_ssh_dir_is_real(self, home: Home) -> None:
+        """
+        Test that ~/.ssh is a real directory, so keys and known_hosts never land in the repository
+        """
+        ssh_dir = home.path / '.ssh'
+        assert ssh_dir.is_dir()
+        assert not ssh_dir.is_symlink()
+
+    @pytest.mark.parametrize('relpath', ['config', 'config.d/personal', 'config.d/fixture'])
+    def test_stowed_files_are_not_group_or_world_writable(self, home: Home, relpath: str) -> None:
+        """
+        Test that ssh's ownership and permission check passes on each symlink target
+        """
+        target = (home.path / '.ssh' / relpath).resolve()
+        info   = target.stat()
+        assert info.st_uid == os.getuid()
+        assert stat.S_IMODE(info.st_mode) & 0o022 == 0
+
+    def test_base_host_has_no_address_or_user(self, home: Home) -> None:
+        """
+        Test that the base NAS entry names a MagicDNS host only: no IP address and no login name
+        """
+        text = (home.path / '.ssh' / 'config.d' / 'personal').read_text(encoding='utf-8')
+        assert text.splitlines()[:2] == ['Host nas', '    HostName nas']
+        assert re.search(r'^\s*User\s', text, re.MULTILINE) is None
+        assert re.search(r'\d+\.\d+\.\d+\.\d+', text) is None
+
+    def test_keychain_option_is_ignorable_where_unsupported(self, home: Home) -> None:
+        """
+        Test that UseKeychain, an Apple-only option, is declared ignorable before it is set
+        """
+        lines = (home.path / '.ssh' / 'config').read_text(encoding='utf-8').splitlines()
+        assert lines.index('    IgnoreUnknown UseKeychain') < lines.index('    UseKeychain yes')
+
+    @pytest.mark.skipif(shutil.which('ssh') is None, reason='ssh not installed')
+    def test_composed_config_resolves_hosts_from_every_layer(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that ssh parses the composed config and resolves base and overlay hosts
+
+        ssh expands `~` in `Include` from the passwd home directory, so the include is pointed at the throwaway home
+        in a copy of the config; the real ~/.ssh is never read.
+        """
+        config = (home.path / '.ssh' / 'config').read_text(encoding='utf-8')
+        copy   = tmp_path / 'ssh_config'
+        copy.write_text(config.replace('~/.ssh/config.d', str(home.path / '.ssh' / 'config.d')), encoding='utf-8')
+        for host, expected in (('nas', 'nas'), ('fixture-host', 'fixture.example.com')):
+            result = home.run('ssh', '-G', '-F', str(copy), host)
+            assert result.returncode == 0, result.stderr
+            assert f'hostname {expected}' in result.stdout.splitlines()

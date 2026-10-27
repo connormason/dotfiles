@@ -1,0 +1,316 @@
+{
+    "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/master/doc/json_schema.json",
+    "display": {
+        "bar": {
+            "border": {
+                "left": "[ ",
+                "leftElapsed": "",
+                "right": " ]",
+                "rightElapsed": ""
+            },
+            "char": {
+                "elapsed": "\u25a0",
+                "total": "-"
+            },
+            "color": {
+                "border": "97",
+                "elapsed": "auto",
+                "total": "97"
+            },
+            "width": 10
+        },
+        "brightColor": true,
+        "color": {
+            "keys": "",
+            "output": "",
+            "separator": "",
+            "title": ""
+        },
+        "constants": [],
+        "disableLinewrap": true,
+        "duration": {
+            "abbreviation": false,
+            "spaceBeforeUnit": "default"
+        },
+        "fraction": {
+            "ndigits": 2
+        },
+        "freq": {
+            "ndigits": 2,
+            "spaceBeforeUnit": "default"
+        },
+        "hideCursor": false,
+        "key": {
+            "type": "string",
+            "paddingLeft": 0,
+            "width": 0
+        },
+        "noBuffer": false,
+        "percent": {
+            "type": [
+                "num",
+                "num-color"
+            ],
+            "color": {
+                "green": "32",
+                "red": "91",
+                "yellow": "93"
+            },
+            "ndigits": 0,
+            "spaceBeforeUnit": "default",
+            "width": 0
+        },
+        "pipe": false,
+        "separator": ": ",
+        "showErrors": false,
+        "size": {
+            "binaryPrefix": "iec",
+            "maxPrefix": "YB",
+            "ndigits": 2,
+            "spaceBeforeUnit": "default"
+        },
+        "stat": false,
+        "temp": {
+            "color": {
+                "green": "32",
+                "red": "91",
+                "yellow": "93"
+            },
+            "ndigits": 1,
+            "spaceBeforeUnit": "default",
+            "unit": "D"
+        }
+    },
+    "general": {
+        "detectVersion": true,
+        "processingTimeout": 5000,
+        "thread": true
+    },
+    "logo": {
+        "type": "auto",
+        "chafa": {
+            "fgOnly": false,
+            "symbols": "block+border+space-wide-inverted"
+        },
+        "color": {
+            "1": "",
+            "2": "",
+            "3": "",
+            "4": "",
+            "5": "",
+            "6": "",
+            "7": "",
+            "8": "",
+            "9": ""
+        },
+        "height": null,
+        "padding": {
+            "left": 0,
+            "right": 4,
+            "top": 0
+        },
+        "position": "left",
+        "preserveAspectRatio": false,
+        "printRemaining": true,
+        "recache": false,
+        "source": "",
+        "width": null
+    },
+    "modules": [
+        {
+            "type": "title",
+            "color": {
+                "at": "",
+                "host": "",
+                "user": ""
+            },
+            "fqdn": false,
+            "key": " ",
+            "keyIcon": "\uf015"
+        },
+        {
+            "type": "separator",
+            "outputColor": "",
+            "string": "-",
+            "times": 0
+        },
+        {
+            "type": "os",
+            "keyIcon": "\ue711"
+        },
+        {
+            "type": "host",
+            "keyIcon": "\udb80\udf22"
+        },
+        {
+            "type": "kernel",
+            "keyIcon": "\uf013"
+        },
+        {
+            "type": "uptime",
+            "keyIcon": "\ue641"
+        },
+        {
+            "type": "packages",
+            "combined": false,
+            "disabled": [
+                "winget"
+            ],
+            "keyIcon": "\udb80\udfd6"
+        },
+        {
+            "type": "shell",
+            "keyIcon": "\uf489"
+        },
+        {
+            "type": "display",
+            "compactType": "none",
+            "keyIcon": "\udb80\udf79",
+            "order": null,
+            "preciseRefreshRate": false
+        },
+        {
+            "type": "de",
+            "keyIcon": "\ue23c"
+        },
+        {
+            "type": "wm",
+            "detectPlugin": false,
+            "keyIcon": "\uf488"
+        },
+        {
+            "type": "wmtheme",
+            "keyIcon": "\udb81\udcf8"
+        },
+        {
+            "type": "theme",
+            "keyIcon": "\udb80\ude7c"
+        },
+        {
+            "type": "icons",
+            "keyIcon": "\uefa8"
+        },
+        {
+            "type": "font",
+            "keyIcon": "\ue659"
+        },
+        {
+            "type": "cursor",
+            "keyIcon": "\udb80\uddbf"
+        },
+        {
+            "type": "terminal",
+            "keyIcon": "\ue795"
+        },
+        {
+            "type": "terminalfont",
+            "keyIcon": "\uf031"
+        },
+        {
+            "type": "cpu",
+            "keyIcon": "\uf4bc",
+            "showPeCoreCount": false,
+            "temp": false
+        },
+        {
+            "type": "gpu",
+            "detectionMethod": "auto",
+            "driverSpecific": false,
+            "hideType": "none",
+            "keyIcon": "\udb83\udfb2",
+            "percent": {
+                "type": 0,
+                "green": 50,
+                "yellow": 80
+            },
+            "temp": false
+        },
+        {
+            "type": "memory",
+            "keyIcon": "\uefc5",
+            "percent": {
+                "type": 0,
+                "green": 50,
+                "yellow": 80
+            }
+        },
+        {
+            "type": "swap",
+            "keyIcon": "\udb81\udce1",
+            "percent": {
+                "type": 0,
+                "green": 50,
+                "yellow": 80
+            },
+            "separate": false
+        },
+        {
+            "type": "disk",
+            "folders": "",
+            "hideFS": "",
+            "hideFolders": "",
+            "keyIcon": "\uf0a0",
+            "percent": {
+                "type": 0,
+                "green": 50,
+                "yellow": 80
+            },
+            "showExternal": true,
+            "showHidden": false,
+            "showReadOnly": true,
+            "showRegular": true,
+            "showSubvolumes": false,
+            "showUnknown": false,
+            "useAvailable": false
+        },
+        {
+            "type": "localip",
+            "compact": false,
+            "defaultRouteOnly": true,
+            "keyIcon": "\udb82\ude5f",
+            "namePrefix": "",
+            "showAllIps": false,
+            "showFlags": false,
+            "showIpv4": true,
+            "showIpv6": false,
+            "showLoop": false,
+            "showMac": false,
+            "showMtu": false,
+            "showPrefixLen": true,
+            "showSpeed": false
+        },
+        {
+            "type": "battery",
+            "keyIcon": "\uf242",
+            "percent": {
+                "type": 0,
+                "green": 50,
+                "yellow": 20
+            },
+            "temp": false
+        },
+        {
+            "type": "poweradapter",
+            "keyIcon": "\udb81\udea5"
+        },
+        {
+            "type": "locale",
+            "keyIcon": "\uf1ab"
+        },
+        "break",
+        {
+            "type": "colors",
+            "block": {
+                "range": [
+                    0,
+                    15
+                ],
+                "width": 3
+            },
+            "key": " ",
+            "keyIcon": "\uefcc",
+            "paddingLeft": 0,
+            "symbol": "block"
+        }
+    ]
+}

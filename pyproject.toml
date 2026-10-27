@@ -298,11 +298,13 @@ ignore = [
 
 # `ruff check` linter per-file rule ignores
 # =========================================
+# NOTE: stow/os_tools/.config/ranger/*.py is vendored from upstream ranger (GPL-3.0) and kept as shipped
 [tool.ruff.lint.per-file-ignores]
 # keep-sorted start
 "run.py"                                                   = ["S112"]
 "services/homeassistant/config/scripts/get_lutron_cert.py" = ["S"]
-"stow/**/startup/*.py"                                     = ["INP001"]                # IPython startup scripts are not a package
+"stow/**/startup/*.py"                                     = ["INP001"]                                                # IPython startup scripts are not a package
+"stow/os_tools/.config/ranger/*.py"                        = ["ANN", "BLE001", "INP", "PGH", "PTH", "RUF", "S", "SIM"]
 "tests/**"                                                 = ["B", "S", "SIM", "PERF"]
 # keep-sorted end
 
