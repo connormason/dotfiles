@@ -135,6 +135,73 @@ class TestDoctorChecks:
         assert 'stow' in check.detail
 
 
+class TestDoctorReadOnly:
+    """
+    Tests that the doctor's own probes can never mutate the home directory
+    """
+    @staticmethod
+    def _record(monkeypatch: pytest.MonkeyPatch, stdout: str = '') -> list[list[str]]:
+        """
+        Stub _capture to record every probe command line
+        """
+        seen: list[list[str]] = []
+
+        def fake_capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+            seen.append(cmd)
+            return _completed(0, stdout)
+
+        monkeypatch.setattr(run, '_capture', fake_capture)
+        return seen
+
+    def test_links_probe_simulates_stow(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that the links check runs this repo's stow.sh in simulate mode only
+        """
+        seen = self._record(monkeypatch, 'stow: no changes (already current)\n')
+        run.check_links()
+        assert seen == [['bash', str(run.STOW_SCRIPT), '-n']]
+
+    def test_render_probe_is_check_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that the render check passes --check and nothing that writes
+        """
+        seen = self._record(monkeypatch)
+        run.check_render()
+        assert seen == [[sys.executable, str(run.RENDER_SCRIPT), '--check']]
+
+    def test_layers_probe_pins_repo(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that the layers check pins DOTFILES_REPO to this repository checkout
+        """
+        seen = self._record(monkeypatch, f'{run.DOTFILES_DIR}\n')
+        run.check_layers()
+        assert len(seen) == 1
+        assert seen[0][:2] == ['bash', '-c']
+        assert 'export DOTFILES_REPO="$1"' in seen[0][2]
+        assert seen[0][-1] == str(run.DOTFILES_DIR)
+
+    def test_git_probe_only_reads_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that the git check only asks for the version
+        """
+        seen = self._record(monkeypatch, 'git version 2.47.1\n')
+        run.check_git_version()
+        assert seen == [['git', '--version']]
+
+    def test_fix_commands_are_not_run_without_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that doctor without --fix never invokes a fix command
+        """
+        monkeypatch.setattr(run, 'doctor_checks', lambda: [run.DoctorCheck('links', False, 'x', ['echo', 'fix'])])
+
+        def fail_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError(f'unexpected command: {cmd}')
+
+        monkeypatch.setattr(run, 'shell_command', fail_shell_command)
+        with pytest.raises(SystemExit):
+            run.cmd_doctor(run.argparse.Namespace(fix=False))
+
+
 class TestDoctorCommand:
     """
     Tests for the doctor orchestration and command registration

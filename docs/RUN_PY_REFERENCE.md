@@ -224,8 +224,10 @@ when either fails.
 | `links`  | `stow.sh -n` reports `no changes` or `no packages found`                                         | `stow.sh --backup-conflicts`    |
 | `render` | `render.py --check` exits 0 (exit 1 is drift; exit 2 is a config or I/O error with no fix)       | `render.py` (without `--force`) |
 
-`--fix` runs the fix command of each failing check, then re-runs every check and reports the final state.
-`bootstrap --verify` invokes `doctor` after all stages succeed.
+`--fix` runs the fix command of each failing check, then re-runs every check and reports the final state. The `links`
+fix runs `stow.sh --backup-conflicts`, which moves any blocking files into `~/.dotfiles-backup/<timestamp>/` before
+linking. Without `--fix`, every probe is read-only (`stow.sh -n`, `render.py --check`). `bootstrap --verify` invokes
+`doctor` after all stages succeed.
 
 ## Architecture
 

@@ -30,7 +30,7 @@ help: ## Show this help message
 	@echo "$(BRIGHT_WHITE)Dotfiles:$(NC)"
 	@echo "  $(YELLOW)doctor          $(NC) Check overlay registry, links, rendered settings, git version, and tools"
 	@echo "  $(YELLOW)bootstrap       $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh)"
-	@echo "  $(YELLOW)stow            $(NC) Link stow packages from every layer into $HOME (stow.sh)"
+	@echo "  $(YELLOW)stow            $(NC) Link stow packages from every layer into the home directory (stow.sh)"
 	@echo "  $(YELLOW)render          $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
 	@echo "  $(YELLOW)test            $(NC) Run the test suite via uv (public-index wrapper)"
 	@echo ""
@@ -74,7 +74,7 @@ doctor: ## Check overlay registry, links, rendered settings, git version, and to
 bootstrap: ## Run the layered bootstrap stages (bootstrap/bootstrap.sh)
 	@python3 run.py bootstrap
 
-stow: ## Link stow packages from every layer into $HOME (stow.sh)
+stow: ## Link stow packages from every layer into the home directory (stow.sh)
 	@python3 run.py stow
 
 render: ## Render settings files from per-layer fragments (scripts/dotfiles/render.py)

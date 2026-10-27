@@ -1556,7 +1556,15 @@ def add_doctor_arguments(parser: argparse.ArgumentParser) -> None:
     """
     Register doctor options
     """
-    parser.add_argument('-f', '--fix', action='store_true', help='Run the fix for each failing check, then re-check')
+    parser.add_argument(
+        '-f',
+        '--fix',
+        action='store_true',
+        help=(
+            'Run the fix for each failing check, then re-check '
+            '(links: stow.sh --backup-conflicts, which moves blocking files into ~/.dotfiles-backup/<timestamp>/)'
+        ),
+    )
 
 
 @command(group='Dotfiles', add_arguments=add_doctor_arguments)
@@ -1626,7 +1634,7 @@ def add_stow_arguments(parser: argparse.ArgumentParser) -> None:
 @command(group='Dotfiles', add_arguments=add_stow_arguments)
 def cmd_stow(args: argparse.Namespace) -> None:
     """
-    Link stow packages from every layer into $HOME (stow.sh)
+    Link stow packages from every layer into the home directory (stow.sh)
     """
     cmd = ['bash', str(STOW_SCRIPT)]
     if args.simulate:
