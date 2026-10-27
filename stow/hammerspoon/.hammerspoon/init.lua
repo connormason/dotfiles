@@ -142,7 +142,7 @@ end
 appShortcutHyper = {'ctrl', 'shift'}
 letterToWindowFilterMapping = {
     -- keep-sorted start
-    b =hs.window.filter.new('Numbers'),
+    b = hs.window.filter.new('Numbers'),
     c = hs.window.filter.new('Calendar'),
     d = hs.window.filter.new('Remote Desktop'),
     e = hs.window.filter.new('Mail'),
@@ -154,20 +154,24 @@ letterToWindowFilterMapping = {
     n = hs.window.filter.new('Notes'),
     o = hs.window.filter.new('OmniGraffle'),
     p = hs.window.filter.new('PyCharm'),
-    s =hs.window.filter.new('Safari'),
+    s = hs.window.filter.new('Safari'),
     t = hs.window.filter.new('Todoist'),
     u = hs.window.filter.new('Sublime Text'),
     v = hs.window.filter.new('Code'),
-    x =hs.window.filter.new('Microsoft Excel'),
+    x = hs.window.filter.new('Microsoft Excel'),
     z = hs.window.filter.new('Zed')
     -- keep-sorted end
 }
 
 -- Optional overlay hotkeys: ~/.hammerspoon/overlay.lua returns { [letter] = mapping }
-local hasOverlay, overlayMappings = pcall(require, "overlay")
-if hasOverlay and type(overlayMappings) == "table" then
-    for letter, mapping in pairs(overlayMappings) do
-        letterToWindowFilterMapping[letter] = mapping
+if package.searchpath("overlay", package.path) then
+    local loaded, overlayMappings = pcall(require, "overlay")
+    if loaded and type(overlayMappings) == "table" then
+        for letter, mapping in pairs(overlayMappings) do
+            letterToWindowFilterMapping[letter] = mapping
+        end
+    else
+        print("overlay.lua ignored: " .. tostring(overlayMappings))
     end
 end
 

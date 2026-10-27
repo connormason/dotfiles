@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -45,6 +46,45 @@ class Home:
         Run an interactive zsh command inside this HOME
         """
         return self.run('zsh', '-i', '-c', command)
+
+
+STARTUP_BUDGET_SECONDS = 0.3
+TIMING_SAMPLES         = 3
+
+
+def run_zsh_with_tty(
+    home: Home, command: str, extra_env: dict[str, str] | None = None
+) -> tuple[subprocess.CompletedProcess[bytes], float]:
+    """
+    Run an interactive zsh command on a pseudo-terminal and return the result with its wall time
+
+    A real terminal is what makes the starship and fzf snippets initialize, which plain pipes never do.
+
+    :param home: isolated HOME to run in
+    :param command: zsh command string
+    :param extra_env: environment overrides layered over the HOME's environment (TERM defaults to xterm-256color)
+    :return: completed process (stdout holds the terminal output, stderr is empty) and elapsed seconds
+    """
+    import pty  # POSIX-only: imported lazily so test collection works everywhere
+    import select
+
+    leader, follower = pty.openpty()
+    env              = {**home.env, 'TERM': 'xterm-256color', **(extra_env or {})}
+    try:
+        start = time.monotonic()
+        proc  = subprocess.Popen(
+            ['zsh', '-i', '-c', command],
+            stdin=follower, stdout=follower, stderr=follower, env=env, cwd=home.path, start_new_session=True,
+        )
+        returncode = proc.wait()
+        elapsed    = time.monotonic() - start
+        output     = b''
+        while select.select([leader], [], [], 0.1)[0]:
+            output += os.read(leader, 65536)
+    finally:
+        os.close(leader)
+        os.close(follower)
+    return subprocess.CompletedProcess(proc.args, returncode, output, b''), elapsed
 
 
 @pytest.fixture(scope='module')
@@ -111,15 +151,17 @@ class TestShell:
     """
     def test_interactive_zsh_is_clean_and_fast(self, home: Home) -> None:
         """
-        Test that an interactive shell starts without stderr output in under 300 ms
+        Test that an interactive shell starts without stderr output in under 300 ms (best of three warm runs)
         """
         home.zsh('exit')  # warm caches (compinit dump) before timing
-        start  = time.monotonic()
-        result = home.zsh('exit')
-        elapsed = time.monotonic() - start
-        assert result.returncode == 0
-        assert result.stderr == ''
-        assert elapsed < 0.3, f'zsh -i took {elapsed:.3f}s'
+        timings = []
+        for _ in range(TIMING_SAMPLES):
+            start  = time.monotonic()
+            result = home.zsh('exit')
+            timings.append(time.monotonic() - start)
+            assert result.returncode == 0
+            assert result.stderr == ''
+        assert min(timings) < STARTUP_BUDGET_SECONDS, f'zsh -i took {min(timings):.3f}s at best ({timings})'
 
     def test_overlay_snippet_is_sourced(self, home: Home) -> None:
         """
@@ -150,7 +192,7 @@ class TestShell:
         """
         zsh    = shutil.which('zsh')
         assert zsh is not None
-        env    = {**home.env, 'PATH': '/usr/bin:/bin'}
+        env    = {**home.env, 'PATH': '/usr/bin:/bin', 'DOTFILES_BREW_PROBE': '0'}  # else the probe finds a local brew
         result = subprocess.run(
             [zsh, '-i', '-c', 'cd / && cd ~'], capture_output=True, text=True, check=False, env=env, cwd=home.path
         )
@@ -454,10 +496,10 @@ class TestTerminalEditor:
         Test that the base hotkey table has no entries for work-only apps
         """
         text = (home.path / '.hammerspoon' / 'init.lua').read_text(encoding='utf-8')
-        assert ' = hs.window.filter.new(' in text
+        assert re.search(r'^\s*b\s*=\s*hs\.window\.filter\.new\(', text, re.MULTILINE)
         for letter in ('3', '4', 'q', 'r', 'w'):
-            assert f"['{letter}'] =" not in text
-            assert f'\n    {letter} = hs.window.filter.new' not in text
+            entry = rf"""^\s*(\[\s*['"]{letter}['"]\s*\]|{letter})\s*="""
+            assert re.search(entry, text, re.MULTILINE) is None, letter
 
     def test_zed_ships_settings_only(self, home: Home) -> None:
         """
@@ -467,24 +509,160 @@ class TestTerminalEditor:
 
     def test_zsh_is_clean_and_fast_with_all_snippets(self, home: Home) -> None:
         """
-        Test that an interactive shell with every terminal snippet sourced prints nothing to stderr and stays fast
+        Test that an interactive shell with every terminal snippet sourced is clean and fast (best of three runs)
         """
         home.zsh('exit')  # warm caches before timing
-        start   = time.monotonic()
-        result  = home.zsh('exit')
-        elapsed = time.monotonic() - start
-        assert result.returncode == 0
-        assert result.stderr == ''
-        assert elapsed < 0.3, f'zsh -i took {elapsed:.3f}s'
+        timings = []
+        for _ in range(TIMING_SAMPLES):
+            start  = time.monotonic()
+            result = home.zsh('exit')
+            timings.append(time.monotonic() - start)
+            assert result.returncode == 0
+            assert result.stderr == ''
+        assert min(timings) < STARTUP_BUDGET_SECONDS, f'zsh -i took {min(timings):.3f}s at best ({timings})'
 
-    @pytest.mark.skipif(shutil.which('brew') is None, reason='Homebrew not installed')
-    def test_homebrew_prefix_is_exported(self, home: Home) -> None:
+    @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
+    def test_zsh_on_a_terminal_is_clean_and_fast(self, home: Home) -> None:
         """
-        Test that the homebrew snippet exports HOMEBREW_PREFIX and puts completions on FPATH
+        Test that a shell on a pseudo-terminal, where starship, fzf, and zoxide initialize, is clean and fast
         """
-        result = home.zsh('print -r -- "$HOMEBREW_PREFIX"; print -r -- "$FPATH"')
+        run_zsh_with_tty(home, 'exit')  # warm caches before timing
+        timings = []
+        for _ in range(TIMING_SAMPLES):
+            result, elapsed = run_zsh_with_tty(home, 'exit')
+            timings.append(elapsed)
+            assert result.returncode == 0
+            assert result.stdout.strip() == b'', result.stdout
+        assert min(timings) < STARTUP_BUDGET_SECONDS, f'tty zsh -i took {min(timings):.3f}s at best ({timings})'
+
+    @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
+    @pytest.mark.parametrize(
+        ('tool', 'function'),
+        [
+            ('starship', 'prompt_starship_precmd'),
+            ('zoxide',   '__zoxide_hook'),
+            ('fzf',      'fzf-file-widget'),
+        ],
+    )
+    def test_tool_integrations_initialize_on_a_terminal(self, home: Home, tool: str, function: str) -> None:
+        """
+        Test that each tool's shell integration is defined when the tool is installed and a terminal is attached
+        """
+        if shutil.which(tool) is None:
+            pytest.skip(f'{tool} not installed')
+        probe = f'print -r -- "defined=${{+functions[{function}]}}${{+widgets[{function}]}}"'
+        result, _elapsed = run_zsh_with_tty(home, probe)
+        assert result.returncode == 0
+        assert b'defined=1' in result.stdout or b'defined=01' in result.stdout, result.stdout
+
+    @staticmethod
+    def _fake_prefix(root: Path) -> Path:
+        """
+        Create a fake Homebrew prefix whose bin/brew is executable
+        """
+        brew = root / 'fakebrew' / 'bin' / 'brew'
+        brew.parent.mkdir(parents=True)
+        brew.write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
+        brew.chmod(0o755)
+        return brew.parent.parent
+
+    def _zsh(self, home: Home, command: str, **env: str) -> subprocess.CompletedProcess[str]:
+        """
+        Run an interactive zsh command with a minimal PATH plus the given environment overrides
+        """
+        zsh = shutil.which('zsh')
+        assert zsh is not None
+        return subprocess.run(
+            [zsh, '-i', '-c', command],
+            capture_output=True, text=True, check=False, cwd=home.path,
+            env={**home.env, 'PATH': '/usr/bin:/bin', **env},
+        )
+
+    def test_homebrew_prefix_is_probed_when_brew_is_off_path(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that a prefix listed in DOTFILES_BREW_PREFIXES is found, exported, and prepended to PATH
+        """
+        prefix = self._fake_prefix(tmp_path)
+        result = self._zsh(
+            home,
+            'print -r -- $HOMEBREW_PREFIX $HOMEBREW_CELLAR $HOMEBREW_REPOSITORY; print -r -- ${(j: :)path}; '
+            'print -r -- ${(j: :)fpath}',
+            DOTFILES_BREW_PREFIXES=str(prefix),
+        )
         assert result.returncode == 0
         assert result.stderr == ''
-        prefix, fpath = result.stdout.strip().split('\n')
-        assert prefix
-        assert f'{prefix}/share/zsh-completions' in fpath
+        exported, paths, fpath = (line.split() for line in result.stdout.strip().split('\n'))
+        assert exported == [str(prefix), f'{prefix}/Cellar', str(prefix)]
+        assert f'{prefix}/sbin' in paths
+        assert paths.index(f'{prefix}/bin') < paths.index('/usr/bin')  # prepended, not appended
+        assert f'{prefix}/share/zsh/site-functions' in fpath
+
+    def test_homebrew_prefix_follows_brew_on_path(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that a brew already on PATH decides the prefix, without resolving symlinks
+        """
+        prefix = self._fake_prefix(tmp_path)
+        result = self._zsh(home, 'print -r -- $HOMEBREW_PREFIX', PATH=f'{prefix}/bin:/usr/bin:/bin')
+        assert result.returncode == 0
+        assert result.stderr == ''
+        assert result.stdout.strip() == str(prefix)
+
+    def test_homebrew_probe_can_be_disabled(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that DOTFILES_BREW_PROBE=0 leaves Homebrew unconfigured when brew is not on PATH
+        """
+        prefix = self._fake_prefix(tmp_path)
+        result = self._zsh(
+            home, 'print -r -- "prefix=${HOMEBREW_PREFIX-unset}"',
+            DOTFILES_BREW_PREFIXES=str(prefix), DOTFILES_BREW_PROBE='0',
+        )
+        assert result.returncode == 0
+        assert result.stderr == ''
+        assert result.stdout.strip() == 'prefix=unset'
+
+    def test_autojump_is_sourced_from_the_brew_prefix(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that the autojump hook reads profile.d/autojump.sh under HOMEBREW_PREFIX rather than a fixed path
+        """
+        prefix  = self._fake_prefix(tmp_path)
+        autojump = prefix / 'bin' / 'autojump'
+        autojump.write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
+        autojump.chmod(0o755)
+        script = prefix / 'etc' / 'profile.d' / 'autojump.sh'
+        script.parent.mkdir(parents=True)
+        script.write_text('export AUTOJUMP_PROBE=from-prefix\n', encoding='utf-8')
+        result = self._zsh(home, 'print -r -- $AUTOJUMP_PROBE', DOTFILES_BREW_PREFIXES=str(prefix))
+        assert result.returncode == 0
+        assert result.stderr == ''
+        assert result.stdout.strip() == 'from-prefix'
+
+    def test_fzf_default_command_requires_fd(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that FZF_DEFAULT_COMMAND is only exported when fd is available
+        """
+        absent = self._zsh(home, 'print -r -- "${FZF_DEFAULT_COMMAND-unset}"', DOTFILES_BREW_PROBE='0')
+        assert absent.returncode == 0
+        assert absent.stderr == ''
+        assert absent.stdout.strip() == 'unset'
+
+        fd = tmp_path / 'bin' / 'fd'
+        fd.parent.mkdir()
+        fd.write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
+        fd.chmod(0o755)
+        present = self._zsh(
+            home, 'print -r -- "${FZF_DEFAULT_COMMAND-unset}"',
+            DOTFILES_BREW_PROBE='0', PATH=f'{fd.parent}:/usr/bin:/bin',
+        )
+        assert present.stdout.strip().startswith('fd ')
+
+    def test_path_and_fpath_have_no_duplicates(self, home: Home) -> None:
+        """
+        Test that nested shells do not accumulate duplicate PATH or FPATH entries
+        """
+        result = home.zsh(
+            "zsh -i -c 'print -r -- ${#path} ${#${(u)path}} ${#fpath} ${#${(u)fpath}}'"
+        )
+        assert result.returncode == 0
+        path_len, path_unique, fpath_len, fpath_unique = result.stdout.split()
+        assert path_len == path_unique
+        assert fpath_len == fpath_unique

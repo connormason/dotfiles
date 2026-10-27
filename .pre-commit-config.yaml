@@ -210,7 +210,7 @@ repos:
         name: "[check]  json syntax"
         stages: [pre-commit, manual]
         priority: 10
-        exclude: ^stow/zed/.*settings\.json$                # JSONC (comments, trailing commas); checked by json5 hook
+        exclude: ^stow/zed/.*\.json$                # JSONC (comments, trailing commas); checked by json5 hook
 
   - repo: https://github.com/abravalheri/validate-pyproject
     rev: v0.25
@@ -259,7 +259,7 @@ repos:
         priority: 10
         entry: scripts/hooks/check-json5.py
         language: python
-        files: .*\.json5$|^stow/zed/.*settings\.json$
+        files: .*\.json5$|^stow/zed/.*\.json$
 
       # Validate Pkl file syntax via `pkl eval` (no-op if `pkl` is not installed)
       - id: check-pkl

@@ -2,24 +2,45 @@
 # Homebrew (https://brew.sh)
 # =============================================================================
 
-# Activate `brew` shell configuration (exports HOMEBREW_PREFIX, extends PATH, MANPATH, and INFOPATH)
-# A fresh machine has `brew` on PATH once the Homebrew installer's ~/.zprofile entry is in place
+# Equivalent of `eval "$(brew shellenv)"` without the subprocess (`brew` costs ~40 ms per shell). `brew` is often not on
+# PATH yet in a fresh shell, so when it is missing, probe $DOTFILES_BREW_PREFIXES (space-separated, set by a layer's
+# bootstrap/env.sh), then /opt/homebrew and /usr/local, and prepend the first prefix that has bin/brew.
+# Set DOTFILES_BREW_PROBE=0 to skip the probe (only a `brew` already on PATH is used).
+_brew_prefix=""
 if (( $+commands[brew] )); then
-    # `brew shellenv` costs ~40 ms per shell (it spawns path_helper), so cache its output and refresh it only when the
-    # brew script itself changes; delete the cache file to force a refresh
-    _brew_env="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/brew-shellenv.zsh"
-    if [[ ! -s "$_brew_env" || "$_brew_env" -ot "${commands[brew]}" ]]; then
-        mkdir -p "${_brew_env:h}" 2>/dev/null && brew shellenv >| "$_brew_env" 2>/dev/null
-    fi
-    if [[ -s "$_brew_env" ]]; then
-        source "$_brew_env"
+    _brew_prefix="${commands[brew]:h:h}"
+elif [[ "${DOTFILES_BREW_PROBE:-1}" != 0 ]]; then
+    for _prefix in ${=DOTFILES_BREW_PREFIXES:-} /opt/homebrew /usr/local; do
+        if [[ -x "$_prefix/bin/brew" ]]; then
+            _brew_prefix="$_prefix"
+            break
+        fi
+    done
+    unset _prefix
+fi
+
+if [[ -n "$_brew_prefix" ]]; then
+    export HOMEBREW_PREFIX="$_brew_prefix"
+    export HOMEBREW_CELLAR="$_brew_prefix/Cellar"
+    # Intel macOS and Linux keep the git checkout in $prefix/Homebrew; Apple Silicon uses the prefix itself
+    if [[ -d "$_brew_prefix/Homebrew" ]]; then
+        export HOMEBREW_REPOSITORY="$_brew_prefix/Homebrew"
     else
-        eval "$(brew shellenv)"
+        export HOMEBREW_REPOSITORY="$_brew_prefix"
     fi
-    unset _brew_env
+
+    pathadd "$_brew_prefix/sbin"
+    pathadd "$_brew_prefix/bin"
+    fpath=("$_brew_prefix/share/zsh/site-functions" $fpath)
+    export INFOPATH="$_brew_prefix/share/info:${INFOPATH:-}"
+    # A leading colon in MANPATH keeps the system default man directories searched, as `brew shellenv` does
+    if [[ -n "${MANPATH-}" ]]; then
+        export MANPATH=":${MANPATH#:}"
+    fi
 
     # export HOMEBREW_NO_ENV_HINTS=1
 
     # Add zsh completions to FPATH for packages installed with `brew`
-    fpathadd "$HOMEBREW_PREFIX/share/zsh-completions"
+    fpathadd "$_brew_prefix/share/zsh-completions"
 fi
+unset _brew_prefix
