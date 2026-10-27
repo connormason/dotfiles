@@ -614,10 +614,25 @@ git commit -m "feat(bootstrap): shared shell library with overlay layer registry
 - Consumes: `bootstrap/lib.sh` (`dotfiles_layers`, `die`).
 - Produces: `stow.sh [-n|--simulate] [-v|--verbose] [--summary|--no-summary] [--backup-conflicts] [--list] [PKG…]`
   - `--list`: prints `<pkg>\t<layer-root>` per package (layer order, then directory order), exit 0
-  - exit 0 success / dry-run; 1 ownership conflict, duplicate package, unknown package, missing overlay; stow's own
-    code on stow failure
+  - exit 0 success / dry-run; 1 ownership conflict (identical path or file-vs-directory), duplicate package, unknown
+    package, missing overlay, any unresolvable stow conflict, backup-able conflict without `--backup-conflicts`,
+    failed post-backup re-verification, combined short flags, bad `STOW_VERBOSE`; stow's own code on an unexpected apply
+    failure
+  - all-or-nothing apply: every layer is simulated first (`stow -n`), conflicts are classified, and nothing is changed
+    unless the whole plan is clean:
+    - backup-able (moved to `~/.dotfiles-backup/<timestamp>/` by `--backup-conflicts`; never directories): a regular file
+      (`cannot stow … over existing target <T> since neither a link nor a directory …`,
+      `existing target is neither a link nor a directory: <T>`) or a foreign symlink
+      (`existing target is not owned by stow: <T>`) at `$HOME/<T>`
+    - unresolvable (abort, nothing moved or linked, also under `-n`): any other conflict, a real directory where a
+      package provides a file, a stow fatal error with no parseable conflict
+    - after a backup, every layer is re-verified; if still not clean, nothing is linked and the backup dir is reported
+  - every stow call passes `--no-folding --ignore='\.DS_Store' --restow`; the ownership check mirrors stow's built-in
+    ignores (`README.*`, `LICENSE.*`, exact `COPYING` at the package root only)
   - final line: `stow: applied <pkgs>` | `stow: simulated <pkgs> (dry-run, no changes written)` |
-    `stow: simulated <pkgs> (dry-run; conflicting files above would be backed up first, then linked)`
+    `stow: simulated <pkgs> (dry-run; <N> conflicting file(s) would be backed up first, then linked)` (preceded by one
+    `stow: would back up existing <T> -> <dir>/<T>` line per target; stow reports no link plan while conflicts exist, so no
+    summary is printed in that case)
   - summary lines from the awk summarizer (`stow: no changes (already current)` when nothing changed)
 
 - [ ] **Step 1: Copy the summarizer and its tests; run them**
@@ -637,6 +652,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -644,13 +660,22 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+# Inherited variables that would leak the developer's own configuration into the tests
+_SCRUBBED_VARS = (
+    'DOTFILES_REPO',
+    'DOTFILES_BREW_PREFIXES',
+    'DOTFILES_LEAK_PATTERNS',
+    'DOTFILES_OVERLAYS_FILE',
+    'STOW_VERBOSE',
+)
+
 pytestmark = pytest.mark.skipif(shutil.which('stow') is None, reason='GNU Stow not installed')
 
 
 @pytest.fixture
-def world(tmp_path: Path) -> dict[str, Path]:
+def world(tmp_path: Path, shell: str) -> dict[str, Path]:
     """
-    Fixture repo (copy of the engine files), overlay, HOME, and overlays registry
+    Fixture repo (copy of the engine files), overlay, HOME, overlays registry, and the bash interpreter under test
     """
     repo = tmp_path / 'repo'
     (repo / 'bootstrap').mkdir(parents=True)
@@ -662,7 +687,7 @@ def world(tmp_path: Path) -> dict[str, Path]:
     (overlay / 'stow').mkdir(parents=True)
     home = tmp_path / 'home'
     home.mkdir()
-    return {'repo': repo, 'overlay': overlay, 'home': home, 'registry': tmp_path / 'overlays'}
+    return {'repo': repo, 'overlay': overlay, 'home': home, 'registry': tmp_path / 'overlays', 'shell': Path(shell)}
 
 
 def _pkg(layer: Path, pkg: str, files: dict[str, str]) -> None:
@@ -675,26 +700,49 @@ def _pkg(layer: Path, pkg: str, files: dict[str, str]) -> None:
         path.write_text(content, encoding='utf-8')
 
 
-def _stow(world: dict[str, Path], *args: str, register_overlay: bool = True) -> subprocess.CompletedProcess[str]:
+def _stow(
+    world: dict[str, Path],
+    *args: str,
+    register_overlay: bool = True,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     """
-    Run the fixture repo's stow.sh with an isolated HOME
+    Run the fixture repo's stow.sh (under the parametrized bash) with an isolated HOME
     """
     if register_overlay:
         world['registry'].write_text(f'{world["overlay"]}\n', encoding='utf-8')
     env = {
-        **os.environ,
+        **{key: value for key, value in os.environ.items() if key not in _SCRUBBED_VARS},
         'HOME': str(world['home']),
         'XDG_CONFIG_HOME': str(world['home'] / '.config'),
         'DOTFILES_OVERLAYS_FILE': str(world['registry']),
+        **(extra_env or {}),
     }
-    env.pop('DOTFILES_REPO', None)
     return subprocess.run(
-        ['bash', str(world['repo'] / 'stow.sh'), *args],
+        [str(world['shell']), str(world['repo'] / 'stow.sh'), *args],
         capture_output=True,
         text=True,
         check=False,
         env=env,
     )
+
+
+def _foreign_symlink(world: dict[str, Path], name: str) -> Path:
+    """
+    Create $HOME/<name> as an absolute symlink to a directory outside every stow layer (an old checkout's link)
+    """
+    elsewhere = world['home'].parent / 'old-checkout'
+    elsewhere.mkdir(exist_ok=True)
+    link = world['home'] / name
+    link.symlink_to(elsewhere)
+    return link
+
+
+def _tree(root: Path) -> list[str]:
+    """
+    Snapshot every path under root (symlinks not followed) as a sorted list of relative names
+    """
+    return sorted(str(path.relative_to(root)) for path in root.rglob('*'))
 
 
 class TestDiscovery:
@@ -714,6 +762,19 @@ class TestDiscovery:
             f'work-shell\t{world["overlay"].resolve()}',
         ]
 
+    def test_inherited_dotfiles_repo_does_not_redirect_base_layer(self, world: dict[str, Path], tmp_path: Path) -> None:
+        """
+        Test that an exported DOTFILES_REPO from another checkout cannot change which base layer is used
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        decoy = tmp_path / 'decoy'
+        _pkg(decoy, 'decoy-pkg', {'.decoyrc': 'x'})
+        result = _stow(world, '--list', extra_env={'DOTFILES_REPO': str(decoy)})
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == [
+            f'shell\t{world["repo"].resolve()}',
+        ]
+
     def test_duplicate_package_name_fails(self, world: dict[str, Path]) -> None:
         """
         Test that a package name defined in two layers is rejected
@@ -721,7 +782,7 @@ class TestDiscovery:
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
         _pkg(world['overlay'], 'shell', {'.zprofile': 'x'})
         result = _stow(world, '--list')
-        assert result.returncode != 0
+        assert result.returncode == 1
         assert "package 'shell' is defined in two layers" in result.stderr
 
     def test_unknown_package_fails(self, world: dict[str, Path]) -> None:
@@ -730,8 +791,9 @@ class TestDiscovery:
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
         result = _stow(world, 'nope')
-        assert result.returncode != 0
+        assert result.returncode == 1
         assert 'unknown package: nope' in result.stderr
+        assert not (world['home'] / '.zshrc').exists()
 
     def test_missing_overlay_fails(self, world: dict[str, Path]) -> None:
         """
@@ -740,8 +802,51 @@ class TestDiscovery:
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
         world['registry'].write_text(f'{world["overlay"] / "gone"}\n', encoding='utf-8')
         result = _stow(world, register_overlay=False)
-        assert result.returncode != 0
+        assert result.returncode == 1
         assert not (world['home'] / '.zshrc').exists()
+
+    def test_repeated_package_names_are_stowed_once(self, world: dict[str, Path]) -> None:
+        """
+        Test that naming a package twice selects it once
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        result = _stow(world, 'shell', 'shell')
+        assert result.returncode == 0, result.stderr
+        assert 'stow: applied shell\n' in result.stdout
+
+
+class TestCli:
+    """
+    Tests for argument and environment handling
+    """
+    def test_help_works_with_broken_registry(self, world: dict[str, Path]) -> None:
+        """
+        Test that --help prints usage without needing a valid overlay registry
+        """
+        world['registry'].write_text(f'{world["overlay"] / "gone"}\n', encoding='utf-8')
+        result = _stow(world, '--help', register_overlay=False)
+        assert result.returncode == 0, result.stderr
+        assert 'Usage: stow.sh' in result.stdout
+
+    def test_combined_short_flags_are_rejected(self, world: dict[str, Path]) -> None:
+        """
+        Test that a short-flag cluster such as -nv is an error instead of being forwarded to stow
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        result = _stow(world, '-nv')
+        assert result.returncode == 1
+        assert 'combined short flags' in result.stderr
+        assert not (world['home'] / '.zshrc').exists()
+
+    @pytest.mark.parametrize('value', ['abc', '-1', '1.5'])
+    def test_non_numeric_stow_verbose_is_rejected(self, world: dict[str, Path], value: str) -> None:
+        """
+        Test that STOW_VERBOSE must be a non-negative integer
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        result = _stow(world, extra_env={'STOW_VERBOSE': value})
+        assert result.returncode == 1
+        assert 'STOW_VERBOSE' in result.stderr
 
 
 class TestOwnership:
@@ -756,10 +861,29 @@ class TestOwnership:
         _pkg(world['overlay'], 'work-shell', {'.zshrc': 'b'})
         result = _stow(world)
         assert result.returncode == 1
-        assert '~/.zshrc' in result.stderr
-        assert 'shell' in result.stderr
-        assert 'work-shell' in result.stderr
+        assert '~/.zshrc <- shell,work-shell' in result.stderr
         assert not (world['home'] / '.zprofile').exists()
+
+    def test_file_versus_directory_collision_fails(self, world: dict[str, Path]) -> None:
+        """
+        Test that one package providing a path as a file and another providing files beneath it is rejected
+        """
+        _pkg(world['repo'], 'a-pkg', {'.config/app': 'file', '.zshrc': 'x'})
+        _pkg(world['overlay'], 'b-pkg', {'.config/app/settings': 'nested'})
+        result = _stow(world)
+        assert result.returncode == 1
+        assert '~/.config/app <- a-pkg (file), b-pkg (directory)' in result.stderr
+        assert not (world['home'] / '.zshrc').exists()
+
+    def test_collision_check_covers_unselected_packages(self, world: dict[str, Path]) -> None:
+        """
+        Test that ownership is checked across all packages even when only one is requested
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'a'})
+        _pkg(world['overlay'], 'work-shell', {'.zshrc': 'b'})
+        result = _stow(world, 'shell')
+        assert result.returncode == 1
+        assert '~/.zshrc <- shell,work-shell' in result.stderr
 
     def test_readme_at_package_root_is_ignored(self, world: dict[str, Path]) -> None:
         """
@@ -768,6 +892,44 @@ class TestOwnership:
         _pkg(world['repo'], 'shell', {'README.md': 'docs', '.zshrc': 'x'})
         _pkg(world['overlay'], 'work-shell', {'README.md': 'docs'})
         assert _stow(world).returncode == 0
+
+    def test_nested_readme_is_not_ignored(self, world: dict[str, Path]) -> None:
+        """
+        Test that stow's README ignore is root-only, so a nested README still counts as an owned path
+        """
+        _pkg(world['repo'], 'a-pkg', {'.config/app/README.md': 'a'})
+        _pkg(world['overlay'], 'b-pkg', {'.config/app/README.md': 'b'})
+        result = _stow(world)
+        assert result.returncode == 1
+        assert '~/.config/app/README.md <- a-pkg,b-pkg' in result.stderr
+
+    def test_ds_store_is_ignored_everywhere(self, world: dict[str, Path]) -> None:
+        """
+        Test that .DS_Store files neither collide across packages nor get linked
+        """
+        _pkg(world['repo'], 'a-pkg', {'.DS_Store': 'a', '.config/app/.DS_Store': 'a', '.config/app/f': 'a'})
+        _pkg(world['overlay'], 'b-pkg', {'.DS_Store': 'b', '.bashrc': 'b'})
+        result = _stow(world)
+        assert result.returncode == 0, result.stderr
+        assert (world['home'] / '.config' / 'app' / 'f').is_symlink()
+        assert not (world['home'] / '.DS_Store').exists()
+        assert not (world['home'] / '.config' / 'app' / '.DS_Store').exists()
+
+    def test_copying_txt_at_package_root_is_counted_but_copying_is_not(self, world: dict[str, Path]) -> None:
+        """
+        Test that only an exact COPYING at the package root is ignored, matching stow's built-in rules
+        """
+        _pkg(world['repo'], 'a-pkg', {'COPYING': 'a', 'COPYING.txt': 'a'})
+        _pkg(world['overlay'], 'b-pkg', {'COPYING': 'b'})
+        result = _stow(world)
+        assert result.returncode == 0, result.stderr
+        assert (world['home'] / 'COPYING.txt').is_symlink()
+        assert not (world['home'] / 'COPYING').exists()
+
+        _pkg(world['overlay'], 'c-pkg', {'COPYING.txt': 'c'})
+        clash = _stow(world)
+        assert clash.returncode == 1
+        assert '~/COPYING.txt <- a-pkg,c-pkg' in clash.stderr
 
 
 class TestLinking:
@@ -815,17 +977,155 @@ class TestLinking:
         result = _stow(world, '-n')
         assert result.returncode == 0
         assert not (world['home'] / '.zshrc').exists()
-        assert 'simulated' in result.stdout
+        assert 'stow: simulated shell (dry-run, no changes written)' in result.stdout
 
-    def test_backup_conflicts_moves_existing_file(self, world: dict[str, Path]) -> None:
+    def test_passthrough_flag_does_not_imply_dry_run(self, world: dict[str, Path]) -> None:
         """
-        Test that --backup-conflicts moves a blocking regular file aside, then links
+        Test that a flag forwarded to stow does not make the run a simulation
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'repo'})
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        result = _stow(world, '--ignore=nothing-matches-this')
+        assert result.returncode == 0, result.stderr
+        assert (world['home'] / '.zshrc').is_symlink()
+        assert 'stow: applied shell' in result.stdout
+
+
+class TestConflicts:
+    """
+    Tests for all-or-nothing conflict handling
+    """
+    def test_backupable_conflicts_without_flag_abort_untouched(self, world: dict[str, Path]) -> None:
+        """
+        Test that file and foreign-symlink conflicts abort with a hint and change nothing
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.foreign': 'repo', '.fresh': 'repo'})
         (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
+        _foreign_symlink(world, '.foreign')
+        before = _tree(world['home'])
+        result = _stow(world)
+        assert result.returncode == 1
+        assert '--backup-conflicts' in result.stderr
+        assert '.zshrc' in result.stderr
+        assert '.foreign' in result.stderr
+        assert _tree(world['home']) == before
+        assert (world['home'] / '.zshrc').read_text(encoding='utf-8') == 'old'
+        assert not (world['home'] / '.fresh').exists()
+
+    def test_dry_run_with_backup_lists_every_would_back_up(self, world: dict[str, Path]) -> None:
+        """
+        Test that -n --backup-conflicts previews each move, exits 0, and moves nothing
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.foreign': 'repo'})
+        (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
+        _foreign_symlink(world, '.foreign')
+        before = _tree(world['home'])
+        result = _stow(world, '-n', '--backup-conflicts')
+        assert result.returncode == 0, result.stderr
+        assert 'stow: would back up existing .zshrc -> ' in result.stdout
+        assert 'stow: would back up existing .foreign -> ' in result.stdout
+        assert '2 conflicting file(s) would be backed up first, then linked' in result.stdout
+        assert _tree(world['home']) == before
+        assert (world['home'] / '.zshrc').read_text(encoding='utf-8') == 'old'
+
+    def test_backup_conflicts_moves_files_and_foreign_symlinks(self, world: dict[str, Path]) -> None:
+        """
+        Test that --backup-conflicts moves a blocking file and a foreign symlink aside, then links both
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.foreign': 'repo'})
+        (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
+        foreign = _foreign_symlink(world, '.foreign')
+        target = foreign.readlink()
         result = _stow(world, '--backup-conflicts')
         assert result.returncode == 0, result.stderr
         assert (world['home'] / '.zshrc').is_symlink()
+        assert (world['home'] / '.foreign').is_symlink()
+        assert (world['home'] / '.foreign').readlink() != target
+        zshrc_backups = list((world['home'] / '.dotfiles-backup').glob('*/.zshrc'))
+        foreign_backups = list((world['home'] / '.dotfiles-backup').glob('*/.foreign'))
+        assert len(zshrc_backups) == 1
+        assert zshrc_backups[0].read_text(encoding='utf-8') == 'old'
+        assert len(foreign_backups) == 1
+        assert foreign_backups[0].is_symlink()
+        assert foreign_backups[0].readlink() == target
+        assert 'stow: applied shell' in result.stdout
+
+    def test_unresolvable_conflict_changes_nothing(self, world: dict[str, Path]) -> None:
+        """
+        Test that a real directory where a package provides a file aborts without moving backup-able siblings
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.config/app': 'repo', '.fresh': 'repo'})
+        (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
+        (world['home'] / '.config' / 'app').mkdir(parents=True)
+        before = _tree(world['home'])
+        result = _stow(world, '--backup-conflicts')
+        assert result.returncode == 1
+        assert '.config/app' in result.stderr
+        assert _tree(world['home']) == before
+        assert (world['home'] / '.zshrc').read_text(encoding='utf-8') == 'old'
+        assert not (world['home'] / '.dotfiles-backup').exists()
+
+    def test_unresolvable_conflict_aborts_dry_run_too(self, world: dict[str, Path]) -> None:
+        """
+        Test that an unresolvable conflict is a failure even when simulating
+        """
+        _pkg(world['repo'], 'shell', {'.config/app': 'repo'})
+        (world['home'] / '.config' / 'app').mkdir(parents=True)
+        result = _stow(world, '-n', '--backup-conflicts')
+        assert result.returncode == 1
+
+    def test_conflict_in_overlay_leaves_base_unlinked(self, world: dict[str, Path]) -> None:
+        """
+        Test that a conflict in a later layer prevents any earlier layer from being linked
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'repo'})
+        _pkg(world['overlay'], 'work-shell', {'.workrc': 'overlay'})
+        (world['home'] / '.workrc').write_text('old', encoding='utf-8')
+        result = _stow(world)
+        assert result.returncode == 1
+        assert not (world['home'] / '.zshrc').exists()
+        assert (world['home'] / '.workrc').read_text(encoding='utf-8') == 'old'
+
+    def test_unresolvable_conflict_in_overlay_leaves_base_unlinked(self, world: dict[str, Path]) -> None:
+        """
+        Test that an unresolvable overlay conflict blocks the base layer even with --backup-conflicts
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.bashrc': 'repo'})
+        _pkg(world['overlay'], 'work-shell', {'.workrc': 'overlay'})
+        (world['home'] / '.bashrc').write_text('old', encoding='utf-8')
+        (world['home'] / '.workrc').mkdir()
+        result = _stow(world, '--backup-conflicts')
+        assert result.returncode == 1
+        assert not (world['home'] / '.zshrc').exists()
+        assert (world['home'] / '.bashrc').read_text(encoding='utf-8') == 'old'
+
+    def test_failed_reverify_links_nothing_and_names_backup_dir(self, world: dict[str, Path], tmp_path: Path) -> None:
+        """
+        Test that a still-dirty re-verification after backup exits 1 without linking and reports the backup directory
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.fresh': 'repo'})
+        (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
+        real_stow = shutil.which('stow')
+        assert real_stow is not None
+        shim_dir = tmp_path / 'shim'
+        shim_dir.mkdir()
+        shim = shim_dir / 'stow'
+        # Once a backup directory exists, every simulated stow reports a fresh unresolvable conflict
+        shim.write_text(
+            '#!/bin/sh\n'
+            'if [ -d "$HOME/.dotfiles-backup" ]; then\n'
+            '    echo "WARNING! stowing shell would cause conflicts:"\n'
+            '    echo "  * simulated residual conflict: .zshrc"\n'
+            '    echo "All operations aborted."\n'
+            '    exit 1\n'
+            'fi\n'
+            f'exec "{real_stow}" "$@"\n',
+            encoding='utf-8',
+        )
+        shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
+        result = _stow(world, '--backup-conflicts', extra_env={'PATH': f'{shim_dir}{os.pathsep}{os.environ["PATH"]}'})
+        assert result.returncode == 1
+        assert str(world['home'] / '.dotfiles-backup') in result.stderr
+        assert not (world['home'] / '.fresh').exists()
         backups = list((world['home'] / '.dotfiles-backup').glob('*/.zshrc'))
         assert len(backups) == 1
         assert backups[0].read_text(encoding='utf-8') == 'old'
@@ -846,19 +1146,37 @@ Expected: FAIL (`stow.sh` missing).
 #
 #   Layers     <repo>/stow, then <overlay>/stow for each overlay in the registry (bootstrap/lib.sh: dotfiles_layers)
 #   Packages   every directory in a layer's stow/; a package name may exist in only one layer
-#   Ownership  no two packages may provide the same $HOME-relative path; checked before anything is linked
+#   Ownership  no two packages may provide the same $HOME-relative path (or a file where another has a directory);
+#              checked before anything is linked
 #   Folding    always --no-folding: $HOME directories stay real, so several packages (and apps' runtime state) can
 #              share them, and nothing an app writes lands inside a repository
+#   Apply      all-or-nothing: every layer is simulated first. Unresolvable conflicts (a real directory where a package
+#              provides a file, ...) abort with nothing changed. Blocking regular files and foreign symlinks abort too
+#              unless --backup-conflicts moves them to ~/.dotfiles-backup/<timestamp>/ first; the layers are then
+#              re-verified and only a clean result is linked. -n previews exactly this, writing nothing.
 #
 # Env: STOW_VERBOSE=N raises stow's verbosity and prints its raw log.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# Help must work even when the overlay registry is broken, so it is handled before lib.sh is sourced.
+for arg in "$@"; do
+    case "$arg" in
+    -h | --help)
+        sed -n '2,/^set -euo pipefail/p' "${BASH_SOURCE[0]}" | sed -e '$d' -e 's/^# \{0,1\}//'
+        exit 0
+        ;;
+    esac
+done
+
 SUMMARIZER="$REPO_DIR/scripts/utility/summarize_stow.awk"
-# shellcheck source=bootstrap/lib.sh
+# Pin the base layer to this checkout: an inherited DOTFILES_REPO from another checkout must not redirect it.
+DOTFILES_REPO="$REPO_DIR"
+export DOTFILES_REPO
+# shellcheck source=/dev/null  # lib.sh is sourced at runtime from the repo root; shellcheck runs without -x
 source "$REPO_DIR/bootstrap/lib.sh"
 
-DRY=()
 DRY_RUN=0
 PASSTHRU=()
 SHOW_RAW=0
@@ -866,27 +1184,27 @@ SHOW_SUMMARY=1
 BACKUP_CONFLICTS=0
 LIST_ONLY=0
 LEVEL="${STOW_VERBOSE:-0}"
+case "$LEVEL" in
+*[!0-9]*) die "STOW_VERBOSE must be a non-negative integer (got '$LEVEL')" ;;
+esac
 if [ "$LEVEL" -gt 0 ]; then
     SHOW_RAW=1
 fi
 WANT=()
 for arg in "$@"; do
     case "$arg" in
-        -n | --no | --simulate) DRY=(-n) DRY_RUN=1 ;;
-        -v | --verbose)
-            SHOW_RAW=1
-            [ "$LEVEL" -ge 1 ] || LEVEL=1
-            ;;
-        --summary) SHOW_SUMMARY=1 ;;
-        --no-summary) SHOW_SUMMARY=0 ;;
-        --backup-conflicts) BACKUP_CONFLICTS=1 ;;
-        --list) LIST_ONLY=1 ;;
-        -h | --help)
-            sed -n '2,/^set -euo pipefail/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'
-            exit 0
-            ;;
-        -*) PASSTHRU+=("$arg") ;;
-        *) WANT+=("$arg") ;;
+    -n | --no | --simulate) DRY_RUN=1 ;;
+    -v | --verbose)
+        SHOW_RAW=1
+        [ "$LEVEL" -ge 1 ] || LEVEL=1
+        ;;
+    --summary) SHOW_SUMMARY=1 ;;
+    --no-summary) SHOW_SUMMARY=0 ;;
+    --backup-conflicts) BACKUP_CONFLICTS=1 ;;
+    --list) LIST_ONLY=1 ;;
+    -[!-]?*) die "combined short flags are not supported: $arg (pass each flag separately, e.g. -n -v)" ;;
+    -*) PASSTHRU+=("$arg") ;;
+    *) WANT+=("$arg") ;;
     esac
 done
 
@@ -945,7 +1263,15 @@ if [ ${#WANT[@]} -eq 0 ]; then
 else
     for pkg in "${WANT[@]}"; do
         idx="$(pkg_index "$pkg")" || die "unknown package: $pkg"
-        SEL+=("$idx")
+        already=0
+        for i in ${SEL[@]+"${SEL[@]}"}; do
+            if [ "$i" = "$idx" ]; then
+                already=1
+            fi
+        done
+        if [ "$already" = 0 ]; then
+            SEL+=("$idx")
+        fi
     done
 fi
 
@@ -955,13 +1281,18 @@ for i in "${SEL[@]}"; do
 done
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Ownership: every $HOME-relative path belongs to exactly one package (across all packages, not just selected ones)
+# Ownership: every $HOME-relative path belongs to exactly one package (across all packages, not just selected ones), and
+# no package provides a file at a path another package uses as a directory.
+# The prune list and root-level ignores mirror stow's built-in ignore list (Stow.pm, __DATA__): file names such as
+# README.md only count as ignored at the package root, and only an exact COPYING is ignored there.
 # ---------------------------------------------------------------------------------------------------------------------
 package_files() { # $1=index: $HOME-relative paths the package provides, honoring stow's default ignores
     (
         cd "${PKG_LAYERS[$1]}/stow/${PKG_NAMES[$1]}" &&
-            find . \( -name .git -o -name .DS_Store -o -name .gitignore \) -prune -o \( -type f -o -type l \) -print |
-            sed 's|^\./||' | grep -v -E '^(README|LICENSE|COPYING)([.][^/]*)?$' || true
+            find . \( -name .git -o -name .gitignore -o -name .gitmodules -o -name .DS_Store -o -name RCS -o -name CVS \
+                -o -name .cvsignore -o -name .svn -o -name _darcs -o -name .hg -o -name '?*,v' -o -name '?*~' \
+                -o -name '.#?*' -o -name '#*#' \) -prune -o \( -type f -o -type l \) -print |
+            sed 's|^\./||' | grep -v -E '^(README.*|LICENSE.*|COPYING)$' || true
     )
 }
 
@@ -970,27 +1301,44 @@ OWNERS="$(
         package_files "$i" | awk -v pkg="${PKG_NAMES[$i]}" '{ print $0 "\t" pkg }'
     done
 )"
-DUPES="$(printf '%s\n' "$OWNERS" | cut -f1 | LC_ALL=C sort | uniq -d | sed '/^$/d')"
-if [ -n "$DUPES" ]; then
+# Prints "<path><TAB><owners>" for each identical-path clash ("pkgA,pkgB") and each file-vs-directory clash
+# ("pkgA (file), pkgB (directory)")
+COLLISIONS="$(printf '%s\n' "$OWNERS" | awk -F'\t' '
+    $1 == "" { next }
+    {
+        path = $1
+        pkg = $2
+        files[path] = (path in files) ? files[path] "," pkg : pkg
+        nfile[path]++
+        n = split(path, parts, "/")
+        prefix = ""
+        for (i = 1; i < n; i++) {
+            prefix = (i == 1) ? parts[1] : prefix "/" parts[i]
+            if (!((prefix SUBSEP pkg) in seen)) {
+                seen[prefix SUBSEP pkg] = 1
+                dirs[prefix] = (prefix in dirs) ? dirs[prefix] ", " pkg " (directory)" : pkg " (directory)"
+            }
+        }
+    }
+    END {
+        for (p in files) {
+            if (nfile[p] > 1) print p "\t" files[p]
+            if (p in dirs) print p "\t" files[p] " (file), " dirs[p]
+        }
+    }' | LC_ALL=C sort)"
+if [ -n "$COLLISIONS" ]; then
     echo "stow: these paths are provided by more than one package:" >&2
-    while IFS= read -r path; do
-        owners="$(printf '%s\n' "$OWNERS" | awk -F'\t' -v p="$path" '$1 == p { print $2 }' | paste -sd, -)"
+    while IFS=$'\t' read -r path owners; do
         printf '  ~/%s <- %s\n' "$path" "$owners" >&2
     done <<EOF
-$DUPES
+$COLLISIONS
 EOF
     exit 1
 fi
 
-selected_in_layer() { # print the selected package names that live in layer $1
-    local i
-    for i in "${SEL[@]}"; do
-        if [ "${PKG_LAYERS[$i]}" = "$1" ]; then
-            printf '%s\n' "${PKG_NAMES[$i]}"
-        fi
-    done
-}
-
+# ---------------------------------------------------------------------------------------------------------------------
+# Layer runs: one stow invocation per layer that has selected packages
+# ---------------------------------------------------------------------------------------------------------------------
 EFF_LEVEL="$LEVEL"
 if [ "$SHOW_SUMMARY" = 1 ] && [ "$EFF_LEVEL" -lt 1 ]; then
     EFF_LEVEL=1
@@ -1000,117 +1348,202 @@ if [ "$EFF_LEVEL" -gt 0 ]; then
     VERBOSE=(--verbose="$EFF_LEVEL")
 fi
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Conflict backup: move blocking regular files / symlinks (never directories) to ~/.dotfiles-backup/<timestamp>/
-# ---------------------------------------------------------------------------------------------------------------------
-CONFLICTS_FOUND=0
-backup_conflicts() {
-    local layer pkgs pkg sim conflicts backup_dir target src
-    backup_dir="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
-    while IFS= read -r layer; do
-        pkgs=()
-        while IFS= read -r pkg; do
-            if [ -n "$pkg" ]; then
-                pkgs+=("$pkg")
-            fi
-        done <<EOF
-$(selected_in_layer "$layer")
-EOF
-        if [ ${#pkgs[@]} -eq 0 ]; then
-            continue
+PKGS=()
+load_pkgs() { # fill PKGS with the selected package names that live in layer $1
+    local i
+    PKGS=()
+    for i in "${SEL[@]}"; do
+        if [ "${PKG_LAYERS[$i]}" = "$1" ]; then
+            PKGS+=("${PKG_NAMES[$i]}")
         fi
-        sim="$(stow --dir "$layer/stow" --target "$HOME" --no-folding --restow -n "${pkgs[@]}" 2>&1 || true)"
-        conflicts="$(printf '%s\n' "$sim" |
-            sed -n -e 's/.* over existing target \(.*\) since .*/\1/p' \
-                -e 's/.*existing target is neither a link nor a directory: \(.*\)/\1/p')"
-        if [ -z "$conflicts" ]; then
-            continue
-        fi
-        CONFLICTS_FOUND=1
-        while IFS= read -r target; do
-            if [ -z "$target" ]; then
-                continue
-            fi
-            src="$HOME/$target"
-            if { [ -e "$src" ] || [ -L "$src" ]; } && [ ! -d "$src" ]; then
-                if [ "$DRY_RUN" = 1 ]; then
-                    echo "stow: would back up existing $target -> $backup_dir/$target"
-                else
-                    mkdir -p "$backup_dir/$(dirname "$target")"
-                    mv "$src" "$backup_dir/$target"
-                    echo "stow: backed up existing $target -> $backup_dir/$target"
-                fi
-            fi
-        done <<EOF
-$conflicts
-EOF
-    done <<EOF
-$LAYERS_OUT
-EOF
+    done
 }
-if [ "$BACKUP_CONFLICTS" = 1 ]; then
-    backup_conflicts
-fi
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Stow each layer's selected packages
-# ---------------------------------------------------------------------------------------------------------------------
-STOW_LOG=""
-RC=0
+LAYER_ROOTS=()
 while IFS= read -r layer; do
-    pkgs=()
-    while IFS= read -r pkg; do
-        if [ -n "$pkg" ]; then
-            pkgs+=("$pkg")
-        fi
-    done <<EOF
-$(selected_in_layer "$layer")
-EOF
-    if [ ${#pkgs[@]} -eq 0 ]; then
-        continue
-    fi
-    out=""
-    layer_rc=0
-    out="$(stow --dir "$layer/stow" --target "$HOME" --no-folding --restow \
-        ${VERBOSE[@]+"${VERBOSE[@]}"} ${DRY[@]+"${DRY[@]}"} ${PASSTHRU[@]+"${PASSTHRU[@]}"} "${pkgs[@]}" 2>&1)" || layer_rc=$?
-    STOW_LOG+="$out"$'\n'
-    if [ "$layer_rc" -ne 0 ] && [ "$RC" -eq 0 ]; then
-        RC=$layer_rc
+    load_pkgs "$layer"
+    if [ ${#PKGS[@]} -gt 0 ]; then
+        LAYER_ROOTS+=("$layer")
     fi
 done <<EOF
 $LAYERS_OUT
 EOF
 
-CONFLICT_ABORT=0
-if [ "$RC" -ne 0 ] && [ "$DRY_RUN" = 1 ] && [ "$BACKUP_CONFLICTS" = 1 ] && [ "$CONFLICTS_FOUND" = 1 ]; then
-    CONFLICT_ABORT=1 # expected: the preview cannot link over files it did not actually move
-    RC=0
+run_layer() { # $1=layer, $2=simulate (1|0): sets LAYER_OUT and LAYER_RC
+    local mode=()
+    if [ "$2" = 1 ]; then
+        mode=(-n)
+    fi
+    load_pkgs "$1"
+    LAYER_RC=0
+    LAYER_OUT="$(stow --dir "$1/stow" --target "$HOME" --no-folding --ignore='\.DS_Store' --restow \
+        ${VERBOSE[@]+"${VERBOSE[@]}"} ${mode[@]+"${mode[@]}"} ${PASSTHRU[@]+"${PASSTHRU[@]}"} "${PKGS[@]}" 2>&1)" ||
+        LAYER_RC=$?
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Preflight: simulate every layer and classify what stow reports. Nothing is changed here.
+#   BACKUP_TARGETS  $HOME-relative regular files / symlinks (e.g. links from an old checkout) that block a link
+#   UNRESOLVED      everything else (a real directory in the way, stow errors): never auto-fixed
+# Stow 2.4.1 wording (Stow.pm), reported as "  * <message>" after "WARNING! stowing <pkg> would cause conflicts:":
+#   cannot stow <src> over existing target <T> since neither a link nor a directory and --adopt not specified
+#   existing target is neither a link nor a directory: <T>
+#   existing target is not owned by stow: <T>
+# Fatal errors (e.g. "stow: ERROR: unstow_contents() called with non-directory path: ...") have no "  * " lines and a
+# non-zero exit.
+# ---------------------------------------------------------------------------------------------------------------------
+PRE_LOGS=()
+BACKUP_TARGETS=()
+UNRESOLVED=()
+
+conflict_target() { # print the $HOME-relative target named by a backup-able conflict message $1, else return 1
+    local target
+    target="$(printf '%s\n' "$1" | sed -n \
+        -e 's/^cannot stow .* over existing target \(.*\) since neither a link nor a directory and --adopt not specified$/\1/p' \
+        -e 's/^existing target is neither a link nor a directory: \(.*\)$/\1/p' \
+        -e 's/^existing target is not owned by stow: \(.*\)$/\1/p')"
+    if [ -z "$target" ]; then
+        return 1
+    fi
+    printf '%s\n' "$target"
+}
+
+preflight() {
+    local layer msgs msg target src
+    PRE_LOGS=()
+    BACKUP_TARGETS=()
+    UNRESOLVED=()
+    for layer in "${LAYER_ROOTS[@]}"; do
+        run_layer "$layer" 1
+        PRE_LOGS+=("$LAYER_OUT")
+        msgs="$(printf '%s\n' "$LAYER_OUT" | sed -n 's/^  \* //p')"
+        if [ -z "$msgs" ]; then
+            if [ "$LAYER_RC" -ne 0 ]; then
+                UNRESOLVED+=("stow failed (exit $LAYER_RC) for $layer:"$'\n'"$LAYER_OUT")
+            fi
+            continue
+        fi
+        while IFS= read -r msg; do
+            if target="$(conflict_target "$msg")"; then
+                src="$HOME/$target"
+                if [ -L "$src" ] || { [ -e "$src" ] && [ ! -d "$src" ]; }; then
+                    BACKUP_TARGETS+=("$target")
+                    continue
+                fi
+            fi
+            UNRESOLVED+=("$msg")
+        done <<EOF
+$msgs
+EOF
+    done
+}
+
+report_unresolved() {
+    local item
+    echo "stow: cannot link; these conflicts need manual attention (nothing was changed):" >&2
+    for item in "${UNRESOLVED[@]}"; do
+        printf '  %s\n' "$item" >&2
+    done
+}
+
+summarize() { # $1=log, $2=dry (1|0)
+    if [ "$SHOW_SUMMARY" = 1 ]; then
+        printf '%s' "$1" | awk -v dry="$2" -f "$SUMMARIZER"
+    fi
+}
+
+show_raw() { # $1=log
+    if [ "$SHOW_RAW" = 1 ]; then
+        printf '%s' "$1" | grep -v '^/' >&2 || true
+    fi
+}
+
+preflight
+if [ ${#UNRESOLVED[@]} -gt 0 ]; then
+    report_unresolved
+    exit 1
 fi
-if [ "$RC" -ne 0 ]; then
-    printf '%s' "$STOW_LOG" >&2
-    echo "stow: FAILED (exit $RC) for ${SEL_NAMES[*]}" >&2
-    exit "$RC"
+if [ ${#BACKUP_TARGETS[@]} -gt 0 ] && [ "$BACKUP_CONFLICTS" = 0 ]; then
+    echo "stow: these existing files block linking (nothing was changed):" >&2
+    for target in "${BACKUP_TARGETS[@]}"; do
+        printf '  ~/%s\n' "$target" >&2
+    done
+    echo "stow: re-run with --backup-conflicts to move them to ~/.dotfiles-backup/ first" >&2
+    exit 1
 fi
-if [ "$SHOW_RAW" = 1 ]; then
-    printf '%s' "$STOW_LOG" | grep -v '^/' >&2 || true
+
+BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Dry run: report what would happen, then stop
+# ---------------------------------------------------------------------------------------------------------------------
+if [ "$DRY_RUN" = 1 ]; then
+    for log in ${PRE_LOGS[@]+"${PRE_LOGS[@]}"}; do
+        show_raw "$log"$'\n'
+    done
+    if [ ${#BACKUP_TARGETS[@]} -gt 0 ]; then
+        # Stow reports no link plan while conflicts exist, so no summary is printed for this case
+        for target in "${BACKUP_TARGETS[@]}"; do
+            echo "stow: would back up existing $target -> $BACKUP_DIR/$target"
+        done
+        echo "stow: simulated ${SEL_NAMES[*]} (dry-run; ${#BACKUP_TARGETS[@]} conflicting file(s) would be backed up first, then linked)"
+    else
+        ALL_PRE=""
+        for log in ${PRE_LOGS[@]+"${PRE_LOGS[@]}"}; do
+            ALL_PRE+="$log"$'\n'
+        done
+        summarize "$ALL_PRE" 1
+        echo "stow: simulated ${SEL_NAMES[*]} (dry-run, no changes written)"
+    fi
+    exit 0
 fi
-if [ "$SHOW_SUMMARY" = 1 ] && [ "$CONFLICT_ABORT" = 0 ]; then
-    printf '%s' "$STOW_LOG" | awk -v dry="$DRY_RUN" -f "$SUMMARIZER"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Backup, then re-verify every layer before linking anything
+# ---------------------------------------------------------------------------------------------------------------------
+if [ ${#BACKUP_TARGETS[@]} -gt 0 ]; then
+    for target in "${BACKUP_TARGETS[@]}"; do
+        mkdir -p "$BACKUP_DIR/$(dirname "$target")"
+        mv "$HOME/$target" "$BACKUP_DIR/$target" || die "could not back up ~/$target (moved files so far are in $BACKUP_DIR)"
+        echo "stow: backed up existing $target -> $BACKUP_DIR/$target"
+    done
+    preflight
+    if [ ${#UNRESOLVED[@]} -gt 0 ] || [ ${#BACKUP_TARGETS[@]} -gt 0 ]; then
+        for log in ${PRE_LOGS[@]+"${PRE_LOGS[@]}"}; do
+            printf '%s\n' "$log" >&2
+        done
+        echo "stow: re-verification failed after backing up; nothing was linked" >&2
+        echo "stow: the moved files are in $BACKUP_DIR (move them back to restore)" >&2
+        exit 1
+    fi
 fi
-if [ "$CONFLICT_ABORT" = 1 ]; then
-    echo "stow: simulated ${SEL_NAMES[*]} (dry-run; conflicting files above would be backed up first, then linked)"
-elif [ "$DRY_RUN" = 1 ]; then
-    echo "stow: simulated ${SEL_NAMES[*]} (dry-run, no changes written)"
-else
-    echo "stow: applied ${SEL_NAMES[*]}"
-fi
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Apply: stow every layer for real
+# ---------------------------------------------------------------------------------------------------------------------
+STOW_LOG=""
+for layer in "${LAYER_ROOTS[@]}"; do
+    run_layer "$layer" 0
+    STOW_LOG+="$LAYER_OUT"$'\n'
+    if [ "$LAYER_RC" -ne 0 ]; then
+        printf '%s' "$STOW_LOG" >&2
+        echo "stow: FAILED (exit $LAYER_RC) for $layer" >&2
+        exit "$LAYER_RC"
+    fi
+done
+
+show_raw "$STOW_LOG"
+summarize "$STOW_LOG" 0
+echo "stow: applied ${SEL_NAMES[*]}"
 ```
 
 Run: `chmod +x stow.sh`
 
 Notes for the implementer: `PASSTHRU` flags never set `DRY_RUN` (fixes a work-repo quirk where any pass-through flag
-counted as a dry run). If shellcheck flags the `${!PKG_NAMES[@]}` expansions, keep the logic and add a targeted
-`# shellcheck disable=` with a reason comment rather than restructuring.
+counted as a dry run). The conflict regexes target GNU Stow 2.4.1's wording (`Stow.pm`); re-probe them if Stow is
+upgraded. If shellcheck flags the `${!PKG_NAMES[@]}` expansions, keep the logic and add a targeted
+`# shellcheck disable=` with a reason comment rather than restructuring. The tests run `stow.sh` under every bash from
+`tests/conftest.py` (`/bin/bash` 3.2 and the PATH bash).
 
 - [ ] **Step 5: Run tests to verify they pass**
 
@@ -1123,7 +1556,7 @@ Run: `prek run --files stow.sh scripts/utility/summarize_stow.awk tests/unit/tes
 - [ ] **Step 6: Commit**
 
 ```bash
-git add stow.sh scripts/utility/summarize_stow.awk tests/unit/test_stow_sh.py tests/unit/test_stow_summary.py
+git add stow.sh scripts/utility/summarize_stow.awk tests/conftest.py tests/unit/test_lib_sh.py tests/unit/test_stow_sh.py tests/unit/test_stow_summary.py
 git commit -m "feat(stow): layered stow driver with single-ownership check"
 ```
 

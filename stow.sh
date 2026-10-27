@@ -5,19 +5,37 @@
 #
 #   Layers     <repo>/stow, then <overlay>/stow for each overlay in the registry (bootstrap/lib.sh: dotfiles_layers)
 #   Packages   every directory in a layer's stow/; a package name may exist in only one layer
-#   Ownership  no two packages may provide the same $HOME-relative path; checked before anything is linked
+#   Ownership  no two packages may provide the same $HOME-relative path (or a file where another has a directory);
+#              checked before anything is linked
 #   Folding    always --no-folding: $HOME directories stay real, so several packages (and apps' runtime state) can
 #              share them, and nothing an app writes lands inside a repository
+#   Apply      all-or-nothing: every layer is simulated first. Unresolvable conflicts (a real directory where a package
+#              provides a file, ...) abort with nothing changed. Blocking regular files and foreign symlinks abort too
+#              unless --backup-conflicts moves them to ~/.dotfiles-backup/<timestamp>/ first; the layers are then
+#              re-verified and only a clean result is linked. -n previews exactly this, writing nothing.
 #
 # Env: STOW_VERBOSE=N raises stow's verbosity and prints its raw log.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+# Help must work even when the overlay registry is broken, so it is handled before lib.sh is sourced.
+for arg in "$@"; do
+    case "$arg" in
+    -h | --help)
+        sed -n '2,/^set -euo pipefail/p' "${BASH_SOURCE[0]}" | sed -e '$d' -e 's/^# \{0,1\}//'
+        exit 0
+        ;;
+    esac
+done
+
 SUMMARIZER="$REPO_DIR/scripts/utility/summarize_stow.awk"
+# Pin the base layer to this checkout: an inherited DOTFILES_REPO from another checkout must not redirect it.
+DOTFILES_REPO="$REPO_DIR"
+export DOTFILES_REPO
 # shellcheck source=/dev/null  # lib.sh is sourced at runtime from the repo root; shellcheck runs without -x
 source "$REPO_DIR/bootstrap/lib.sh"
 
-DRY=()
 DRY_RUN=0
 PASSTHRU=()
 SHOW_RAW=0
@@ -25,13 +43,16 @@ SHOW_SUMMARY=1
 BACKUP_CONFLICTS=0
 LIST_ONLY=0
 LEVEL="${STOW_VERBOSE:-0}"
+case "$LEVEL" in
+*[!0-9]*) die "STOW_VERBOSE must be a non-negative integer (got '$LEVEL')" ;;
+esac
 if [ "$LEVEL" -gt 0 ]; then
     SHOW_RAW=1
 fi
 WANT=()
 for arg in "$@"; do
     case "$arg" in
-    -n | --no | --simulate) DRY=(-n) DRY_RUN=1 ;;
+    -n | --no | --simulate) DRY_RUN=1 ;;
     -v | --verbose)
         SHOW_RAW=1
         [ "$LEVEL" -ge 1 ] || LEVEL=1
@@ -40,10 +61,7 @@ for arg in "$@"; do
     --no-summary) SHOW_SUMMARY=0 ;;
     --backup-conflicts) BACKUP_CONFLICTS=1 ;;
     --list) LIST_ONLY=1 ;;
-    -h | --help)
-        sed -n '2,/^set -euo pipefail/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'
-        exit 0
-        ;;
+    -[!-]?*) die "combined short flags are not supported: $arg (pass each flag separately, e.g. -n -v)" ;;
     -*) PASSTHRU+=("$arg") ;;
     *) WANT+=("$arg") ;;
     esac
@@ -104,7 +122,15 @@ if [ ${#WANT[@]} -eq 0 ]; then
 else
     for pkg in "${WANT[@]}"; do
         idx="$(pkg_index "$pkg")" || die "unknown package: $pkg"
-        SEL+=("$idx")
+        already=0
+        for i in ${SEL[@]+"${SEL[@]}"}; do
+            if [ "$i" = "$idx" ]; then
+                already=1
+            fi
+        done
+        if [ "$already" = 0 ]; then
+            SEL+=("$idx")
+        fi
     done
 fi
 
@@ -114,13 +140,18 @@ for i in "${SEL[@]}"; do
 done
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Ownership: every $HOME-relative path belongs to exactly one package (across all packages, not just selected ones)
+# Ownership: every $HOME-relative path belongs to exactly one package (across all packages, not just selected ones), and
+# no package provides a file at a path another package uses as a directory.
+# The prune list and root-level ignores mirror stow's built-in ignore list (Stow.pm, __DATA__): file names such as
+# README.md only count as ignored at the package root, and only an exact COPYING is ignored there.
 # ---------------------------------------------------------------------------------------------------------------------
 package_files() { # $1=index: $HOME-relative paths the package provides, honoring stow's default ignores
     (
         cd "${PKG_LAYERS[$1]}/stow/${PKG_NAMES[$1]}" &&
-            find . \( -name .git -o -name .DS_Store -o -name .gitignore \) -prune -o \( -type f -o -type l \) -print |
-            sed 's|^\./||' | grep -v -E '^(README|LICENSE|COPYING)([.][^/]*)?$' || true
+            find . \( -name .git -o -name .gitignore -o -name .gitmodules -o -name .DS_Store -o -name RCS -o -name CVS \
+                -o -name .cvsignore -o -name .svn -o -name _darcs -o -name .hg -o -name '?*,v' -o -name '?*~' \
+                -o -name '.#?*' -o -name '#*#' \) -prune -o \( -type f -o -type l \) -print |
+            sed 's|^\./||' | grep -v -E '^(README.*|LICENSE.*|COPYING)$' || true
     )
 }
 
@@ -129,27 +160,44 @@ OWNERS="$(
         package_files "$i" | awk -v pkg="${PKG_NAMES[$i]}" '{ print $0 "\t" pkg }'
     done
 )"
-DUPES="$(printf '%s\n' "$OWNERS" | cut -f1 | LC_ALL=C sort | uniq -d | sed '/^$/d')"
-if [ -n "$DUPES" ]; then
+# Prints "<path><TAB><owners>" for each identical-path clash ("pkgA,pkgB") and each file-vs-directory clash
+# ("pkgA (file), pkgB (directory)")
+COLLISIONS="$(printf '%s\n' "$OWNERS" | awk -F'\t' '
+    $1 == "" { next }
+    {
+        path = $1
+        pkg = $2
+        files[path] = (path in files) ? files[path] "," pkg : pkg
+        nfile[path]++
+        n = split(path, parts, "/")
+        prefix = ""
+        for (i = 1; i < n; i++) {
+            prefix = (i == 1) ? parts[1] : prefix "/" parts[i]
+            if (!((prefix SUBSEP pkg) in seen)) {
+                seen[prefix SUBSEP pkg] = 1
+                dirs[prefix] = (prefix in dirs) ? dirs[prefix] ", " pkg " (directory)" : pkg " (directory)"
+            }
+        }
+    }
+    END {
+        for (p in files) {
+            if (nfile[p] > 1) print p "\t" files[p]
+            if (p in dirs) print p "\t" files[p] " (file), " dirs[p]
+        }
+    }' | LC_ALL=C sort)"
+if [ -n "$COLLISIONS" ]; then
     echo "stow: these paths are provided by more than one package:" >&2
-    while IFS= read -r path; do
-        owners="$(printf '%s\n' "$OWNERS" | awk -F'\t' -v p="$path" '$1 == p { print $2 }' | paste -sd, -)"
+    while IFS=$'\t' read -r path owners; do
         printf '  ~/%s <- %s\n' "$path" "$owners" >&2
     done <<EOF
-$DUPES
+$COLLISIONS
 EOF
     exit 1
 fi
 
-selected_in_layer() { # print the selected package names that live in layer $1
-    local i
-    for i in "${SEL[@]}"; do
-        if [ "${PKG_LAYERS[$i]}" = "$1" ]; then
-            printf '%s\n' "${PKG_NAMES[$i]}"
-        fi
-    done
-}
-
+# ---------------------------------------------------------------------------------------------------------------------
+# Layer runs: one stow invocation per layer that has selected packages
+# ---------------------------------------------------------------------------------------------------------------------
 EFF_LEVEL="$LEVEL"
 if [ "$SHOW_SUMMARY" = 1 ] && [ "$EFF_LEVEL" -lt 1 ]; then
     EFF_LEVEL=1
@@ -159,107 +207,190 @@ if [ "$EFF_LEVEL" -gt 0 ]; then
     VERBOSE=(--verbose="$EFF_LEVEL")
 fi
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Conflict backup: move blocking regular files / symlinks (never directories) to ~/.dotfiles-backup/<timestamp>/
-# ---------------------------------------------------------------------------------------------------------------------
-CONFLICTS_FOUND=0
-backup_conflicts() {
-    local layer pkgs pkg sim conflicts backup_dir target src
-    backup_dir="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
-    while IFS= read -r layer; do
-        pkgs=()
-        while IFS= read -r pkg; do
-            if [ -n "$pkg" ]; then
-                pkgs+=("$pkg")
-            fi
-        done <<EOF
-$(selected_in_layer "$layer")
-EOF
-        if [ ${#pkgs[@]} -eq 0 ]; then
-            continue
+PKGS=()
+load_pkgs() { # fill PKGS with the selected package names that live in layer $1
+    local i
+    PKGS=()
+    for i in "${SEL[@]}"; do
+        if [ "${PKG_LAYERS[$i]}" = "$1" ]; then
+            PKGS+=("${PKG_NAMES[$i]}")
         fi
-        sim="$(stow --dir "$layer/stow" --target "$HOME" --no-folding --restow -n "${pkgs[@]}" 2>&1 || true)"
-        conflicts="$(printf '%s\n' "$sim" |
-            sed -n -e 's/.* over existing target \(.*\) since .*/\1/p' \
-                -e 's/.*existing target is neither a link nor a directory: \(.*\)/\1/p')"
-        if [ -z "$conflicts" ]; then
-            continue
-        fi
-        CONFLICTS_FOUND=1
-        while IFS= read -r target; do
-            if [ -z "$target" ]; then
-                continue
-            fi
-            src="$HOME/$target"
-            if { [ -e "$src" ] || [ -L "$src" ]; } && [ ! -d "$src" ]; then
-                if [ "$DRY_RUN" = 1 ]; then
-                    echo "stow: would back up existing $target -> $backup_dir/$target"
-                else
-                    mkdir -p "$backup_dir/$(dirname "$target")"
-                    mv "$src" "$backup_dir/$target"
-                    echo "stow: backed up existing $target -> $backup_dir/$target"
-                fi
-            fi
-        done <<EOF
-$conflicts
-EOF
-    done <<EOF
-$LAYERS_OUT
-EOF
+    done
 }
-if [ "$BACKUP_CONFLICTS" = 1 ]; then
-    backup_conflicts
-fi
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Stow each layer's selected packages
-# ---------------------------------------------------------------------------------------------------------------------
-STOW_LOG=""
-RC=0
+LAYER_ROOTS=()
 while IFS= read -r layer; do
-    pkgs=()
-    while IFS= read -r pkg; do
-        if [ -n "$pkg" ]; then
-            pkgs+=("$pkg")
-        fi
-    done <<EOF
-$(selected_in_layer "$layer")
-EOF
-    if [ ${#pkgs[@]} -eq 0 ]; then
-        continue
-    fi
-    out=""
-    layer_rc=0
-    out="$(stow --dir "$layer/stow" --target "$HOME" --no-folding --restow \
-        ${VERBOSE[@]+"${VERBOSE[@]}"} ${DRY[@]+"${DRY[@]}"} ${PASSTHRU[@]+"${PASSTHRU[@]}"} "${pkgs[@]}" 2>&1)" || layer_rc=$?
-    STOW_LOG+="$out"$'\n'
-    if [ "$layer_rc" -ne 0 ] && [ "$RC" -eq 0 ]; then
-        RC=$layer_rc
+    load_pkgs "$layer"
+    if [ ${#PKGS[@]} -gt 0 ]; then
+        LAYER_ROOTS+=("$layer")
     fi
 done <<EOF
 $LAYERS_OUT
 EOF
 
-CONFLICT_ABORT=0
-if [ "$RC" -ne 0 ] && [ "$DRY_RUN" = 1 ] && [ "$BACKUP_CONFLICTS" = 1 ] && [ "$CONFLICTS_FOUND" = 1 ]; then
-    CONFLICT_ABORT=1 # expected: the preview cannot link over files it did not actually move
-    RC=0
+run_layer() { # $1=layer, $2=simulate (1|0): sets LAYER_OUT and LAYER_RC
+    local mode=()
+    if [ "$2" = 1 ]; then
+        mode=(-n)
+    fi
+    load_pkgs "$1"
+    LAYER_RC=0
+    LAYER_OUT="$(stow --dir "$1/stow" --target "$HOME" --no-folding --ignore='\.DS_Store' --restow \
+        ${VERBOSE[@]+"${VERBOSE[@]}"} ${mode[@]+"${mode[@]}"} ${PASSTHRU[@]+"${PASSTHRU[@]}"} "${PKGS[@]}" 2>&1)" ||
+        LAYER_RC=$?
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Preflight: simulate every layer and classify what stow reports. Nothing is changed here.
+#   BACKUP_TARGETS  $HOME-relative regular files / symlinks (e.g. links from an old checkout) that block a link
+#   UNRESOLVED      everything else (a real directory in the way, stow errors): never auto-fixed
+# Stow 2.4.1 wording (Stow.pm), reported as "  * <message>" after "WARNING! stowing <pkg> would cause conflicts:":
+#   cannot stow <src> over existing target <T> since neither a link nor a directory and --adopt not specified
+#   existing target is neither a link nor a directory: <T>
+#   existing target is not owned by stow: <T>
+# Fatal errors (e.g. "stow: ERROR: unstow_contents() called with non-directory path: ...") have no "  * " lines and a
+# non-zero exit.
+# ---------------------------------------------------------------------------------------------------------------------
+PRE_LOGS=()
+BACKUP_TARGETS=()
+UNRESOLVED=()
+
+conflict_target() { # print the $HOME-relative target named by a backup-able conflict message $1, else return 1
+    local target
+    target="$(printf '%s\n' "$1" | sed -n \
+        -e 's/^cannot stow .* over existing target \(.*\) since neither a link nor a directory and --adopt not specified$/\1/p' \
+        -e 's/^existing target is neither a link nor a directory: \(.*\)$/\1/p' \
+        -e 's/^existing target is not owned by stow: \(.*\)$/\1/p')"
+    if [ -z "$target" ]; then
+        return 1
+    fi
+    printf '%s\n' "$target"
+}
+
+preflight() {
+    local layer msgs msg target src
+    PRE_LOGS=()
+    BACKUP_TARGETS=()
+    UNRESOLVED=()
+    for layer in "${LAYER_ROOTS[@]}"; do
+        run_layer "$layer" 1
+        PRE_LOGS+=("$LAYER_OUT")
+        msgs="$(printf '%s\n' "$LAYER_OUT" | sed -n 's/^  \* //p')"
+        if [ -z "$msgs" ]; then
+            if [ "$LAYER_RC" -ne 0 ]; then
+                UNRESOLVED+=("stow failed (exit $LAYER_RC) for $layer:"$'\n'"$LAYER_OUT")
+            fi
+            continue
+        fi
+        while IFS= read -r msg; do
+            if target="$(conflict_target "$msg")"; then
+                src="$HOME/$target"
+                if [ -L "$src" ] || { [ -e "$src" ] && [ ! -d "$src" ]; }; then
+                    BACKUP_TARGETS+=("$target")
+                    continue
+                fi
+            fi
+            UNRESOLVED+=("$msg")
+        done <<EOF
+$msgs
+EOF
+    done
+}
+
+report_unresolved() {
+    local item
+    echo "stow: cannot link; these conflicts need manual attention (nothing was changed):" >&2
+    for item in "${UNRESOLVED[@]}"; do
+        printf '  %s\n' "$item" >&2
+    done
+}
+
+summarize() { # $1=log, $2=dry (1|0)
+    if [ "$SHOW_SUMMARY" = 1 ]; then
+        printf '%s' "$1" | awk -v dry="$2" -f "$SUMMARIZER"
+    fi
+}
+
+show_raw() { # $1=log
+    if [ "$SHOW_RAW" = 1 ]; then
+        printf '%s' "$1" | grep -v '^/' >&2 || true
+    fi
+}
+
+preflight
+if [ ${#UNRESOLVED[@]} -gt 0 ]; then
+    report_unresolved
+    exit 1
 fi
-if [ "$RC" -ne 0 ]; then
-    printf '%s' "$STOW_LOG" >&2
-    echo "stow: FAILED (exit $RC) for ${SEL_NAMES[*]}" >&2
-    exit "$RC"
+if [ ${#BACKUP_TARGETS[@]} -gt 0 ] && [ "$BACKUP_CONFLICTS" = 0 ]; then
+    echo "stow: these existing files block linking (nothing was changed):" >&2
+    for target in "${BACKUP_TARGETS[@]}"; do
+        printf '  ~/%s\n' "$target" >&2
+    done
+    echo "stow: re-run with --backup-conflicts to move them to ~/.dotfiles-backup/ first" >&2
+    exit 1
 fi
-if [ "$SHOW_RAW" = 1 ]; then
-    printf '%s' "$STOW_LOG" | grep -v '^/' >&2 || true
+
+BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Dry run: report what would happen, then stop
+# ---------------------------------------------------------------------------------------------------------------------
+if [ "$DRY_RUN" = 1 ]; then
+    for log in ${PRE_LOGS[@]+"${PRE_LOGS[@]}"}; do
+        show_raw "$log"$'\n'
+    done
+    if [ ${#BACKUP_TARGETS[@]} -gt 0 ]; then
+        # Stow reports no link plan while conflicts exist, so no summary is printed for this case
+        for target in "${BACKUP_TARGETS[@]}"; do
+            echo "stow: would back up existing $target -> $BACKUP_DIR/$target"
+        done
+        echo "stow: simulated ${SEL_NAMES[*]} (dry-run; ${#BACKUP_TARGETS[@]} conflicting file(s) would be backed up first, then linked)"
+    else
+        ALL_PRE=""
+        for log in ${PRE_LOGS[@]+"${PRE_LOGS[@]}"}; do
+            ALL_PRE+="$log"$'\n'
+        done
+        summarize "$ALL_PRE" 1
+        echo "stow: simulated ${SEL_NAMES[*]} (dry-run, no changes written)"
+    fi
+    exit 0
 fi
-if [ "$SHOW_SUMMARY" = 1 ] && [ "$CONFLICT_ABORT" = 0 ]; then
-    printf '%s' "$STOW_LOG" | awk -v dry="$DRY_RUN" -f "$SUMMARIZER"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Backup, then re-verify every layer before linking anything
+# ---------------------------------------------------------------------------------------------------------------------
+if [ ${#BACKUP_TARGETS[@]} -gt 0 ]; then
+    for target in "${BACKUP_TARGETS[@]}"; do
+        mkdir -p "$BACKUP_DIR/$(dirname "$target")"
+        mv "$HOME/$target" "$BACKUP_DIR/$target" || die "could not back up ~/$target (moved files so far are in $BACKUP_DIR)"
+        echo "stow: backed up existing $target -> $BACKUP_DIR/$target"
+    done
+    preflight
+    if [ ${#UNRESOLVED[@]} -gt 0 ] || [ ${#BACKUP_TARGETS[@]} -gt 0 ]; then
+        for log in ${PRE_LOGS[@]+"${PRE_LOGS[@]}"}; do
+            printf '%s\n' "$log" >&2
+        done
+        echo "stow: re-verification failed after backing up; nothing was linked" >&2
+        echo "stow: the moved files are in $BACKUP_DIR (move them back to restore)" >&2
+        exit 1
+    fi
 fi
-if [ "$CONFLICT_ABORT" = 1 ]; then
-    echo "stow: simulated ${SEL_NAMES[*]} (dry-run; conflicting files above would be backed up first, then linked)"
-elif [ "$DRY_RUN" = 1 ]; then
-    echo "stow: simulated ${SEL_NAMES[*]} (dry-run, no changes written)"
-else
-    echo "stow: applied ${SEL_NAMES[*]}"
-fi
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Apply: stow every layer for real
+# ---------------------------------------------------------------------------------------------------------------------
+STOW_LOG=""
+for layer in "${LAYER_ROOTS[@]}"; do
+    run_layer "$layer" 0
+    STOW_LOG+="$LAYER_OUT"$'\n'
+    if [ "$LAYER_RC" -ne 0 ]; then
+        printf '%s' "$STOW_LOG" >&2
+        echo "stow: FAILED (exit $LAYER_RC) for $layer" >&2
+        exit "$LAYER_RC"
+    fi
+done
+
+show_raw "$STOW_LOG"
+summarize "$STOW_LOG" 0
+echo "stow: applied ${SEL_NAMES[*]}"
