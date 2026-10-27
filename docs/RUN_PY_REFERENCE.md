@@ -1,7 +1,7 @@
 # run.py - Command Reference
 
-Python CLI tool for managing the dotfiles repository. Provides commands for inventory management and codebase
-maintenance with ANSI styling and retry logic for robustness.
+Python CLI tool for managing the dotfiles repository. Provides commands for inventory management, codebase maintenance,
+and the layered dev environment (stow, bootstrap, render, doctor), with ANSI styling and retry logic for robustness.
 
 ## Quick Start
 
@@ -187,6 +187,45 @@ update-inventory: ## Update inventory repo
 	@python3 run.py update-inventory
 ...
 ```
+
+### Dotfiles
+
+Thin wrappers over the layered dev-env engine: [`stow.sh`](../stow.sh),
+[`bootstrap/bootstrap.sh`](../bootstrap/bootstrap.sh), and
+[`scripts/dotfiles/render.py`](../scripts/dotfiles/render.py). Each wrapper forwards its flags and exits with the
+underlying script's return code. All commands belong to the `Dotfiles` group.
+
+| Command     | Forwards to                  | Options                                                                                   |
+| ----------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `bootstrap` | `bootstrap/bootstrap.sh`     | `--dry-run`, `--list`, `--only STAGE`, `--from STAGE`, `--resume`, `--verify`, `--no-log` |
+| `stow`      | `stow.sh`                    | `[PACKAGE...]`, `-n/--simulate`, `--backup-conflicts`, `-v/--verbose`                     |
+| `render`    | `scripts/dotfiles/render.py` | `[TARGET...]`, `--diff`, `--check`, `--force`, `-v/--verbose`                             |
+| `doctor`    | (runs the checks below)      | `-f/--fix`                                                                                |
+| `test`      | `scripts/hooks/uv-public.sh` | `[PATH...]` (default: `tests`)                                                            |
+
+```bash
+python3 run.py bootstrap --list           # stages across all layers
+python3 run.py bootstrap --dry-run        # simulate every stage
+python3 run.py stow -n                    # preview links; writes nothing
+python3 run.py render --check             # exit 1 if rendered settings drifted
+python3 run.py test tests/unit/test_run_doctor.py
+```
+
+#### `doctor`
+
+Runs one check per line and exits 1 if any check fails. `tools` and `layers` run first; the remaining checks are skipped
+when either fails.
+
+| Check    | Passes when                                                                                      | Fix (`--fix`)                   |
+| -------- | ------------------------------------------------------------------------------------------------ | ------------------------------- |
+| `tools`  | `brew`, `git`, `stow`, `uv`, `zsh` are on `PATH`                                                 | none                            |
+| `layers` | the overlay registry resolves (`dotfiles_layers` in `bootstrap/lib.sh`) and every overlay exists | none                            |
+| `git`    | `git --version` is at least 2.36 (needed for `includeIf "hasconfig:remote.*.url:"`)              | none                            |
+| `links`  | `stow.sh -n` reports `no changes` or `no packages found`                                         | `stow.sh --backup-conflicts`    |
+| `render` | `render.py --check` exits 0 (exit 1 is drift; exit 2 is a config or I/O error with no fix)       | `render.py` (without `--force`) |
+
+`--fix` runs the fix command of each failing check, then re-runs every check and reports the final state.
+`bootstrap --verify` invokes `doctor` after all stages succeed.
 
 ## Architecture
 

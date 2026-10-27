@@ -100,6 +100,16 @@ INVENTORY_FILE: Path = INVENTORY_DIR / 'inventory.yml'
 VAULT_PASSWORD: Path = DOTFILES_DIR  / 'vault_password.txt'
 PLAYBOOKS_DIR:  Path = DOTFILES_DIR  / 'playbooks'
 
+# Layered dev-env engine (stow.sh, bootstrap driver, settings renderer)
+STOW_SCRIPT:      Path = DOTFILES_DIR / 'stow.sh'
+BOOTSTRAP_SCRIPT: Path = DOTFILES_DIR / 'bootstrap' / 'bootstrap.sh'
+RENDER_SCRIPT:    Path = DOTFILES_DIR / 'scripts' / 'dotfiles' / 'render.py'
+UV_PUBLIC:        Path = DOTFILES_DIR / 'scripts' / 'hooks' / 'uv-public.sh'
+
+# Doctor requirements
+REQUIRED_TOOLS:  tuple[str, ...] = ('brew', 'git', 'stow', 'uv', 'zsh')
+MIN_GIT_VERSION: tuple[int, int] = (2, 36)  # includeIf "hasconfig:remote.*.url:" support
+
 # Glob patterns for finding vault files within inventory
 VAULT_FILE_PATTERNS: list[str] = [
     'group_vars/*/vault.yml',
@@ -1404,6 +1414,272 @@ def cmd_makefile(args: argparse.Namespace) -> None:
     with MAKEFILE_PATH.open('w') as f:
         f.write('\n'.join(lines))
     printf('✅ Makefile updated', fg='bright_green')
+
+
+"""
+Dotfiles commands
+
+Thin wrappers over the layered engine (stow.sh, bootstrap/bootstrap.sh, scripts/dotfiles/render.py) plus a doctor
+that checks the overlay registry, link state, render drift, git version, and required tools:
+- bootstrap: Run the layered bootstrap stages
+- stow: Link stow packages from every layer into $HOME
+- render: Render settings files from per-layer fragments
+- doctor: Verify the environment (``--fix`` runs each failing check's repair command, then re-checks)
+- test: Run the test suite through the public-index uv wrapper
+"""
+
+
+@dataclasses.dataclass(frozen=True)
+class DoctorCheck:
+    """
+    Result of one doctor check
+
+    :param name: short check name
+    :param ok: whether the check passed
+    :param detail: one-line explanation
+    :param fix: command that repairs the problem, if one exists
+    """
+    name:   str
+    ok:     bool
+    detail: str
+    fix:    list[str] | None = None
+
+
+def _capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    """
+    Run a command quietly and capture its output (patched in tests)
+
+    :param cmd: command and arguments
+    :return: completed process with text stdout/stderr
+    """
+    return subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=DOTFILES_DIR)
+
+
+def _first_line(text: str, default: str) -> str:
+    """
+    Get the first non-empty line of command output with ANSI styling removed
+
+    :param text: command output
+    :param default: value returned when the output has no text
+    :return: first non-empty line, or ``default``
+    """
+    for line in unstyle(text).splitlines():
+        if line.strip():
+            return line.strip()
+    return default
+
+
+def check_layers() -> DoctorCheck:
+    """
+    Check that every registered overlay exists
+    """
+    # DOTFILES_REPO is pinned to this checkout so an inherited value from another one cannot redirect the base layer
+    script = 'export DOTFILES_REPO="$1"; source "$1/bootstrap/lib.sh" && dotfiles_layers'
+    result = _capture(['bash', '-c', script, 'doctor', str(DOTFILES_DIR)])
+    if result.returncode != 0:
+        return DoctorCheck('layers', False, _first_line(result.stderr, 'overlay registry error'))
+    count = len([line for line in result.stdout.splitlines() if line])
+    return DoctorCheck('layers', True, f'{count} layer(s): base + {count - 1} overlay(s)')
+
+
+def check_links() -> DoctorCheck:
+    """
+    Check that stowing would change nothing
+    """
+    result = _capture(['bash', str(STOW_SCRIPT), '-n'])
+    if result.returncode == 0 and ('stow: no changes' in result.stdout or 'stow: no packages found' in result.stdout):
+        return DoctorCheck('links', True, 'all packages linked')
+
+    fix = ['bash', str(STOW_SCRIPT), '--backup-conflicts']
+    if result.returncode != 0:
+        return DoctorCheck('links', False, _first_line(result.stderr or result.stdout, 'stow simulation failed'), fix)
+    summary = next((line for line in result.stdout.splitlines() if re.match(r'stow: \d+ added', line)), '')
+    return DoctorCheck('links', False, summary or 'stow reports pending changes', fix)
+
+
+def check_render() -> DoctorCheck:
+    """
+    Check that rendered settings files match their fragments
+    """
+    result = _capture([sys.executable, str(RENDER_SCRIPT), '--check'])
+    if result.returncode == 0:
+        return DoctorCheck('render', True, 'rendered settings in sync')
+    if result.returncode == 1:
+        return DoctorCheck(
+            'render',
+            False,
+            'rendered settings out of sync (see: run.py render --diff)',
+            [sys.executable, str(RENDER_SCRIPT)],
+        )
+    # Exit 2 (or anything else): bad fragment/registry or I/O error, which re-rendering cannot repair
+    return DoctorCheck('render', False, _first_line(result.stderr, f'render failed (exit {result.returncode})'))
+
+
+def check_git_version() -> DoctorCheck:
+    """
+    Check that git supports ``includeIf "hasconfig:remote.*.url:..."`` (git >= 2.36)
+    """
+    result = _capture(['git', '--version'])
+    match  = re.search(r'(\d+)\.(\d+)', result.stdout)
+    if match is None:
+        return DoctorCheck('git', False, 'could not determine git version')
+    version = (int(match.group(1)), int(match.group(2)))
+    want    = '.'.join(map(str, MIN_GIT_VERSION))
+    return DoctorCheck(
+        'git',
+        version >= MIN_GIT_VERSION,
+        f'git {version[0]}.{version[1]} (need >= {want} for per-remote identity)',
+    )
+
+
+def check_tools() -> DoctorCheck:
+    """
+    Check that required command-line tools are on PATH
+    """
+    missing = [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
+    if missing:
+        return DoctorCheck('tools', False, f'missing: {", ".join(missing)}')
+    return DoctorCheck('tools', True, ', '.join(REQUIRED_TOOLS))
+
+
+def doctor_checks() -> list[DoctorCheck]:
+    """
+    Run every doctor check (tools and layers first; the rest depend on them)
+    """
+    first = [check_tools(), check_layers()]
+    if not all(c.ok for c in first):
+        return first
+    return [*first, check_git_version(), check_links(), check_render()]
+
+
+def add_doctor_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register doctor options
+    """
+    parser.add_argument('-f', '--fix', action='store_true', help='Run the fix for each failing check, then re-check')
+
+
+@command(group='Dotfiles', add_arguments=add_doctor_arguments)
+def cmd_doctor(args: argparse.Namespace) -> None:
+    """
+    Check overlay registry, links, rendered settings, git version, and tools
+    """
+    checks = doctor_checks()
+    if args.fix:
+        for check in checks:
+            if not check.ok and check.fix:
+                printf(f'🔧 {check.name}: {shlex.join(check.fix)}', fg='bright_cyan')
+                shell_command(check.fix, indent=3, check=False)
+        checks = doctor_checks()
+    for check in checks:
+        emoji = '🟢' if check.ok else '🔴'
+        printf(f'{emoji} {style(check.name, fg="white", bold=True)}  {check.detail}', indent=3)
+    if not all(check.ok for check in checks):
+        sys.exit(1)
+
+
+def add_bootstrap_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register bootstrap driver options
+    """
+    parser.add_argument('--dry-run', action='store_true', help='Simulate every stage')
+    parser.add_argument('--list', action='store_true', help='List stages across layers')
+    parser.add_argument('--only', metavar='STAGE', help='Run a single stage')
+    parser.add_argument('--from', dest='from_stage', metavar='STAGE', help='Run from STAGE onward')
+    parser.add_argument('--resume', action='store_true', help='Continue after the last completed stage')
+    parser.add_argument('--verify', action='store_true', help='Run doctor after all stages succeed')
+    parser.add_argument('--no-log', action='store_true', help='Do not tee output to the bootstrap log')
+
+
+@command(group='Dotfiles', add_arguments=add_bootstrap_arguments)
+def cmd_bootstrap(args: argparse.Namespace) -> None:
+    """
+    Run the layered bootstrap stages (bootstrap/bootstrap.sh)
+    """
+    cmd = ['bash', str(BOOTSTRAP_SCRIPT)]
+    for flag, enabled in (
+        ('--dry-run', args.dry_run),
+        ('--list',    args.list),
+        ('--resume',  args.resume),
+        ('--verify',  args.verify),
+        ('--no-log',  args.no_log),
+    ):
+        if enabled:
+            cmd.append(flag)
+    if args.only:
+        cmd.extend(['--only', args.only])
+    if args.from_stage:
+        cmd.extend(['--from', args.from_stage])
+    sys.exit(shell_command(cmd, check=False).returncode)
+
+
+def add_stow_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register stow options
+    """
+    parser.add_argument('packages', nargs='*', help='Packages to stow (default: all, across layers)')
+    parser.add_argument('-n', '--simulate', action='store_true', help='Preview without changing $HOME')
+    parser.add_argument('--backup-conflicts', action='store_true', help='Move blocking files to ~/.dotfiles-backup')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Show the raw stow log')
+
+
+@command(group='Dotfiles', add_arguments=add_stow_arguments)
+def cmd_stow(args: argparse.Namespace) -> None:
+    """
+    Link stow packages from every layer into $HOME (stow.sh)
+    """
+    cmd = ['bash', str(STOW_SCRIPT)]
+    if args.simulate:
+        cmd.append('-n')
+    if args.backup_conflicts:
+        cmd.append('--backup-conflicts')
+    if args.verbose:
+        cmd.append('--verbose')
+    sys.exit(shell_command([*cmd, *args.packages], check=False).returncode)
+
+
+def add_render_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register render options
+    """
+    parser.add_argument('targets', nargs='*', help='Targets (default: all)')
+    parser.add_argument('--diff', action='store_true', help='Preview differences; write nothing')
+    parser.add_argument('--check', action='store_true', help='Exit 1 if out of sync; write nothing')
+    parser.add_argument('--force', action='store_true', help='Overwrite in-app edits after backing them up')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Report skipped/current targets')
+
+
+@command(group='Dotfiles', add_arguments=add_render_arguments)
+def cmd_render(args: argparse.Namespace) -> None:
+    """
+    Render settings files from per-layer fragments (scripts/dotfiles/render.py)
+    """
+    cmd = [sys.executable, str(RENDER_SCRIPT), *args.targets]
+    for flag, enabled in (
+        ('--diff',  args.diff),
+        ('--check', args.check),
+        ('--force', args.force),
+        ('-v',      args.verbose),
+    ):
+        if enabled:
+            cmd.append(flag)
+    sys.exit(shell_command(cmd, check=False).returncode)
+
+
+def add_test_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register test options
+    """
+    parser.add_argument('paths', nargs='*', help='Test paths (default: tests/)')
+
+
+@command(group='Dotfiles', add_arguments=add_test_arguments)
+def cmd_test(args: argparse.Namespace) -> None:
+    """
+    Run the test suite via uv (public-index wrapper)
+    """
+    cmd = [str(UV_PUBLIC), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])]
+    sys.exit(shell_command(cmd, check=False).returncode)
 
 
 """

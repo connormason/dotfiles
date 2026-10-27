@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean pre install-hooks uninstall-hooks makefile
+.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean pre install-hooks uninstall-hooks makefile doctor bootstrap stow render test
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -26,6 +26,13 @@ help: ## Show this help message
 	@echo "  $(YELLOW)install-hooks   $(NC) Install prek git hook shims (overwrites any existing shims)"
 	@echo "  $(YELLOW)uninstall-hooks $(NC) Uninstall prek git hook shims"
 	@echo "  $(YELLOW)makefile        $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
+	@echo ""
+	@echo "$(BRIGHT_WHITE)Dotfiles:$(NC)"
+	@echo "  $(YELLOW)doctor          $(NC) Check overlay registry, links, rendered settings, git version, and tools"
+	@echo "  $(YELLOW)bootstrap       $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh)"
+	@echo "  $(YELLOW)stow            $(NC) Link stow packages from every layer into $HOME (stow.sh)"
+	@echo "  $(YELLOW)render          $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
+	@echo "  $(YELLOW)test            $(NC) Run the test suite via uv (public-index wrapper)"
 	@echo ""
 
 # Inventory
@@ -59,3 +66,19 @@ uninstall-hooks: ## Uninstall prek git hook shims
 
 makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
 	@python3 run.py makefile
+
+# Dotfiles
+doctor: ## Check overlay registry, links, rendered settings, git version, and tools
+	@python3 run.py doctor
+
+bootstrap: ## Run the layered bootstrap stages (bootstrap/bootstrap.sh)
+	@python3 run.py bootstrap
+
+stow: ## Link stow packages from every layer into $HOME (stow.sh)
+	@python3 run.py stow
+
+render: ## Render settings files from per-layer fragments (scripts/dotfiles/render.py)
+	@python3 run.py render
+
+test: ## Run the test suite via uv (public-index wrapper)
+	@python3 run.py test
