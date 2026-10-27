@@ -23,5 +23,5 @@ fi
 # =====================================================================================================
 
 if (( $+commands[autojump] )); then
-    source_if_exists /opt/homebrew/etc/profile.d/autojump.sh
+    source_if_exists "${HOMEBREW_PREFIX:-/opt/homebrew}/etc/profile.d/autojump.sh"
 fi

@@ -399,3 +399,92 @@ class TestVSCode:
         Test that keybindings and the snippets placeholder are symlinked into the user directory
         """
         assert (home.path / self.USER_DIR / name).is_symlink()
+
+
+class TestTerminalEditor:
+    """
+    Tests for the terminal, editor, and window-manager packages
+    """
+    @pytest.mark.parametrize(
+        'relpath',
+        [
+            '.config/iterm2/com.googlecode.iterm2.plist',
+            '.config/tmux/tmux.conf',
+            '.config/tmux/tmux.conf.local',
+            '.config/starship.toml',
+            '.config/zed/settings.json',
+            '.config/zsh/conf.d/05-homebrew.zsh',
+            '.config/zsh/conf.d/30-iterm2.zsh',
+            '.config/zsh/conf.d/36-fzf.zsh',
+            '.config/zsh/conf.d/38-zoxide.zsh',
+            '.config/zsh/conf.d/46-tmux.zsh',
+            '.config/zsh/conf.d/80-starship.zsh',
+            '.hammerspoon/init.lua',
+            '.hammerspoon/Spoons/WifiNotifier.spoon/init.lua',
+            '.hammerspoon/Spoons/ReloadConfiguration.spoon/init.lua',
+            '.hammerspoon/Spoons/SpoonInstall.spoon/init.lua',
+        ],
+    )
+    def test_key_files_are_linked(self, home: Home, relpath: str) -> None:
+        """
+        Test that each package's key files are stowed as symlinks
+        """
+        assert (home.path / relpath).is_symlink()
+
+    def test_iterm2_working_directories_are_blank(self, home: Home) -> None:
+        """
+        Test that the iTerm2 profiles carry no hardcoded home path
+        """
+        text = (home.path / '.config' / 'iterm2' / 'com.googlecode.iterm2.plist').read_text(encoding='utf-8')
+        assert '/Users/' not in text
+        assert '<key>Working Directory</key>\n\t\t\t<string></string>' in text
+
+    def test_hammerspoon_loads_optional_overlay_hotkeys(self, home: Home) -> None:
+        """
+        Test that init.lua merges overlay hotkeys after the base mapping and before it is used to bind keys
+        """
+        text    = (home.path / '.hammerspoon' / 'init.lua').read_text(encoding='utf-8')
+        defined = text.index('letterToWindowFilterMapping = {')
+        merged  = text.index('pcall(require, "overlay")')
+        bound   = text.index('for letter, filter in pairs(letterToWindowFilterMapping)')
+        assert defined < merged < bound
+
+    def test_hammerspoon_base_keeps_only_generic_apps(self, home: Home) -> None:
+        """
+        Test that the base hotkey table has no entries for work-only apps
+        """
+        text = (home.path / '.hammerspoon' / 'init.lua').read_text(encoding='utf-8')
+        assert ' = hs.window.filter.new(' in text
+        for letter in ('3', '4', 'q', 'r', 'w'):
+            assert f"['{letter}'] =" not in text
+            assert f'\n    {letter} = hs.window.filter.new' not in text
+
+    def test_zed_ships_settings_only(self, home: Home) -> None:
+        """
+        Test that Zed's runtime state (prompts database) is not part of the package
+        """
+        assert sorted(p.name for p in (home.path / '.config' / 'zed').iterdir()) == ['settings.json']
+
+    def test_zsh_is_clean_and_fast_with_all_snippets(self, home: Home) -> None:
+        """
+        Test that an interactive shell with every terminal snippet sourced prints nothing to stderr and stays fast
+        """
+        home.zsh('exit')  # warm caches before timing
+        start   = time.monotonic()
+        result  = home.zsh('exit')
+        elapsed = time.monotonic() - start
+        assert result.returncode == 0
+        assert result.stderr == ''
+        assert elapsed < 0.3, f'zsh -i took {elapsed:.3f}s'
+
+    @pytest.mark.skipif(shutil.which('brew') is None, reason='Homebrew not installed')
+    def test_homebrew_prefix_is_exported(self, home: Home) -> None:
+        """
+        Test that the homebrew snippet exports HOMEBREW_PREFIX and puts completions on FPATH
+        """
+        result = home.zsh('print -r -- "$HOMEBREW_PREFIX"; print -r -- "$FPATH"')
+        assert result.returncode == 0
+        assert result.stderr == ''
+        prefix, fpath = result.stdout.strip().split('\n')
+        assert prefix
+        assert f'{prefix}/share/zsh-completions' in fpath
