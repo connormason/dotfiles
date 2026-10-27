@@ -62,7 +62,7 @@ isolation. [`uv-public.sh`](#uv-publicsh) is the exception: a shell wrapper arou
 | -------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------- | ----------------- |
 | [`check-json5.py`](#check-json5py)           | Validate JSON5 file syntax via `pyjson5`                                | `check-json5`                                        | 10 (check phase)  |
 | [`check-leaks.py`](#check-leakspy)           | Block employer-internal identifiers (content, paths, git identity)      | `check-leaks`, `check-leaks-msg`                     | 10 (check phase)  |
-| [`check-leaks-push.sh`](#check-leaks-pushsh) | Pre-push scan of pushed commits' identities and messages for leaks      | `check-leaks-push-history`, `check-leaks-push-files` | 10 (check phase)  |
+| [`check-leaks-push.sh`](#check-leaks-pushsh) | Pre-push scan of pushed commits' identities, messages, and added lines  | `check-leaks-push-history`, `check-leaks-push-files` | 10 (check phase)  |
 | [`check-pkl.py`](#check-pklpy)               | Validate Pkl files by running `pkl eval --format yaml`                  | `check-pkl`                                          | 10 (check phase)  |
 | [`format-pkl.py`](#format-pklpy)             | Auto-format Pkl files via `pkl format`                                  | `format-pkl`                                         | 35 (format phase) |
 | [`sort-json-array.py`](#sort-json-arraypy)   | Sort a top-level JSON array of objects by a key                         | `sort-json-array`                                    | 30 (sort phase)   |
@@ -354,9 +354,10 @@ the commit; amend the wording and commit again.
 
 ### Synopsis<a name="synopsis-2"></a>
 
-Pre-push leak scan of the commits being pushed: their author/committer identities and commit messages, fed to
-[`check-leaks.py`](#check-leakspy). `cherry-pick`, `rebase`, `am`, and `git commit --no-verify` bypass the `pre-commit`
-and `commit-msg` hooks, so this is the last local gate before content reaches the public remote. It takes no arguments.
+Pre-push leak scan of the commits being pushed: their author/committer identities, commit messages, and every line they
+add, fed to [`check-leaks.py`](#check-leakspy). `cherry-pick`, `rebase`, `am`, and `git commit --no-verify` bypass the
+`pre-commit` and `commit-msg` hooks, so this is the last local gate before content reaches the public remote. It takes
+no arguments.
 
 ### Behavior<a name="behavior-2"></a>
 
@@ -370,8 +371,15 @@ and `commit-msg` hooks, so this is the last local gate before content reaches th
 Commits before the range are not scanned. Commit messages are written to a temporary file and scanned like any other
 file; identities are piped to `check-leaks.py --identities-from -`.
 
-**File contents** of the pushed range are scanned by the separate `check-leaks-push-files` hook entry, which prek feeds
-the files changed between the two refs.
+**Patches.** The added lines of every pushed commit (`git log -p -U0 --format='commit %h' --no-color <range>`) are
+written to a temporary file and scanned too, so content that one pushed commit adds and a later one removes is caught
+even though the tip is clean. Removed and context lines are blanked rather than deleted: a removed line was either added
+earlier in the range (and is caught there) or is already public, and blanking keeps the reported line numbers aligned
+with that command's output. The script prints `pre-push: scanning <range>` first and, on findings,
+`pre-push: inspect with: <that command>`.
+
+**File contents** at the tip are scanned by the separate `check-leaks-push-files` hook entry, which prek feeds the files
+changed between the two refs.
 
 ### Exit Codes<a name="exit-codes-2"></a>
 

@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# pre-push leak scan of the commits being pushed: author/committer identities and commit messages.
+# pre-push leak scan of the commits being pushed: author/committer identities, commit messages, and every line the
+# pushed commits add.
 #
 # cherry-pick, rebase, am, and `git commit --no-verify` bypass the pre-commit and commit-msg hooks, so this is the
-# last local gate before content becomes public. File contents in the pushed range are scanned by the separate
-# check-leaks pre-push hook entry. Range: PRE_COMMIT_FROM_REF..PRE_COMMIT_TO_REF when the from-ref exists locally;
-# otherwise merge-base(to, origin/main)..to; otherwise the tip commit only.
+# last local gate before content becomes public. The separate check-leaks pre-push hook entry scans the files changed in
+# the range as they are at the tip; the patch scan here also catches content that one pushed commit adds and a later one
+# removes (the tip is clean, but the commit still publishes it). Only added lines are scanned: a removed line is either
+# added earlier in the same range (and caught there) or already public. Range: PRE_COMMIT_FROM_REF..PRE_COMMIT_TO_REF
+# when the from-ref exists locally; otherwise merge-base(to, origin/main)..to; otherwise the tip commit only.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -21,7 +24,20 @@ else
 fi
 
 msgs="$(mktemp "${TMPDIR:-/tmp}/check-leaks-msgs.XXXXXX")"
-trap 'rm -f "$msgs"' EXIT
+patch="$(mktemp "${TMPDIR:-/tmp}/check-leaks-patch.XXXXXX")"
+trap 'rm -f "$msgs" "$patch"' EXIT
+
+# Findings name the temp patch file, so point at the matching git command: blanking (not deleting) every line that is
+# neither a commit header nor an added line keeps line numbers aligned with its output.
+echo "pre-push: scanning ${range[*]}"
 git log --format=%B "${range[@]}" >"$msgs"
+git log -p -U0 --format='commit %h' --no-color "${range[@]}" |
+    awk '/^commit / || /^\+/ { print; next } { print "" }' >"$patch"
+
+rc=0
 git log --format='%an <%ae>%n%cn <%ce>' "${range[@]}" |
-    "$here/check-leaks.py" --identities-from - "$msgs"
+    "$here/check-leaks.py" --identities-from - "$msgs" "$patch" || rc=$?
+if [ "$rc" -ne 0 ]; then
+    echo "pre-push: inspect with: git log -p -U0 --format='commit %h' --no-color ${range[*]}"
+fi
+exit "$rc"

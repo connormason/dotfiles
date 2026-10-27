@@ -50,6 +50,16 @@ def _commit(repo: Path, message: str, email: str = 'jane@example.org') -> str:
     return _git(repo, 'rev-parse', 'HEAD')
 
 
+def _write_commit(repo: Path, name: str, content: str, message: str) -> str:
+    """
+    Write a file, commit it, and return the new sha
+    """
+    (repo / name).write_text(content, encoding='utf-8')
+    _git(repo, 'add', name)
+    _git(repo, 'commit', '-q', '-m', message)
+    return _git(repo, 'rev-parse', 'HEAD')
+
+
 def _run(repo: Path, from_ref: str | None, to_ref: str) -> subprocess.CompletedProcess[str]:
     """
     Run the pre-push script inside the fixture repo
@@ -105,3 +115,28 @@ class TestCheckLeaksPush:
         _commit(repo, f'old: mentions {CORP_DOMAIN}')
         head = _commit(repo, 'feat: clean tip')
         assert _run(repo, '0' * 40, head).returncode == 0
+
+    def test_content_added_then_removed_in_range_fails(self, repo: Path) -> None:
+        """
+        Test that content added by one pushed commit and removed by a later one is caught although the tip is clean
+        """
+        base = _git(repo, 'rev-parse', 'HEAD')
+        _write_commit(repo, 'notes.txt', f'mirror: pkgs.{CORP_DOMAIN}\n', 'docs: add notes')
+        head = _write_commit(repo, 'notes.txt', 'mirror: example.org\n', 'docs: scrub notes')
+        result = _run(repo, base, head)
+        assert result.returncode == 1
+        assert CORP_DOMAIN not in result.stdout
+        assert f'pre-push: scanning {base}..{head}' in result.stdout
+        hint = f"pre-push: inspect with: git log -p -U0 --format='commit %h' --no-color {base}..{head}"
+        assert hint in result.stdout
+
+    def test_removing_content_that_predates_range_passes(self, repo: Path) -> None:
+        """
+        Test that a pushed commit which only deletes already-published content is not rejected for the deleted lines
+        """
+        base = _write_commit(repo, 'notes.txt', f'mirror: pkgs.{CORP_DOMAIN}\nkeep: example.org\n', 'docs: old notes')
+        head = _write_commit(repo, 'notes.txt', 'keep: example.org\n', 'docs: scrub notes')
+        result = _run(repo, base, head)
+        assert result.returncode == 0, result.stdout
+        assert f'pre-push: scanning {base}..{head}' in result.stdout
+        assert 'inspect with' not in result.stdout

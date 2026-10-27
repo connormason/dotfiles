@@ -298,7 +298,7 @@ repos:
         language: python
         types: [text]
 
-      # pre-push: scan identities + messages of the pushed commits (cherry-picks/rebases bypass commit hooks)
+      # pre-push: scan identities, messages, and added lines of pushed commits (cherry-picks/rebases skip commit hooks)
       - id: check-leaks-push-history
         name: "[check]  internal identifiers in pushed commits"
         stages: [pre-push]
