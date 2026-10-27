@@ -4,7 +4,6 @@ Unit tests for bootstrap/lib.sh
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -18,34 +17,6 @@ LIB       = REPO_ROOT / 'bootstrap' / 'lib.sh'
 _SCRUBBED_VARS = ('DOTFILES_REPO', 'DOTFILES_BREW_PREFIXES', 'DOTFILES_LEAK_PATTERNS', 'DOTFILES_OVERLAYS_FILE')
 
 BashRunner = Callable[..., 'subprocess.CompletedProcess[str]']
-
-
-def _discover_shells() -> list[str]:
-    """
-    Find the bash interpreters to exercise (the system bash plus the PATH bash), deduplicated by resolved path
-    """
-    shells: list[str] = []
-    seen: set[Path] = set()
-    for candidate in ('/bin/bash', shutil.which('bash')):
-        if not candidate or not Path(candidate).exists():
-            continue
-        resolved = Path(candidate).resolve()
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        shells.append(candidate)
-    return shells
-
-
-SHELLS = _discover_shells()
-
-
-@pytest.fixture(params=SHELLS, ids=SHELLS)
-def shell(request: pytest.FixtureRequest) -> str:
-    """
-    Bash interpreter under test (macOS /bin/bash is 3.2, so it guards the portability constraint)
-    """
-    return request.param
 
 
 @pytest.fixture
