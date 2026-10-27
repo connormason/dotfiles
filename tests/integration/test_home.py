@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,7 @@ FIXTURE   = REPO_ROOT / 'tests' / 'fixtures' / 'overlay'
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(shutil.which('stow') is None, reason='GNU Stow not installed'),
+    pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh not installed'),
 ]
 
 
@@ -99,3 +101,56 @@ class TestEngine:
         """
         result = home.run('python3', str(REPO_ROOT / 'scripts' / 'dotfiles' / 'render.py'), '--check')
         assert result.returncode == 0, result.stderr
+
+
+class TestShell:
+    """
+    Tests for the shell package
+    """
+    def test_interactive_zsh_is_clean_and_fast(self, home: Home) -> None:
+        """
+        Test that an interactive shell starts without stderr output in under 300 ms
+        """
+        home.zsh('exit')  # warm caches (compinit dump) before timing
+        start  = time.monotonic()
+        result = home.zsh('exit')
+        elapsed = time.monotonic() - start
+        assert result.returncode == 0
+        assert result.stderr == ''
+        assert elapsed < 0.3, f'zsh -i took {elapsed:.3f}s'
+
+    def test_overlay_snippet_is_sourced(self, home: Home) -> None:
+        """
+        Test that conf.d snippets from overlays load alongside the base's
+        """
+        assert home.zsh('print -r -- $DOTFILES_FIXTURE_OVERLAY').stdout.strip() == '1'
+
+    def test_dotfiles_repo_resolves(self, home: Home) -> None:
+        """
+        Test that DOTFILES_REPO points at this repository
+        """
+        assert Path(home.zsh('print -r -- $DOTFILES_REPO').stdout.strip()) == REPO_ROOT
+
+    def test_zshrc_local_is_sourced_last(self, home: Home) -> None:
+        """
+        Test that ~/.zshrc.local runs after conf.d
+        """
+        local = home.path / '.zshrc.local'
+        local.write_text('export ZSHRC_LOCAL_PROBE=1\n', encoding='utf-8')
+        try:
+            assert home.zsh('print -r -- $ZSHRC_LOCAL_PROBE').stdout.strip() == '1'
+        finally:
+            local.unlink()
+
+    def test_interactive_zsh_is_clean_without_tools(self, home: Home) -> None:
+        """
+        Test that an interactive shell, including its chpwd hooks, is clean when no optional tool is on PATH
+        """
+        zsh    = shutil.which('zsh')
+        assert zsh is not None
+        env    = {**home.env, 'PATH': '/usr/bin:/bin'}
+        result = subprocess.run(
+            [zsh, '-i', '-c', 'cd / && cd ~'], capture_output=True, text=True, check=False, env=env, cwd=home.path
+        )
+        assert result.returncode == 0
+        assert result.stderr == ''

@@ -379,6 +379,12 @@ repos:
         name: "[format] shell scripts (shfmt)"
         stages: [pre-commit]
         priority: 35
+        # zsh dotfiles are not POSIX/bash; shfmt mangles them (zsh syntax it does not understand)
+        exclude: |
+          (?x)^(
+              stow/[^/]+/\.(zshrc|zprofile|zshenv|zlogin)|
+              stow/[^/]+/\.config/zsh/.*\.zsh
+          )$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -532,7 +538,12 @@ repos:
         name: "[lint]   shell scripts"
         stages: [pre-commit, manual]
         priority: 40
-        exclude: \.zsh$           # shellcheck does not support zsh (e.g. roles/zsh/files/p10k.zsh)
+        # shellcheck does not support zsh: *.zsh files (e.g. roles/zsh/files/p10k.zsh) and stowed zsh dotfiles
+        exclude: |
+          (?x)(
+              \.zsh$|
+              ^stow/[^/]+/\.(zshrc|zprofile|zshenv|zlogin)$
+          )
 
   # - repo: https://github.com/DavidAnson/markdownlint-cli2
   #   rev: v0.22.0
