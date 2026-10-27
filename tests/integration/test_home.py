@@ -191,6 +191,12 @@ class TestPythonNode:
         """
         assert not (home.path / relpath).exists()
 
+    def test_ipython_startup_file_is_linked(self, home: Home) -> None:
+        """
+        Test that the IPython startup file is stowed as a symlink
+        """
+        assert (home.path / '.ipython' / 'profile_default' / 'startup' / '00-rich.py').is_symlink()
+
     def test_hatch_config_is_generic(self, home: Home) -> None:
         """
         Test that the stowed hatch config carries no publish index, email, or hardcoded home paths

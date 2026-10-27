@@ -302,6 +302,7 @@ ignore = [
 # keep-sorted start
 "run.py"                                                   = ["S112"]
 "services/homeassistant/config/scripts/get_lutron_cert.py" = ["S"]
+"stow/**/startup/*.py"                                     = ["INP001"]                # IPython startup scripts are not a package
 "tests/**"                                                 = ["B", "S", "SIM", "PERF"]
 # keep-sorted end
 
