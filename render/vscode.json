@@ -1,0 +1,185 @@
+{
+  "[python]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "always",
+      "source.organizeImports.ruff": "always"
+    }
+  },
+  "better-comments.highlightPlainText": true,
+  "better-comments.tags": [
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#FF2D00",
+      "italic": false,
+      "strikethrough": false,
+      "tag": "!",
+      "underline": false
+    },
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#3498DB",
+      "italic": false,
+      "strikethrough": false,
+      "tag": "?",
+      "underline": false
+    },
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#474747",
+      "italic": false,
+      "strikethrough": true,
+      "tag": "//",
+      "underline": false
+    },
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#FF8C00",
+      "italic": false,
+      "strikethrough": false,
+      "tag": "todo",
+      "underline": false
+    },
+    {
+      "backgroundColor": "transparent",
+      "bold": false,
+      "color": "#98C379",
+      "italic": false,
+      "strikethrough": false,
+      "tag": "*",
+      "underline": false
+    }
+  ],
+  "breadcrumbs.enabled": true,
+  "claudeCode.preferredLocation": "panel",
+  "editor.autoIndentOnPaste": true,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
+  "editor.fontFamily": "Menlo",
+  "editor.fontLigatures": true,
+  "editor.fontSize": 11,
+  "editor.fontWeight": "400",
+  "editor.guides.bracketPairs": "active",
+  "editor.guides.highlightActiveBracketPair": false,
+  "editor.guides.highlightActiveIndentation": "always",
+  "editor.letterSpacing": -0.1,
+  "editor.lineHeight": 20,
+  "editor.lineNumbers": "on",
+  "editor.minimap.enabled": false,
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "editor.renderLineHighlight": "all",
+  "editor.renderLineHighlightOnlyWhenFocus": true,
+  "editor.renderWhitespace": "boundary",
+  "editor.rulers": [
+    120
+  ],
+  "editor.stickyScroll.enabled": true,
+  "evenBetterToml.formatter.alignComments": true,
+  "evenBetterToml.formatter.alignEntries": true,
+  "evenBetterToml.formatter.allowedBlankLines": 2,
+  "evenBetterToml.formatter.arrayAutoExpand": true,
+  "evenBetterToml.formatter.arrayTrailingComma": true,
+  "evenBetterToml.formatter.columnWidth": 120,
+  "evenBetterToml.formatter.compactArrays": true,
+  "evenBetterToml.formatter.compactInlineTables": true,
+  "evenBetterToml.formatter.indentString": "  ",
+  "evenBetterToml.formatter.trailingNewline": true,
+  "explorer.autoReveal": "focusNoScroll",
+  "explorer.compactFolders": false,
+  "explorer.confirmDelete": false,
+  "explorer.confirmDragAndDrop": false,
+  "files.associations": {
+    "*.csv": "csv",
+    "*.ini": "ini",
+    "*.j2": "jinja-html",
+    "*.jinja": "jinja-html",
+    "*.jsx": "javascriptreact",
+    "*.toml": "toml",
+    "*.tsv": "tsv",
+    "*.tsx": "typescriptreact",
+    "nginx.conf": "nginx"
+  },
+  "files.autoSave": "onFocusChange",
+  "files.exclude": {
+    "**/*.pyc": true,
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/__pycache__": true
+  },
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "files.trimTrailingWhitespace": true,
+  "git.detectWorktrees": true,
+  "github.gitProtocol": "ssh",
+  "githubPullRequests.codingAgent.autoCommitAndPush": false,
+  "githubPullRequests.codingAgent.enabled": false,
+  "githubPullRequests.queries": [
+    {
+      "label": "Created By Me",
+      "query": "repo:${owner}/${repository} is:open author:${user}"
+    },
+    {
+      "label": "Waiting For My Review",
+      "query": "repo:${owner}/${repository} is:open review-requested:${user}"
+    },
+    {
+      "label": "All Open",
+      "query": "default"
+    }
+  ],
+  "githubPullRequests.showPullRequestNumberInTree": true,
+  "gitlens.currentLine.enabled": false,
+  "makefile.configureOnOpen": false,
+  "markdown.extension.completion.enabled": true,
+  "markdown.preview.doubleClickToSwitchToEditor": true,
+  "markdown.preview.fontSize": 12,
+  "material-icon-theme.activeIconPack": "none",
+  "path-intellisense.autoSlashAfterDirectory": true,
+  "problems.visibility": false,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.variableTypes": false,
+  "python.analysis.typeCheckingMode": "standard",
+  "python.languageServer": "Pylance",
+  "ruff.lineLength": 120,
+  "search.defaultViewMode": "tree",
+  "telemetry.feedback.enabled": false,
+  "telemetry.telemetryLevel": "off",
+  "terminal.integrated.fontSize": 12,
+  "terminal.integrated.inheritEnv": false,
+  "terminal.integrated.letterSpacing": 0,
+  "terminal.integrated.lineHeight": 1.1,
+  "window.confirmSaveUntitledWorkspace": false,
+  "window.newWindowProfile": "Default",
+  "window.openFilesInNewWindow": "default",
+  "window.zoomLevel": 0,
+  "workbench.activityBar.iconClickBehavior": "toggle",
+  "workbench.activityBar.location": "default",
+  "workbench.colorTheme": "JetBrains New UI Dark Theme",
+  "workbench.editor.empty.hint": "hidden",
+  "workbench.editor.highlightModifiedTabs": true,
+  "workbench.editor.labelFormat": "short",
+  "workbench.editor.pinnedTabsOnSeparateRow": true,
+  "workbench.editor.preferHistoryBasedLanguageDetection": true,
+  "workbench.editor.wrapTabs": true,
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.sideBar.location": "left",
+  "workbench.statusBar.visible": true,
+  "workbench.tree.indent": 8,
+  "yaml.disableSchemaDetection": [
+    "**/.github/workflows/*.yml",
+    "**/.github/workflows/*.yaml",
+    "**/.gitea/workflows/*.yml",
+    "**/.gitea/workflows/*.yaml",
+    "**/.forgejo/workflows/*.yml",
+    "**/.forgejo/workflows/*.yaml"
+  ],
+  "yaml.format.printWidth": 120,
+  "gitlens.currentLine.pullRequests.enabled": false
+}

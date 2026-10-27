@@ -341,3 +341,61 @@ class TestGit:
         repo = self._repo(home, name, remote)
         result = home.run('git', 'config', 'user.email', cwd=repo)
         assert result.stdout.strip() == expected
+
+
+class TestVSCode:
+    """
+    Tests for the vscode package and render fragment
+    """
+    USER_DIR = Path('Library') / 'Application Support' / 'Code' / 'User'
+
+    def _settings(self, home: Home) -> dict[str, object]:
+        """
+        Load the rendered VS Code settings
+        """
+        return json.loads((home.path / self.USER_DIR / 'settings.json').read_text(encoding='utf-8'))
+
+    def test_settings_are_rendered_not_linked(self, home: Home) -> None:
+        """
+        Test that settings.json is a regular rendered file rather than a symlink into a repository
+        """
+        settings = home.path / self.USER_DIR / 'settings.json'
+        assert settings.is_file()
+        assert not settings.is_symlink()
+
+    def test_fixture_overlay_value_wins_over_base(self, home: Home) -> None:
+        """
+        Test that the fixture overlay's editor.fontSize replaces the base value
+        """
+        assert self._settings(home)['editor.fontSize'] == 13
+
+    def test_base_keys_are_present(self, home: Home) -> None:
+        """
+        Test that generic base keys survive the merge
+        """
+        settings = self._settings(home)
+        assert settings['editor.rulers'] == [120]
+        assert settings['python.languageServer'] == 'Pylance'
+        assert settings['telemetry.telemetryLevel'] == 'off'
+
+    @pytest.mark.parametrize(
+        'key',
+        [
+            'claudeCode.claudeProcessWrapper',
+            'claudeCode.disableLoginPrompt',
+            'MATLAB.showFeatureNotAvailableError',
+            'terminal.integrated.commandsToSkipShell',
+        ],
+    )
+    def test_overlay_only_keys_are_absent(self, home: Home, key: str) -> None:
+        """
+        Test that keys the work overlay owns are absent when only the base and fixture overlay are rendered
+        """
+        assert key not in self._settings(home)
+
+    @pytest.mark.parametrize('name', ['keybindings.json', 'snippets/.gitkeep'])
+    def test_stowed_files_are_linked(self, home: Home, name: str) -> None:
+        """
+        Test that keybindings and the snippets placeholder are symlinked into the user directory
+        """
+        assert (home.path / self.USER_DIR / name).is_symlink()

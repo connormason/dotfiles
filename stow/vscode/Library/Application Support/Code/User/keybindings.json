@@ -1,0 +1,151 @@
+[
+    {
+        "command": "-editor.action.copyLinesDownAction",
+        "key": "shift+alt+down",
+        "when": "editorTextFocus"
+    },
+    {
+        "command": "-editor.action.copyLinesUpAction",
+        "key": "shift+alt+up",
+        "when": "editorTextFocus"
+    },
+    {
+        "command": "-workbench.action.gotoLine",
+        "key": "ctrl+g"
+    },
+    {
+        "command": "editor.action.addSelectionToNextFindMatch",
+        "key": "ctrl+g",
+        "when": "editorFocus"
+    },
+    {
+        "command": "editor.action.blockComment",
+        "key": "ctrl+shift+/",
+        "when": "editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.commentLine",
+        "key": "ctrl+/",
+        "when": "editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.deleteLines",
+        "key": "cmd+backspace",
+        "when": "editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.formatDocument",
+        "key": "ctrl+alt+l",
+        "when": "editorHasDocumentFormattingProvider && editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.goToImplementation",
+        "key": "ctrl+alt+b",
+        "when": "editorHasImplementationProvider && editorTextFocus"
+    },
+    {
+        "command": "editor.action.goToTypeDefinition",
+        "key": "ctrl+shift+b",
+        "when": "editorHasTypeDefinitionProvider && editorTextFocus"
+    },
+    {
+        "command": "editor.action.joinLines",
+        "key": "ctrl+shift+j",
+        "when": "editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.moveLinesDownAction",
+        "key": "shift+alt+down",
+        "when": "editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.moveLinesUpAction",
+        "key": "shift+alt+up",
+        "when": "editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.organizeImports",
+        "key": "ctrl+alt+o",
+        "when": "editorHasOrganizeImportsProvider && editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.peekDefinition",
+        "key": "ctrl+shift+i",
+        "when": "editorHasDefinitionProvider && editorTextFocus"
+    },
+    {
+        "command": "editor.action.quickFix",
+        "key": "alt+enter",
+        "when": "editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.referenceSearch.trigger",
+        "key": "alt+f7",
+        "when": "editorHasReferenceProvider && editorTextFocus"
+    },
+    {
+        "command": "editor.action.removeSelectionFromNextFindMatch",
+        "key": "shift+alt+j",
+        "when": "editorFocus && editorHasMultipleSelections"
+    },
+    {
+        "command": "editor.action.rename",
+        "key": "shift+f6",
+        "when": "editorHasRenameProvider && editorTextFocus && !editorReadonly"
+    },
+    {
+        "command": "editor.action.revealDefinition",
+        "key": "ctrl+b",
+        "when": "editorHasDefinitionProvider && editorTextFocus"
+    },
+    {
+        "command": "editor.action.smartSelect.grow",
+        "key": "ctrl+w",
+        "when": "editorTextFocus"
+    },
+    {
+        "command": "editor.action.smartSelect.shrink",
+        "key": "ctrl+shift+w",
+        "when": "editorTextFocus"
+    },
+    {
+        "command": "workbench.action.debug.run",
+        "key": "shift+f10"
+    },
+    {
+        "command": "workbench.action.debug.start",
+        "key": "shift+f9"
+    },
+    {
+        "command": "workbench.action.findInFiles",
+        "key": "ctrl+shift+f"
+    },
+    {
+        "command": "workbench.action.gotoLine",
+        "key": "ctrl+l"
+    },
+    {
+        "command": "workbench.action.navigateBack",
+        "key": "ctrl+alt+left"
+    },
+    {
+        "command": "workbench.action.navigateForward",
+        "key": "ctrl+alt+right"
+    },
+    {
+        "command": "workbench.action.quickOpen",
+        "key": "ctrl+shift+n"
+    },
+    {
+        "command": "workbench.action.quickOpenPreviousRecentlyUsedEditorInGroup",
+        "key": "ctrl+e"
+    },
+    {
+        "command": "workbench.action.replaceInFiles",
+        "key": "ctrl+shift+r"
+    },
+    {
+        "command": "workbench.action.terminal.toggleTerminal",
+        "key": "alt+f12"
+    }
+]
