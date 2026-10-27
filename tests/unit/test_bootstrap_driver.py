@@ -125,6 +125,17 @@ class TestStageDiscovery:
         assert result.returncode != 0
         assert 'overlay not found' in result.stderr
 
+    def test_unreadable_overlay_is_fatal(
+        self, shell: str, env: dict[str, str], overlay: Path, unreadable_overlay: Path,
+    ) -> None:
+        """
+        Test that an overlay that exists but cannot be entered aborts discovery instead of being skipped
+        """
+        Path(env['DOTFILES_OVERLAYS_FILE']).write_text(f'{unreadable_overlay}\n{overlay}\n', encoding='utf-8')
+        result = _drive(shell, env, '--list')
+        assert result.returncode != 0
+        assert f'cannot resolve overlay: {unreadable_overlay}' in result.stderr
+
 
 class TestStageExecution:
     """

@@ -104,13 +104,18 @@ dotfiles_overlays_file() {
     printf '%s\n' "${DOTFILES_OVERLAYS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/overlays}"
 }
 
-# Print the repo root, then each registered overlay root (absolute), one per line. Dies on a missing overlay.
+# Print the repo root, then each registered overlay root (absolute), one per line. Dies on a missing or unresolvable
+# overlay. Callers capture this with "$(dotfiles_layers)" || ..., where errexit is off, so every step that can fail
+# must fail explicitly.
 dotfiles_layers() {
-    local registry line raw
-    registry="$(dotfiles_overlays_file)"
+    local registry line raw real
+    registry="$(dotfiles_overlays_file)" || return 1
     printf '%s\n' "$DOTFILES_REPO"
     if [ ! -f "$registry" ]; then
         return 0
+    fi
+    if [ ! -r "$registry" ]; then
+        die "cannot read overlays registry: $registry"
     fi
     while IFS= read -r line || [ -n "$line" ]; do
         line="${line%%#*}"
@@ -130,7 +135,8 @@ dotfiles_layers() {
         if [ ! -d "$line" ]; then
             die "overlay not found: $line (listed in $registry)"
         fi
-        (cd "$line" && pwd -P)
+        real="$(cd "$line" && pwd -P)" || die "cannot resolve overlay: $line (listed in $registry)"
+        printf '%s\n' "$real"
     done <"$registry"
 }
 

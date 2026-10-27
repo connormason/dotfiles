@@ -158,6 +158,16 @@ class TestDiscovery:
         assert result.returncode == 1
         assert not (world['home'] / '.zshrc').exists()
 
+    def test_unreadable_overlay_fails_list(self, world: dict[str, Path], unreadable_overlay: Path) -> None:
+        """
+        Test that an overlay that exists but cannot be entered aborts --list instead of being skipped
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        world['registry'].write_text(f'{unreadable_overlay}\n{world["overlay"]}\n', encoding='utf-8')
+        result = _stow(world, '--list', register_overlay=False)
+        assert result.returncode != 0
+        assert f'cannot resolve overlay: {unreadable_overlay}' in result.stderr
+
     def test_repeated_package_names_are_stowed_once(self, world: dict[str, Path]) -> None:
         """
         Test that naming a package twice selects it once

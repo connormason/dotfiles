@@ -141,6 +141,21 @@ class TestDotfilesLayers:
         assert result.returncode != 0
         assert 'overlay path must be absolute or ~/-relative: some/relative/overlay' in result.stderr
 
+    @pytest.mark.skipif(os.geteuid() == 0, reason='root ignores file permissions')
+    def test_unreadable_registry_fails(self, bash: BashRunner, env: dict[str, str]) -> None:
+        """
+        Test that an overlays registry that exists but cannot be read is an error, not an empty registry
+        """
+        registry = Path(env['DOTFILES_OVERLAYS_FILE'])
+        _register(env, '# overlays\n')
+        registry.chmod(0)
+        try:
+            result = bash('true')
+        finally:
+            registry.chmod(0o644)
+        assert result.returncode != 0
+        assert f'cannot read overlays registry: {registry}' in result.stderr
+
     def test_repo_root_is_canonical_through_symlink(
         self, shell: str, env: dict[str, str], tmp_path: Path,
     ) -> None:
@@ -199,6 +214,20 @@ class TestManifestFiles:
         result = bash(script)
         assert result.returncode != 0
         assert 'overlay not found' in result.stderr
+
+    def test_fails_on_unreadable_overlay(self, bash: BashRunner, unreadable_overlay: Path, tmp_path: Path) -> None:
+        """
+        Test that an overlay that exists but cannot be entered fails manifest_files instead of being skipped
+        """
+        readable = _overlay(tmp_path, 'readable')
+        (readable / 'bootstrap' / 'repos.txt').write_text('x\n', encoding='utf-8')
+        script = (
+            f'printf "%s\\n%s\\n" "{unreadable_overlay}" "{readable}" > "$DOTFILES_OVERLAYS_FILE"\n'
+            'manifest_files repos.txt'
+        )
+        result = bash(script)
+        assert result.returncode != 0
+        assert f'cannot resolve overlay: {unreadable_overlay}' in result.stderr
 
 
 class TestLayerEnv:
