@@ -24,9 +24,10 @@ test conventions). In addition:
 
 - **Private leak patterns must be installed** (`~/.config/dotfiles/leak-patterns.txt`, engine plan Task 1) before any
   task here starts. Every ported file passes `scripts/hooks/check-leaks.py` with those patterns.
-- **Overlay staging directory:** `~/.local/share/dotfiles-overlay-staging/` (outside every repository; never committed).
+- **Overlay staging directory:** `.superpowers/overlay-staging/` at the worktree root (git-excluded via
+  `.git/info/exclude`; never committed; worktree-isolated agents cannot write outside the worktree).
   Layout mirrors a future overlay: `stow/<overlay-pkg>/<$HOME-relative path>`, `render/<id>.json`,
-  `bootstrap/<file>`. Every move into staging is appended as one line to `~/.local/share/dotfiles-overlay-staging/STAGING.md`:
+  `bootstrap/<file>`. Every move into staging is appended as one line to `.superpowers/overlay-staging/STAGING.md`:
   `<source file:lines> -> <staging path> — <generic one-line reason>`. Staging is the Phase C input.
 - **Every zsh snippet must be safe when its tool is absent** (guard with `have`-style checks / `source_if_exists`), so
   `zsh -i -c exit` in an empty `$HOME` prints nothing to stderr.
@@ -713,7 +714,7 @@ drop any entry already in `bootstrap/Brewfile`. README: what the profile is, how
 - [ ] **Step 1:** Controller confirms with the user, then pushes `dev-env-base` and opens a PR (CI must be green:
   lint, leak guard, `pytest (macOS)` incl. integration + bootstrap dry-run). Per the user's preference, remove the
   local worktree after the PR is opened (keep the branch).
-- [ ] **Step 2:** Back up `~/.local/share/dotfiles-overlay-staging/` (it is the only copy of the Phase C input) — e.g.
+- [ ] **Step 2:** Back up `.superpowers/overlay-staging/` (it is the only copy of the Phase C input) — e.g.
   copy it into the work repo's working tree **outside git tracking**, or into a private location the user chooses.
 
 ---
