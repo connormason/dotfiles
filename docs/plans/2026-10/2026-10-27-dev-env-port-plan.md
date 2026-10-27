@@ -77,7 +77,8 @@ test conventions). In addition:
 **Interfaces:**
 
 - Produces: pytest fixture `home(tmp_path) -> Home` where `Home` is a dataclass with `path: Path`, `env: dict[str, str]`
-  (HOME, XDG dirs, `DOTFILES_OVERLAYS_FILE` registering `tests/fixtures/overlay`), and methods
+  (HOME and XDG dirs; `tests/fixtures/overlay` is registered by writing `$XDG_CONFIG_HOME/dotfiles/overlays`, the
+  default registry path, with `DOTFILES_OVERLAYS_FILE` removed from the environment), and methods
   `run(*cmd) -> CompletedProcess[str]` and `zsh(command) -> CompletedProcess[str]` (`zsh -i -c command` in that
   HOME). The fixture runs `stow.sh` and `render.py --force` once; later tasks add test methods only.
 
@@ -629,9 +630,9 @@ Every stage starts with the work-repo header pattern (`set -euo pipefail`, `HERE
 | `72-vscode`     | `72-vscode.sh`        | Read the union of `manifest_files vscode-extensions.txt`.                                                                                                                                                                  |
 | `80-repos`      | `80-repos.sh`         | Read `manifest_files repos.txt`; split each non-comment line on whitespace into `name url` (fixes the work repo's tab-only parsing bug); clone into `$HOME/name` if absent.                                                 |
 | `90-python`     | `90-python.sh`        | uv comes from the Brewfile (no installer fallback); install tools from the union of `manifest_files uv-tools.txt` with the same line syntax.                                                                              |
-| `95-dotfiles`   | `95-dotfiles.sh`      | `run "$REPO/stow.sh" --backup-conflicts`; keep the oh-my-zsh unattended install and plugin clones; delete the `.gitconfig.local` rendering (identity is static now).                                                     |
+| `95-dotfiles`   | `95-dotfiles.sh`      | Under `BOOTSTRAP_DRY_RUN=1` call `"$REPO/stow.sh" -n --backup-conflicts` directly (not via `run`): a read-only preview of what would be backed up and linked. Otherwise `run "$REPO/stow.sh" --backup-conflicts`. Keep the oh-my-zsh unattended install and plugin clones; delete the `.gitconfig.local` rendering (identity is static now). |
 | `96-iterm2`     | `70-iterm2.sh`        | Renumbered to run after `95-dotfiles` (fixes the work repo's ordering bug: the prefs folder must exist first).                                                                                                             |
-| `97-render`     | new                   | `try python3 "$REPO/scripts/dotfiles/render.py"`; on drift, warn with the `run.py render --diff` hint (bootstrap continues).                                                                                               |
+| `97-render`     | new                   | Under `BOOTSTRAP_DRY_RUN=1` run `python3 "$REPO/scripts/dotfiles/render.py" --check` directly (report only: a non-zero exit is a `warn`, never a stage failure). Otherwise run `render.py` and branch on its exit code: `0` ok; `1` (drift refused) → `warn` with the `run.py render --diff` hint and continue; `2` (bad fragment/registry or I/O error) → fail the stage. |
 
 Manifests:
 
@@ -680,8 +681,8 @@ Verify each id/cask name against the old `roles/macos/defaults/main.yml` (copy i
 drop any entry already in `bootstrap/Brewfile`. README: what the profile is, how to register it
 (`echo "$PWD/profiles/personal-mac" >> ~/.config/dotfiles/overlays`).
 
-- [ ] **Step 1:** Write the profile; `bash -c 'source bootstrap/lib.sh; DOTFILES_OVERLAYS_FILE=<tmp registry> manifest_files Brewfile'`
-  lists base then profile.
+- [ ] **Step 1:** Write the profile; `DOTFILES_OVERLAYS_FILE=<tmp registry> bash -c 'source bootstrap/lib.sh; manifest_files Brewfile'`
+  lists base then profile (the variable must be set before `lib.sh` is sourced, which resolves the layers).
 - [ ] **Step 2:** Commit `feat(profiles): personal-mac overlay`.
 
 ---
@@ -711,11 +712,16 @@ drop any entry already in `bootstrap/Brewfile`. README: what the profile is, how
 
 ### Task 12: Publish Phase A
 
-- [ ] **Step 1:** Controller confirms with the user, then pushes `dev-env-base` and opens a PR (CI must be green:
+Order matters: the staging directory lives inside the worktree (git-excluded, never committed), and Step 2 removes the
+worktree, so Step 1 backs staging up first. (These steps were previously in the opposite order.)
+
+- [ ] **Step 1:** Back up `.superpowers/overlay-staging/` (it is the only copy of the Phase C input) **before** the
+  worktree is removed: ask the user for a private location outside the worktree (e.g. the work repo's working tree,
+  outside git tracking), confirm it with them, copy staging there, and verify the copy (file count and `STAGING.md`
+  present) before continuing.
+- [ ] **Step 2:** Controller confirms with the user, then pushes `dev-env-base` and opens a PR (CI must be green:
   lint, leak guard, `pytest (macOS)` incl. integration + bootstrap dry-run). Per the user's preference, remove the
-  local worktree after the PR is opened (keep the branch).
-- [ ] **Step 2:** Back up `.superpowers/overlay-staging/` (it is the only copy of the Phase C input) — e.g.
-  copy it into the work repo's working tree **outside git tracking**, or into a private location the user chooses.
+  local worktree after the PR is opened (keep the branch); only after Step 1's backup is verified.
 
 ---
 
@@ -730,7 +736,12 @@ These steps run on the personal MacBook after the Phase A PR merges. They are a 
   `find ~ -maxdepth 4 -type l -lname '*dotfiles*' 2>/dev/null` and the old `~/.zshrc` / `~/.p10k.zsh` / `~/.gitconfig`.
   Copy them to `~/.dotfiles-backup/pre-base/`, then remove the links.
 - [ ] **B3. Bootstrap:** `~/dotfiles-personal/bootstrap/bootstrap.sh --dry-run`, review, then
-  `~/dotfiles-personal/bootstrap/bootstrap.sh --verify`. Resolve every doctor failure.
+  `~/dotfiles-personal/bootstrap/bootstrap.sh --verify`. Resolve every doctor failure. The dry run includes the stow
+  backup preview (`stow: would back up existing …` from `95-dotfiles`) and the render check (`97-render`), so review
+  both before the real run. An existing VS Code `settings.json` written as JSONC (comments, trailing commas) is refused
+  by `render.py` as invalid JSON; `run.py render --force vscode` backs it up to `~/.dotfiles-backup/<timestamp>/` and
+  replaces it with the rendered JSON, which drops the comments (move anything worth keeping into `render/vscode.json`
+  first).
 - [ ] **B4. Verify:** new terminal (clean, fast); `git config user.email` inside `~/dotfiles-personal` is the personal
   identity; `ssh -G nas | grep -i '^hostname'` resolves through `~/.ssh/config.d/personal`; Claude Code starts and logs
   in; VS Code opens with base settings.

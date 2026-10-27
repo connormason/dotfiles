@@ -63,7 +63,7 @@ dotfiles-personal/
     Brewfile uv-tools.txt vscode-extensions.txt repos.txt
   render/                   base JSON fragments: claude.json, vscode.json
   profiles/personal-mac/    in-repo overlay (personal-only Brewfile)
-  run.py                    dev/test/doctor/render/snapshot tooling + NAS inventory/vault commands
+  run.py                    dev/test/doctor/render tooling + NAS inventory/vault commands
   roles/ playbooks/ library/ services/   NAS only (unchanged)
   tests/
 ```
@@ -123,15 +123,17 @@ order.
 Git ignores missing include files, so a machine without an overlay needs nothing extra. (`hasconfig:remote.*.url`
 requires git 2.36+; Homebrew git satisfies this, and `doctor` checks it.)
 
-### Render tool (`run.py render`, bootstrap stage `90-render`)
+### Render tool (`run.py render`, bootstrap stage `97-render`)
 
 - **Targets:** `claude` → `~/.claude/settings.json`; `vscode` → `~/Library/Application Support/Code/User/settings.json`.
 - **Merge** (base, then overlays in order): objects deep-merge; arrays concatenate with order-preserving de-duplication;
   for scalars the later layer wins; an explicit `null` deletes the key.
 - **Output:** deterministic pretty JSON (sorted keys, 2-space indent, trailing newline).
-- **Drift guard:** the SHA-256 of the last render is stored in `~/.local/state/dotfiles/render/<id>.sha256`. If the live
-  file differs from it (edited in-app), `render` refuses, prints the live-vs-last-render diff, and exits non-zero.
-  `render --diff` previews; `render --force` backs the live file up to `~/.dotfiles-backup/<timestamp>/` and overwrites.
+- **Drift guard:** the last managed render (the managed keys as JSON, mode `0600`) is stored in
+  `${XDG_STATE_HOME:-~/.local/state}/dotfiles/render/<id>.json`. If the live file's managed content differs from both
+  that state and the new render (edited in-app), `render` refuses, prints the live-vs-last-render diff, and exits
+  non-zero. `render --diff` previews; `render --force` backs the live file up to `~/.dotfiles-backup/<timestamp>/` and
+  overwrites.
 - **Claude specifics:** `CLAUDE.md` stays generic, and employer-specific instructions become overlay `rules/*.md`
   (user-level rules auto-load). Hook commands use `$HOME`, never an absolute home path. The base fragment enables public
   plugin marketplaces; an overlay fragment may add others and disable duplicates via `false`/`null`.
@@ -154,7 +156,8 @@ Bootstrap stages cover a generic SSH key, Homebrew with `brew bundle` over all B
 repos from `repos.txt`, stow, render, and verify.
 
 `run.py` gains the work repo's generic commands (`doctor`, `status`, `bootstrap`, `test-*`, the hook commands, manifest
-dumps, `report`, `backup`) plus `render` and `snapshot`. The NAS inventory/vault commands stay.
+dumps, `report`, `backup`) plus `render`. `snapshot`, which the Phase D safeguards use, is owned by the Phase C plan
+(work repo). The NAS inventory/vault commands stay.
 
 **Removed:** the Ansible roles `iterm`, `python`, `starship`, `hammerspoon`, `macos`, `macos_settings`, `macos_dock`,
 `link_dotfile`, plus `playbooks/local_bootstrap.yml` and `local_bootstrap.sh`. Roles shared with the NAS playbook
@@ -173,15 +176,19 @@ Phases C and D are planned in the work repository, the only place that can name 
 
 **Phase D safeguards** (requirements on that plan):
 
-1. `run.py snapshot` before cutover records:
+1. `run.py snapshot` (built by the Phase C plan in the work repo; this base does not ship it) before cutover records:
    - the resolved-content hash of every managed `$HOME` path
    - a `zsh -i` dump of the environment, `PATH`, `fpath`, aliases, and function names
    - `git config --list`
    - `ssh -G` for key hosts
    - the parsed rendered JSON
 2. A `stow -n` dry run of base + overlay reports zero conflicts.
-3. Cutover happens with a spare terminal open: tag the work repo `pre-overlay`, unstow the old packages, stow the new
-   ones, render.
+3. Cutover happens with a spare terminal open: tag the work repo `pre-overlay`, unstow the old packages (`stow -D`),
+   stow the new ones, render. The unstow must come **before** the new layers are stowed: the old work repo's stow
+   folded whole directories into single symlinks pointing into that repo, and if they are still present the new
+   `stow.sh --backup-conflicts` classifies each one as a foreign symlink and moves it into `~/.dotfiles-backup/`,
+   emptying those directories in `$HOME`. Relative foreign symlinks also break once moved inside the backup directory
+   (they resolve against their new location), so the backup is no restore source for them.
 4. Re-snapshot and diff. The diff must be empty or match an explicit allowlist; otherwise, roll back.
 5. Smoke tests:
    - a new terminal opens

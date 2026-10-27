@@ -40,13 +40,14 @@ the render with a warning on stderr.
 
 ### Drift guard
 
-The last managed render is stored as `${XDG_STATE_HOME:-~/.local/state}/dotfiles/render/<target>.json`. A missing,
-empty, corrupt, or non-object state file is treated as absent (with a warning on stderr), so it can never wedge a
-render. Drift means the live managed content differs from **both** the stored last render and the new render. A drifted
-target is refused (with a diff on stderr) unless `--force` is given, which first copies the live file to
-`~/.dotfiles-backup/<YYYYmmdd-HHMMSS>/<path relative to HOME>` (directories `0700`, files `0600`; no backup is made when
-there is no drift). A live file that is not valid JSON, or is valid JSON but not an object, is refused with a matching
-message. A pre-existing file equal to the new render is adopted without `--force`.
+The last managed render is stored as `${XDG_STATE_HOME:-~/.local/state}/dotfiles/render/<target>.json`. A missing state
+file is treated as absent silently (the normal first-render case); an empty, corrupt, unreadable, or non-object one is
+treated as absent with a warning on stderr, so it can never wedge a render. Drift means the live managed content differs
+from **both** the stored last render and the new render. A drifted target is refused (with a diff on stderr) unless
+`--force` is given, which first copies the live file to `~/.dotfiles-backup/<YYYYmmdd-HHMMSS>/<path relative to HOME>`
+(directories `0700`, files `0600`; no backup is made when there is no drift). A live file that is not valid JSON, or is
+valid JSON but not an object, is refused with a matching message. A pre-existing file equal to the new render is adopted
+without `--force`.
 
 ### Writes
 

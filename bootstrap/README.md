@@ -50,6 +50,9 @@ exercises every stage under bash 3.2) with these exported:
 | `DOTFILES_REPO`     | Root of the base layer (this repository)      |
 | `DOTFILES_LAYER`    | Root of the layer the stage itself comes from |
 
+Base stages source the helpers with `source "$HERE/lib.sh"`. An overlay stage lives outside this repository, so it must
+source them through the exported base root: `source "$DOTFILES_REPO/bootstrap/lib.sh"`.
+
 ## Stages
 
 | Stage        | Purpose                            | Layer |
