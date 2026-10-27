@@ -66,6 +66,7 @@ class LeakGuardError(Exception):
     """
     Raised for configuration or environment failures (bad pattern file, unavailable git identity).
     """
+    pass
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,7 @@ def style(text: Any = '', *, fg: str | None = None, bold: bool | None = None, di
         bits.append(f'\033[{1 if bold else 22}m')
     if dim is not None:
         bits.append(f'\033[{2 if dim else 22}m')
+
     bits.append(str(text))
     bits.append(ANSI_RESET_ALL)
     return ''.join(bits)
@@ -176,11 +178,11 @@ class Args(argparse.Namespace):
     """
     :class:`argparse.Namespace` annotated with args supported by this script.
     """
-    filenames:       Sequence[str]  # positional arg(s)
-    identity:        bool
-    identities_from: str | None
-    patterns_file:   str | None
-    verbose:         bool
+    filenames:       Sequence[str]      # positional arg(s) "FILENAMES"
+    identity:        bool               # --identity
+    identities_from: str | None         # --identities-from
+    patterns_file:   str | None         # --patterns-file
+    verbose:         bool               # --verbose
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:
@@ -203,7 +205,11 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
         Register the positional arguments group on the parser.
         """
         positional_args = parser.add_argument_group('Positional arguments')
-        positional_args.add_argument('filenames', nargs='*', help='Files whose paths and contents are scanned')
+        positional_args.add_argument(
+            'filenames',
+            nargs='*',
+            help='Files whose paths and contents are scanned',
+        )
     add_positional_args()
 
     def add_identity_opts() -> None:
@@ -243,7 +249,12 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
         Register the output options group on the parser.
         """
         output_opts = parser.add_argument_group('Output options')
-        output_opts.add_argument('-v', '--verbose', action='store_true', help='Report clean results too')
+        output_opts.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Report clean results too',
+        )
     add_output_opts()
 
     def add_other_opts() -> None:
@@ -314,7 +325,11 @@ def load_patterns(patterns_file: Path | None, *, required: bool) -> list[re.Patt
                 lines = patterns_file.read_text(encoding='utf-8').splitlines()
             except (OSError, UnicodeDecodeError) as exc:
                 raise LeakGuardError(f'Unable to read {folduser(patterns_file)}: {exc!s}') from exc
-            sources.extend(line.strip() for line in lines if line.strip() and not line.lstrip().startswith('#'))
+            else:
+                sources.extend(
+                    line.strip() for line in lines
+                    if line.strip() and not line.lstrip().startswith('#')
+                )
 
     compiled: list[re.Pattern[str]] = []
     for source in sources:
@@ -324,6 +339,7 @@ def load_patterns(patterns_file: Path | None, *, required: bool) -> list[re.Patt
             raise LeakGuardError(f'Invalid pattern {mask(source)!r}: {exc!s}') from exc
         if compiled[-1].search(''):
             raise LeakGuardError(f'Pattern {mask(source)!r} matches the empty string (it would flag every line)')
+
     return compiled
 
 
@@ -366,14 +382,22 @@ def scan_file(path: Path, patterns: Sequence[re.Pattern[str]]) -> list[Finding]:
     :raises OSError: if the file cannot be read
     :return: findings, path matches first (line 0)
     """
-    findings = [Finding(str(path), 0, match.group(0)) for pattern in patterns for match in pattern.finditer(str(path))]
+    findings: list[Finding] = [
+        Finding(str(path), 0, match.group(0))
+        for pattern in patterns
+        for match in pattern.finditer(str(path))
+    ]
 
     data = path.read_bytes()
     if b'\0' in data[:BINARY_SNIFF_BYTES]:
         return findings
 
     text = data.decode('utf-8', errors='replace')
-    findings.extend(Finding(str(path), lineno, match) for lineno, match in scan_text(text, patterns))
+    findings.extend(
+        Finding(str(path), lineno, match)
+        for lineno, match in scan_text(text, patterns)
+    )
+
     return findings
 
 
@@ -385,13 +409,16 @@ def git_identities() -> list[str]:
     :return: ``Name <email>`` strings for the author and committer
     """
     identities: list[str] = []
+
     for var in ('GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT'):
         result = subprocess.run(['git', 'var', var], capture_output=True, text=True, check=False)
         if result.returncode != 0:
             raise LeakGuardError(f'git var {var} failed: {result.stderr.strip()}')
+
         ident = result.stdout.strip()
         match = IDENT_RE.match(ident)
         identities.append(match.group('ident') if match else ident)
+
     return identities
 
 
@@ -432,7 +459,9 @@ def report(findings: Sequence[Finding], patterns: Sequence[re.Pattern[str]]) -> 
                 label = 'identity'
             else:
                 label = 'path'
+
             printf(f'{label}: internal identifier {mask(item.match)}', fg='bright_red', indent=8)
+
         if len(items) > MAX_FINDINGS_PER_FILE:
             printf(f'... and {len(items) - MAX_FINDINGS_PER_FILE} more', dim=True, indent=8)
 
@@ -473,6 +502,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except LeakGuardError as exc:
             printf(f'{ERROR}   {exc!s}')
             return 2
+
     if args.identities_from:
         try:
             if args.identities_from == '-':
@@ -482,6 +512,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (OSError, UnicodeDecodeError) as exc:
             printf(f'{ERROR}   Unable to read identities: {mask_matches(str(exc), patterns)}')
             return 2
+
     findings.extend(scan_identities(identities, patterns))
 
     if findings:

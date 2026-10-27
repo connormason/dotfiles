@@ -1,6 +1,8 @@
 name: gitleaks
 on: [pull_request, push, workflow_dispatch]
+
 jobs:
+
   scan:
     name: gitleaks
     runs-on: ubuntu-latest
@@ -12,6 +14,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_NOTIFY_USER_LIST: "@connormason"
+
   leak-guard:
     name: leak guard
     runs-on: ubuntu-latest
@@ -20,10 +23,12 @@ jobs:
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
+
       # The runner has no git identity, so the script is called directly instead of through prek's --identity hook
       - name: Scan tracked files
         shell: bash
         run: git ls-files -z | xargs -0 uv run --no-project scripts/hooks/check-leaks.py --
+
       # Commit messages are scanned only for new commits (the pushed or PR range): older history predates the guard.
       # A new-branch push (all-zero or unreachable "before" SHA) and workflow_dispatch fall back to the tip commit
       - name: Scan new commit messages
@@ -45,6 +50,7 @@ jobs:
             git log -1 --format=%B "$GITHUB_SHA" > "$RUNNER_TEMP/commit-messages.txt"
           fi
           uv run --no-project scripts/hooks/check-leaks.py "$RUNNER_TEMP/commit-messages.txt"
+
       # Identities of every reachable commit (history already passes the baseline)
       - name: Scan commit identities
         shell: bash

@@ -25,8 +25,9 @@ def _load_module() -> ModuleType:
     Import the hyphenated hook script as module ``check_leaks``
     """
     spec = importlib.util.spec_from_file_location('check_leaks', SCRIPT_PATH)
-    assert spec is not None
+    assert spec        is not None
     assert spec.loader is not None
+
     module = importlib.util.module_from_spec(spec)
     sys.modules['check_leaks'] = module
     spec.loader.exec_module(module)
@@ -128,6 +129,7 @@ class TestPrivatePatterns:
         """
         patterns_file = tmp_path / 'leak-patterns.txt'
         patterns_file.write_text('# internal tools\n\nsecret-tool\n', encoding='utf-8')
+
         patterns = check_leaks.load_patterns(patterns_file, required=True)
         assert len(patterns) == len(check_leaks.BASELINE_PATTERNS) + 1
         assert check_leaks.scan_text('runs Secret-Tool nightly', patterns) == [(1, 'Secret-Tool')]
@@ -212,9 +214,12 @@ class TestScanFile:
         """
         patterns_file = tmp_path / 'leak-patterns.txt'
         patterns_file.write_text('secret-tool\n', encoding='utf-8')
+
         patterns = check_leaks.load_patterns(patterns_file, required=True)
+
         target = tmp_path / 'secret-tool.txt'
         target.write_text('clean\n', encoding='utf-8')
+
         findings = check_leaks.scan_file(target, patterns)
         assert [(f.line, f.match) for f in findings] == [(0, 'secret-tool')]
 
@@ -224,6 +229,7 @@ class TestScanFile:
         """
         target = tmp_path / 'notes.md'
         target.write_text(f'clean\nmail jane@{CORP_DOMAIN}\n', encoding='utf-8')
+
         findings = check_leaks.scan_file(target, baseline)
         assert [(f.line, f.match) for f in findings] == [(2, CORP_DOMAIN)]
 
@@ -246,7 +252,7 @@ class TestIdentity:
         Pin a personal author and committer identity for git var
         """
         for role in ('AUTHOR', 'COMMITTER'):
-            monkeypatch.setenv(f'GIT_{role}_NAME', 'Jane Doe')
+            monkeypatch.setenv(f'GIT_{role}_NAME',  'Jane Doe')
             monkeypatch.setenv(f'GIT_{role}_EMAIL', 'jane@example.org')
         return monkeypatch
 
@@ -303,9 +309,10 @@ class TestOutput:
         target = tmp_path / 'many.txt'
         target.write_text(''.join(f'jane{i}@{CORP_DOMAIN}\n' for i in range(7)), encoding='utf-8')
         assert check_leaks.main([str(target)]) == 1
+
         out = capsys.readouterr().out
         assert CORP_DOMAIN not in out
-        assert 'and 2 more' in out
+        assert 'and 2 more'    in out
 
     def test_report_masks_matches_in_path(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """
@@ -313,6 +320,7 @@ class TestOutput:
         """
         target = tmp_path / f'jane@{CORP_DOMAIN}.txt'
         target.write_text('clean\n', encoding='utf-8')
+
         assert check_leaks.main([str(target)]) == 1
         assert CORP_DOMAIN not in capsys.readouterr().out
 
