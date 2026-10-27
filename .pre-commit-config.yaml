@@ -341,10 +341,16 @@ repos:
         name: "[fix]    trailing whitespace"
         stages: [pre-commit]
         priority: 23
+        # These pre-commit reference docs: mdformat-config re-wraps long YAML code-block scalars with a trailing space,
+        # so the two hooks would fight forever; mdformat owns those files
         exclude: |
           (?x)(
               ^.gitignore|
-              .config/istat_menus.ismp
+              .config/istat_menus.ismp|
+              ^stow/claude/\.claude/skills/pre-commit-analysis/references/hook-catalog\.md$|
+              ^stow/claude/\.claude/skills/pre-commit-migration/references/migration-guide\.md$|
+              ^stow/claude/\.claude/skills/pre-commit-setup/references/hook-catalog\.md$|
+              ^stow/claude/\.claude/skills/pre-commit-setup/references/pre-commit-comprehensive\.md$
           )
 
   # ========================================================================================

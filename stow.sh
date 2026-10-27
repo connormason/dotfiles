@@ -146,13 +146,14 @@ done
 # Ownership: every $HOME-relative path belongs to exactly one package (across all packages, not just selected ones), and
 # no package provides a file at a path another package uses as a directory.
 # The prune list and root-level ignores mirror stow's built-in ignore list (Stow.pm, __DATA__): file names such as
-# README.md only count as ignored at the package root, and only an exact COPYING is ignored there.
+# README.md only count as ignored at the package root, and only an exact COPYING is ignored there. .DS_Store and
+# .backups/ (editor-hook backup directories) are pruned everywhere, matching the --ignore flags passed to stow below.
 # ---------------------------------------------------------------------------------------------------------------------
 package_files() { # $1=index: $HOME-relative paths the package provides, honoring stow's default ignores
     (
         cd "${PKG_LAYERS[$1]}/stow/${PKG_NAMES[$1]}" &&
-            find . \( -name .git -o -name .gitignore -o -name .gitmodules -o -name .DS_Store -o -name RCS -o -name CVS \
-                -o -name .cvsignore -o -name .svn -o -name _darcs -o -name .hg -o -name '?*,v' -o -name '?*~' \
+            find . \( -name .git -o -name .gitignore -o -name .gitmodules -o -name .DS_Store -o -name .backups \
+                -o -name RCS -o -name CVS -o -name .cvsignore -o -name .svn -o -name _darcs -o -name .hg -o -name '?*,v' -o -name '?*~' \
                 -o -name '.#?*' -o -name '#*#' \) -prune -o \( -type f -o -type l \) -print |
             sed 's|^\./||' | grep -v -E '^(README.*|LICENSE.*|COPYING)$' || true
     )
@@ -263,8 +264,8 @@ run_layer() { # $1=layer, $2=simulate (1|0): sets LAYER_OUT and LAYER_RC
     fi
     load_pkgs "$1"
     LAYER_RC=0
-    LAYER_OUT="$(stow --dir "$1/stow" --target "$HOME" --no-folding --ignore='\.DS_Store' --restow \
-        ${VERBOSE[@]+"${VERBOSE[@]}"} ${mode[@]+"${mode[@]}"} "${PKGS[@]}" 2>&1)" ||
+    LAYER_OUT="$(stow --dir "$1/stow" --target "$HOME" --no-folding --ignore='\.DS_Store' --ignore='\.backups' \
+        --restow ${VERBOSE[@]+"${VERBOSE[@]}"} ${mode[@]+"${mode[@]}"} "${PKGS[@]}" 2>&1)" ||
         LAYER_RC=$?
 }
 

@@ -14,7 +14,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TREES     = ('stow', 'render', 'profiles', 'tests/fixtures')
-NOISE     = ('.DS_Store', '__pycache__', '.pyc')
+NOISE     = ('.DS_Store', '__pycache__', '.pyc', '/.backups/')
 
 pytestmark = pytest.mark.skipif(shutil.which('git') is None, reason='git not installed')
 

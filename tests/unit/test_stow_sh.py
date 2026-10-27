@@ -329,6 +329,17 @@ class TestOwnership:
         assert not (world['home'] / '.DS_Store').exists()
         assert not (world['home'] / '.config' / 'app' / '.DS_Store').exists()
 
+    def test_backups_directories_are_ignored_everywhere(self, world: dict[str, Path]) -> None:
+        """
+        Test that .backups directories neither collide across packages nor get linked
+        """
+        _pkg(world['repo'], 'a-pkg', {'.claude/.backups/CLAUDE.md.1.bak': 'a', '.claude/CLAUDE.md': 'a'})
+        _pkg(world['overlay'], 'b-pkg', {'.claude/.backups/CLAUDE.md.1.bak': 'b', '.claude/rules/r.md': 'b'})
+        result = _stow(world)
+        assert result.returncode == 0, result.stderr
+        assert (world['home'] / '.claude' / 'CLAUDE.md').is_symlink()
+        assert not (world['home'] / '.claude' / '.backups').exists()
+
     def test_copying_txt_at_package_root_is_counted_but_copying_is_not(self, world: dict[str, Path]) -> None:
         """
         Test that only an exact COPYING at the package root is ignored, matching stow's built-in rules

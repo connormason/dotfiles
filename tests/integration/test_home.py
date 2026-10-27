@@ -209,6 +209,98 @@ class TestPythonNode:
         assert '/Users/' not in text
 
 
+class TestClaude:
+    """
+    Tests for the claude package and render fragment
+    """
+    @staticmethod
+    def _settings(home: Home) -> dict[str, object]:
+        """
+        Load the rendered Claude settings
+        """
+        return json.loads((home.path / '.claude' / 'settings.json').read_text(encoding='utf-8'))
+
+    @staticmethod
+    def _hook_commands(settings: dict[str, object]) -> list[str]:
+        """
+        Every hook command in the rendered settings
+        """
+        hooks = settings.get('hooks', {})
+        assert isinstance(hooks, dict)
+        return [hook['command'] for groups in hooks.values() for group in groups for hook in group['hooks']]
+
+    def test_settings_hooks_use_home_relative_paths(self, home: Home) -> None:
+        """
+        Test that no rendered hook command embeds an absolute home path
+        """
+        text = (home.path / '.claude' / 'settings.json').read_text(encoding='utf-8')
+        assert '/Users/' not in text
+
+    def test_hook_scripts_exist_for_every_hook(self, home: Home) -> None:
+        """
+        Test that every $HOME path in a rendered hook command, interpreter-prefixed or not, points at a stowed script
+        """
+        scripts = [
+            Path(token.strip('"').replace('$HOME', str(home.path), 1))
+            for command in self._hook_commands(self._settings(home))
+            for token in command.split()
+            if token.strip('"').startswith('$HOME/')
+        ]
+        assert scripts, 'no home-relative hook commands rendered'
+        missing = [str(script) for script in scripts if not script.is_file()]
+        assert missing == []
+
+    def test_direct_hook_commands_are_executable(self, home: Home) -> None:
+        """
+        Test that hook commands run without an interpreter prefix point at executable files
+        """
+        direct = [
+            Path(command.split()[0].strip('"').replace('$HOME', str(home.path), 1))
+            for command in self._hook_commands(self._settings(home))
+            if command.startswith('$HOME/')
+        ]
+        assert direct
+        assert [str(script) for script in direct if not os.access(script, os.X_OK)] == []
+
+    def test_base_settings_carry_no_overlay_only_keys(self, home: Home) -> None:
+        """
+        Test that keys the work overlay owns are absent when only the base and fixture overlay are rendered
+        """
+        settings = self._settings(home)
+        for key in ('apiKeyHelper', 'statusLine', 'enabledPlugins', 'extraKnownMarketplaces', 'mcpServers'):
+            assert key not in settings, key
+
+    def test_spinner_verbs_are_unique(self, home: Home) -> None:
+        """
+        Test that the rendered spinner verbs contain no duplicates
+        """
+        spinner = self._settings(home)['spinnerVerbs']
+        assert isinstance(spinner, dict)
+        verbs = spinner['verbs']
+        assert verbs
+        assert len(verbs) == len(set(verbs))
+
+    def test_claude_alias_without_ca_override(self, home: Home) -> None:
+        """
+        Test that the shell snippet defines the claude alias and leaves the Node CA bundle to overlays
+        """
+        result = home.zsh('alias cl; print -r -- "ca=${NODE_EXTRA_CA_CERTS-unset}"')
+        assert result.returncode == 0, result.stderr
+        assert result.stderr == ''
+        assert 'claude' in result.stdout
+        assert 'ca=unset' in result.stdout
+
+    def test_cleanup_script_runs_dry(self, home: Home) -> None:
+        """
+        Test that the stowed cleanup script completes a dry run in an empty Claude directory
+        """
+        script = home.path / '.claude' / 'scripts' / 'dotclaude-cleanup.sh'
+        assert script.is_symlink()
+        result = home.run('bash', str(script), '--dry-run')
+        assert result.returncode == 0, result.stderr
+        assert 'DRY RUN complete' in result.stdout
+
+
 class TestGit:
     """
     Tests for per-remote git identity

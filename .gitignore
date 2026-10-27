@@ -405,3 +405,6 @@ vault_password.txt
 .ansible/.lock
 .tmp/
 .claude/settings.local.json
+
+# Timestamped backups written by the Claude Code settings-backup hook next to edited CLAUDE.md / .claude/*.md files
+.backups/
