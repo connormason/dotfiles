@@ -1846,7 +1846,8 @@ git commit -m "feat(bootstrap): layered stage driver merging stages across overl
   - `merge(base: object, overlay: object) -> object`
   - `layers(repo: Path) -> list[Path]` — lib.sh output is routed to stderr; non-absolute lines are rejected
   - `prepare(target: str, roots: Sequence[Path]) -> Prepared | None` — find + compose one target's fragments
-  - `atomic_write(path: Path, text: str, default_mode: int) -> None` — temp file + `Path.replace`, mode preserved
+  - `atomic_write(path: Path, text: str, default_mode: int, *, preserve_mode: bool = True) -> None` — temp file +
+    `Path.replace`; the replaced file's mode is preserved unless `preserve_mode=False` (state files are always 0600)
   - `compose(fragments: Sequence[Path]) -> tuple[dict[str, object], list[str]]` — merged managed settings + the
     unmanaged top-level keys
   - `dumps(data: object) -> str` — deterministic JSON text (sorted keys, 2-space indent, trailing newline)
@@ -2282,6 +2283,27 @@ class TestResilientState:
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'edited'}
 
 
+    @pytest.mark.skipif(os.geteuid() == 0, reason='root ignores file permissions')
+    def test_unreadable_state_is_repaired(self, world: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that an unreadable state file is rewritten 0600 so later renders are not refused as drift
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
+        state.parent.mkdir(parents=True)
+        state.write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
+        state.chmod(0o000)
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
+        assert _run(world, 'claude') == 0
+        assert 'state' in capsys.readouterr().err
+        assert stat.S_IMODE(state.stat().st_mode) == 0o600
+        assert state.read_text(encoding='utf-8') == render.dumps({'theme': 'dark'})
+        _fragment(world['repo'], 'claude', {'theme': 'light'})
+        assert _run(world, 'claude') == 0
+        assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'light'}
+
+
 class TestIoErrors:
     """
     Tests that I/O problems exit 2 with an error line instead of a traceback
@@ -2467,6 +2489,7 @@ path. A drift guard refuses to overwrite edits made in the app since the last re
 from __future__ import annotations
 
 import argparse
+import contextlib
 import difflib
 import functools
 import json
@@ -2746,21 +2769,22 @@ def read_state(state: Path) -> dict[str, object] | None:
     return data
 
 
-def atomic_write(path: Path, text: str, default_mode: int) -> None:
+def atomic_write(path: Path, text: str, default_mode: int, *, preserve_mode: bool = True) -> None:
     """
     Write text to path through a temp file in the same directory and ``os.replace``.
 
-    An existing file's mode is preserved; for a symlink the mode of its target is used. A symlink itself is replaced,
-    never written through.
+    With ``preserve_mode`` an existing file's mode is kept; for a symlink the mode of its target is used. A symlink
+    itself is replaced, never written through.
 
     :param path: destination path
     :param text: file content
-    :param default_mode: mode used when no existing file supplies one
+    :param default_mode: mode used when no existing file supplies one (or when ``preserve_mode`` is false)
+    :param preserve_mode: copy the mode of the file being replaced; disable for files this script owns outright
     """
-    try:
-        mode = stat.S_IMODE(path.stat().st_mode)
-    except OSError:
-        mode = default_mode
+    mode = default_mode
+    if preserve_mode:
+        with contextlib.suppress(OSError):
+            mode = stat.S_IMODE(path.stat().st_mode)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
     tmp = Path(tmp_name)
@@ -2881,7 +2905,7 @@ def render_target(prepared: Prepared, *, mode: str, force: bool) -> int:
         info(f'{target}: rendered {dest}')
     elif VERBOSE:
         info(f'{target}: already current')
-    atomic_write(state, new_text, DEFAULT_STATE_MODE)
+    atomic_write(state, new_text, DEFAULT_STATE_MODE, preserve_mode=False)
     return 0
 
 

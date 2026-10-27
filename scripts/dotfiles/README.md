@@ -50,8 +50,9 @@ message. A pre-existing file equal to the new render is adopted without `--force
 ### Writes
 
 The target and its state file are written atomically through a temp file in the same directory followed by a replace. An
-existing file's mode is preserved. A symlink at the target is replaced by a real file (the symlink's target is never
-written); the former link destination is reported and the mode of the link's target is inherited when it exists.
+existing target's mode is preserved; the state file is always written 0600, which also repairs an unreadable one. A
+symlink at the target is replaced by a real file (the symlink's target is never written); the former link destination is
+reported and the mode of the link's target is inherited when it exists.
 
 All requested targets are composed and validated before any is written: one malformed fragment exits `2` with nothing
 rendered.

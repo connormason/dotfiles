@@ -12,6 +12,7 @@ path. A drift guard refuses to overwrite edits made in the app since the last re
 from __future__ import annotations
 
 import argparse
+import contextlib
 import difflib
 import functools
 import json
@@ -291,21 +292,22 @@ def read_state(state: Path) -> dict[str, object] | None:
     return data
 
 
-def atomic_write(path: Path, text: str, default_mode: int) -> None:
+def atomic_write(path: Path, text: str, default_mode: int, *, preserve_mode: bool = True) -> None:
     """
     Write text to path through a temp file in the same directory and ``os.replace``.
 
-    An existing file's mode is preserved; for a symlink the mode of its target is used. A symlink itself is replaced,
-    never written through.
+    With ``preserve_mode`` an existing file's mode is kept; for a symlink the mode of its target is used. A symlink
+    itself is replaced, never written through.
 
     :param path: destination path
     :param text: file content
-    :param default_mode: mode used when no existing file supplies one
+    :param default_mode: mode used when no existing file supplies one (or when ``preserve_mode`` is false)
+    :param preserve_mode: copy the mode of the file being replaced; disable for files this script owns outright
     """
-    try:
-        mode = stat.S_IMODE(path.stat().st_mode)
-    except OSError:
-        mode = default_mode
+    mode = default_mode
+    if preserve_mode:
+        with contextlib.suppress(OSError):
+            mode = stat.S_IMODE(path.stat().st_mode)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
     tmp = Path(tmp_name)
@@ -426,7 +428,7 @@ def render_target(prepared: Prepared, *, mode: str, force: bool) -> int:
         info(f'{target}: rendered {dest}')
     elif VERBOSE:
         info(f'{target}: already current')
-    atomic_write(state, new_text, DEFAULT_STATE_MODE)
+    atomic_write(state, new_text, DEFAULT_STATE_MODE, preserve_mode=False)
     return 0
 
 

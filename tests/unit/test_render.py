@@ -404,6 +404,27 @@ class TestResilientState:
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'edited'}
 
 
+    @pytest.mark.skipif(os.geteuid() == 0, reason='root ignores file permissions')
+    def test_unreadable_state_is_repaired(self, world: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that an unreadable state file is rewritten 0600 so later renders are not refused as drift
+        """
+        _fragment(world['repo'], 'claude', {'theme': 'dark'})
+        state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
+        state.parent.mkdir(parents=True)
+        state.write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
+        state.chmod(0o000)
+        _claude(world).parent.mkdir(parents=True)
+        _claude(world).write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
+        assert _run(world, 'claude') == 0
+        assert 'state' in capsys.readouterr().err
+        assert stat.S_IMODE(state.stat().st_mode) == 0o600
+        assert state.read_text(encoding='utf-8') == render.dumps({'theme': 'dark'})
+        _fragment(world['repo'], 'claude', {'theme': 'light'})
+        assert _run(world, 'claude') == 0
+        assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'light'}
+
+
 class TestIoErrors:
     """
     Tests that I/O problems exit 2 with an error line instead of a traceback
