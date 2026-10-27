@@ -20,6 +20,7 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(shutil.which('stow') is None, reason='GNU Stow not installed'),
     pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh not installed'),
+    pytest.mark.skipif(shutil.which('git') is None, reason='git not installed'),
 ]
 
 
@@ -59,6 +60,7 @@ def home(tmp_path_factory: pytest.TempPathFactory) -> Home:
         'HOME': str(path),
         'PATH': os.environ['PATH'],
         'TERM': 'dumb',
+        'GIT_CONFIG_NOSYSTEM': '1',  # keep the machine's system gitconfig out of git assertions
         'XDG_CONFIG_HOME': str(path / '.config'),
         'XDG_STATE_HOME': str(path / '.local' / 'state'),
         'XDG_DATA_HOME': str(path / '.local' / 'share'),
@@ -154,3 +156,38 @@ class TestShell:
         )
         assert result.returncode == 0
         assert result.stderr == ''
+
+
+class TestGit:
+    """
+    Tests for per-remote git identity
+    """
+    def _repo(self, home: Home, name: str, remote: str) -> Path:
+        """
+        Create a repo with an origin remote inside HOME
+        """
+        repo = home.path / name
+        home.run('git', 'init', '-q', '--template=', str(repo))
+        home.run('git', '-C', str(repo), 'remote', 'add', 'origin', remote)
+        return repo
+
+    def test_personal_remote_uses_personal_identity(self, home: Home) -> None:
+        """
+        Test that a personal GitHub remote overrides the overlay's default identity
+        """
+        repo = self._repo(home, 'personal', 'git@github.com:connormason/example.git')
+        assert home.run('git', 'config', 'user.email', cwd=repo).stdout.strip() == 'connor@conmason.com'
+
+    def test_personal_https_remote_uses_personal_identity(self, home: Home) -> None:
+        """
+        Test that a personal HTTPS GitHub remote also gets the personal identity
+        """
+        repo = self._repo(home, 'personal-https', 'https://github.com/connormason/example.git')
+        assert home.run('git', 'config', 'user.email', cwd=repo).stdout.strip() == 'connor@conmason.com'
+
+    def test_other_remote_uses_overlay_default(self, home: Home) -> None:
+        """
+        Test that any other remote gets the overlay's default identity
+        """
+        repo = self._repo(home, 'other', 'git@git.example.com:team/example.git')
+        assert home.run('git', 'config', 'user.email', cwd=repo).stdout.strip() == 'work@example.com'

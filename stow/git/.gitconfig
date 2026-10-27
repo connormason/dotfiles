@@ -1,0 +1,60 @@
+[alias]
+
+	# Get name of current branch
+	branch-name = rev-parse --abbrev-ref HEAD
+
+	# Get default branch of repo
+	db = !git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | cut -d"/" -f4 || git ls-remote --symref origin HEAD 2>/dev/null | head -n1 | cut -d"/" -f3 | cut -f1
+
+	# Push current local branch to remote (origin)
+	po = "!git push -u origin $(git branch-name)"
+
+	# Push current local branch to remote (origin) and open GitHub pull request in browser
+	pr = "!hub pull-request --push --copy --browse"
+
+	# Auto-generate .gitignore file with provided rules
+	ignore = "!gi() { curl -sL https://www.gitignore.io/api/$@ ;}; gi"
+
+[core]
+	editor = vi
+	pager = delta
+
+[delta]
+	navigate = true    # use n and N to move between diff sections
+	dark = true
+	line-numbers = true
+	side-by-side = true
+
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+
+[init]
+	defaultBranch = main
+	templateDir = ~/.git-template
+
+[interactive]
+	diffFilter = delta --color-only
+
+[pull]
+	rebase = false
+
+[push]
+	default = simple
+
+[user]
+	name = Connor Mason
+	email = connor@conmason.com
+
+[include]
+	; work overlay (or machine-local overrides): default identity, extra aliases
+	path = ~/.gitconfig.overlay
+
+[includeIf "hasconfig:remote.*.url:git@github.com:connormason/**"]
+	; personal remotes always use the personal identity, even on a machine whose default is the work identity
+	path = ~/.config/git/identity-personal
+
+[includeIf "hasconfig:remote.*.url:https://github.com/connormason/**"]
+	path = ~/.config/git/identity-personal
