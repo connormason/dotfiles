@@ -5,7 +5,8 @@ set -euo pipefail
 # Dry-run flag: when 1, run() prints commands instead of executing them.
 : "${BOOTSTRAP_DRY_RUN:=0}"
 
-# Repo root (this file lives in <repo>/bootstrap/). Exported so overlay stages can source "$DOTFILES_REPO/bootstrap/lib.sh".
+# Repo root (this file lives in <repo>/bootstrap/). Exported so overlay stages can
+# source "$DOTFILES_REPO/bootstrap/lib.sh".
 DOTFILES_REPO="${DOTFILES_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}"
 export DOTFILES_REPO
 
@@ -82,8 +83,8 @@ confirm() {
 }
 
 # Append the first Homebrew prefix that has bin/brew to PATH. Appended (not prepended) so an active virtualenv's python
-# is not shadowed. A layer's bootstrap/env.sh may set DOTFILES_BREW_PREFIXES (space-separated) to add prefixes; these are
-# checked before the defaults (/opt/homebrew, /usr/local) and the first prefix with bin/brew wins.
+# is not shadowed. A layer's bootstrap/env.sh may set DOTFILES_BREW_PREFIXES (space-separated) to add prefixes; these
+# are checked before the defaults (/opt/homebrew, /usr/local) and the first prefix with bin/brew wins.
 ensure_brew_on_path() {
     local prefix
     for prefix in ${DOTFILES_BREW_PREFIXES:-} /opt/homebrew /usr/local; do

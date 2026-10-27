@@ -284,9 +284,11 @@ BACKUP_TARGETS=()
 UNRESOLVED=()
 
 conflict_target() { # print the $HOME-relative target named by a backup-able conflict message $1, else return 1
-    local target
+    local target adopt
+    adopt='^cannot stow .* over existing target \(.*\) since neither a link nor a directory'
+    adopt+=' and --adopt not specified$'
     target="$(printf '%s\n' "$1" | sed -n \
-        -e 's/^cannot stow .* over existing target \(.*\) since neither a link nor a directory and --adopt not specified$/\1/p' \
+        -e "s/$adopt/\1/p" \
         -e 's/^existing target is neither a link nor a directory: \(.*\)$/\1/p' \
         -e 's/^existing target is not owned by stow: \(.*\)$/\1/p')"
     if [ -z "$target" ]; then
@@ -373,7 +375,8 @@ if [ "$DRY_RUN" = 1 ]; then
         for target in "${BACKUP_TARGETS[@]}"; do
             echo "stow: would back up existing $target -> $BACKUP_DIR/$target"
         done
-        echo "stow: simulated ${SEL_NAMES[*]} (dry-run; ${#BACKUP_TARGETS[@]} conflicting file(s) would be backed up first, then linked)"
+        echo "stow: simulated ${SEL_NAMES[*]} (dry-run; ${#BACKUP_TARGETS[@]} conflicting file(s) would be backed up" \
+            "first, then linked)"
     else
         ALL_PRE=""
         for log in ${PRE_LOGS[@]+"${PRE_LOGS[@]}"}; do
@@ -391,7 +394,8 @@ fi
 if [ ${#BACKUP_TARGETS[@]} -gt 0 ]; then
     for target in "${BACKUP_TARGETS[@]}"; do
         mkdir -p "$BACKUP_DIR/$(dirname "$target")"
-        mv "$HOME/$target" "$BACKUP_DIR/$target" || die "could not back up ~/$target (moved files so far are in $BACKUP_DIR)"
+        mv "$HOME/$target" "$BACKUP_DIR/$target" ||
+            die "could not back up ~/$target (moved files so far are in $BACKUP_DIR)"
         echo "stow: backed up existing $target -> $BACKUP_DIR/$target"
     done
     preflight
