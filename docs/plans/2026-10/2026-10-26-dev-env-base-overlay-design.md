@@ -92,6 +92,8 @@ order.
 - No hardcoded repository paths: the engine resolves its own root, and overlay paths come from the registry.
 - Composition directories are created as real directories before stowing, so stow never folds them into a single
   symlink: `~/.config/zsh/conf.d`, `~/.ssh/config.d`, `~/.claude/{agents,commands,hooks,rules,skills}`.
+- Rendered files are owned by the render tool: `stow.sh` refuses any package that provides a render target (or a path
+  above one), reading the target list from `render.py --list-targets` so the list has one source of truth.
 
 ### Composition points
 

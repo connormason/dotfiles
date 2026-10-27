@@ -441,12 +441,13 @@ class Args(argparse.Namespace):
     """
     :class:`argparse.Namespace` annotated with args supported by this script.
     """
-    targets: Sequence[str]
-    diff:    bool
-    check:   bool
-    force:   bool
-    repo:    str
-    verbose: bool
+    targets:      Sequence[str]
+    diff:         bool
+    check:        bool
+    list_targets: bool
+    force:        bool
+    repo:         str
+    verbose:      bool
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:
@@ -466,6 +467,11 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--diff', action='store_true', help='Show live-vs-rendered differences; write nothing')
     mode.add_argument('--check', action='store_true', help='Exit 1 if a target is out of sync; write nothing')
+    mode.add_argument(
+        '--list-targets',
+        action='store_true',
+        help="Print each target's path relative to HOME, one per line; read nothing else",
+    )
     parser.add_argument('--force', action='store_true', help='Overwrite in-app edits (live file is backed up first)')
     parser.add_argument('--repo', default=str(DEFAULT_REPO), help='Base repository root (default: this repo)')
     parser.add_argument('-v', '--verbose', action='store_true', help='Report skipped and already-current targets')
@@ -491,6 +497,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if unknown:
         error(f'unknown target(s): {", ".join(unknown)} (known: {", ".join(TARGETS)})')
         return 2
+
+    if args.list_targets:
+        # stow.sh reads this to refuse packages that would link over a rendered file
+        for target in targets:
+            print(TARGETS[target].removeprefix('~/'))
+        return 0
 
     try:
         roots    = layers(Path(args.repo))

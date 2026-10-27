@@ -17,7 +17,8 @@ target's path; a drift guard refuses to overwrite edits made in the app since th
 | `claude` | `~/.claude/settings.json`                               |
 | `vscode` | `~/Library/Application Support/Code/User/settings.json` |
 
-A target for which no layer provides a fragment is skipped.
+A target for which no layer provides a fragment is skipped. `stow.sh` refuses any package that provides a target path
+(or a path above one), reading the list from `render.py --list-targets` so the table above has one source of truth.
 
 ### Merge semantics
 
@@ -60,16 +61,17 @@ rendered.
 ### Usage
 
 ```
-render.py [TARGET…] [--diff | --check] [--force] [--repo PATH] [-v]
+render.py [TARGET…] [--diff | --check | --list-targets] [--force] [--repo PATH] [-v]
 ```
 
-| Flag      | Effect                                                          |
-| --------- | --------------------------------------------------------------- |
-| `--diff`  | Show live-vs-rendered differences; write nothing                |
-| `--check` | Exit 1 if a target is out of sync; write nothing                |
-| `--force` | Overwrite in-app edits (live file is backed up first)           |
-| `--repo`  | Base repository root (default: the repo containing this script) |
-| `-v`      | Report skipped and already-current targets                      |
+| Flag             | Effect                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| `--diff`         | Show live-vs-rendered differences; write nothing                                               |
+| `--check`        | Exit 1 if a target is out of sync; write nothing                                               |
+| `--list-targets` | Print each target's path relative to HOME, one per line (read by `stow.sh`); read nothing else |
+| `--force`        | Overwrite in-app edits (live file is backed up first)                                          |
+| `--repo`         | Base repository root (default: the repo containing this script)                                |
+| `-v`             | Report skipped and already-current targets                                                     |
 
 Exit codes: `0` ok / in sync, `1` drift refused or out of sync (the maximum across targets), `2` configuration or I/O
 error (bad fragment, unknown target, missing overlay, unreadable or unwritable path, bash unavailable).

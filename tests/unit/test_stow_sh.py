@@ -36,6 +36,8 @@ def world(tmp_path: Path, shell: str) -> dict[str, Path]:
     shutil.copy2(REPO_ROOT / 'stow.sh', repo / 'stow.sh')
     shutil.copy2(REPO_ROOT / 'bootstrap' / 'lib.sh', repo / 'bootstrap' / 'lib.sh')
     shutil.copy2(REPO_ROOT / 'scripts' / 'utility' / 'summarize_stow.awk', repo / 'scripts' / 'utility')
+    (repo / 'scripts' / 'dotfiles').mkdir()
+    shutil.copy2(REPO_ROOT / 'scripts' / 'dotfiles' / 'render.py', repo / 'scripts' / 'dotfiles')
     overlay = tmp_path / 'overlay'
     (overlay / 'stow').mkdir(parents=True)
     home = tmp_path / 'home'
@@ -232,6 +234,39 @@ class TestOwnership:
     """
     Tests for single ownership of $HOME paths
     """
+    def test_package_providing_a_render_target_fails(self, world: dict[str, Path]) -> None:
+        """
+        Test that a package shipping a file render.py writes is rejected before anything is linked
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        _pkg(world['overlay'], 'claude', {'.claude/settings.json': '{}', '.claude/rules/a.md': 'x'})
+        result = _stow(world)
+        assert result.returncode == 1
+        assert 'written by scripts/dotfiles/render.py' in result.stderr
+        assert '~/.claude/settings.json <- claude' in result.stderr
+        assert not (world['home'] / '.zshrc').exists()
+
+    def test_package_providing_a_render_target_parent_fails(self, world: dict[str, Path], tmp_path: Path) -> None:
+        """
+        Test that a package linking a path above a render target (which would carry the target into the repo) fails
+        """
+        elsewhere = tmp_path / 'elsewhere'
+        elsewhere.mkdir()
+        package = world['repo'] / 'stow' / 'claude-link'
+        package.mkdir(parents=True)
+        (package / '.claude').symlink_to(elsewhere)
+        result = _stow(world)
+        assert result.returncode == 1
+        assert '~/.claude/settings.json <- claude-link' in result.stderr
+
+    def test_other_files_beside_a_render_target_are_allowed(self, world: dict[str, Path]) -> None:
+        """
+        Test that a package may provide siblings of a render target, such as files under ~/.claude/
+        """
+        _pkg(world['repo'], 'claude', {'.claude/rules/a.md': 'x', '.claude/settings.local.json': '{}'})
+        result = _stow(world)
+        assert result.returncode == 0, result.stderr
+        assert (world['home'] / '.claude' / 'rules' / 'a.md').is_symlink()
     def test_two_packages_same_path_fails_before_linking(self, world: dict[str, Path]) -> None:
         """
         Test that two packages providing one path abort the run and name both owners

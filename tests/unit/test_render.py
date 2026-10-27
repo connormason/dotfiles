@@ -585,3 +585,36 @@ class TestRiskPaths:
         assert _run(world) == 2
         assert not _claude(world).exists()
         assert not (world['state'] / 'dotfiles' / 'render').exists()
+
+
+class TestListTargets:
+    """
+    Tests for --list-targets (the render-owned paths stow.sh refuses to link)
+    """
+    def test_prints_home_relative_paths(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that every target path is printed relative to HOME, one per line, in TARGETS order
+        """
+        assert render.main(['--list-targets']) == 0
+        assert capsys.readouterr().out.splitlines() == [
+            '.claude/settings.json',
+            'Library/Application Support/Code/User/settings.json',
+        ]
+
+    def test_needs_no_layers(self, world: dict[str, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that listing works without resolving layers, so a broken registry cannot hide render ownership
+        """
+        (tmp_path / 'overlays').write_text(f'{tmp_path / "gone"}\n', encoding='utf-8')
+        assert _run(world, '--list-targets') == 0
+        assert '.claude/settings.json' in capsys.readouterr().out.splitlines()
+
+    def test_script_entry_point(self) -> None:
+        """
+        Test that the script prints the list when executed directly, as stow.sh does
+        """
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), '--list-targets'], capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert len(result.stdout.splitlines()) == len(render.TARGETS)

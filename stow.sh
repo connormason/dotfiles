@@ -6,8 +6,9 @@
 #   Options    only those above and -h|--help; any other option is an error (none is passed through to stow)
 #   Layers     <repo>/stow, then <overlay>/stow for each overlay in the registry (bootstrap/lib.sh: dotfiles_layers)
 #   Packages   every directory in a layer's stow/; a package name may exist in only one layer
-#   Ownership  no two packages may provide the same $HOME-relative path (or a file where another has a directory);
-#              checked before anything is linked
+#   Ownership  no two packages may provide the same $HOME-relative path (or a file where another has a directory), and
+#              none may provide a file render.py writes (render.py --list-targets) or a path above one; checked before
+#              anything is linked
 #   Folding    always --no-folding: $HOME directories stay real, so several packages (and apps' runtime state) can
 #              share them, and nothing an app writes lands inside a repository
 #   Apply      all-or-nothing: every layer is simulated first. Unresolvable conflicts (a real directory where a package
@@ -194,6 +195,31 @@ if [ -n "$COLLISIONS" ]; then
     done <<EOF
 $COLLISIONS
 EOF
+    exit 1
+fi
+
+# Render ownership: render.py writes its targets as real files, so no package may provide one, nor a path above one
+# (a linked parent would carry the rendered file into a repository). render.py is the single source of the target list.
+RENDER_SCRIPT="$REPO_DIR/scripts/dotfiles/render.py"
+RENDER_TARGETS="$(python3 "$RENDER_SCRIPT" --list-targets)" ||
+    die "cannot list render targets (python3 $RENDER_SCRIPT --list-targets failed)"
+# Prints "<render target><TAB><package>" for each package path equal to or above a render target
+RENDER_CLASHES="$(printf '%s\n' "$OWNERS" | RENDER_TARGETS="$RENDER_TARGETS" awk -F'\t' '
+    BEGIN { n = split(ENVIRON["RENDER_TARGETS"], targets, "\n") }
+    $1 == "" { next }
+    {
+        for (i = 1; i <= n; i++) {
+            if (targets[i] != "" && ($1 == targets[i] || index(targets[i], $1 "/") == 1)) print targets[i] "\t" $2
+        }
+    }' | LC_ALL=C sort -u)"
+if [ -n "$RENDER_CLASHES" ]; then
+    echo "stow: these paths are written by scripts/dotfiles/render.py, so no package may provide them:" >&2
+    while IFS=$'\t' read -r path owner; do
+        printf '  ~/%s <- %s\n' "$path" "$owner" >&2
+    done <<EOF
+$RENDER_CLASHES
+EOF
+    echo "stow: move the settings into a render/<target>.json fragment instead" >&2
     exit 1
 fi
 
