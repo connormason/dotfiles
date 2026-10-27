@@ -6,7 +6,7 @@ set -euo pipefail
 : "${BOOTSTRAP_DRY_RUN:=0}"
 
 # Repo root (this file lives in <repo>/bootstrap/). Exported so overlay stages can source "$DOTFILES_REPO/bootstrap/lib.sh".
-DOTFILES_REPO="${DOTFILES_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+DOTFILES_REPO="${DOTFILES_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)}"
 export DOTFILES_REPO
 
 log() { printf '\033[1;34m[bootstrap]\033[0m %s\n' "$*"; }
@@ -82,10 +82,11 @@ confirm() {
 }
 
 # Append the first Homebrew prefix that has bin/brew to PATH. Appended (not prepended) so an active virtualenv's python
-# is not shadowed. A layer's bootstrap/env.sh may set DOTFILES_BREW_PREFIXES (space-separated) to add prefixes.
+# is not shadowed. A layer's bootstrap/env.sh may set DOTFILES_BREW_PREFIXES (space-separated) to add prefixes; these are
+# checked before the defaults (/opt/homebrew, /usr/local) and the first prefix with bin/brew wins.
 ensure_brew_on_path() {
     local prefix
-    for prefix in ${DOTFILES_BREW_PREFIXES:-/opt/homebrew /usr/local}; do
+    for prefix in ${DOTFILES_BREW_PREFIXES:-} /opt/homebrew /usr/local; do
         if [ -x "$prefix/bin/brew" ]; then
             case ":$PATH:" in
             *":$prefix/bin:"*) ;;
@@ -105,7 +106,7 @@ dotfiles_overlays_file() {
 
 # Print the repo root, then each registered overlay root (absolute), one per line. Dies on a missing overlay.
 dotfiles_layers() {
-    local registry line
+    local registry line raw
     registry="$(dotfiles_overlays_file)"
     printf '%s\n' "$DOTFILES_REPO"
     if [ ! -f "$registry" ]; then
@@ -118,8 +119,13 @@ dotfiles_layers() {
         if [ -z "$line" ]; then
             continue
         fi
+        raw="$line"
         case "$line" in
         \~/*) line="$HOME/${line#\~/}" ;;
+        esac
+        case "$line" in
+        /*) ;;
+        *) die "overlay path must be absolute or ~/-relative: $raw (listed in $registry)" ;;
         esac
         if [ ! -d "$line" ]; then
             die "overlay not found: $line (listed in $registry)"
@@ -141,20 +147,20 @@ $layers
 EOF
 }
 
-# Source every layer's bootstrap/env.sh (base first) so overlays can set variables base stages read.
-_dotfiles_source_layer_env() {
-    local layers layer
-    layers="$(dotfiles_layers)" || exit 1
-    while IFS= read -r layer; do
-        if [ -f "$layer/bootstrap/env.sh" ]; then
+# Source every layer's bootstrap/env.sh (base first) so overlays can set variables base stages read. This runs at the
+# top level of the sourcing shell, not inside a function, so declare/typeset in an env.sh stay global (bash 3.2 has no
+# `declare -g`). The guard keeps an env.sh that sources this library again from recursing.
+if [ -z "${_DOTFILES_LIB_LOADED:-}" ]; then
+    _DOTFILES_LIB_LOADED=1
+    _dotfiles_layers_out="$(dotfiles_layers)" || exit 1
+    while IFS= read -r _dotfiles_layer; do
+        if [ -f "$_dotfiles_layer/bootstrap/env.sh" ]; then
             # shellcheck source=/dev/null
-            source "$layer/bootstrap/env.sh"
+            source "$_dotfiles_layer/bootstrap/env.sh"
         fi
     done <<EOF
-$layers
+$_dotfiles_layers_out
 EOF
-}
-
-# Make brew-installed tools available to every stage that sources this library.
-_dotfiles_source_layer_env
-ensure_brew_on_path
+    unset _dotfiles_layers_out _dotfiles_layer
+    ensure_brew_on_path
+fi
