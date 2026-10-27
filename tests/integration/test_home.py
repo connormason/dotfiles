@@ -158,6 +158,51 @@ class TestShell:
         assert result.stderr == ''
 
 
+class TestPythonNode:
+    """
+    Tests for the python and node packages
+    """
+    def test_workon_home_resolves_cleanly(self, home: Home) -> None:
+        """
+        Test that WORKON_HOME is exported under HOME without stderr output
+        """
+        result = home.zsh('print -r -- $WORKON_HOME')
+        assert result.returncode == 0
+        assert result.stderr == ''
+        assert result.stdout.strip() == str(home.path / '.virtualenvs')
+
+    def test_bun_install_is_exported(self, home: Home) -> None:
+        """
+        Test that the node package points BUN_INSTALL at ~/.bun
+        """
+        assert home.zsh('print -r -- $BUN_INSTALL').stdout.strip() == str(home.path / '.bun')
+
+    @pytest.mark.parametrize(
+        'relpath',
+        [
+            '.pip/pip.conf',
+            '.npmrc',
+            '.config/uv/uv.toml',
+        ],
+    )
+    def test_registry_configs_are_not_shipped(self, home: Home, relpath: str) -> None:
+        """
+        Test that the base layer ships no package-index or registry configuration
+        """
+        assert not (home.path / relpath).exists()
+
+    def test_hatch_config_is_generic(self, home: Home) -> None:
+        """
+        Test that the stowed hatch config carries no publish index, email, or hardcoded home paths
+        """
+        config = home.path / 'Library' / 'Application Support' / 'hatch' / 'config.toml'
+        assert config.is_symlink()
+        text = config.read_text(encoding='utf-8')
+        assert '[publish' not in text
+        assert 'email' not in text
+        assert '/Users/' not in text
+
+
 class TestGit:
     """
     Tests for per-remote git identity
