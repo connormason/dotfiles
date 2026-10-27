@@ -201,6 +201,22 @@ class TestCli:
         assert 'combined short flags' in result.stderr
         assert not (world['home'] / '.zshrc').exists()
 
+    @pytest.mark.parametrize('flag', ['--adopt', '-D', '--target=x', '--dir=x', '--ignore=x', '--no'])
+    def test_unknown_flags_are_rejected(self, world: dict[str, Path], flag: str) -> None:
+        """
+        Test that a flag outside the documented set is an error instead of being forwarded to stow
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        (world['home'] / '.zshrc').write_text('home', encoding='utf-8')
+        before = _tree(world['repo'])
+        result = _stow(world, flag)
+        assert result.returncode == 1
+        assert f'unknown option: {flag}' in result.stderr
+        assert 'applied' not in result.stdout
+        assert (world['home'] / '.zshrc').read_text(encoding='utf-8') == 'home'
+        assert (world['repo'] / 'stow' / 'shell' / '.zshrc').read_text(encoding='utf-8') == 'x'
+        assert _tree(world['repo']) == before
+
     @pytest.mark.parametrize('value', ['abc', '-1', '1.5'])
     def test_non_numeric_stow_verbose_is_rejected(self, world: dict[str, Path], value: str) -> None:
         """
@@ -342,15 +358,6 @@ class TestLinking:
         assert not (world['home'] / '.zshrc').exists()
         assert 'stow: simulated shell (dry-run, no changes written)' in result.stdout
 
-    def test_passthrough_flag_does_not_imply_dry_run(self, world: dict[str, Path]) -> None:
-        """
-        Test that a flag forwarded to stow does not make the run a simulation
-        """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
-        result = _stow(world, '--ignore=nothing-matches-this')
-        assert result.returncode == 0, result.stderr
-        assert (world['home'] / '.zshrc').is_symlink()
-        assert 'stow: applied shell' in result.stdout
 
 
 class TestConflicts:

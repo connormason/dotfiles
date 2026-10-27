@@ -3,6 +3,7 @@
 #
 # Usage: stow.sh [-n|--simulate] [-v|--verbose] [--summary|--no-summary] [--backup-conflicts] [--list] [PACKAGE...]
 #
+#   Options    only those above and -h|--help; any other option is an error (none is passed through to stow)
 #   Layers     <repo>/stow, then <overlay>/stow for each overlay in the registry (bootstrap/lib.sh: dotfiles_layers)
 #   Packages   every directory in a layer's stow/; a package name may exist in only one layer
 #   Ownership  no two packages may provide the same $HOME-relative path (or a file where another has a directory);
@@ -37,7 +38,6 @@ export DOTFILES_REPO
 source "$REPO_DIR/bootstrap/lib.sh"
 
 DRY_RUN=0
-PASSTHRU=()
 SHOW_RAW=0
 SHOW_SUMMARY=1
 BACKUP_CONFLICTS=0
@@ -52,7 +52,7 @@ fi
 WANT=()
 for arg in "$@"; do
     case "$arg" in
-    -n | --no | --simulate) DRY_RUN=1 ;;
+    -n | --simulate) DRY_RUN=1 ;;
     -v | --verbose)
         SHOW_RAW=1
         [ "$LEVEL" -ge 1 ] || LEVEL=1
@@ -62,7 +62,9 @@ for arg in "$@"; do
     --backup-conflicts) BACKUP_CONFLICTS=1 ;;
     --list) LIST_ONLY=1 ;;
     -[!-]?*) die "combined short flags are not supported: $arg (pass each flag separately, e.g. -n -v)" ;;
-    -*) PASSTHRU+=("$arg") ;;
+    # Nothing else reaches stow: --adopt would move $HOME content into the repo, --dir/--target would defeat conflict
+    # classification, and -D would unlink while reporting "applied"
+    -*) die "unknown option: $arg (see stow.sh --help)" ;;
     *) WANT+=("$arg") ;;
     esac
 done
@@ -236,7 +238,7 @@ run_layer() { # $1=layer, $2=simulate (1|0): sets LAYER_OUT and LAYER_RC
     load_pkgs "$1"
     LAYER_RC=0
     LAYER_OUT="$(stow --dir "$1/stow" --target "$HOME" --no-folding --ignore='\.DS_Store' --restow \
-        ${VERBOSE[@]+"${VERBOSE[@]}"} ${mode[@]+"${mode[@]}"} ${PASSTHRU[@]+"${PASSTHRU[@]}"} "${PKGS[@]}" 2>&1)" ||
+        ${VERBOSE[@]+"${VERBOSE[@]}"} ${mode[@]+"${mode[@]}"} "${PKGS[@]}" 2>&1)" ||
         LAYER_RC=$?
 }
 

@@ -1540,7 +1540,8 @@ echo "stow: applied ${SEL_NAMES[*]}"
 Run: `chmod +x stow.sh`
 
 Notes for the implementer: `PASSTHRU` flags never set `DRY_RUN` (fixes a work-repo quirk where any pass-through flag
-counted as a dry run). The conflict regexes target GNU Stow 2.4.1's wording (`Stow.pm`); re-probe them if Stow is
+counted as a dry run). *Superseded by the final-review fixes: `stow.sh` now rejects every option outside its documented
+set (`--adopt`, `-D`, `--dir`, `--target`, ... never reach stow), so `PASSTHRU` is gone.* The conflict regexes target GNU Stow 2.4.1's wording (`Stow.pm`); re-probe them if Stow is
 upgraded. If shellcheck flags the `${!PKG_NAMES[@]}` expansions, keep the logic and add a targeted
 `# shellcheck disable=` with a reason comment rather than restructuring. The tests run `stow.sh` under every bash from
 `tests/conftest.py` (`/bin/bash` 3.2 and the PATH bash).
