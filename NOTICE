@@ -1,0 +1,43 @@
+Third-party notices
+===================
+
+This repository is personal configuration (see README.md, "License"). The files listed below are third-party works
+that are redistributed here under their own licenses; those licenses govern the listed files, not the rest of the
+repository.
+
+ranger 1.9.4 (GPL-3.0)
+----------------------
+Upstream: https://github.com/ranger/ranger
+Copyright 2009-2018 Roman Zimbelmann and the ranger contributors (see the AUTHORS file shipped with ranger).
+License: GNU General Public License, version 3 (full text: docs/licenses/ranger-GPL-3.0.txt). The vendored files carry
+no per-file license header; they are distributed as part of ranger and covered by its license.
+
+Vendored files (package stow/os_tools):
+
+  stow/os_tools/.config/ranger/scope.sh      unmodified copy of ranger/data/scope.sh
+  stow/os_tools/.config/ranger/commands.py   unmodified copy of ranger/config/commands_sample.py (renamed)
+  stow/os_tools/.config/ranger/rifle.conf    unmodified copy of ranger/config/rifle.conf
+  stow/os_tools/.config/ranger/rc.conf       MODIFIED copy of ranger/config/rc.conf
+
+Modifications to rc.conf (2026-10-27): a header comment marking the file as modified was added; `set preview_images`
+was changed from false to true; `default_linemode devicons2` (needs the third-party ranger-devicons2 plugin, which is
+not vendored) and a `fzf_filter` binding for `f` (needs ranger-fzf-filter, also not vendored) appear only as comments
+with explanatory notes, so the `f` binding stays upstream's `console find%space`.
+
+Hammerspoon Spoons (MIT)
+------------------------
+Upstream: https://github.com/Hammerspoon/Spoons (license field in each init.lua: "MIT -
+https://opensource.org/licenses/MIT"). Copyright holders are the Spoon authors named in each file.
+
+  stow/hammerspoon/.hammerspoon/Spoons/ReloadConfiguration.spoon/   author: Jon Lorusso
+  stow/hammerspoon/.hammerspoon/Spoons/SpoonInstall.spoon/          author: Diego Zamboni
+  stow/hammerspoon/.hammerspoon/Spoons/WifiNotifier.spoon/          author: Garth Mortensen
+
+Oh my tmux! (WTFPL v2 and MIT, dual-licensed)
+---------------------------------------------
+Upstream: https://github.com/gpakosz/.tmux
+Copyright 2012- Gregory Pakosz (@gpakosz). The file headers state: "dual licensed under the WTFPL v2 license and the
+MIT license, without any warranty."
+
+  stow/tmux/.config/tmux/tmux.conf         Oh my tmux! main configuration
+  stow/tmux/.config/tmux/tmux.conf.local   Oh my tmux! local customization file (carries the same header)

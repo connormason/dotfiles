@@ -682,7 +682,6 @@ class TestOsTools:
             '.config/fastfetch/config.jsonc',
             '.config/htop/htoprc',
             '.config/ranger/commands.py',
-            '.config/ranger/commands_full.py',
             '.config/ranger/rc.conf',
             '.config/ranger/rifle.conf',
             '.config/ranger/scope.sh',
@@ -722,6 +721,13 @@ class TestOsTools:
         assert kind == 'scalar-export'
         assert Path(value) == home.path / '.config' / 'eza'
         assert (Path(value) / 'theme.yml').is_file()
+
+    def test_base_nas_alias_matches_the_ssh_host(self, home: Home) -> None:
+        """
+        Test that the bare nas command runs ssh against the base Host entry
+        """
+        result = home.zsh('print -r -- "${aliases[nas]-unset}"')
+        assert result.stdout.strip() == 'ssh nas'
 
     def test_ls_aliases_require_eza(self, home: Home) -> None:
         """
@@ -858,3 +864,42 @@ class TestSsh:
             result = home.run('ssh', '-G', '-F', str(copy), host)
             assert result.returncode == 0, result.stderr
             assert f'hostname {expected}' in result.stdout.splitlines()
+
+
+class TestVendoredNotices:
+    """
+    Tests for third-party license notices
+    """
+    RANGER_DIR = Path('stow') / 'os_tools' / '.config' / 'ranger'
+
+    def test_notice_lists_every_vendored_ranger_file(self) -> None:
+        """
+        Test that NOTICE names each ranger file shipped by the os_tools package
+        """
+        notice  = (REPO_ROOT / 'NOTICE').read_text(encoding='utf-8')
+        shipped = sorted(p.name for p in (REPO_ROOT / self.RANGER_DIR).iterdir())
+        assert shipped == ['commands.py', 'rc.conf', 'rifle.conf', 'scope.sh']
+        for name in shipped:
+            assert f'{self.RANGER_DIR.as_posix()}/{name}' in notice
+
+    def test_gpl_text_is_included(self) -> None:
+        """
+        Test that the GPL-3.0 text referenced by NOTICE is in the repository
+        """
+        text = (REPO_ROOT / 'docs' / 'licenses' / 'ranger-GPL-3.0.txt').read_text(encoding='utf-8')
+        assert 'GNU GENERAL PUBLIC LICENSE' in text
+        assert 'Version 3, 29 June 2007' in text
+
+    def test_modified_ranger_file_is_marked(self) -> None:
+        """
+        Test that rc.conf, the only modified ranger file, says so in a header
+        """
+        text = (REPO_ROOT / self.RANGER_DIR / 'rc.conf').read_text(encoding='utf-8')
+        assert 'MODIFIED from ranger 1.9.4' in '\n'.join(text.splitlines()[:5])
+
+    def test_readme_license_section_has_the_carve_out(self) -> None:
+        """
+        Test that the README points third-party files at NOTICE
+        """
+        readme = (REPO_ROOT / 'README.md').read_text(encoding='utf-8')
+        assert 'Third-party files are under their own licenses; see [NOTICE](NOTICE).' in readme

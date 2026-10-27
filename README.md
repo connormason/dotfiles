@@ -489,6 +489,8 @@ python3 run.py pre
 
 Personal configuration - not licensed for reuse.
 
+Third-party files are under their own licenses; see [NOTICE](NOTICE).
+
 ## Author
 
 Connor Mason

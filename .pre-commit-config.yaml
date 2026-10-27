@@ -390,7 +390,9 @@ repos:
         exclude: |
           (?x)^(
               stow/[^/]+/\.(zshrc|zprofile|zshenv|zlogin)|
-              stow/[^/]+/\.config/zsh/.*\.zsh
+              stow/[^/]+/\.config/zsh/.*\.zsh|
+              # vendored from upstream ranger 1.9.4 (GPL-3.0); formatter-exempt
+              stow/os_tools/\.config/ranger/scope\.sh
           )$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -511,8 +513,8 @@ repos:
         exclude: |
           (?x)(
               ^services/homeassistant/config/|
-              # vendored from upstream ranger (GPL-3.0), kept as shipped
-              ^stow/os_tools/\.config/ranger/
+              # vendored from upstream ranger 1.9.4 (GPL-3.0); lint-exempt
+              ^stow/os_tools/\.config/ranger/commands\.py$
           )
 
   - repo: https://github.com/econchick/interrogate
@@ -555,7 +557,7 @@ repos:
           (?x)(
               \.zsh$|
               ^stow/[^/]+/\.(zshrc|zprofile|zshenv|zlogin)$|
-              # vendored from upstream ranger (GPL-3.0), kept as shipped
+              # vendored from upstream ranger 1.9.4 (GPL-3.0); lint-exempt
               ^stow/os_tools/\.config/ranger/scope\.sh$
           )
 
