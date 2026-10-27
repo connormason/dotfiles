@@ -407,6 +407,7 @@ addopts = """
 
 markers = [
     # keep-sorted start
+    "integration: Throwaway-home integration tests",
     "macos_only: Tests that only run on macOS",
     "requires_homebrew: Tests that require Homebrew to be installed",
     "role: Role-specific tests",
