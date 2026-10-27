@@ -338,6 +338,10 @@ silently; the bound is a spec requirement.
     path = ~/.config/git/identity-personal
 [includeIf "hasconfig:remote.*.url:https://github.com/connormason/**"]
     path = ~/.config/git/identity-personal
+[includeIf "hasconfig:remote.*.url:ssh://git@github.com/connormason/**"]
+    path = ~/.config/git/identity-personal
+[includeIf "hasconfig:remote.*.url:https://*@github.com/connormason/**"]
+    path = ~/.config/git/identity-personal
 ```
 
 (The personal name and email are already public in this repo's history.)
@@ -360,28 +364,42 @@ class TestGit:
     """
     Tests for per-remote git identity
     """
-    def _repo(self, home: Home, name: str, remote: str) -> Path:
+    PERSONAL = 'connor@conmason.com'
+    DEFAULT  = 'work@example.com'
+
+    def _repo(self, home: Home, name: str, remote: str | None) -> Path:
         """
-        Create a repo with an origin remote inside HOME
+        Create a repo inside HOME, with an origin remote when one is given
         """
         repo = home.path / name
-        home.run('git', 'init', '-q', '--template=', str(repo))
-        home.run('git', '-C', str(repo), 'remote', 'add', 'origin', remote)
+        commands: list[tuple[str, ...]] = [('git', 'init', '-q', '--template=', str(repo))]
+        if remote is not None:
+            commands.append(('git', '-C', str(repo), 'remote', 'add', 'origin', remote))
+        for command in commands:
+            result = home.run(*command)
+            assert result.returncode == 0, result.stderr
         return repo
 
-    def test_personal_remote_uses_personal_identity(self, home: Home) -> None:
+    @pytest.mark.parametrize(
+        ('remote', 'expected'),
+        [
+            ('git@github.com:connormason/x.git',            PERSONAL),
+            ('https://github.com/connormason/x.git',        PERSONAL),
+            ('ssh://git@github.com/connormason/x.git',      PERSONAL),
+            ('https://someuser@github.com/connormason/x.git', PERSONAL),
+            (None,                                          DEFAULT),
+            ('git@git.example.com:team/x.git',              DEFAULT),
+            ('git@github.com:connormason2/x.git',           DEFAULT),
+        ],
+    )
+    def test_identity_follows_remote(self, home: Home, remote: str | None, expected: str) -> None:
         """
-        Test that a personal GitHub remote overrides the overlay's default identity
+        Test that personal GitHub remotes get the personal identity and everything else the overlay's default
         """
-        repo = self._repo(home, 'personal', 'git@github.com:connormason/example.git')
-        assert home.run('git', 'config', 'user.email', cwd=repo).stdout.strip() == 'connor@conmason.com'
-
-    def test_other_remote_uses_overlay_default(self, home: Home) -> None:
-        """
-        Test that any other remote gets the overlay's default identity
-        """
-        repo = self._repo(home, 'other', 'git@git.example.com:team/example.git')
-        assert home.run('git', 'config', 'user.email', cwd=repo).stdout.strip() == 'work@example.com'
+        name = 'repo-' + ''.join(c if c.isalnum() else '-' for c in str(remote))
+        repo = self._repo(home, name, remote)
+        result = home.run('git', 'config', 'user.email', cwd=repo)
+        assert result.stdout.strip() == expected
 ```
 
 - [ ] **Step 1:** Port per protocol; apply changes 1–3.

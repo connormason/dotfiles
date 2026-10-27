@@ -58,3 +58,9 @@
 
 [includeIf "hasconfig:remote.*.url:https://github.com/connormason/**"]
 	path = ~/.config/git/identity-personal
+
+[includeIf "hasconfig:remote.*.url:ssh://git@github.com/connormason/**"]
+	path = ~/.config/git/identity-personal
+
+[includeIf "hasconfig:remote.*.url:https://*@github.com/connormason/**"]
+	path = ~/.config/git/identity-personal

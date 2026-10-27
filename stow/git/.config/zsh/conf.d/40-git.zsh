@@ -3,10 +3,10 @@
 # =====================================================================================================
 
 # Activate git-forgit zsh plugin
-source_if_exists "$HOMEBREW_PREFIX/share/forgit/forgit.plugin.zsh"
+[[ -n "${HOMEBREW_PREFIX:-}" ]] && source_if_exists "$HOMEBREW_PREFIX/share/forgit/forgit.plugin.zsh"
 
 # Add `git forgit` aliases
-[[ -n "$FORGIT_INSTALL_DIR" ]] && pathadd "$FORGIT_INSTALL_DIR/bin"
+[[ -n "${FORGIT_INSTALL_DIR:-}" ]] && pathadd "$FORGIT_INSTALL_DIR/bin"
 
 # Workaround for display width issue when `delta` pager used in `fzf` preview window
 # https://github.com/wfxr/forgit/issues/121#issuecomment-725358145

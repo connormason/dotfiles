@@ -118,6 +118,12 @@ order.
     path = ~/.gitconfig.overlay            ; work overlay: default identity = work email
 [includeIf "hasconfig:remote.*.url:git@github.com:connormason/**"]
     path = ~/.config/git/identity-personal ; personal remotes always use the personal identity
+[includeIf "hasconfig:remote.*.url:https://github.com/connormason/**"]
+    path = ~/.config/git/identity-personal
+[includeIf "hasconfig:remote.*.url:ssh://git@github.com/connormason/**"]
+    path = ~/.config/git/identity-personal
+[includeIf "hasconfig:remote.*.url:https://*@github.com/connormason/**"]
+    path = ~/.config/git/identity-personal ; token / userinfo HTTPS remotes
 ```
 
 Git ignores missing include files, so a machine without an overlay needs nothing extra. (`hasconfig:remote.*.url`
