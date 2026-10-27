@@ -8,6 +8,7 @@ default_install_hook_types:
   - post-checkout
   - post-merge
   - post-rewrite
+  - pre-push
 
 exclude: ^archive/
 
@@ -287,6 +288,25 @@ repos:
         stages: [commit-msg]
         entry: scripts/hooks/check-leaks.py
         language: python
+
+      # pre-push: scan file contents changed in the pushed range (catches content committed with --no-verify)
+      - id: check-leaks-push-files
+        name: "[check]  internal identifiers in pushed files"
+        stages: [pre-push]
+        priority: 10
+        entry: scripts/hooks/check-leaks.py
+        language: python
+        types: [text]
+
+      # pre-push: scan identities + messages of the pushed commits (cherry-picks/rebases bypass commit hooks)
+      - id: check-leaks-push-history
+        name: "[check]  internal identifiers in pushed commits"
+        stages: [pre-push]
+        priority: 10
+        entry: scripts/hooks/check-leaks-push.sh
+        language: system
+        pass_filenames: false
+        always_run: true
 
   # ========================================================================================
   # Text/whitespace fixers
