@@ -60,11 +60,13 @@ jobs:
         run: uvx codespell
 
   pytest:
-    name: pytest
-    runs-on: ubuntu-latest
+    name: pytest (macOS)
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - name: Install GNU Stow
+        run: brew install stow
       - name: Install dependencies
         run: uv sync --group test
       - name: Pytest
