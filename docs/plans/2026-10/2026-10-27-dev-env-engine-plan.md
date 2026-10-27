@@ -1578,7 +1578,7 @@ git commit -m "feat(stow): layered stow driver with single-ownership check"
   - Stages: every `<layer>/bootstrap/[0-9][0-9]-*.sh`, merged across layers, sorted by name; a two-digit number used
     twice anywhere is fatal (`die "stage number NN is used twice: <path> and <path>"`)
   - `--list`: one line per stage: the stage name, plus `  (<layer root>)` when the stage comes from an overlay
-  - Each stage runs as `bash <path>` with `BOOTSTRAP_DRY_RUN`, `DOTFILES_REPO` (base root) and `DOTFILES_LAYER` (the
+  - Each stage runs as `"$BASH" <path>` (the driver's own interpreter) with `BOOTSTRAP_DRY_RUN`, `DOTFILES_REPO` (base root) and `DOTFILES_LAYER` (the
     stage's own layer root) exported
   - `--verify`: after all stages succeed, runs `scripts/hooks/uv-public.sh run python run.py doctor` from the repo root
   - State/log dir unchanged: `${BOOTSTRAP_LOG_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-bootstrap}`

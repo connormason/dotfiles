@@ -41,7 +41,8 @@ the repo root cannot also be registered as an overlay). An overlay contributes t
 | `env.sh`                                                         | Sourced by `lib.sh` at the top level of every shell that sources it, base first, so overlays can set variables base stages read |
 | `Brewfile`, `uv-tools.txt`, `vscode-extensions.txt`, `repos.txt` | Manifest fragments; stages enumerate every layer's copy with `manifest_files NAME`                                              |
 
-Each stage runs as a separate `bash <path>` process with these exported:
+Each stage runs as a separate `"$BASH" <path>` process (the same bash that runs the driver, so `/bin/bash bootstrap.sh`
+exercises every stage under bash 3.2) with these exported:
 
 | Variable            | Value                                         |
 | ------------------- | --------------------------------------------- |

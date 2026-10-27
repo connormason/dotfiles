@@ -14,8 +14,8 @@
 #
 # Stages are the <layer>/bootstrap/NN-*.sh files of the repo root and every registered overlay (bootstrap/lib.sh:
 # dotfiles_layers), merged and sorted by name. A two-digit number may be used only once across all layers. Each stage
-# runs as its own `bash` process with BOOTSTRAP_DRY_RUN, DOTFILES_REPO (base layer root) and DOTFILES_LAYER (the
-# stage's own layer root) exported.
+# runs as its own process under the bash running this driver ($BASH), with BOOTSTRAP_DRY_RUN, DOTFILES_REPO (base layer
+# root) and DOTFILES_LAYER (the stage's own layer root) exported.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -270,7 +270,7 @@ for i in ${STAGE_NAMES[@]+"${!STAGE_NAMES[@]}"}; do
     # driver, so a failing stage still lands in the summary before we stop.
     set +e
     BOOTSTRAP_DRY_RUN="${BOOTSTRAP_DRY_RUN:-0}" DOTFILES_REPO="$REPO" DOTFILES_LAYER="${path%/bootstrap/*}" \
-        bash "$path"
+        "${BASH:-bash}" "$path"
     rc=$?
     set -e
     RESULT_NAMES+=("$name")

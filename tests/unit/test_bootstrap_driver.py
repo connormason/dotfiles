@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -151,6 +152,26 @@ class TestStageExecution:
         assert Path(repo).resolve() == REPO_ROOT
         assert Path(layer).resolve() == overlay.resolve()
         assert dry_run == '1'
+
+    def test_stage_runs_under_driver_interpreter(
+        self, shell: str, env: dict[str, str], overlay: Path, tmp_path: Path,
+    ) -> None:
+        """
+        Test that stages run under the bash that runs the driver, not whichever bash is first on PATH
+        """
+        probe = tmp_path / 'bash-version'
+        (overlay / 'bootstrap' / '97-selftest-bash.sh').write_text(
+            f'printf "%s" "${{BASH_VERSINFO[0]}}" > "{probe}"\n',
+            encoding='utf-8',
+        )
+        expected = subprocess.run(
+            [shell, '-c', 'printf "%s" "${BASH_VERSINFO[0]}"'], capture_output=True, text=True, check=True,
+        ).stdout
+        result = _drive(shell, env, '--dry-run', '--no-log', '--only', '97-selftest-bash')
+        assert result.returncode == 0, result.stderr
+        assert probe.read_text(encoding='utf-8') == expected
+        if shell == '/bin/bash' and sys.platform == 'darwin':
+            assert expected == '3'
 
     def test_inherited_dotfiles_repo_does_not_redirect_base_layer(
         self, shell: str, env: dict[str, str], tmp_path: Path
