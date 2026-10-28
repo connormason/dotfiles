@@ -59,6 +59,7 @@ class RenderError(Exception):
     """
     Configuration error: bad fragment, bad layer registry, or unknown target.
     """
+    pass
 
 
 class Prepared(NamedTuple):
@@ -162,6 +163,7 @@ def merge(base: object, overlay: object) -> object:
             else:
                 merged[key] = _drop_nulls(value)
         return merged
+
     if isinstance(base, list) and isinstance(overlay, list):
         combined = list(base)
         seen     = {canonical(item) for item in combined}
@@ -172,6 +174,7 @@ def merge(base: object, overlay: object) -> object:
                 combined.append(cleaned)
                 seen.add(key)
         return combined
+
     return _drop_nulls(overlay)
 
 
@@ -197,16 +200,20 @@ def layers(repo: Path) -> list[Path]:
         )
     except OSError as exc:
         raise RenderError(f'cannot run bash to resolve layers: {exc!s}') from exc
+
     if result.returncode != 0:
         raise RenderError(ANSI_ESCAPE.sub('', result.stderr).strip() or 'dotfiles_layers failed')
+
     roots = []
     for line in result.stdout.splitlines():
         if not line:
             continue
+
         root = Path(line)
         if not root.is_absolute():
             raise RenderError(f'dotfiles_layers produced a non-absolute layer path: {ANSI_ESCAPE.sub("", line)!r}')
         roots.append(root)
+
     return roots
 
 
@@ -223,23 +230,30 @@ def compose(fragments: Sequence[Path]) -> tuple[dict[str, object], list[str]]:
     """
     merged:    object    = {}
     unmanaged: list[str] = []
+
     for fragment in fragments:
         try:
             data = json.loads(fragment.read_text(encoding='utf-8'))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise RenderError(f'{fragment}: {exc!s}') from exc
+
         if not isinstance(data, dict):
             raise RenderError(f'{fragment}: top level must be an object')
+
         keys = data.pop(UNMANAGED_KEY, [])
         if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
             raise RenderError(f'{fragment}: {UNMANAGED_KEY} must be a list of key names')
+
         unmanaged.extend(k for k in keys if k not in unmanaged)
         merged = merge(merged, data)
+
     if not isinstance(merged, dict):
         raise RenderError('merged settings must be an object')
+
     overlap = [k for k in unmanaged if k in merged]
     if overlap:
         warn(f'fragment value(s) ignored for key(s) listed in {UNMANAGED_KEY}: {", ".join(overlap)}')
+
     return {k: v for k, v in merged.items() if k not in unmanaged}, unmanaged
 
 
@@ -258,6 +272,7 @@ def prepare(target: str, roots: Sequence[Path]) -> Prepared | None:
         if VERBOSE:
             info(f'{target}: no fragments in any layer; skipped')
         return None
+
     managed, unmanaged = compose(fragments)
     return Prepared(target, managed, unmanaged)
 
@@ -282,11 +297,13 @@ def read_state(state: Path) -> dict[str, object] | None:
     """
     if not state.is_file():
         return None
+
     try:
         data = json.loads(state.read_text(encoding='utf-8'))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         warn(f'ignoring unusable state file {state} ({exc!s}); treating it as absent')
         return None
+
     if not isinstance(data, dict):
         warn(f'ignoring unusable state file {state} (not a JSON object); treating it as absent')
         return None
@@ -309,8 +326,10 @@ def atomic_write(path: Path, text: str, default_mode: int, *, preserve_mode: boo
     if preserve_mode:
         with contextlib.suppress(OSError):
             mode = stat.S_IMODE(path.stat().st_mode)
+
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
+
     tmp = Path(tmp_name)
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as handle:
@@ -350,14 +369,17 @@ def _backup(dest: Path) -> Path:
         relative = dest.relative_to(home)
     except ValueError:
         relative = Path(dest.name)
-    backup = home / '.dotfiles-backup' / time.strftime('%Y%m%d-%H%M%S') / relative
+
+    backup  = home / '.dotfiles-backup' / time.strftime('%Y%m%d-%H%M%S') / relative
     current = home
     for part in backup.parent.relative_to(home).parts:
         current = current / part
         current.mkdir(mode=BACKUP_DIR_MODE, exist_ok=True)
+
     fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, BACKUP_FILE_MODE)
     with os.fdopen(fd, 'wb') as handle:
         handle.write(dest.read_bytes())
+
     backup.chmod(BACKUP_FILE_MODE)
     return backup
 
@@ -373,6 +395,7 @@ def render_target(prepared: Prepared, *, mode: str, force: bool) -> int:
     :return: 0 ok / in sync, 1 drift refused / out of sync
     """
     target, managed, unmanaged = prepared
+
     new_text = dumps(managed)
     dest     = Path(TARGETS[target]).expanduser()
     state    = state_path(target)
@@ -390,12 +413,14 @@ def render_target(prepared: Prepared, *, mode: str, force: bool) -> int:
                 live = parsed
             else:
                 live_problem = 'is not a JSON object'
+
     live_managed = {k: v for k, v in live.items() if k not in unmanaged} if live is not None else None
     live_managed_text = dumps(live_managed) if live_managed is not None else None
 
     if mode == 'diff':
         print(_diff(live_managed_text or '', new_text, f'{dest} (live)', f'{dest} (rendered)'), end='')
         return 0
+
     if mode == 'check':
         if live_managed_text == new_text:
             return 0
@@ -404,8 +429,9 @@ def render_target(prepared: Prepared, *, mode: str, force: bool) -> int:
 
     current = live_managed_text == new_text
     in_sync = False
-    if last is not None and live_managed is not None:
+    if (last is not None) and (live_managed is not None):
         in_sync = canonical(last) == canonical(live_managed)
+
     drifted = dest.exists() and not current and not in_sync
     if drifted and not force:
         reason = live_problem or 'was edited since the last render'
@@ -429,6 +455,7 @@ def render_target(prepared: Prepared, *, mode: str, force: bool) -> int:
         info(f'{target}: rendered {dest}')
     elif VERBOSE:
         info(f'{target}: already current')
+
     atomic_write(state, new_text, DEFAULT_STATE_MODE, preserve_mode=False)
     return 0
 
@@ -442,13 +469,13 @@ class Args(argparse.Namespace):
     """
     :class:`argparse.Namespace` annotated with args supported by this script.
     """
-    targets:      Sequence[str]
-    diff:         bool
-    check:        bool
-    list_targets: bool
-    force:        bool
-    repo:         str
-    verbose:      bool
+    targets:      Sequence[str]     # positional arg(s) "TARGETS"
+    diff:         bool              # --diff
+    check:        bool              # --check
+    list_targets: bool              # --list-targets
+    force:        bool              # --force
+    repo:         str               # --repo
+    verbose:      bool              # --verbose
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:
@@ -464,18 +491,46 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
         description='Render JSON settings files from per-layer fragments',
         formatter_class=functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
     )
-    parser.add_argument('targets', nargs='*', help=f'Targets to render (default: all of {", ".join(TARGETS)})')
+    parser.add_argument(
+        'targets',
+        nargs='*',
+        help=f'Targets to render (default: all of {", ".join(TARGETS)})',
+    )
+
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument('--diff', action='store_true', help='Show live-vs-rendered differences; write nothing')
-    mode.add_argument('--check', action='store_true', help='Exit 1 if a target is out of sync; write nothing')
+    mode.add_argument(
+        '--diff',
+        action='store_true',
+        help='Show live-vs-rendered differences; write nothing',
+    )
+    mode.add_argument(
+        '--check',
+        action='store_true',
+        help='Exit 1 if a target is out of sync; write nothing',
+    )
     mode.add_argument(
         '--list-targets',
         action='store_true',
         help="Print each target's path relative to HOME, one per line; read nothing else",
     )
-    parser.add_argument('--force', action='store_true', help='Overwrite in-app edits (live file is backed up first)')
-    parser.add_argument('--repo', default=str(DEFAULT_REPO), help='Base repository root (default: this repo)')
-    parser.add_argument('-v', '--verbose', action='store_true', help='Report skipped and already-current targets')
+
+    parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Overwrite in-app edits (live file is backed up first)',
+    )
+    parser.add_argument(
+        '--repo',
+        default=str(DEFAULT_REPO),
+        help='Base repository root (default: this repo)',
+    )
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='store_true',
+        help='Report skipped and already-current targets',
+    )
+
     args    = parser.parse_args(argv, namespace=Args())
     VERBOSE = args.verbose
     return args

@@ -44,8 +44,10 @@ _PUBLIC_HOSTS_ALT:   str             = '|'.join(PUBLIC_VENDOR_HOSTS)
 # Written so their own source text can never match them (escaped dot before the TLD, `/{2}` in place of a literal
 # double slash), which lets this file be scanned like any other without an exclusion
 BASELINE_PATTERNS: tuple[str, ...] = (
+
     # Corporate domain, any subdomain, and email addresses at it -- except the bare public vendor hosts above
     rf'(?<![\w.-])(?!(?:{_PUBLIC_HOSTS_ALT})\.apple\.com\b)(?:[\w-]+\.)*apple\.com\b',
+
     # Internal bug-tracker URL schemes
     r'\b(?:rdar|radar):/{2}',
 )
@@ -109,7 +111,7 @@ def style(text: Any = '', *, fg: str | None = None, bold: bool | None = None, di
     :return: styled text
     """
     bits: list[str] = []
-    if fg:
+    if fg is not None:
         bits.append(f'\033[{ANSI_COLOR[fg]}m')
     if bold is not None:
         bits.append(f'\033[{1 if bold else 22}m')

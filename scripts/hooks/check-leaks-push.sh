@@ -8,8 +8,9 @@
 # removes (the tip is clean, but the commit still publishes it). Only added lines are scanned: a removed line is either
 # added earlier in the same range (and caught there) or already public. The paths each commit adds, copies, or renames
 # to are appended to the scanned patch, since a leak that lives only in a path (an empty file, a pure rename) has no
-# added line. Merge commits are diffed with --cc so a leak introduced by a conflict resolution is seen. Range: PRE_COMMIT_FROM_REF..PRE_COMMIT_TO_REF
-# when the from-ref exists locally; otherwise merge-base(to, origin/main)..to; otherwise the tip commit only.
+# added line. Merge commits are diffed with --cc so a leak introduced by a conflict resolution is seen.
+# Range: PRE_COMMIT_FROM_REF..PRE_COMMIT_TO_REF when the from-ref exists locally;
+# otherwise merge-base(to, origin/main)..to; otherwise the tip commit only.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
