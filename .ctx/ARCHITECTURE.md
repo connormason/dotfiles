@@ -56,7 +56,7 @@ Inventory structure:
 
 ```
 inventory/
-├── inventory.yml              # Host definitions
+├── inventory.yml             # Host definitions
 ├── group_vars/
 │   └── all/vault.yml         # Shared secrets
 └── host_vars/

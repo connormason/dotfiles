@@ -12,7 +12,9 @@ from typing import NamedTuple
 from typing import Optional
 from typing import Union
 
-""" Module metadata """
+# ====================================================================================================
+# Module metadata
+# ====================================================================================================
 
 
 ANSIBLE_METADATA: dict[str, Any] = {
@@ -290,7 +292,9 @@ valid_media_by_port:
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
-""" Exceptions """
+# ====================================================================================================
+# Exceptions
+# ====================================================================================================
 
 
 class ConfigurationError(Exception):
@@ -300,7 +304,9 @@ class ConfigurationError(Exception):
     pass
 
 
-""" Regex definitions """
+# ====================================================================================================
+# Regex definitions
+# ====================================================================================================
 
 
 HARDWARE_PORTS_REGEX = re.compile(
@@ -323,7 +329,9 @@ INTERFACE_INFO_REGEXES: dict[str, re.Pattern[str]] = {
 }
 
 
-""" Lookups """
+# ====================================================================================================
+# Lookups
+# ====================================================================================================
 
 
 INTERFACE_CONFIGURATION_MAP: dict[str, str] = {
@@ -346,7 +354,9 @@ SPEED_MAPPING: dict[int, str] = {
 SPEED_REVERSE_MAPPING: dict[str, int] = {v: k for k, v in SPEED_MAPPING.items()}
 
 
-""" Parsed types """
+# ====================================================================================================
+# Parsed types
+# ====================================================================================================
 
 
 class HardwarePortEntry(NamedTuple):
@@ -402,7 +412,9 @@ class NetworkServiceInfo(NamedTuple):
     address:            Optional[str]   # MAC address. Can be (null). "Ethernet Address"
 
 
-""" Parsing helpers """
+# ====================================================================================================
+# Parsing helpers
+# ====================================================================================================
 
 
 def parse_listhardwarereports(stdout: str) -> dict[str, HardwarePortEntry]:
@@ -521,7 +533,9 @@ def parse_getinfo(name: str, stdout: str) -> Optional[NetworkServiceInfo]:
     )
 
 
-""" Core module logic """
+# ====================================================================================================
+# Core module logic
+# ====================================================================================================
 
 
 def build_module() -> AnsibleModule:
@@ -540,17 +554,21 @@ def build_module() -> AnsibleModule:
 
                     # Required args
                     mac_address=dict(
-                        type='str', required=True,
+                        type='str',
+                        required=True,
                     ),
 
                     # Interface customization args
                     name=dict(
-                        type='str', required=False, default=None,
+                        type='str',
+                        required=False,
+                        default=None,
                     ),
 
                     # DHCP args
                     dhcp=dict(
-                        type='bool', required=False,
+                        type='bool',
+                        required=False,
                     ),
 
                     # DHCP w/ manual address args
@@ -559,7 +577,8 @@ def build_module() -> AnsibleModule:
                         required=False,
                         options=dict(
                             ip_address=dict(
-                                type='str', required=True,
+                                type='str',
+                                required=True,
                             ),
                         ),
                     ),
@@ -570,13 +589,17 @@ def build_module() -> AnsibleModule:
                         required=False,
                         options=dict(
                             ip_address=dict(
-                                type='str', required=True,
+                                type='str',
+                                required=True,
                             ),
                             subnet_mask=dict(
-                                type='str', required=True,
+                                type='str',
+                                required=True,
                             ),
                             router=dict(
-                                type='str', required=False, default=None,
+                                type='str',
+                                required=False,
+                                default=None,
                             ),
                         ),
                     ),
@@ -587,25 +610,34 @@ def build_module() -> AnsibleModule:
                         required=False,
                         options=dict(
                             off=dict(
-                                type='bool', required=False,
+                                type='bool',
+                                required=False,
                             ),
                             automatic=dict(
-                                type='bool', required=False,
+                                type='bool',
+                                required=False,
                             ),
                             link_local=dict(
-                                type='bool', required=False, aliases=['link_local_only'],
+                                type='bool',
+                                required=False,
+                                aliases=['link_local_only'],
                             ),
                             manual=dict(
-                                type='dict', required=False,
+                                type='dict',
+                                required=False,
                                 options=dict(
                                     address=dict(
-                                        type='str', required=True,
+                                        type='str',
+                                        required=True,
                                     ),
                                     prefix_length=dict(
-                                        type='int', required=True,
+                                        type='int',
+                                        required=True,
                                     ),
                                     router=dict(
-                                        type='str', required=False, default=None,
+                                        type='str',
+                                        required=False,
+                                        default=None,
                                     ),
                                 ),
                             ),
@@ -623,10 +655,16 @@ def build_module() -> AnsibleModule:
                     # DNS server/search domain args
                     # Set to empty list to clear out configured values
                     dns_servers=dict(
-                        type='list', elements='str', required=False, default=None,
+                        type='list',
+                        elements='str',
+                        required=False,
+                        default=None,
                     ),
                     search_domains=dict(
-                        type='list', elements='str', required=False, default=None,
+                        type='list',
+                        elements='str',
+                        required=False,
+                        default=None,
                     ),
 
                     # Hardware configuration args
@@ -636,21 +674,31 @@ def build_module() -> AnsibleModule:
                         default=None,
                         options=dict(
                             speed=dict(
-                                type='int', required=False, default=None,
+                                type='int',
+                                required=False,
+                                default=None,
                                 choices=[10, 100, 1000],
                             ),
                             duplex=dict(
-                                type='str',  required=False, default=None,
+                                type='str',
+                                required=False,
+                                default=None,
                                 choices=['full', 'full-duplex', 'half', 'half-duplex'],
                             ),
                             flow_control=dict(
-                                type='bool', required=False, default=None,
+                                type='bool',
+                                required=False,
+                                default=None,
                             ),
                             energy_efficient_ethernet=dict(
-                                type='bool', required=False, default=None,
+                                type='bool',
+                                required=False,
+                                default=None,
                             ),
                             mtu=dict(
-                                type='int',  required=False, default=None,
+                                type='int',
+                                required=False,
+                                default=None,
                             ),
                         ),
                         required_together=['speed', 'duplex', 'flow_control', 'energy_efficient_ethernet'],
@@ -747,7 +795,8 @@ class ConfigureNetworkInterfaces:
             raise ConfigurationError(f'Command `networksetup {cmd}` failed: {stderr}')
         return rc, stdout, stderr
 
-    """ ``networksetup`` command execution/parsing helpers """
+    # ``networksetup`` command execution/parsing helpers
+    # ----------------------------------------------------------------------------------------------------
 
     def get_hardware_ports_by_mac_address(self) -> dict[str, HardwarePortEntry]:
         """
@@ -922,7 +971,8 @@ class ConfigureNetworkInterfaces:
             return []
         return [line.strip() for line in stdout.splitlines()]
 
-    """ Main configuration command methods """
+    # Main configuration command methods
+    # ----------------------------------------------------------------------------------------------------
 
     def validate_config(self) -> None:
         """
