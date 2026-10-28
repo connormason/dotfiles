@@ -371,12 +371,17 @@ no arguments.
 Commits before the range are not scanned. Commit messages are written to a temporary file and scanned like any other
 file; identities are piped to `check-leaks.py --identities-from -`.
 
-**Patches.** The added lines of every pushed commit (`git log -p -U0 --format='commit %h' --no-color <range>`) are
-written to a temporary file and scanned too, so content that one pushed commit adds and a later one removes is caught
-even though the tip is clean. Removed and context lines are blanked rather than deleted: a removed line was either added
-earlier in the range (and is caught there) or is already public, and blanking keeps the reported line numbers aligned
-with that command's output. The script prints `pre-push: scanning <range>` first and, on findings,
-`pre-push: inspect with: <that command>`.
+**Patches.** The added lines of every pushed commit
+(`git log -p -U0 --cc --no-textconv --format='commit %h' --no-color <range>`; `--cc` shows the combined diff of merge
+commits, so a leak introduced by a conflict resolution is seen) are written to a temporary file and scanned too, so
+content that one pushed commit adds and a later one removes is caught even though the tip is clean. Removed and context
+lines are blanked rather than deleted: a removed line was either added earlier in the range (and is caught there) or is
+already public, and blanking keeps the reported line numbers aligned with that command's output. The paths each pushed
+commit adds, copies, or renames to
+(`git log --name-only --diff-filter=ACR --cc --format='commit %h' --no-color <range>`) are appended to the same file,
+because a leak that lives only in a path (an empty file, a pure rename) has no added line. The script prints
+`pre-push: scanning <range>` first and, on findings, `pre-push: inspect with: <the patch command>` followed by
+`pre-push: and (paths): <the path command>`.
 
 **File contents** at the tip are scanned by the separate `check-leaks-push-files` hook entry, which prek feeds the files
 changed between the two refs.

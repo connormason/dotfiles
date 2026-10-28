@@ -127,7 +127,10 @@ class TestCheckLeaksPush:
         assert result.returncode == 1
         assert CORP_DOMAIN not in result.stdout
         assert f'pre-push: scanning {base}..{head}' in result.stdout
-        hint = f"pre-push: inspect with: git log -p -U0 --format='commit %h' --no-color {base}..{head}"
+        hint = (
+            "pre-push: inspect with: git log -p -U0 --cc --no-textconv --format='commit %h' --no-color "
+            f'{base}..{head}'
+        )
         assert hint in result.stdout
 
     def test_removing_content_that_predates_range_passes(self, repo: Path) -> None:
@@ -140,3 +143,45 @@ class TestCheckLeaksPush:
         assert result.returncode == 0, result.stdout
         assert f'pre-push: scanning {base}..{head}' in result.stdout
         assert 'inspect with' not in result.stdout
+
+    def test_empty_file_with_leaky_path_fails(self, repo: Path) -> None:
+        """
+        Test that a leak present only in the path of a pushed empty file is caught
+        """
+        base = _git(repo, 'rev-parse', 'HEAD')
+        head = _write_commit(repo, f'pkgs.{CORP_DOMAIN}.txt', '', 'docs: add placeholder')
+        result = _run(repo, base, head)
+        assert result.returncode == 1
+        assert CORP_DOMAIN not in result.stdout
+
+    def test_pure_rename_to_leaky_path_fails(self, repo: Path) -> None:
+        """
+        Test that a content-preserving rename to a leaky path is caught although the patch has no added lines
+        """
+        base = _write_commit(repo, 'notes.txt', 'keep: example.org\n', 'docs: add notes')
+        _git(repo, 'mv', 'notes.txt', f'pkgs.{CORP_DOMAIN}.txt')
+        _git(repo, 'commit', '-q', '-m', 'docs: rename notes')
+        head = _git(repo, 'rev-parse', 'HEAD')
+        result = _run(repo, base, head)
+        assert result.returncode == 1
+        assert CORP_DOMAIN not in result.stdout
+
+    def test_merge_resolution_adding_leak_fails(self, repo: Path) -> None:
+        """
+        Test that a leak introduced only by a merge's conflict resolution is caught
+        """
+        _write_commit(repo, 'notes.txt', 'mirror: example.org\n', 'docs: add notes')
+        base = _git(repo, 'rev-parse', 'HEAD')
+        _git(repo, 'checkout', '-q', '-b', 'side')
+        _write_commit(repo, 'notes.txt', 'mirror: side.example.org\n', 'docs: side notes')
+        _git(repo, 'checkout', '-q', 'main')
+        _write_commit(repo, 'notes.txt', 'mirror: main.example.org\n', 'docs: main notes')
+        merge = subprocess.run(['git', '-C', str(repo), 'merge', 'side'], capture_output=True, text=True, check=False)
+        assert merge.returncode != 0
+        (repo / 'notes.txt').write_text(f'mirror: pkgs.{CORP_DOMAIN}\n', encoding='utf-8')
+        _git(repo, 'add', 'notes.txt')
+        _git(repo, 'commit', '-q', '--no-edit')
+        head = _git(repo, 'rev-parse', 'HEAD')
+        result = _run(repo, base, head)
+        assert result.returncode == 1
+        assert CORP_DOMAIN not in result.stdout
