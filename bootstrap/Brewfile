@@ -13,7 +13,6 @@ tap "jesseduffield/lazydocker"
 # Formulae
 # keep-sorted start
 brew "Adembc/homebrew-tap/lazyssh"
-brew "autojump"
 brew "bat"
 brew "btop"
 brew "cmake"

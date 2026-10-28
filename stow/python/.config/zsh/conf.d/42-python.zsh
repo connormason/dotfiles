@@ -15,5 +15,5 @@ export WORKON_HOME=$HOME/.virtualenvs
 
 # Generate & activate `uv` shell completions
 if (( $+commands[uv] )); then
-    eval "$(uv generate-shell-completion zsh)"
+    cached_eval uv uv generate-shell-completion zsh
 fi

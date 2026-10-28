@@ -6,7 +6,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
+import signal
 import stat
 import subprocess
 import time
@@ -49,8 +51,62 @@ class Home:
         return self.run('zsh', '-i', '-c', command)
 
 
-STARTUP_BUDGET_SECONDS = 0.3
-TIMING_SAMPLES         = 3
+STARTUP_BUDGET_MS = 300   # on a machine whose calibration run takes CALIBRATION_MS or less
+CALIBRATION_MS    = 25
+TIMING_SAMPLES    = 3
+PTY_TIMEOUT       = 10    # seconds before a terminal run is killed and the test fails
+
+
+@dataclass
+class StartupBudget:
+    """
+    Startup-time budget for this session, scaled by how slowly this machine launches processes right now
+    """
+    calib_ms:  float
+    budget_ms: float
+    source:    str
+
+    def check(self, timings: list[float], label: str) -> None:
+        """
+        Assert that the best of the timings fits the budget, reporting the calibration on failure
+
+        :param timings: wall times in seconds
+        :param label: what was timed, for the assertion message
+        """
+        best_ms = min(timings) * 1000
+        samples = ', '.join(f'{t * 1000:.0f}' for t in timings)
+        assert best_ms < self.budget_ms, (
+            f'{label} took {best_ms:.0f} ms at best ({samples} ms); budget {self.budget_ms:.0f} ms '
+            f'({self.source}; calib {self.calib_ms:.1f} ms for 10 process launches)'
+        )
+
+
+@pytest.fixture(scope='session')
+def startup_budget() -> StartupBudget:
+    """
+    Calibrate the startup budget once per session
+
+    The calibration is the best of five wall times of a bare zsh launching /usr/bin/true ten times, which tracks
+    process-launch cost under the current load. The budget is 300 ms, scaled up by calib / 25 ms when the machine is
+    slower than that. DOTFILES_STARTUP_BUDGET_MS overrides the computed budget.
+    """
+    zsh = shutil.which('zsh')
+    assert zsh is not None
+    best = float('inf')
+    for _ in range(5):
+        start = time.monotonic()
+        subprocess.run([zsh, '-f', '-c', 'repeat 10 /usr/bin/true'], check=True)
+        best = min(best, time.monotonic() - start)
+    calib_ms = best * 1000
+
+    override = os.environ.get('DOTFILES_STARTUP_BUDGET_MS', '')
+    if override:
+        try:
+            return StartupBudget(calib_ms, float(override), 'DOTFILES_STARTUP_BUDGET_MS override')
+        except ValueError:
+            pytest.fail(f'DOTFILES_STARTUP_BUDGET_MS must be a number of milliseconds, got {override!r}')
+    scale = max(1.0, calib_ms / CALIBRATION_MS)
+    return StartupBudget(calib_ms, STARTUP_BUDGET_MS * scale, f'calibrated x{scale:.2f}')
 
 
 def run_zsh_with_tty(
@@ -59,30 +115,43 @@ def run_zsh_with_tty(
     """
     Run an interactive zsh command on a pseudo-terminal and return the result with its wall time
 
-    A real terminal is what makes the starship and fzf snippets initialize, which plain pipes never do.
+    A real terminal is what makes the starship and fzf snippets initialize, which plain pipes never do. The run is
+    killed (with its whole process group) after PTY_TIMEOUT seconds; the test is skipped when no pseudo-terminal can be
+    allocated.
 
     :param home: isolated HOME to run in
     :param command: zsh command string
     :param extra_env: environment overrides layered over the HOME's environment (TERM defaults to xterm-256color)
+    :raises subprocess.TimeoutExpired: if the shell does not exit within PTY_TIMEOUT seconds
     :return: completed process (stdout holds the terminal output, stderr is empty) and elapsed seconds
     """
     import pty  # POSIX-only: imported lazily so test collection works everywhere
     import select
 
-    leader, follower = pty.openpty()
-    env              = {**home.env, 'TERM': 'xterm-256color', **(extra_env or {})}
+    try:
+        leader, follower = pty.openpty()
+    except OSError as e:
+        pytest.skip(f'no pseudo-terminal available: {e}')
+    env  = {**home.env, 'TERM': 'xterm-256color', **(extra_env or {})}
+    proc = None
     try:
         start = time.monotonic()
         proc  = subprocess.Popen(
             ['zsh', '-i', '-c', command],
             stdin=follower, stdout=follower, stderr=follower, env=env, cwd=home.path, start_new_session=True,
         )
-        returncode = proc.wait()
+        returncode = proc.wait(timeout=PTY_TIMEOUT)
         elapsed    = time.monotonic() - start
         output     = b''
         while select.select([leader], [], [], 0.1)[0]:
             output += os.read(leader, 65536)
     finally:
+        if proc is not None and proc.poll() is None:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)  # start_new_session made the shell its group's leader
+            except ProcessLookupError:
+                pass
+            proc.wait()
         os.close(leader)
         os.close(follower)
     return subprocess.CompletedProcess(proc.args, returncode, output, b''), elapsed
@@ -151,11 +220,21 @@ class TestShell:
     """
     Tests for the shell package
     """
-    def test_interactive_zsh_is_clean_and_fast(self, home: Home) -> None:
+    def test_interactive_zsh_is_clean(self, home: Home) -> None:
         """
-        Test that an interactive shell starts without stderr output in under 300 ms (best of three warm runs)
+        Test that an interactive shell starts without stderr output, cold and warm
         """
-        home.zsh('exit')  # warm caches (compinit dump) before timing
+        for _ in range(2):
+            result = home.zsh('exit')
+            assert result.returncode == 0
+            assert result.stderr == ''
+
+    @pytest.mark.timing
+    def test_interactive_zsh_is_clean_and_fast(self, home: Home, startup_budget: StartupBudget) -> None:
+        """
+        Test that an interactive shell starts without stderr output within the startup budget (best of three warm runs)
+        """
+        home.zsh('exit')  # warm caches (compinit dump, generated completions) before timing
         timings = []
         for _ in range(TIMING_SAMPLES):
             start  = time.monotonic()
@@ -163,7 +242,7 @@ class TestShell:
             timings.append(time.monotonic() - start)
             assert result.returncode == 0
             assert result.stderr == ''
-        assert min(timings) < STARTUP_BUDGET_SECONDS, f'zsh -i took {min(timings):.3f}s at best ({timings})'
+        startup_budget.check(timings, 'zsh -i')
 
     def test_overlay_snippet_is_sourced(self, home: Home) -> None:
         """
@@ -200,6 +279,337 @@ class TestShell:
         )
         assert result.returncode == 0
         assert result.stderr == ''
+
+
+def write_fake_tool(path: Path, log: Path, output: str, status: int = 0) -> Path:
+    """
+    Write an executable stand-in that appends its arguments to log, prints output, and exits with status
+
+    :param path: where to create the tool (parent directories are created)
+    :param log: invocation log, one line of arguments per run
+    :param output: text printed on stdout
+    :param status: exit status
+    :return: the tool's path
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f'#!/bin/sh\nprintf \'%s\\n\' "$*" >> {shlex.quote(str(log))}\n'
+        f"cat <<'EOF'\n{output}\nEOF\nexit {status}\n",
+        encoding='utf-8',
+    )
+    path.chmod(0o755)
+    return path
+
+
+def invocations(log: Path) -> list[str]:
+    """
+    Return the argument lines a fake tool recorded, oldest first
+    """
+    return log.read_text(encoding='utf-8').splitlines() if log.exists() else []
+
+
+def make_older(path: Path, seconds: float) -> None:
+    """
+    Set a file's mtime (not following symlinks) to the given number of seconds ago
+    """
+    when = time.time() - seconds
+    os.utime(path, (when, when), follow_symlinks=False)
+
+
+class TestStartupCaches:
+    """
+    Tests for cached generator output (cached_eval in 00-lib) and the completion dump (20-completion)
+    """
+    @staticmethod
+    def _env(home: Home, root: Path, **extra: str) -> dict[str, str]:
+        """
+        Environment with only root/bin and the system directories on PATH, and a private cache directory
+        """
+        return {
+            **home.env,
+            'PATH': f'{root / "bin"}:/usr/bin:/bin',
+            'DOTFILES_BREW_PROBE': '0',
+            'XDG_CACHE_HOME': str(root / 'cache'),
+            **extra,
+        }
+
+    @staticmethod
+    def _zsh(home: Home, env: dict[str, str], command: str) -> subprocess.CompletedProcess[str]:
+        """
+        Run an interactive zsh command with stdin closed (so a compinit prompt fails fast instead of waiting)
+        """
+        zsh = shutil.which('zsh')
+        assert zsh is not None
+        return subprocess.run(
+            [zsh, '-i', '-c', command],
+            capture_output=True, text=True, check=False, env=env, cwd=home.path, stdin=subprocess.DEVNULL,
+        )
+
+    # ==============================================================================
+    # cached_eval
+    # ==============================================================================
+
+    PROBE = 'cached_eval fake faketool init zsh; print -r -- "status=$? probe=${CACHED_PROBE-unset}"'
+
+    def test_second_start_reuses_the_cache(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that the generator runs once and later shells source its saved output
+        """
+        log = tmp_path / 'calls.log'
+        write_fake_tool(tmp_path / 'bin' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
+        env = self._env(home, tmp_path)
+        for _ in range(2):
+            result = self._zsh(home, env, self.PROBE)
+            assert result.stderr == ''
+            assert result.stdout.strip() == 'status=0 probe=loaded'
+        assert invocations(log) == ['init zsh']
+        assert (tmp_path / 'cache' / 'zsh' / 'fake.zsh').is_file()
+        assert list((tmp_path / 'cache' / 'zsh').glob('*.tmp')) == []
+
+    def test_newer_binary_regenerates(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that touching the binary newer than the cache makes the next shell regenerate it
+        """
+        log  = tmp_path / 'calls.log'
+        tool = write_fake_tool(tmp_path / 'bin' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
+        env  = self._env(home, tmp_path)
+        self._zsh(home, env, self.PROBE)
+        future = time.time() + 3600
+        os.utime(tool, (future, future))
+        result = self._zsh(home, env, self.PROBE)
+        assert result.stdout.strip() == 'status=0 probe=loaded'
+        assert invocations(log) == ['init zsh', 'init zsh']
+
+    def test_newer_symlink_target_regenerates(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that the mtime of a symlinked binary's target counts, as for Homebrew's bin/ links into the Cellar
+        """
+        log    = tmp_path / 'calls.log'
+        target = write_fake_tool(tmp_path / 'Cellar' / 'v1' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
+        link   = tmp_path / 'bin' / 'faketool'
+        link.parent.mkdir()
+        link.symlink_to(target)
+        make_older(link, 7200)
+        env = self._env(home, tmp_path)
+        self._zsh(home, env, self.PROBE)
+        future = time.time() + 3600
+        os.utime(target, (future, future))
+        self._zsh(home, env, self.PROBE)
+        assert invocations(log) == ['init zsh', 'init zsh']
+
+    def test_retargeted_symlink_regenerates_even_when_the_new_binary_is_older(
+        self, home: Home, tmp_path: Path
+    ) -> None:
+        """
+        Test that an upgrade which relinks to a binary built before the cache was written still regenerates it
+        """
+        log  = tmp_path / 'calls.log'
+        old  = write_fake_tool(tmp_path / 'Cellar' / 'v1' / 'faketool', log, 'typeset -g CACHED_PROBE=v1')
+        new  = write_fake_tool(tmp_path / 'Cellar' / 'v2' / 'faketool', log, 'typeset -g CACHED_PROBE=v2')
+        link = tmp_path / 'bin' / 'faketool'
+        link.parent.mkdir()
+        link.symlink_to(old)
+        env = self._env(home, tmp_path)
+        assert self._zsh(home, env, self.PROBE).stdout.strip() == 'status=0 probe=v1'
+        make_older(new, 86400)  # bottles keep their build-time mtimes, older than a cache written since
+        link.unlink()
+        link.symlink_to(new)
+        assert self._zsh(home, env, self.PROBE).stdout.strip() == 'status=0 probe=v2'
+        assert invocations(log) == ['init zsh', 'init zsh']
+
+    def test_changed_arguments_regenerate(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that the cache records the generator's arguments, so editing a snippet's command takes effect
+        """
+        log = tmp_path / 'calls.log'
+        write_fake_tool(tmp_path / 'bin' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
+        env = self._env(home, tmp_path)
+        self._zsh(home, env, self.PROBE)
+        self._zsh(home, env, self.PROBE.replace('init zsh', 'init zsh --cmd j'))
+        assert invocations(log) == ['init zsh', 'init zsh --cmd j']
+
+    @pytest.mark.parametrize(
+        ('output', 'status'),
+        [
+            ('typeset -g CACHED_PROBE=partial', 3),
+            ('',                                0),
+        ],
+    )
+    def test_failed_or_empty_generation_is_not_cached(
+        self, home: Home, tmp_path: Path, output: str, status: int
+    ) -> None:
+        """
+        Test that a failing or silent generator leaves no cache, sources nothing, and is retried by the next shell
+        """
+        log = tmp_path / 'calls.log'
+        write_fake_tool(tmp_path / 'bin' / 'faketool', log, output, status)
+        env = self._env(home, tmp_path)
+        for _ in range(2):
+            result = self._zsh(home, env, self.PROBE)
+            assert result.stderr == ''
+            assert result.stdout.strip() == 'status=1 probe=unset'
+        assert invocations(log) == ['init zsh', 'init zsh']
+        assert list((tmp_path / 'cache' / 'zsh').glob('fake*')) == []
+
+    def test_unwritable_cache_falls_back_to_direct_eval(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that the tool still initializes, silently, when the cache directory cannot be created
+        """
+        log     = tmp_path / 'calls.log'
+        blocker = tmp_path / 'not-a-dir'
+        blocker.write_text('', encoding='utf-8')
+        write_fake_tool(tmp_path / 'bin' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
+        env    = self._env(home, tmp_path, XDG_CACHE_HOME=str(blocker))
+        result = self._zsh(home, env, self.PROBE)
+        assert result.stderr == ''
+        assert result.stdout.strip() == 'status=0 probe=loaded'
+
+    def test_absent_binary_is_a_silent_no_op(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that naming a tool that is not installed returns 1 without output or a cache file
+        """
+        result = self._zsh(home, self._env(home, tmp_path), self.PROBE)
+        assert result.stderr == ''
+        assert result.stdout.strip() == 'status=1 probe=unset'
+        assert not (tmp_path / 'cache' / 'zsh' / 'fake.zsh').exists()
+
+    @pytest.mark.parametrize(
+        ('tool', 'args', 'terminal'),
+        [
+            ('pkl',      'shell-completion zsh',          False),
+            ('wt',       'config shell init zsh',         False),
+            ('uv',       'generate-shell-completion zsh', False),
+            ('fzf',      '--zsh',                         True),
+            ('starship', 'init zsh',                      True),
+        ],
+    )
+    def test_snippet_caches_generated_output(
+        self, home: Home, tmp_path: Path, tool: str, args: str, terminal: bool
+    ) -> None:
+        """
+        Test that each snippet's generator runs on the first start only, and again once its binary is newer
+        """
+        if terminal and os.name != 'posix':
+            pytest.skip('pseudo-terminals are POSIX-only')
+        log    = tmp_path / 'calls.log'
+        binary = write_fake_tool(tmp_path / 'bin' / tool, log, f'typeset -g CACHED_PROBE_{tool}=1')
+        env    = self._env(home, tmp_path)
+        probe  = f'print -r -- "probe=${{CACHED_PROBE_{tool}-unset}}"'
+
+        def start() -> str:
+            if terminal:
+                overrides = {key: env[key] for key in ('PATH', 'DOTFILES_BREW_PROBE', 'XDG_CACHE_HOME')}
+                on_tty, _elapsed = run_zsh_with_tty(home, probe, overrides)
+                return on_tty.stdout.decode().strip()
+            piped = self._zsh(home, env, probe)
+            assert piped.stderr == ''
+            return piped.stdout.strip()
+
+        counts = []
+        for step in range(3):
+            if step == 2:
+                future = time.time() + 3600
+                os.utime(binary, (future, future))
+            assert start() == 'probe=1'
+            counts.append(len(invocations(log)))
+        assert counts == [1, 1, 2]
+        assert set(invocations(log)) == {args}
+
+    # ==============================================================================
+    # compinit
+    # ==============================================================================
+
+    @staticmethod
+    def _fake_compaudit(root: Path) -> tuple[Path, Path]:
+        """
+        Put a compaudit that records each run in a function directory, returning (directory, log)
+        """
+        log    = root / 'audit.log'
+        fndir  = root / 'functions'
+        fndir.mkdir()
+        (fndir / 'compaudit').write_text(f'print -r -- audit >> {shlex.quote(str(log))}\nreturn 0\n', encoding='utf-8')
+        return fndir, log
+
+    @staticmethod
+    def _fpath_with(directory: Path) -> str:
+        """
+        Return zsh's default FPATH with directory prepended (an FPATH in the environment replaces the default)
+        """
+        zsh = shutil.which('zsh')
+        assert zsh is not None
+        default = subprocess.run([zsh, '-f', '-c', 'print -r -- $FPATH'], capture_output=True, text=True, check=True)
+        return f'{directory}:{default.stdout.strip()}'
+
+    def _dump(self, root: Path) -> Path:
+        """
+        Return the single completion dump under root's cache directory
+        """
+        dumps = sorted((root / 'cache' / 'zsh').glob('zcompdump-*'))
+        assert len(dumps) == 1, dumps
+        return dumps[0]
+
+    def test_compinit_audits_only_without_a_dump(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that the first shell runs the full compinit (security audit), and the next loads the dump as-is
+        """
+        fndir, log = self._fake_compaudit(tmp_path)
+        env        = self._env(home, tmp_path, FPATH=self._fpath_with(fndir))
+        counts     = []
+        for _ in range(2):
+            result = self._zsh(home, env, 'exit')
+            assert result.returncode == 0
+            assert result.stderr == ''
+            counts.append(len(invocations(log)))
+        assert counts == [1, 1]
+        assert self._dump(tmp_path).stat().st_size > 0
+
+    def test_day_old_dump_gets_one_full_check(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that a dump older than 24 hours triggers one full compinit, which resets its age
+        """
+        fndir, log = self._fake_compaudit(tmp_path)
+        env        = self._env(home, tmp_path, FPATH=self._fpath_with(fndir))
+        self._zsh(home, env, 'exit')
+        make_older(self._dump(tmp_path), 25 * 3600)
+        counts = []
+        for _ in range(2):
+            result = self._zsh(home, env, 'exit')
+            assert result.stderr == ''
+            counts.append(len(invocations(log)))
+        assert counts == [2, 2]
+
+    def test_pkl_completion_does_not_rerun_compinit(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that the bare compinit inside pkl's generated script is skipped, and compinit stays usable afterwards
+        """
+        fndir, audits = self._fake_compaudit(tmp_path)
+        write_fake_tool(
+            tmp_path / 'bin' / 'pkl', tmp_path / 'pkl.log',
+            'autoload -Uz compinit\ncompinit\ntypeset -g CACHED_PROBE_pkl=1',
+        )
+        env    = self._env(home, tmp_path, FPATH=self._fpath_with(fndir))
+        probe  = 'print -r -- "probe=$CACHED_PROBE_pkl compinit=${+functions[compinit]}"'
+        counts = []
+        for _ in range(2):
+            result = self._zsh(home, env, probe)
+            assert result.stderr == ''
+            assert result.stdout.strip() == 'probe=1 compinit=1'
+            counts.append(len(invocations(audits)))
+        assert counts == [1, 1]
+
+    def test_insecure_function_directory_is_ignored_without_a_prompt(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that the full compinit skips a world-writable fpath directory silently instead of asking
+        """
+        insecure = tmp_path / 'insecure'
+        insecure.mkdir()
+        (insecure / '_insecurefake').write_text('#compdef insecurefake\n', encoding='utf-8')
+        insecure.chmod(0o777)
+        env    = self._env(home, tmp_path, FPATH=self._fpath_with(insecure))
+        result = self._zsh(home, env, 'print -r -- "comp=${_comps[insecurefake]-none}"')
+        assert result.returncode == 0
+        assert result.stderr == ''
+        assert result.stdout.strip() == 'comp=none'
 
 
 class TestPythonNode:
@@ -509,7 +919,8 @@ class TestTerminalEditor:
         """
         assert sorted(p.name for p in (home.path / '.config' / 'zed').iterdir()) == ['settings.json']
 
-    def test_zsh_is_clean_and_fast_with_all_snippets(self, home: Home) -> None:
+    @pytest.mark.timing
+    def test_zsh_is_clean_and_fast_with_all_snippets(self, home: Home, startup_budget: StartupBudget) -> None:
         """
         Test that an interactive shell with every terminal snippet sourced is clean and fast (best of three runs)
         """
@@ -521,10 +932,21 @@ class TestTerminalEditor:
             timings.append(time.monotonic() - start)
             assert result.returncode == 0
             assert result.stderr == ''
-        assert min(timings) < STARTUP_BUDGET_SECONDS, f'zsh -i took {min(timings):.3f}s at best ({timings})'
+        startup_budget.check(timings, 'zsh -i')
 
     @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
-    def test_zsh_on_a_terminal_is_clean_and_fast(self, home: Home) -> None:
+    def test_zsh_on_a_terminal_is_clean(self, home: Home) -> None:
+        """
+        Test that a shell on a pseudo-terminal, where starship and fzf initialize, prints nothing, cold and warm
+        """
+        for _ in range(2):
+            result, _elapsed = run_zsh_with_tty(home, 'exit')
+            assert result.returncode == 0
+            assert result.stdout.strip() == b'', result.stdout
+
+    @pytest.mark.timing
+    @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
+    def test_zsh_on_a_terminal_is_clean_and_fast(self, home: Home, startup_budget: StartupBudget) -> None:
         """
         Test that a shell on a pseudo-terminal, where starship, fzf, and zoxide initialize, is clean and fast
         """
@@ -535,7 +957,7 @@ class TestTerminalEditor:
             timings.append(elapsed)
             assert result.returncode == 0
             assert result.stdout.strip() == b'', result.stdout
-        assert min(timings) < STARTUP_BUDGET_SECONDS, f'tty zsh -i took {min(timings):.3f}s at best ({timings})'
+        startup_budget.check(timings, 'tty zsh -i')
 
     @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
     @pytest.mark.parametrize(
@@ -621,22 +1043,6 @@ class TestTerminalEditor:
         assert result.returncode == 0
         assert result.stderr == ''
         assert result.stdout.strip() == 'prefix=unset'
-
-    def test_autojump_is_sourced_from_the_brew_prefix(self, home: Home, tmp_path: Path) -> None:
-        """
-        Test that the autojump hook reads profile.d/autojump.sh under HOMEBREW_PREFIX rather than a fixed path
-        """
-        prefix  = self._fake_prefix(tmp_path)
-        autojump = prefix / 'bin' / 'autojump'
-        autojump.write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
-        autojump.chmod(0o755)
-        script = prefix / 'etc' / 'profile.d' / 'autojump.sh'
-        script.parent.mkdir(parents=True)
-        script.write_text('export AUTOJUMP_PROBE=from-prefix\n', encoding='utf-8')
-        result = self._zsh(home, 'print -r -- $AUTOJUMP_PROBE', DOTFILES_BREW_PREFIXES=str(prefix))
-        assert result.returncode == 0
-        assert result.stderr == ''
-        assert result.stdout.strip() == 'from-prefix'
 
     def test_fzf_default_command_requires_fd(self, home: Home, tmp_path: Path) -> None:
         """

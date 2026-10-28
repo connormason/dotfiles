@@ -10,7 +10,8 @@
 # Numeric bands encode load order: 00 lib/path -> 05 homebrew -> 10 omz -> 20 completion ->
 # 30-49 tools -> 50 directories -> 60 ssh aliases -> 80 starship -> 90 banner.
 #
-# 00-lib.zsh defines shared helper functions (pathadd, fpathadd, source_if_exists) used by later fragments.
+# 00-lib.zsh defines shared helper functions (pathadd, fpathadd, source_if_exists, cached_eval) used by later
+# fragments.
 #
 # To add a tool: create NN-<tool>.zsh in that tool's stow package under .config/zsh/conf.d/.
 #

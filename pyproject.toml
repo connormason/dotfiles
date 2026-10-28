@@ -414,6 +414,7 @@ markers = [
     "requires_homebrew: Tests that require Homebrew to be installed",
     "role: Role-specific tests",
     "slow: Tests that take significant time",
+    "timing: Load-sensitive startup-time tests (calibrated budget; DOTFILES_STARTUP_BUDGET_MS overrides)",
     # keep-sorted end
 ]
 norecursedirs = [

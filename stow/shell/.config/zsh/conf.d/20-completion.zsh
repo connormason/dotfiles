@@ -5,7 +5,20 @@
 fpath=(/usr/local/share/zsh-completions $fpath)                                 # Must come before `compinit`
 fpath+=~/.zfunc
 
-autoload -Uz compinit && compinit                                               # Must come before all `zstyle` calls
+# Must come before all `zstyle` calls. The full compinit (security audit of $fpath, rescan for new completion files)
+# runs only when the dump is missing or more than 24 h old; otherwise the dump loads as-is (-C). -i skips insecure
+# directories instead of prompting. The dump is keyed on $ZSH_VERSION because -C skips compinit's version check.
+# New completions (e.g. a fresh `brew install`) appear after the daily check; delete the dump to pick them up now.
+_zcompdump="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/zcompdump-$ZSH_VERSION"
+autoload -Uz compinit
+if () { setopt local_options extended_glob; [[ ! -s "$1" || -n $1(#qN.mh+24) ]] } "$_zcompdump"; then
+    [[ -d "${_zcompdump:h}" ]] || command mkdir -p "${_zcompdump:h}" 2>/dev/null
+    compinit -i -d "$_zcompdump"
+    command touch "$_zcompdump" 2>/dev/null     # compinit leaves an unchanged dump untouched; restart its 24 h clock
+else
+    compinit -C -d "$_zcompdump"
+fi
+unset _zcompdump
 
 # Force zsh not to show completion menu, which allows fzf-tab to capture the unambiguous prefix
 zstyle ':completion:*' menu no

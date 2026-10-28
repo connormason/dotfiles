@@ -20,7 +20,9 @@ alias forgit=git-forgit
 # =====================================================================================================
 
 # Activate `wt` shell configuration
-if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi
+if (( $+commands[wt] )); then
+    cached_eval wt wt config shell init zsh
+fi
 
 # =====================================================================================================
 # git aliases

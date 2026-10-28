@@ -5,7 +5,7 @@
 # Activate `fzf` shell configuration (needs a terminal on stdin: piped `zsh -c` has no ZLE, and the integration's
 # option restore errors out there)
 if (( $+commands[fzf] )) && [[ -t 0 ]]; then
-    source <(fzf --zsh)
+    cached_eval fzf fzf --zsh
 fi
 # export FZF_CTRL_T_OPTS="
 #   --walker-skip .git,.idea,.mypy_cache,.pytest_cache,.ruff_cache,.venv,__pycache__,node_modules,venv
