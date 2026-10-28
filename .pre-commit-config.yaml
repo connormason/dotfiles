@@ -538,6 +538,7 @@ repos:
               ^\.nox/|
               ^\.tmp/|
               ^\.worktrees/|
+              ^archive/|
               ^build/|
               ^docs/|
               ^tests/

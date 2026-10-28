@@ -115,7 +115,7 @@ default = true
 [tool.codespell]
 count = true
 summary = true
-skip = "smb.conf.j2"
+skip = "smb.conf.j2,archive"
 ignore-words-list = [
     # keep-sorted start
     "*.css",
@@ -169,7 +169,10 @@ python_version         = "3.9" # TODO: update
 warn_unused_configs    = true
 
 exclude = [
+    # keep-sorted start
+    "archive/",
     "services/homeassistant/",
+    # keep-sorted end
 ]
 
 [[tool.mypy.overrides]]
