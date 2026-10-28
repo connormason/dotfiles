@@ -4,7 +4,8 @@
 
 Ansible roles for the home NAS (Debian Linux), run by [`playbooks/nas_bootstrap.yml`](../playbooks/nas_bootstrap.yml).
 macOS configuration is no longer handled by Ansible; it lives in the stow engine (see [`stow/`](../stow/README.md),
-[`bootstrap/`](../bootstrap/README.md), and [`profiles/`](../profiles/README.md)).
+[`bootstrap/`](../bootstrap/README.md), and [`profiles/`](../profiles/README.md)). The retired macOS roles are preserved
+as a frozen snapshot in [`archive/ansible-macos/`](../archive/ansible-macos/README.md).
 
 ## Roles
 

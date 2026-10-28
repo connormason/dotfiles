@@ -8,6 +8,9 @@ Directory layout, key components, and provisioning flow for the dotfiles-persona
 - **macOS** — the stow engine and `bootstrap/` stage scripts. Entry point: `bootstrap/bootstrap.sh`.
 - **NAS** — Ansible. Entry point: `nas_bootstrap.sh` → `playbooks/nas_bootstrap.yml`.
 
+The retired Ansible macOS setup survives as a frozen, unmaintained snapshot in `archive/ansible-macos/` (reference only;
+skipped by the lint tooling).
+
 `nas_bootstrap.sh`:
 
 1. Validates repository structure

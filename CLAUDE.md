@@ -36,6 +36,11 @@ All secrets are `ansible-vault`-encrypted in the `inventory/` clone. The passwor
 (gitignored, created manually; referenced by `ansible.cfg`'s `vault_password_file`). Never commit the vault password or
 decrypted secrets.
 
+## Archive
+
+[`archive/ansible-macos/`](archive/ansible-macos/README.md) is the frozen pre-stow Ansible macOS setup, kept for
+reference. It is not maintained and is skipped by the lint tooling; do not edit it or treat it as active configuration.
+
 ## Plans & Docs
 
 Design docs and implementation plans live under [`docs/plans/<YYYY-MM>/`](docs/plans/), named

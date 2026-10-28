@@ -3,7 +3,8 @@
 # Playbooks
 
 Ansible playbooks for the home NAS. [`nas_bootstrap.yml`](nas_bootstrap.yml) is the only playbook; macOS configuration
-moved to the stow engine (see [`bootstrap/`](../bootstrap/README.md)).
+moved to the stow engine (see [`bootstrap/`](../bootstrap/README.md)). The retired `local_bootstrap.yml` macOS playbook
+is preserved in [`archive/ansible-macos/`](../archive/ansible-macos/README.md).
 
 ## Overview
 

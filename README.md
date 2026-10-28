@@ -113,6 +113,7 @@ Configures the home NAS server with:
 | [`playbooks/`](playbooks/) | NAS Ansible playbook and execution guide                | [playbooks/README.md](playbooks/README.md)               |
 | [`roles/`](roles/)         | Ansible roles for the NAS                               | [roles/README.md](roles/README.md)                       |
 | [`services/`](services/)   | Docker Compose definitions for the NAS stack            | [services/README.md](services/README.md)                 |
+| [`archive/`](archive/)     | Frozen reference material (retired Ansible macOS setup) | [archive/README.md](archive/README.md)                   |
 | [`docs/`](docs/)           | Extended documentation, notes, and plans                | [docs/README.md](docs/README.md)                         |
 | [`run.py`](run.py)         | Python CLI for repository management                    | [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md)     |
 | `inventory/`               | Host definitions and encrypted vault files (gitignored) | Managed via `run.py update-inventory`                    |
@@ -260,6 +261,9 @@ dotfiles-personal/
 │   └── requirements.yml                    # External collection dependencies
 │
 ├── services/                               # Docker Compose definitions for the NAS stack
+│
+├── archive/                                # Frozen reference material (not maintained)
+│   └── ansible-macos/                      # Retired Ansible macOS setup (snapshot of 1ef973a)
 │
 ├── inventory/                              # Standalone git repository (private)
 │   ├── inventory.yml                       # Host definitions
