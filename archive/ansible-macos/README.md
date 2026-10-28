@@ -8,7 +8,8 @@ and `bootstrap/` stage scripts. Kept as reference material for a possible future
 ## Status
 
 - **Frozen and unmaintained.** Nothing here is linted, tested, or run by CI; pre-commit hooks, ruff, mypy, interrogate,
-  yamllint, and codespell are configured to skip `archive/`. The gitleaks scan and the repo leak guard still cover it.
+  yamllint, and codespell are configured to skip `archive/`. In CI, the gitleaks scan and the repo leak guard (a
+  `git ls-files` scan) still cover it; the local prek hooks skip `archive/`.
 - **Snapshot of commit `1ef973a`**, the last commit before the retirement on branch `dev-env-base` (PR #18). Commit SHAs
   may not survive a squash merge, so the files in this directory are the record, not the SHA.
 - **The active macOS setup is the stow engine:** see [`bootstrap/README.md`](../../bootstrap/README.md) for the stage
@@ -99,8 +100,8 @@ Observations from reading the code, not tested guidance.
 - `local_bootstrap.sh` requires `run.py` beside it. `run.py` is not in this archive, so the script exits at its
   validation step as shipped.
 - Privilege: the play relies on `--ask-become-pass` (interactive) plus `admin_password`. `become: true` appears in
-  `macos_settings` (`power.yml`, `other.yml`, `finder.yml`) and `zsh` (package install, permissions, login shell);
-  `tailscale` escalates only on its Debian and NAS paths.
+  `macos_settings` (`power.yml`, `other.yml`, `finder.yml`) and `zsh` (permissions, login shell, and the non-macOS
+  package install); `tailscale` escalates only on its Debian and NAS paths.
 - Homebrew prefix: the script hardcodes `/opt/homebrew/bin`; the `python` role derives its prefix from
   `ansible_facts['machine']` (`/opt/homebrew` on `arm64`, otherwise `/usr/local`).
 - `macos_dock` pauses 7 seconds twice and restarts the Dock via `launchctl kickstart gui/<uid>/com.apple.Dock.agent`. It
@@ -110,8 +111,8 @@ Observations from reading the code, not tested guidance.
 - The `ssh` remote branch uses `community.crypto.openssh_keypair`, which is not listed in `roles/requirements.yml`.
 - The `git` role's `gh` task links from `roles/tools/files/gh/`, a path that does not exist in the snapshot (the files
   are in `roles/git/files/gh/`).
-- `macos_settings`, `macos_dock`, and `python` declare the `macos` role as a dependency in `meta/main.yml`, so the
-  Homebrew tasks run again for each.
+- `macos_settings`, `macos_dock`, and `python` declare the `macos` role as a dependency in `meta/main.yml`. Whether
+  Ansible re-runs the `macos` tasks for each dependent was not tested.
 
 ## Known staleness
 
