@@ -1,0 +1,8 @@
+---
+- name: Disable smart quotes in Messages
+  command: |
+    defaults write com.apple.messageshelper.MessageController SOInputLineSettings -dict-add "automaticQuoteSubstitutionEnabled" -bool false
+
+- name: Disable continuous spell checking in Messages
+  command: |
+    defaults write com.apple.messageshelper.MessageController SOInputLineSettings -dict-add "continuousSpellCheckingEnabled" -bool false

@@ -1,0 +1,72 @@
+---
+- name: Validate link_dotfile inputs
+  block:
+    - name: Validate required vars
+      ansible.builtin.assert:
+        that:
+          - link_dotfile_src is defined
+          - link_dotfile_dst is defined
+        fail_msg: >
+          Missing required vars for link_dotfile. You must define both `link_dotfile_src` and `link_dotfile_dst`.
+        quiet: false
+
+    - name: Check if source file exists
+      ansible.builtin.stat:
+        path: "{{ link_dotfile_src }}"
+      register: dotfile_src_stat
+
+    - name: Fail if source file does not exist
+      ansible.builtin.fail:
+        msg: "Source file '{{ link_dotfile_src }}' does not exist"
+      when: not dotfile_src_stat.stat.exists
+
+- name: Output link_dotfile action
+  ansible.builtin.debug:
+    msg: "Linking dotfile {{ link_dotfile_src }} to {{ link_dotfile_dst }}"
+
+- name: Stat destination file (follow symlinks = false)
+  ansible.builtin.stat:
+    path: "{{ link_dotfile_dst }}"
+    follow: false
+  register: dotfile_stat
+
+- name: Ensure parent directory of destination exists
+  ansible.builtin.file:
+    path: "{{ link_dotfile_dst | dirname }}"
+    state: directory
+    mode: "{{ dotfile_dir_mode | default(omit) }}"
+
+- name: Backup existing dotfile (non-symlink only)
+  ansible.builtin.command: >
+    mv "{{ link_dotfile_dst }}" "{{ link_dotfile_dst }}.backup_{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+  when:
+    - dotfile_stat.stat.exists
+    - not dotfile_stat.stat.islnk
+  changed_when: true
+
+- name: Remove existing symlink (if it points to the wrong target)
+  ansible.builtin.file:
+    path: "{{ link_dotfile_dst }}"
+    state: absent
+  when:
+    - dotfile_stat.stat.exists | default(false)
+    - dotfile_stat.stat.islnk | default(false)
+    - dotfile_stat.stat.lnk_source | default('') != link_dotfile_src
+
+- name: Symlink dotfile (if missing or incorrect)
+  ansible.builtin.file:
+    src: "{{ link_dotfile_src }}"
+    dest: "{{ link_dotfile_dst }}"
+    state: link
+    force: false
+  when:
+    - dotfile_stat.stat.exists | default(false) == false
+    - (dotfile_stat.stat.islnk | default(false) == false) or (dotfile_stat.stat.lnk_source | default('') != link_dotfile_src)
+
+- name: Dotfile already correctly linked
+  ansible.builtin.debug:
+    msg: "✅ {{ link_dotfile_dst }} is already correctly linked to {{ link_dotfile_src }}"
+  when:
+    - dotfile_stat.stat.exists | default(false)
+    - dotfile_stat.stat.islnk | default(false)
+    - dotfile_stat.stat.lnk_source | default('') == link_dotfile_src

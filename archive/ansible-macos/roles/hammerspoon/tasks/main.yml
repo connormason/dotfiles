@@ -1,0 +1,11 @@
+---
+- name: Create hammerspoon configuration dir
+  file:
+    path: "{{ hammerspoon_config_dir }}"
+    state: directory
+
+- name: Symlink hammerspoon config
+  file:
+    src: "{{ hammerspoon_config_src }}"
+    dest: "{{ hammerspoon_config_dest }}"
+    state: link
