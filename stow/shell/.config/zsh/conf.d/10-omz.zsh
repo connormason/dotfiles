@@ -46,8 +46,11 @@ compinit() { : }
 compdef() { _omz_deferred_compdefs+=("${(j: :)${(@q)@}}") }
 : "${ZSH_COMPDUMP:=${XDG_CACHE_HOME:-$HOME/.cache}/zsh/omz-compdump}"
 
-# Load oh-my-zsh; skipped silently when absent so an empty HOME starts clean (bootstrap step 95-dotfiles installs it)
-source_if_exists "${ZSH}/oh-my-zsh.sh"
-
-unfunction compinit compdef
-autoload -Uz compinit
+# Load oh-my-zsh; skipped silently when absent so an empty HOME starts clean (bootstrap step 95-dotfiles installs it).
+# The always block removes the stubs even when oh-my-zsh aborts mid-load, so a failure cannot leave compinit a no-op.
+{
+    source_if_exists "${ZSH}/oh-my-zsh.sh"
+} always {
+    unfunction compinit compdef
+    autoload -Uz compinit
+}
