@@ -19,6 +19,9 @@ Vendored files (package stow/os_tools):
   stow/os_tools/.config/ranger/rifle.conf    unmodified copy of ranger/config/rifle.conf
   stow/os_tools/.config/ranger/rc.conf       MODIFIED copy of ranger/config/rc.conf
 
+The pristine commands.py comment refers readers to commands_full.py for the complete list of default commands; that file
+is not shipped here.
+
 Modifications to rc.conf (2026-10-27): a header comment marking the file as modified was added; `set preview_images`
 was changed from false to true; `default_linemode devicons2` (needs the third-party ranger-devicons2 plugin, which is
 not vendored) and a `fzf_filter` binding for `f` (needs ranger-fzf-filter, also not vendored) appear only as comments
@@ -27,7 +30,8 @@ with explanatory notes, so the `f` binding stays upstream's `console find%space`
 Hammerspoon Spoons (MIT)
 ------------------------
 Upstream: https://github.com/Hammerspoon/Spoons (license field in each init.lua: "MIT -
-https://opensource.org/licenses/MIT"). Copyright holders are the Spoon authors named in each file.
+https://opensource.org/licenses/MIT"). Copyright holders are the Spoon authors named in each file. The license text is
+in docs/licenses/MIT-hammerspoon-spoons.txt; the vendored files state no copyright year.
 
   stow/hammerspoon/.hammerspoon/Spoons/ReloadConfiguration.spoon/   author: Jon Lorusso
   stow/hammerspoon/.hammerspoon/Spoons/SpoonInstall.spoon/          author: Diego Zamboni

@@ -1,0 +1,28 @@
+Hammerspoon Spoons vendored under stow/hammerspoon/.hammerspoon/Spoons/
+
+Each vendored Spoon declares, in its init.lua, `obj.license = "MIT - https://opensource.org/licenses/MIT"` and names its
+author in `obj.author`. The Spoons carry no copyright year or license header of their own, so none is stated here. The
+holders below are the authors named in those files:
+
+  ReloadConfiguration.spoon   Jon Lorusso
+  SpoonInstall.spoon          Diego Zamboni
+  WifiNotifier.spoon          Garth Mortensen
+
+The MIT License (MIT)
+
+Copyright (c) Jon Lorusso (ReloadConfiguration.spoon)
+Copyright (c) Diego Zamboni (SpoonInstall.spoon)
+Copyright (c) Garth Mortensen (WifiNotifier.spoon)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -441,8 +441,8 @@ class TestGit:
 **Files:** `stow/claude/.claude/**`, `stow/claude/.config/zsh/conf.d/32-claude.zsh`, `render/claude.json`
 
 **Port these (generic) directories/files** per protocol: `agents/` (generic agents only), `hooks/` (generic hooks only),
-`rules/`, `skills/` (generic skills only), `commands/` (generic only), `scripts/`, `CLAUDE.md`,
-`claude-devtools-config.json`, `plugins/config.json`. Do **not** port `settings.json` (it becomes a render fragment) or
+`rules/`, `skills/` (generic skills only), `commands/` (generic only), `scripts/`, `CLAUDE.md`, `plugins/config.json`. Do
+**not** port `settings.json` (it becomes a render fragment) or
 any `.backups/` / `__pycache__/`.
 
 **Employer content (move to staging, path `stow/work-claude/.claude/…` unless stated):**
