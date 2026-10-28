@@ -77,6 +77,7 @@ class TestPersonalMacProfile:
         """
         Test that no profile Brewfile entry repeats a base Brewfile entry
         """
+        assert _entries(BASE_BREWFILE), 'base Brewfile parsed as empty; the comparison below would pass vacuously'
         duplicates = set(_entries(PROFILE / 'bootstrap' / 'Brewfile')) & set(_entries(BASE_BREWFILE))
         assert not duplicates, f'already in bootstrap/Brewfile: {sorted(duplicates)}'
 

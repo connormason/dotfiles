@@ -153,8 +153,9 @@ package_files() { # $1=index: $HOME-relative paths the package provides, honorin
     (
         cd "${PKG_LAYERS[$1]}/stow/${PKG_NAMES[$1]}" &&
             find . \( -name .git -o -name .gitignore -o -name .gitmodules -o -name .DS_Store -o -name .backups \
-                -o -name RCS -o -name CVS -o -name .cvsignore -o -name .svn -o -name _darcs -o -name .hg -o -name '?*,v' -o -name '?*~' \
-                -o -name '.#?*' -o -name '#*#' \) -prune -o \( -type f -o -type l \) -print |
+                -o -name RCS -o -name CVS -o -name .cvsignore -o -name .svn -o -name _darcs -o -name .hg \
+                -o -name '?*,v' -o -name '?*~' -o -name '.#?*' -o -name '#*#' \) \
+                -prune -o \( -type f -o -type l \) -print |
             sed 's|^\./||' | grep -v -E '^(README.*|LICENSE.*|COPYING)$' || true
     )
 }
@@ -204,6 +205,9 @@ fi
 RENDER_SCRIPT="$REPO_DIR/scripts/dotfiles/render.py"
 RENDER_TARGETS="$(python3 "$RENDER_SCRIPT" --list-targets)" ||
     die "cannot list render targets (python3 $RENDER_SCRIPT --list-targets failed)"
+# An empty list would make the ownership check below vacuously pass
+[ -n "$RENDER_TARGETS" ] ||
+    die "cannot list render targets (python3 $RENDER_SCRIPT --list-targets printed an empty list)"
 # Prints "<render target><TAB><package>" for each package path equal to or above a render target
 RENDER_CLASHES="$(printf '%s\n' "$OWNERS" | RENDER_TARGETS="$RENDER_TARGETS" awk -F'\t' '
     BEGIN { n = split(ENVIRON["RENDER_TARGETS"], targets, "\n") }

@@ -267,6 +267,19 @@ class TestOwnership:
         result = _stow(world)
         assert result.returncode == 0, result.stderr
         assert (world['home'] / '.claude' / 'rules' / 'a.md').is_symlink()
+
+    def test_empty_render_target_list_fails(self, world: dict[str, Path]) -> None:
+        """
+        Test that a render.py which lists no targets aborts the run instead of silently skipping the ownership check
+        """
+        (world['repo'] / 'scripts' / 'dotfiles' / 'render.py').write_text('', encoding='utf-8')
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        result = _stow(world)
+        assert result.returncode == 1
+        assert 'render targets' in result.stderr
+        assert 'empty' in result.stderr
+        assert not (world['home'] / '.zshrc').exists()
+
     def test_two_packages_same_path_fails_before_linking(self, world: dict[str, Path]) -> None:
         """
         Test that two packages providing one path abort the run and name both owners
@@ -403,7 +416,6 @@ class TestLinking:
         assert result.returncode == 0
         assert not (world['home'] / '.zshrc').exists()
         assert 'stow: simulated shell (dry-run, no changes written)' in result.stdout
-
 
 
 class TestConflicts:
