@@ -66,14 +66,14 @@ inventory/
 
 Ansible roles, all run by `playbooks/nas_bootstrap.yml`:
 
-**Linux roles**:
+**Linux system roles**:
 
 - `debian`: System packages and configuration
 - `docker`: Docker setup with compose stack (Plex, Sonarr, Radarr, PiHole, Home Assistant, etc.)
 - `zfs`: ZFS filesystem configuration
 - `samba`: File sharing setup
 
-**Shared roles**:
+**User and network roles**:
 
 - `git`: Git configuration
 - `ssh`: SSH key generation

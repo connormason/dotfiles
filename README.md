@@ -400,7 +400,8 @@ See [run.py documentation](docs/RUN_PY_REFERENCE.md#inventory-management) for de
 1. Verify if Homebrew installer was legitimately updated at https://github.com/Homebrew/install
 2. Generate new checksum:
    `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256`
-3. Update `EXPECTED_CHECKSUM` in the bootstrap scripts
+3. Update the checksum constant in the script that failed: `EXPECTED_CHECKSUM` in `nas_bootstrap.sh`, or
+   `BREW_INSTALLER_SHA256` in `bootstrap/50-brew.sh`
 
 ### Role Failures<a name="role-failures"></a>
 

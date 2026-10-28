@@ -18,8 +18,8 @@ Roles are included in the order the playbook runs them; each is selectable with 
 | [`docker`](docker/README.md)       | Docker-based media server and home-automation stack                                    |
 | [`git`](git/README.md)             | Global git config (rendered from a template), git template hooks, global ignore file   |
 | [`ssh`](ssh/README.md)             | SSH key pair generation                                                                |
-| [`zsh`](zsh/README.md)             | oh-my-zsh, Powerlevel10k, default shell, and `.zshrc` / `.zprofile` / `.p10k.zsh` copy |
 | [`tailscale`](tailscale/README.md) | Tailscale install and configuration, plus HTTPS certificates and Caddy for the NAS     |
+| [`zsh`](zsh/README.md)             | oh-my-zsh, Powerlevel10k, default shell, and `.zshrc` / `.zprofile` / `.p10k.zsh` copy |
 
 ## External dependencies
 
