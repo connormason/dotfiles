@@ -618,3 +618,25 @@ class TestListTargets:
         )
         assert result.returncode == 0, result.stderr
         assert len(result.stdout.splitlines()) == len(render.TARGETS)
+
+
+class TestUnexpectedErrors:
+    """
+    Tests for crash handling in render.main
+    """
+    @pytest.mark.parametrize('mode', [(), ('--check',)])
+    def test_crash_exits_2_with_error_line(
+        self, world: dict[str, Path], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+        mode: tuple[str, ...],
+    ) -> None:
+        """
+        Test that an unexpected exception is reported as an ERROR line and exit 2, never as drift (exit 1)
+        """
+        def _crash(*_args: object, **_kwargs: object) -> int:
+            raise RuntimeError('kaboom')
+
+        monkeypatch.setattr(render, 'prepare', _crash)
+        assert _run(world, *mode) == 2
+        err = capsys.readouterr().err
+        assert 'render: ERROR: unexpected RuntimeError: kaboom' in err
+        assert 'Traceback' not in err

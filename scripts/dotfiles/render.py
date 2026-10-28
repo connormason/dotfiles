@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from collections.abc import Sequence
 from pathlib import Path
 from typing import NamedTuple
@@ -485,7 +486,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     Render, check, or diff settings targets.
 
     All requested targets are composed and validated before any is written, so a bad fragment never leaves a partial
-    render behind.
+    render behind. An unexpected exception is reported as an error (exit 2), never as drift (exit 1), so callers such
+    as the 97-render bootstrap stage cannot mistake a crash for an in-app edit.
+
+    :param argv: command-line arguments (default: ``sys.argv[1:]``)
+    :return: 0 ok, 1 drift refused / out of sync, 2 configuration, I/O, or unexpected error
+    """
+    try:
+        return _main(argv)
+    except Exception as exc:
+        error(f'unexpected {type(exc).__name__}: {exc}')
+        if VERBOSE:
+            traceback.print_exc()
+        return 2
+
+
+def _main(argv: Sequence[str] | None) -> int:
+    """
+    Implement :func:`main`.
 
     :param argv: command-line arguments (default: ``sys.argv[1:]``)
     :return: 0 ok, 1 drift refused / out of sync, 2 configuration or I/O error

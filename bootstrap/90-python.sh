@@ -31,13 +31,18 @@ while IFS= read -r manifest; do
     if [ -z "$manifest" ]; then
         continue
     fi
+    lineno=0
     while IFS= read -r raw || [ -n "$raw" ]; do
+        lineno=$((lineno + 1))
         raw="${raw%%#*}" # strip comments (inline and full-line)
         # shellcheck disable=SC2086
         set -- $raw # word-split: trims/collapses whitespace, drops blank lines
         if [ "$#" -eq 0 ]; then
             continue
         fi
+        case "$1" in
+        -*) die "$manifest:$lineno: a line must start with the tool name, not an option: $*" ;;
+        esac
         slot=${#TOOL_NAMES[@]}
         for i in ${TOOL_NAMES[@]+"${!TOOL_NAMES[@]}"}; do
             if [ "${TOOL_NAMES[$i]}" = "$1" ]; then

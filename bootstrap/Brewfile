@@ -95,4 +95,5 @@ cask "font-fira-code-nerd-font"
 # Mac App Store (requires `mas` and an authenticated App Store session)
 # keep-sorted start
 mas "Amphetamine", id: 937984704
+mas "Apple Remote Desktop", id: 409907375
 # keep-sorted end
