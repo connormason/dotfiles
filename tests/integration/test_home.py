@@ -597,6 +597,56 @@ class TestStartupCaches:
             counts.append(len(invocations(audits)))
         assert counts == [1, 1]
 
+    @staticmethod
+    def _fake_omz(home: Home) -> Path:
+        """
+        Install a minimal oh-my-zsh at the path 10-omz sources, mirroring the real script's compinit and compdef calls
+        """
+        omz = home.path / '.oh-my-zsh'
+        omz.mkdir()
+        (omz / 'oh-my-zsh.sh').write_text(
+            'autoload -U compaudit compinit zrecompile\n'
+            'ZSH_COMPDUMP="${ZSH_COMPDUMP:-$HOME/.zcompdump-fakehost-$ZSH_VERSION}"\n'
+            'unset _comp_secure\n'
+            'compinit -i -d "$ZSH_COMPDUMP"\n'
+            'compdef _fakeomz fakeomz\n'
+            "compdef _fakeomz 'semi;colon'\n",
+            encoding='utf-8',
+        )
+        return omz
+
+    def test_oh_my_zsh_does_not_run_its_own_compinit(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that oh-my-zsh's compinit is skipped, its compdef calls are replayed after the real compinit, and
+        compinit and compdef are the real functions again afterwards
+        """
+        fndir, audits = self._fake_compaudit(tmp_path)
+        env   = self._env(home, tmp_path, FPATH=self._fpath_with(fndir))
+        probe = (
+            'print -r -- "comps=${_comps[fakeomz]-none},${_comps[semi;colon]-none}"; '
+            'print -r -- "queue=${+_omz_deferred_compdefs}"; '
+            'print -r -- "compinit=${functions[compinit]}"; '
+            'print -r -- "compdef=${functions[compdef]}"'
+        )
+        omz = self._fake_omz(home)
+        try:
+            counts = []
+            for _ in range(2):
+                result = self._zsh(home, env, probe)
+                assert result.returncode == 0
+                assert result.stderr == ''
+                comps, queue, compinit, *compdef = result.stdout.splitlines()
+                assert comps == 'comps=_fakeomz,_fakeomz'
+                assert queue == 'queue=0'
+                assert compinit == 'compinit=builtin autoload -XU'
+                assert '_omz_deferred_compdefs' not in '\n'.join(compdef)
+                counts.append(len(invocations(audits)))
+            assert counts == [1, 1]
+            assert list(home.path.glob('.zcompdump*')) == []
+            assert self._dump(tmp_path).stat().st_size > 0
+        finally:
+            shutil.rmtree(omz)
+
     def test_insecure_function_directory_is_ignored_without_a_prompt(self, home: Home, tmp_path: Path) -> None:
         """
         Test that the full compinit skips a world-writable fpath directory silently instead of asking

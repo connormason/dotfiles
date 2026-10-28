@@ -36,5 +36,18 @@ plugins=(
 zstyle ':omz:update' mode auto      # update automatically without asking
 zstyle ':omz:update' frequency 3    # update every 3 days
 
+# oh-my-zsh runs its own full compinit (compaudit, plus a dump it deletes whenever its metadata changes) on every
+# start; 20-completion's cached compinit is the only one wanted. oh-my-zsh has no switch to skip it (ZSH_DISABLE_COMPFIX
+# only swaps `-i` for `-u`), so a no-op stands in for compinit while it loads. Plugins call `compdef` at load time, and
+# only compinit defines it, so those calls are queued here and replayed by 20-completion once compinit has run. The
+# dump oh-my-zsh keeps for its metadata check holds no completions; it moves out of $HOME into the cache directory.
+typeset -ga _omz_deferred_compdefs=()
+compinit() { : }
+compdef() { _omz_deferred_compdefs+=("${(j: :)${(@q)@}}") }
+: "${ZSH_COMPDUMP:=${XDG_CACHE_HOME:-$HOME/.cache}/zsh/omz-compdump}"
+
 # Load oh-my-zsh; skipped silently when absent so an empty HOME starts clean (bootstrap step 95-dotfiles installs it)
 source_if_exists "${ZSH}/oh-my-zsh.sh"
+
+unfunction compinit compdef
+autoload -Uz compinit

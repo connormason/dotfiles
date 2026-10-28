@@ -6,9 +6,11 @@ fpath=(/usr/local/share/zsh-completions $fpath)                                 
 fpath+=~/.zfunc
 
 # Must come before all `zstyle` calls. The full compinit (security audit of $fpath, rescan for new completion files)
-# runs only when the dump is missing or more than 24 h old; otherwise the dump loads as-is (-C). -i skips insecure
-# directories instead of prompting. The dump is keyed on $ZSH_VERSION because -C skips compinit's version check.
-# New completions (e.g. a fresh `brew install`) appear after the daily check; delete the dump to pick them up now.
+# runs only when the dump is missing or more than 24 h old; otherwise the dump loads as-is (-C). On the full-check path
+# -i skips insecure directories instead of prompting; -C skips that sanitization entirely, so between daily checks an
+# insecure $fpath directory is trusted (accepted risk: single-user machine). The dump is keyed on $ZSH_VERSION because
+# -C skips compinit's version check. New completions (e.g. a fresh `brew install`) appear after the daily check; delete
+# the dump to pick them up now. This is the only compinit: 10-omz keeps oh-my-zsh from running its own.
 _zcompdump="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/zcompdump-$ZSH_VERSION"
 autoload -Uz compinit
 if () { setopt local_options extended_glob; [[ ! -s "$1" || -n $1(#qN.mh+24) ]] } "$_zcompdump"; then
@@ -19,6 +21,12 @@ else
     compinit -C -d "$_zcompdump"
 fi
 unset _zcompdump
+
+# Replay the compdef calls oh-my-zsh's plugins made before compinit existed (queued by 10-omz)
+for _compdef_args in "${_omz_deferred_compdefs[@]}"; do
+    eval "compdef $_compdef_args"
+done
+unset _compdef_args _omz_deferred_compdefs
 
 # Force zsh not to show completion menu, which allows fzf-tab to capture the unambiguous prefix
 zstyle ':completion:*' menu no
