@@ -2,20 +2,27 @@
 
 Full command reference for the dotfiles-personal repository. Loaded on demand from [`CLAUDE.md`](../CLAUDE.md).
 
-## Running Ansible Playbooks
+## Bootstrapping
 
 ```bash
-# Bootstrap local Mac (interactive, asks for sudo password)
-chmod u+x local_bootstrap.sh && ./local_bootstrap.sh
+# Bootstrap a Mac (stow engine + numbered stages; --dry-run previews, --list shows stages, --resume continues)
+bootstrap/bootstrap.sh
 
-# Bootstrap NAS server
+# Bootstrap NAS server (Ansible; asks for the sudo password)
 chmod u+x nas_bootstrap.sh && ./nas_bootstrap.sh
+```
 
+## Running Ansible Playbooks (NAS)
+
+```bash
 # Run specific tags only
-ansible-playbook playbooks/local_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags git,zsh
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags git,zsh
 
 # Run with extra variables
-ansible-playbook playbooks/local_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -e "some_var=value"
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -e "some_var=value"
+
+# Syntax check
+ansible-playbook --syntax-check -i localhost, playbooks/nas_bootstrap.yml
 ```
 
 ## Python Script Commands (`run.py`)

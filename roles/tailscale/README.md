@@ -1,10 +1,10 @@
 # tailscale
 
-Sets up [Tailscale VPN](https://tailscale.com/) on Debian and macOS systems.
+Sets up [Tailscale VPN](https://tailscale.com/) on Debian systems.
 
 ## Features
 
-- Installs Tailscale from official apt repository (Debian) or verifies brew cask (macOS)
+- Installs Tailscale from official apt repository
 - Configures Tailscale with idempotent `tailscale set` + `tailscale login`
 - Enables Tailscale SSH on Linux hosts
 - Provisions HTTPS certificates via `tailscale cert` (NAS only)
@@ -17,7 +17,6 @@ Sets up [Tailscale VPN](https://tailscale.com/) on Debian and macOS systems.
 2. **Reusable auth key** generated in [Tailscale admin console](https://login.tailscale.com/admin/settings/keys)
    - Note: Reusable auth keys expire after ~90 days and must be regenerated
 3. **HTTPS certificates enabled** in Tailscale admin console (for HTTPS feature)
-4. **macOS only:** Launch Tailscale.app at least once to set up the system extension
 
 ## Required Variables
 
@@ -77,12 +76,6 @@ After first playbook run:
 
 # Tailscale only
 ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags tailscale
-
-# Mac bootstrap
-./local_bootstrap.sh
-
-# Tailscale only (Mac)
-ansible-playbook playbooks/local_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags tailscale
 ```
 
 ## Cert Renewal

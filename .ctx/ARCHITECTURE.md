@@ -3,19 +3,38 @@
 Directory layout, key components, and provisioning flow for the dotfiles-personal repository. Loaded on demand from
 [`CLAUDE.md`](../CLAUDE.md).
 
-## Dual Bootstrap System
+## Two Provisioning Systems
 
-Two separate bootstrap workflows targeting different environments:
+- **macOS** — the stow engine and `bootstrap/` stage scripts. Entry point: `bootstrap/bootstrap.sh`.
+- **NAS** — Ansible. Entry point: `nas_bootstrap.sh` → `playbooks/nas_bootstrap.yml`.
 
-- **`local_bootstrap.sh`** → `playbooks/local_bootstrap.yml`: Personal Mac configuration
-- **`nas_bootstrap.sh`** → `playbooks/nas_bootstrap.yml`: Home NAS/server configuration
+`nas_bootstrap.sh`:
 
-Both scripts:
+1. Validates repository structure
+2. Installs Homebrew with checksum verification
+3. Installs Ansible via Homebrew
+4. Executes the NAS playbook
 
-1. Validate repository structure
-2. Install Homebrew with checksum verification
-3. Install Ansible via Homebrew
-4. Execute corresponding Ansible playbook
+## macOS: Stow Engine and Bootstrap Stages
+
+Layered: the repo root is the base layer; machine-specific overlays (see `profiles/`) are directories listed in the
+overlays registry (`~/.config/dotfiles/overlays`, or `$DOTFILES_OVERLAYS_FILE`). Layers are ordered base first, then
+overlays in file order. Full contract in [`bootstrap/README.md`](../bootstrap/README.md).
+
+- **`bootstrap/bootstrap.sh`**: discovers numbered stage scripts (`NN-*.sh`) in every layer's `bootstrap/` directory,
+  merges them by number, and runs each as a separate bash process. Flags: `--dry-run`, `--list`, `--only`, `--from`,
+  `--resume`, `--verify`, `--no-log`. Shared helpers live in `bootstrap/lib.sh`.
+- **Stages** (base): `00-preflight`, `20-ssh-key`, `50-brew`, `60-macos`, `72-vscode`, `80-repos`, `90-python`,
+  `95-dotfiles`, `96-iterm2`, `97-render`.
+- **Manifests**: `bootstrap/Brewfile`, `vscode-extensions.txt`, `repos.txt`, `uv-tools.txt`; each stage reads the base
+  copy then every overlay's copy.
+- **`stow.sh`**: links every layer's `stow/<package>/` into `$HOME` with `--no-folding`. All-or-nothing: layers are
+  simulated first and unresolvable conflicts abort with nothing changed; `--backup-conflicts` moves blocking files to
+  `~/.dotfiles-backup/<timestamp>/`. Package inventory: [`stow/README.md`](../stow/README.md).
+- **`scripts/dotfiles/render.py`**: renders JSON settings files that apps rewrite at runtime (`render/<target>.json`
+  fragments merged across layers, with a drift guard).
+- **`run.py doctor`**: verifies tools, overlay registry, links, and rendered settings.
+- **`profiles/`**: per-machine overlays; see [`profiles/README.md`](../profiles/README.md).
 
 ## Inventory Management
 
@@ -36,29 +55,16 @@ Inventory structure:
 inventory/
 ├── inventory.yml              # Host definitions
 ├── group_vars/
-│   ├── all/vault.yml         # Shared secrets
-│   └── localhost/
-│       ├── vars.yml          # Mac-specific variables
-│       └── vault.yml         # Mac-specific secrets
+│   └── all/vault.yml         # Shared secrets
 └── host_vars/
     └── nas/
         ├── vars.yml          # NAS-specific variables
         └── vault.yml         # NAS-specific secrets
 ```
 
-## Role System
+## Role System (NAS)
 
-Ansible roles organized by target system:
-
-**macOS roles**:
-
-- `macos`: Homebrew packages, cask apps, Mac App Store apps
-- `macos_settings`: System preferences (Finder, Dock, Activity Monitor, etc.)
-- `macos_dock`: Dock configuration
-- `hammerspoon`: Window management automation
-- `iterm`: iTerm2 configuration
-- `python`: Python tooling (pipx, uv, hatch)
-- `starship`: Shell prompt configuration
+Ansible roles, all run by `playbooks/nas_bootstrap.yml`:
 
 **Linux roles**:
 
@@ -69,22 +75,10 @@ Ansible roles organized by target system:
 
 **Shared roles**:
 
-- `git`: Git configuration and gh CLI
-- `ssh`: SSH client configuration
+- `git`: Git configuration
+- `ssh`: SSH key generation
 - `zsh`: Shell configuration
 - `tailscale`: Tailscale VPN setup
-- `link_dotfile`: Reusable role for symlinking dotfiles
-
-## link_dotfile Role Pattern
-
-Reusable role for safely creating dotfile symlinks:
-
-- Validates source exists
-- Creates parent directories
-- Backs up existing non-symlink files (with timestamp)
-- Only updates if symlink missing or pointing to wrong target
-
-Usage details and the include-role snippet live in [`CONVENTIONS.md`](CONVENTIONS.md) "Adding a New Dotfile".
 
 ## Python Management Script (`run.py`)
 
@@ -94,6 +88,7 @@ Usage details and the include-role snippet live in [`CONVENTIONS.md`](CONVENTION
 
 - **Inventory**: `list-hosts`, `update-inventory`
 - **Codebase**: `clean`, `pre`, `makefile`
+- **Layered dev environment**: `bootstrap`, `stow`, `render`, `doctor`, `test`
 
 **Key features**:
 
@@ -122,36 +117,17 @@ Media server and home automation stack in `roles/docker/files/docker-compose.yml
 
 **Storage paths**: `/storage/media/*` mounted into containers
 
-## macOS Package Management Layers
-
-1. **Homebrew formulae** (`brew_packages` in `roles/macos/defaults/main.yml`): CLI tools
-2. **Homebrew casks** (`brew_cask_packages`): GUI applications
-3. **Mac App Store** (`mas_apps`): App Store apps via the `mas` CLI
-
-## macOS System Settings
-
-The `macos_settings` role configures system preferences via `defaults write` commands, applied via separate task files
-in `roles/macos_settings/tasks/`:
-
-- Finder behavior and appearance
-- Dock size/position/behavior
-- Activity Monitor preferences
-- Messages app settings
-- Power management
-- I/O devices (keyboard, trackpad)
-
 ## Key Configuration Files
 
 - **`.pre-commit-config.yaml`**: Code quality hooks
 - **`.yamllint.yaml`**: YAML linting rules
 - **`.ansible-lint.yaml`**: Ansible best practices
-- **`ansible.cfg`**: Ansible defaults (`roles_path`, `library`, `vault_password_file`)
+- **`ansible.cfg`**: Ansible defaults (`roles_path`, `vault_password_file`)
 - **`vault_password.txt`**: Ansible Vault password (gitignored, create manually)
-- **`roles/requirements.yml`**: External Ansible role dependencies
+- **`roles/requirements.yml`**: External Ansible collection dependencies
 
 ## Bootstrap Script Security
 
-- Homebrew installer checksum verified before execution (`local_bootstrap.sh`)
-- Expected checksum: `b2ffbf7e7f451c6db3b5d1976fc6a9c2faecf58ee5e1dbf6e498643c91f0d3bc`
+- Homebrew installer checksum verified before execution (`nas_bootstrap.sh`, `bootstrap/50-brew.sh`)
 - Update the checksum when the Homebrew installer changes:
   `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256`

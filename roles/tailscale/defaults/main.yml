@@ -17,4 +17,3 @@ tailscale_plex_port: 32443                      # Dedicated Caddy port for Plex
 
 # Platform
 tailscale_version: ""                           # Empty = latest available
-tailscale_macos_cli: "/Applications/Tailscale.app/Contents/MacOS/Tailscale"

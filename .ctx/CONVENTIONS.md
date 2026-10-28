@@ -16,31 +16,29 @@ Self-contained style rules live in [`.claude/rules/`](../.claude/rules) (they do
 - [`readme-guidelines.md`](../.claude/rules/readme-guidelines.md) — per-directory READMEs with breadcrumbs;
   auto-formatted with mdformat via prek (`.ctx/` and `docs/plans/` excluded).
 
-## Adding a New Dotfile
+## Adding a New Dotfile (macOS)
 
-1. Place the source file in the appropriate `roles/*/files/` directory.
-2. Use the `link_dotfile` role in the playbook:
+1. Put the file in `stow/<package>/` at its `$HOME`-relative path (e.g. `stow/git/.config/git/ignore`). A new tool gets
+   a new package directory.
+2. Preview the links with `./stow.sh -n`; `bootstrap/95-dotfiles.sh` applies them.
+3. Add the package to the table in [`stow/README.md`](../stow/README.md). `tests/unit/test_docs_consistency.py` fails
+   when the table and the directories under `stow/` disagree.
+4. Files an app rewrites at runtime (settings JSON) are rendered from `render/<target>.json` fragments instead; stow
+   refuses to link a render target.
 
-```yaml
-- include_role:
-    name: roles/link_dotfile
-  vars:
-    link_dotfile_src: "{{ dotfiles_dir }}/roles/myapp/files/config"
-    link_dotfile_dst: "{{ home_dir }}/.config/myapp/config"
-```
+## Adding macOS Applications
 
-## Adding a New Ansible Role
+Edit the manifests in `bootstrap/`:
+
+- CLI tools and GUI apps → `Brewfile`
+- VS Code extensions → `vscode-extensions.txt`
+- uv tools → `uv-tools.txt`
+- Applications for one machine only → that machine's overlay under `profiles/`
+
+## Adding a New Ansible Role (NAS)
 
 1. Create the role directory: `roles/new-role/`
 2. Add `tasks/main.yml` with the role logic (FQCN modules, tags, idempotent tasks).
 3. Add `defaults/main.yml` for default variables (optional).
-4. Include the role in the appropriate playbook (`local_bootstrap.yml` or `nas_bootstrap.yml`).
+4. Include the role in `playbooks/nas_bootstrap.yml`.
 5. Add role tags for selective execution.
-
-## Adding macOS Applications
-
-Edit `roles/macos/defaults/main.yml`:
-
-- CLI tools → `brew_packages`
-- GUI apps → `brew_cask_packages`
-- App Store apps → `mas_apps` (requires the app ID from the App Store)

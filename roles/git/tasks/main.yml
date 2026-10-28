@@ -37,21 +37,16 @@
   tags:
     - configfile
     - preferences
-  ansible.builtin.include_role:
-    name: roles/link_dotfile
-  vars:
-    link_dotfile_src: "{{ dotfiles_home }}/roles/git/files/gitignore_global"
-    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.config/git/ignore"
+  block:
+    - name: Create ~/.config/git directory
+      ansible.builtin.file:
+        path: "{{ ansible_facts['user_dir'] }}/.config/git"
+        state: directory
+        mode: "{{ git_template_dir_mode }}"
 
-- name: Link gh config files
-  tags:
-    - configfile
-    - preferences
-  ansible.builtin.include_role:
-    name: roles/link_dotfile
-  vars:
-    link_dotfile_src: "{{ dotfiles_home }}/roles/tools/files/gh/{{ item }}"
-    link_dotfile_dst: "{{ ansible_facts['user_dir'] }}/.config/gh/{{ item }}"
-  loop:
-    - config.yml
-    - hosts.yml
+    - name: Symlink global git ignore file
+      ansible.builtin.file:
+        src: "{{ dotfiles_home }}/roles/git/files/gitignore_global"
+        dest: "{{ ansible_facts['user_dir'] }}/.config/git/ignore"
+        state: link
+        force: true
