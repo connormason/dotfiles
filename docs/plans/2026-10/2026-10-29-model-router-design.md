@@ -131,7 +131,20 @@ order, which is undocumented. The base layer has no other `Agent` matchers today
 
 **Rollout:** ship in `advise`; after about a week of logs, review disagreements before enabling `enforce`.
 
-## Open questions
+## Spike results (2026-10-29)
 
-- Exact `PostToolUse` fields for `Agent` (resolved by spike item 2).
-- Whether `Task` is still a distinct tool name on the installed version, or only `Agent` (matcher `Agent|Task` covers both).
+Run with a throwaway `PreToolUse`/`PostToolUse` hook (matcher `Agent|Task`) that forced `model: "haiku"`, loaded via
+`claude -p ... --settings`.
+
+1. **Rewrite works: yes.** The `PreToolUse` payload had no `model` in `tool_input`; the hook returned
+   `hookSpecificOutput.updatedInput` (original input plus `model: "haiku"`) with **no** `permissionDecision`. The
+   subagent then reported its model as `claude-haiku-5-5[1m]`, and the `PostToolUse` `tool_input` echoed `"model": "haiku"`.
+   `permissionDecision: "allow"` is therefore not required, and the router must not emit it.
+2. **`PostToolUse` shape:** `tool_name` is `Agent` (not `Task`). Top-level keys: `session_id`, `transcript_path`, `cwd`,
+   `prompt_id`, `permission_mode`, `effort`, `hook_event_name`, `tool_name`, `tool_input`, `tool_response`,
+   `tool_use_id`, `duration_ms`. `tool_input` is the **post-rewrite** input (includes the injected `model`). The model
+   that actually ran is `tool_response.resolvedModel` (here the full ID `claude-haiku-5-5[1m]`); `tool_response` also
+   carries `status`, `agentId`, `agentType`, `totalDurationMs`, `totalTokens`, and `usage`. Because a resolved model is
+   present, the post record can log it. Matcher `Agent|Task` is kept to cover both names, but only `Agent` was observed.
+3. **Python version:** the hook runner's `python3` resolved to `3.14.6`, so the script may rely on Python 3.9+ features
+   (the JSON-config decision no longer needs to avoid `tomllib` for version reasons, but stays for portability).
