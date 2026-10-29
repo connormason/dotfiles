@@ -88,3 +88,18 @@ Requirements:
    (`docs/plans/2026-10/2026-10-26-dev-env-base-overlay-design.md`): the advice says to set `user.email` locally; say
    `user.name` and `user.email` (user.name otherwise still comes from the overlay default or personal config).
 1. Format changed markdown with `prek run mdformat --files <files>`; run `prek run --files <changed files>`.
+
+## Task 7: `bootstrap/60-macos.sh` comments match their values (comment-only)
+
+USER RULING: keep the current values; rewrite the comments so they describe what the commands do.
+
+1. `AppleShowAllExtensions -bool false` (~line 128) sits under the comment "Show all file extensions": the value hides
+   extensions (macOS default). Reword the comment to state the real behaviour.
+1. `launchanim -int 1` (~lines 86-87) sits under "Disable animations when opening apps": `1` keeps the animation.
+   Reword.
+1. `NewWindowTarget PfLo` with `file://${HOME}` (~lines 151-155) sits under "Set Documents as the default location":
+   the target is the home folder. Reword (leave the path value unchanged; do not add a trailing slash).
+1. No value, key, ordering, or behaviour changes: `git diff` must show only comment lines changed. Check any test or
+   doc that quotes these comments (`grep -rn` for the old wording) and keep them consistent.
+1. Verify: `bash -n bootstrap/60-macos.sh`, `shellcheck`/`shfmt -d` if available, full suite once, and
+   `prek run --files bootstrap/60-macos.sh`.
