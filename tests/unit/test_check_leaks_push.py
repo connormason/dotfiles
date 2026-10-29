@@ -17,6 +17,17 @@ SCRIPT    = REPO_ROOT / 'scripts' / 'hooks' / 'check-leaks-push.sh'
 CORP_DOMAIN = 'apple' + '.com'
 
 
+def _find_utf8_locale() -> str | None:
+    """
+    Return an installed UTF-8 locale name, or None when the machine has none
+    """
+    available = set(subprocess.run(['locale', '-a'], capture_output=True, text=True, check=False).stdout.split())
+    return next((name for name in ('en_US.UTF-8', 'C.UTF-8') if name in available), None)
+
+
+UTF8_LOCALE = _find_utf8_locale()
+
+
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:
     """
     Run git in a fixture repo and return stdout
@@ -67,14 +78,20 @@ def _write_commit(repo: Path, name: str, content: str, message: str) -> str:
     return _git(repo, 'rev-parse', 'HEAD')
 
 
-def _run(repo: Path, from_ref: str | None, to_ref: str) -> subprocess.CompletedProcess[str]:
+def _run(
+    repo: Path, from_ref: str | None, to_ref: str, locale: str | None = None
+) -> subprocess.CompletedProcess[str]:
     """
-    Run the pre-push script inside the fixture repo
+    Run the pre-push script inside the fixture repo, optionally under a specific LC_ALL locale
     """
     env = {**os.environ, 'PRE_COMMIT_TO_REF': to_ref}
+    if locale is not None:
+        env['LC_ALL'] = locale
     if from_ref is not None:
         env['PRE_COMMIT_FROM_REF'] = from_ref
-    return subprocess.run([str(SCRIPT)], cwd=repo, capture_output=True, text=True, check=False, env=env)
+    return subprocess.run(
+        [str(SCRIPT)], cwd=repo, capture_output=True, text=True, errors='replace', check=False, env=env
+    )
 
 
 class TestCheckLeaksPush:
@@ -237,6 +254,8 @@ class TestCheckLeaksPush:
         """
         Test that a NUL byte on an added line does not hide a leak elsewhere in the scanned patch
         """
+        # Only bites on NUL-preserving awks (gawk/mawk); BSD awk truncates at the NUL, so this passes with or without
+        # the `tr -d '\000'` step on macOS
         # `diff` forces a textual patch; otherwise git would treat the NUL-bearing file as binary and emit no lines
         info = repo / '.git' / 'info'
         info.mkdir(exist_ok=True)
@@ -250,6 +269,23 @@ class TestCheckLeaksPush:
         head   = _git(repo, 'rev-parse', 'HEAD')
         result = _run(repo, base, head)
         assert result.returncode == 1, result.stdout
+        assert CORP_DOMAIN not in result.stdout
+
+    @pytest.mark.skipif(UTF8_LOCALE is None, reason='No UTF-8 locale installed')
+    def test_non_utf8_bytes_in_patch_still_scanned(self, repo: Path) -> None:
+        """
+        Test that a non-UTF-8 byte on an added line yields a leak report rather than a tool error in a UTF-8 locale
+        """
+        base = _git(repo, 'rev-parse', 'HEAD')
+        (repo / 'latin1.txt').write_bytes(b'caf\xe9 \xff\n' + f'mirror: pkgs.{CORP_DOMAIN}\n'.encode())
+        _git(repo, 'add', 'latin1.txt')
+        _git(repo, 'commit', '-q', '-m', 'docs: add latin1 notes')
+
+        head   = _git(repo, 'rev-parse', 'HEAD')
+        result = _run(repo, base, head, locale=UTF8_LOCALE)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert 'Illegal byte sequence' not in result.stderr
+        assert 'multibyte conversion failure' not in result.stderr
         assert CORP_DOMAIN not in result.stdout
 
     def test_non_ascii_leaky_path_fails(self, repo: Path, tmp_path: Path) -> None:

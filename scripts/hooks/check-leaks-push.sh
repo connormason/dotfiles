@@ -36,12 +36,15 @@ trap 'rm -f "$msgs" "$patch"' EXIT
 # Findings name the temp patch file, so point at the matching git commands: blanking (not deleting) every line that is
 # neither a commit header nor an added line keeps line numbers aligned with the first command's output (tr only removes
 # NUL bytes, never newlines); the path listing of the second command follows it, shifted by the first section's length.
-# The awk pattern admits any number of --cc added-line prefix columns ("+", "++", " +", "+++", ...).
+# The awk pattern admits any number of --cc added-line prefix columns ("+", "++", " +", "+++", ...). LC_ALL=C makes awk
+# and tr process bytes: in a UTF-8 locale an added line that is not valid UTF-8 (a Latin-1 file, say) aborts BSD awk
+# ("towc: multibyte conversion failure") and tr ("Illegal byte sequence"), so the push would die on a tool error instead
+# of being scanned (check-leaks.py decodes the patch with errors='replace').
 echo "pre-push: scanning ${range[*]}"
 git log --format=%B "${range[@]}" >"$msgs"
 git log -p -U0 --cc --no-textconv --format='commit %h' --no-color "${range[@]}" |
-    awk '/^commit / || /^[ +]*\+/ { print; next } { print "" }' |
-    tr -d '\000' >"$patch"
+    LC_ALL=C awk '/^commit / || /^[ +]*\+/ { print; next } { print "" }' |
+    LC_ALL=C tr -d '\000' >"$patch"
 patch_lines="$(wc -l <"$patch" | tr -d '[:space:]')"
 git -c core.quotePath=false log --name-only --diff-filter=ACR --cc --no-textconv --format='commit %h' --no-color \
     "${range[@]}" >>"$patch"

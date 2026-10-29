@@ -155,6 +155,7 @@ class TestBrewInstallerChecksum:
         assert 'installer checksum verified' in result.stdout
         assert 'raw.githubusercontent.com/Homebrew/install/HEAD/install.sh' in sandbox.curl_args.read_text('utf-8')
         assert sandbox.marker.exists()
+        # Guards against a future sudo call being added; neither the stage nor the stub installer calls sudo today
         assert not sandbox.sudo_marker.exists()
         assert list(sandbox.tmpdir.iterdir()) == []
 
@@ -173,5 +174,6 @@ class TestBrewInstallerChecksum:
         assert f'actual:   {hashlib.sha256(sandbox.payload).hexdigest()}' in result.stderr
         assert 'installer checksum verified' not in result.stdout
         assert not sandbox.marker.exists()
+        # Guards against a future sudo call being added; neither the stage nor the stub installer calls sudo today
         assert not sandbox.sudo_marker.exists()
         assert list(sandbox.tmpdir.iterdir()) == []
