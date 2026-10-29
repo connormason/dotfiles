@@ -169,6 +169,8 @@ class TestValidateConfig:
             ('rules',           [{'class': 'hard', 'any': 'x'}]),
             ('rules',           [{'class': 'hard', 'any': []}]),
             ('rules',           ['not-an-object']),
+            ('rules',           [{'class': ['hard'], 'any': ['x']}]),
+            ('rules',           [{'class': {}, 'any': ['x']}]),
         ],
     )
     def test_invalid_values_rejected(self, key: str, value: object) -> None:

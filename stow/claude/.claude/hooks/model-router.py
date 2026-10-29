@@ -93,7 +93,8 @@ def _validate_rule(rule: object, index: int, classes: dict) -> None:
     where = f'rules[{index}]'
     if not isinstance(rule, dict):
         raise ConfigError(f'{where}: must be an object')
-    if rule.get('class') not in classes:
+    name = rule.get('class')
+    if not isinstance(name, str) or name not in classes:
         raise ConfigError(f'{where}.class: {rule.get("class")!r} is not a defined class')
     patterns = rule.get('any')
     if not isinstance(patterns, list) or not patterns or not all(isinstance(p, str) for p in patterns):
