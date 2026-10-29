@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -280,3 +282,220 @@ class TestDecide:
         assert model_router.apply_floor('fable', 'sonnet') == 'fable'
         assert model_router.apply_floor('haiku', None) == 'haiku'
         assert model_router.apply_floor('haiku', 'opus') == 'opus'
+
+
+FIXTURE_DIR = Path(__file__).resolve().parents[1] / 'fixtures' / 'model_router'
+
+
+def _event(tool_input: dict, env: Env, tool_name: str = 'Agent', **extra: object) -> str:
+    """
+    Serialize a hook event payload
+    """
+    payload = {
+        'session_id': 'session-1',
+        'tool_use_id': 'toolu_1',
+        'cwd': str(env.project),
+        'tool_name': tool_name,
+        'tool_input': tool_input,
+        **extra,
+    }
+    return json.dumps(payload)
+
+
+def _log_path(env: Env) -> Path:
+    """
+    Location of the decision log inside the isolated state directory
+    """
+    return env.state / 'dotfiles' / 'model-router' / 'decisions.jsonl'
+
+
+def _records(env: Env) -> list[dict]:
+    """
+    Parsed decision-log records
+    """
+    path = _log_path(env)
+    if not path.is_file():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()]
+
+
+MECHANICAL = {'subagent_type': GP, 'description': 'tidy', 'prompt': 'rename the helper foo across the repo'}
+
+
+class TestBuildPreOutput:
+    """
+    Tests for PreToolUse hook output
+    """
+    def test_rewrite_sets_model_and_preserves_input(self) -> None:
+        """
+        Test that a rewrite returns updatedInput with only model added, and never a permission decision
+        """
+        decision = model_router.decide(MECHANICAL, _cfg(mode='enforce'))
+        output = model_router.build_pre_output(MECHANICAL, decision)
+        specific = output['hookSpecificOutput']
+        assert specific['hookEventName'] == 'PreToolUse'
+        assert specific['updatedInput'] == {**MECHANICAL, 'model': 'haiku'}
+        assert 'permissionDecision' not in specific
+
+    def test_advise_adds_context_only(self) -> None:
+        """
+        Test that advise mode emits context naming the model and rule, with no input rewrite
+        """
+        decision = model_router.decide(MECHANICAL, _cfg(mode='advise'))
+        specific = model_router.build_pre_output(MECHANICAL, decision)['hookSpecificOutput']
+        assert 'updatedInput' not in specific
+        assert "model='haiku'" in specific['additionalContext']
+        assert 'mechanical-keywords' in specific['additionalContext']
+
+    def test_passthrough_emits_nothing(self) -> None:
+        """
+        Test that a pass-through decision produces no output
+        """
+        decision = model_router.decide({'subagent_type': GP, 'prompt': 'summarize'}, _cfg())
+        assert model_router.build_pre_output({'prompt': 'summarize'}, decision) is None
+
+
+class TestRun:
+    """
+    Tests for the fail-open entry point and the decision log
+    """
+    def test_enforce_rewrites_and_logs_without_prompt_text(self, env: Env) -> None:
+        """
+        Test that enforce mode rewrites the model and logs a record that omits the prompt
+        """
+        _write_layer(env.home, {'mode': 'enforce'})
+        output = model_router.run('pre', _event(MECHANICAL, env))
+        assert output['hookSpecificOutput']['updatedInput']['model'] == 'haiku'
+
+        [record] = _records(env)
+        assert record['action'] == 'rewrite'
+        assert record['decided_model'] == 'haiku'
+        assert record['rule'] == 'mechanical-keywords'
+        assert record['tool_use_id'] == 'toolu_1'
+        assert record['prompt_len'] == len(MECHANICAL['prompt'])
+        assert 'rename' not in _log_path(env).read_text(encoding='utf-8')
+
+    def test_default_advise_does_not_rewrite(self, env: Env) -> None:
+        """
+        Test that the shipped default only advises
+        """
+        output = model_router.run('pre', _event(MECHANICAL, env))
+        assert 'updatedInput' not in output['hookSpecificOutput']
+        assert _records(env)[0]['action'] == 'advise'
+
+    def test_unrouted_tool_ignored(self, env: Env) -> None:
+        """
+        Test that other tools are ignored and leave no log
+        """
+        assert model_router.run('pre', _event({'command': 'ls'}, env, tool_name='Bash')) is None
+        assert _records(env) == []
+
+    def test_malformed_stdin_fails_open_and_logs_error(self, env: Env) -> None:
+        """
+        Test that unparsable stdin yields no output and an error record
+        """
+        assert model_router.run('pre', '{nope') is None
+        assert _records(env)[0]['event'] == 'error'
+
+    def test_invalid_config_fails_open_and_logs_error(self, env: Env) -> None:
+        """
+        Test that an invalid config layer leaves the call untouched and logs the error
+        """
+        _write_layer(env.home, {'mode': 'loud'})
+        assert model_router.run('pre', _event(MECHANICAL, env)) is None
+        assert 'mode' in _records(env)[0]['error']
+
+    def test_off_mode_is_inert(self, env: Env) -> None:
+        """
+        Test that off mode produces no output and no log
+        """
+        _write_layer(env.home, {'mode': 'off'})
+        assert model_router.run('pre', _event(MECHANICAL, env)) is None
+        assert _records(env) == []
+
+    def test_log_can_be_disabled(self, env: Env) -> None:
+        """
+        Test that log=false suppresses the decision log but not the routing
+        """
+        _write_layer(env.home, {'mode': 'enforce', 'log': False})
+        assert model_router.run('pre', _event(MECHANICAL, env)) is not None
+        assert _records(env) == []
+
+    def test_post_logs_event_with_resolved_model(self, env: Env) -> None:
+        """
+        Test that PostToolUse writes a post record and produces no hook output
+        """
+        event = _event(MECHANICAL, env, tool_response={'resolvedModel': 'claude-haiku-5-5'})
+        assert model_router.run('post', event) is None
+
+        [record] = _records(env)
+        assert record['event'] == 'post'
+        assert record['tool_use_id'] == 'toolu_1'
+        assert record['resolved_model'] == 'claude-haiku-5-5'
+
+    def test_log_rotates_above_size_cap(self, env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that the log rotates once it exceeds the size cap
+        """
+        monkeypatch.setattr(model_router, 'LOG_MAX_BYTES', 10)
+        model_router.run('pre', _event(MECHANICAL, env))
+        model_router.run('pre', _event(MECHANICAL, env))
+
+        rotated = _log_path(env).with_name('decisions.jsonl.1')
+        assert rotated.is_file()
+        assert len(_records(env)) == 1
+
+
+class TestRecordedPostPayload:
+    """
+    Tests against the real PostToolUse payload captured by the feasibility spike
+    """
+    def test_resolved_model_matches_recorded_payload(self) -> None:
+        """
+        Test that handle_post extracts the resolved model from the captured payload
+        """
+        payload = json.loads((FIXTURE_DIR / 'post_agent_payload.json').read_text(encoding='utf-8'))
+        expected = payload.pop('_expected_resolved_model')
+        assert model_router.handle_post(payload)['resolved_model'] == expected
+
+
+class TestCli:
+    """
+    Tests for the script's command-line contract
+    """
+    @staticmethod
+    def _invoke(env: Env, args: list[str], stdin: str) -> subprocess.CompletedProcess[str]:
+        """
+        Run the script with an isolated HOME and state directory
+        """
+        child_env = {**os.environ, 'HOME': str(env.home), 'XDG_STATE_HOME': str(env.state)}
+        return subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), *args],
+            input=stdin, capture_output=True, text=True, env=child_env, check=False,
+        )
+
+    def test_pre_prints_hook_json(self, env: Env) -> None:
+        """
+        Test that pre prints the rewrite JSON on stdout and exits 0
+        """
+        _write_layer(env.home, {'mode': 'enforce'})
+        result = self._invoke(env, ['pre'], _event(MECHANICAL, env))
+        assert result.returncode == 0
+        assert json.loads(result.stdout)['hookSpecificOutput']['updatedInput']['model'] == 'haiku'
+
+    @pytest.mark.parametrize(
+        ('args', 'stdin'),
+        [
+            ([],        '{}'),
+            (['bogus'], '{}'),
+            (['pre'],   '{nope'),
+            (['post'],  ''),
+        ],
+    )
+    def test_bad_invocations_exit_zero_silently(self, env: Env, args: list[str], stdin: str) -> None:
+        """
+        Test that unknown modes and malformed input never fail the hook
+        """
+        result = self._invoke(env, args, stdin)
+        assert result.returncode == 0
+        assert result.stdout == ''

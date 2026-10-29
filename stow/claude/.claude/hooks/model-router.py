@@ -11,8 +11,12 @@ See docs/MODEL_ROUTER.md for configuration and rollout.
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 from dataclasses import dataclass
+from datetime import datetime
+from datetime import timezone
 from pathlib import Path
 
 # ==============================================================================
@@ -247,3 +251,190 @@ def decide(tool_input: dict, cfg: dict) -> Decision:
 
     action = 'advise' if cfg.get('mode') == 'advise' else 'rewrite'
     return Decision(action, reason, chosen, cls, rule_id)
+
+
+# ==============================================================================
+# Hook output and records
+# ==============================================================================
+
+def now_iso() -> str:
+    """
+    Current UTC time, ISO-8601, second resolution.
+    """
+    return datetime.now(timezone.utc).isoformat(timespec='seconds')
+
+
+def build_pre_output(tool_input: dict, decision: Decision) -> dict | None:
+    """
+    Build the PreToolUse hook output for a decision.
+
+    A rewrite returns ``updatedInput`` (the original input plus ``model``) and deliberately no ``permissionDecision``,
+    so the user's normal permission flow still applies. Advise mode returns context only.
+
+    :param tool_input: the original tool input.
+    :param decision: the routing decision.
+    :return: hook output, or ``None`` to leave the call untouched.
+    """
+    if decision.action == 'rewrite':
+        updated = dict(tool_input)
+        updated['model'] = decision.model
+        return {
+            'hookSpecificOutput': {
+                'hookEventName':     'PreToolUse',
+                'updatedInput':      updated,
+                'additionalContext': f'model-router: routed to {decision.model} ({decision.cls or decision.reason}).',
+            }
+        }
+    if decision.action == 'advise':
+        return {
+            'hookSpecificOutput': {
+                'hookEventName':     'PreToolUse',
+                'additionalContext': (
+                    f"model-router (advise): this spawn matches {decision.rule or decision.reason} "
+                    f"(class {decision.cls or 'n/a'}); consider passing model='{decision.model}'."
+                ),
+            }
+        }
+    return None
+
+
+def handle_pre(payload: dict, cfg: dict) -> tuple[dict | None, dict]:
+    """
+    Decide on a PreToolUse payload.
+
+    :param payload: the hook's stdin JSON.
+    :param cfg: validated config.
+    :return: ``(hook_output, log_record)``; the record never contains prompt text.
+    """
+    tool_input = payload.get('tool_input') or {}
+    decision = decide(tool_input, cfg)
+    record = {
+        'event':           'pre',
+        'ts':              now_iso(),
+        'session_id':      payload.get('session_id'),
+        'tool_use_id':     payload.get('tool_use_id'),
+        'subagent_type':   tool_input.get('subagent_type'),
+        'requested_model': tool_input.get('model'),
+        'decided_model':   decision.model,
+        'class':           decision.cls,
+        'rule':            decision.rule,
+        'mode':            cfg.get('mode'),
+        'action':          decision.action,
+        'reason':          decision.reason,
+        'prompt_len':      len(str(tool_input.get('prompt') or '')),
+    }
+    return build_pre_output(tool_input, decision), record
+
+
+def extract_resolved_model(tool_response: object) -> str | None:
+    """
+    Read the model a subagent actually ran on from a PostToolUse ``tool_response``.
+
+    :param tool_response: the payload's ``tool_response`` value.
+    :return: the model string, or ``None`` when the payload does not carry one.
+    """
+    if isinstance(tool_response, dict):
+        model = tool_response.get('resolvedModel')
+        if isinstance(model, str):
+            return model
+    return None
+
+
+def handle_post(payload: dict) -> dict:
+    """
+    Build the log record for a PostToolUse payload.
+
+    :param payload: the hook's stdin JSON.
+    :return: the log record.
+    """
+    tool_input = payload.get('tool_input') or {}
+    return {
+        'event':          'post',
+        'ts':             now_iso(),
+        'session_id':     payload.get('session_id'),
+        'tool_use_id':    payload.get('tool_use_id'),
+        'subagent_type':  tool_input.get('subagent_type'),
+        'resolved_model': extract_resolved_model(payload.get('tool_response')),
+    }
+
+
+# ==============================================================================
+# Decision log
+# ==============================================================================
+
+def state_dir() -> Path:
+    """
+    Directory holding the decision log: ``${XDG_STATE_HOME:-~/.local/state}/dotfiles/model-router``.
+    """
+    base = os.environ.get('XDG_STATE_HOME') or str(Path.home() / '.local' / 'state')
+    return Path(base) / 'dotfiles' / 'model-router'
+
+
+def write_log(record: dict) -> None:
+    """
+    Append one JSON record to the decision log, rotating once it exceeds ``LOG_MAX_BYTES``.
+
+    I/O errors are swallowed on purpose: a logging failure must never fail a hook that fails open.
+
+    :param record: the record to append.
+    """
+    try:
+        directory = state_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / 'decisions.jsonl'
+        if path.is_file() and path.stat().st_size > LOG_MAX_BYTES:
+            path.replace(directory / 'decisions.jsonl.1')
+        with path.open('a', encoding='utf-8') as handle:
+            handle.write(json.dumps(record, sort_keys=True) + '\n')
+    except OSError:
+        pass
+
+
+# ==============================================================================
+# Entry points
+# ==============================================================================
+
+def run(mode: str, raw: str) -> dict | None:
+    """
+    Process one hook event. Never raises: any failure is logged and the call is left untouched.
+
+    :param mode: ``'pre'`` or ``'post'``.
+    :param raw: the hook's raw stdin text.
+    :return: hook output to print as JSON, or ``None`` for no output.
+    """
+    try:
+        payload = json.loads(raw or '{}')
+        if not isinstance(payload, dict) or payload.get('tool_name') not in ROUTED_TOOLS:
+            return None
+
+        cfg = load_config(Path(payload.get('cwd') or Path.cwd()))
+        if cfg['mode'] == 'off':
+            return None
+
+        if mode == 'pre':
+            output, record = handle_pre(payload, cfg)
+        else:
+            output, record = None, handle_post(payload)
+        if cfg.get('log', True):
+            write_log(record)
+        return output
+    except Exception as e:
+        write_log({'event': 'error', 'ts': now_iso(), 'mode': mode, 'error': f'{type(e).__name__}: {e!s}'})
+        return None
+
+
+def main() -> None:
+    """
+    CLI entry: ``model-router.py pre|post`` with the hook payload on stdin. Unknown modes exit 0 silently.
+    """
+    mode = sys.argv[1] if len(sys.argv) > 1 else ''
+    if mode not in ('pre', 'post'):
+        sys.exit(0)
+
+    output = run(mode, sys.stdin.read())
+    if output is not None:
+        print(json.dumps(output))
+
+
+if __name__ == '__main__':
+    main()
