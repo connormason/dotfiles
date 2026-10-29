@@ -53,7 +53,8 @@
 	path = ~/.gitconfig.overlay
 
 [includeIf "hasconfig:remote.*.url:git@github.com:connormason/**"]
-	; personal remotes always use the personal identity, even on a machine whose default is the work identity
+	; repos with a remote matching these globs use the personal identity, even where the default is the work identity;
+	; other remote spellings and repos without a remote yet do not match (see stow/README.md, "Git identity")
 	path = ~/.config/git/identity-personal
 
 [includeIf "hasconfig:remote.*.url:https://github.com/connormason/**"]

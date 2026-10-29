@@ -60,9 +60,11 @@ falls back to the overlay's default identity when:
 - the host is any other spelling (`www.github.com`, `ssh.github.com`), or the URL is rewritten from an alias by
   `url.<base>.insteadOf` (the URL is matched as written, not as rewritten).
 
-To be certain, add the remote before the first commit or set `git config user.email` in the repository (a local setting
-overrides all of the above). In this repository, the [leak guard](../scripts/hooks/README.md#check-leakspy)'s
-`--identity` check additionally rejects a commit whose identity matches its patterns.
+To be certain, add the remote before the first commit or set `user.name` and `user.email` in the repository (a local
+setting overrides all of the above; without it, `user.name` still comes from the overlay's default if it sets one, else
+from the personal default in [`git/.gitconfig`](git/.gitconfig)). In this repository, the
+[leak guard](../scripts/hooks/README.md#check-leakspy)'s `--identity` check additionally rejects a commit whose identity
+matches its patterns.
 
 ## Apply
 

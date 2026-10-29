@@ -117,7 +117,7 @@ order.
 [include]
     path = ~/.gitconfig.overlay            ; work overlay: default identity = work email
 [includeIf "hasconfig:remote.*.url:git@github.com:connormason/**"]
-    path = ~/.config/git/identity-personal ; remotes matching these globs use the personal identity (limits below)
+    path = ~/.config/git/identity-personal ; repos with a matching remote use the personal identity (limits below)
 [includeIf "hasconfig:remote.*.url:https://github.com/connormason/**"]
     path = ~/.config/git/identity-personal
 [includeIf "hasconfig:remote.*.url:ssh://git@github.com/connormason/**"]
@@ -134,8 +134,9 @@ configuration, so it is a mitigation, not a guarantee. A repository falls back t
 has no remote yet (commits made before `git remote add` keep the default), when the owner or host differs in letter
 case, when the remote uses an SSH host alias or an explicit port, or when the URL is spelled any other way (for example
 `www.github.com`, or an `url.<base>.insteadOf` alias, which is matched as written). Mitigation: add the remote before
-the first commit, or set `user.email` in the repository. The leak guard's `--identity` check is the backstop for
-patterns it knows.
+the first commit, or set `user.name` and `user.email` in the repository (without that, `user.name` still comes from the
+overlay's default if it sets one, else from the personal default). The leak guard's `--identity` check is the backstop
+for patterns it knows.
 
 ### Render tool (`run.py render`, bootstrap stage `97-render`)
 
