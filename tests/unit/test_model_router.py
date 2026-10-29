@@ -31,7 +31,13 @@ def _load_module() -> ModuleType:
 
     module = importlib.util.module_from_spec(spec)
     sys.modules['model_router'] = module
-    spec.loader.exec_module(module)
+    # The script lives in a stow package: keep exec_module from leaving a __pycache__ that stow would link into $HOME
+    previous = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = previous
     return module
 
 
@@ -213,6 +219,12 @@ class TestDecide:
             ({'subagent_type': GP, 'prompt': 'weigh the design trade-offs of two caches'},
              {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
             ({'subagent_type': GP, 'prompt': 'rename helpers, then explain the design tradeoffs'},
+             {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
+            # patterns span lines and the description/prompt boundary: `.` matches newlines
+            ({'subagent_type': GP, 'description': 'Cache design review',
+              'prompt': 'Evaluate the design.\nList the trade-offs. Use grep to locate callers.'},
+             {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
+            ({'subagent_type': GP, 'prompt': 'weigh the design\nand the trade-offs of two caches'},
              {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
             ({'subagent_type': 'Explore', 'prompt': 'list all usages of foo'},
              {'mode': 'enforce'},                  'rewrite',     'haiku',  'rule'),

@@ -30,6 +30,7 @@ ROUTED_TOOLS = ('Agent', 'Task')
 DEFAULT_CONFIG = Path(__file__).with_name('model-router.default.json')
 CONFIG_NAME = 'model-router.json'
 LOG_MAX_BYTES = 1_000_000
+RULE_FLAGS = re.IGNORECASE | re.DOTALL
 
 
 # ==============================================================================
@@ -106,7 +107,7 @@ def _validate_rule(rule: object, index: int, classes: dict) -> None:
         raise ConfigError(f'{where}.any: must be a non-empty list of strings')
     for pattern in patterns:
         try:
-            re.compile(pattern, re.IGNORECASE)
+            re.compile(pattern, RULE_FLAGS)
         except re.error as e:
             raise ConfigError(f'{where}.any: invalid regex {pattern!r}: {e!s}') from e
 
@@ -233,7 +234,7 @@ def decide(tool_input: dict, cfg: dict) -> Decision:
     elif subagent_type in (cfg.get('classify_types') or []):
         text = f'{description}\n{prompt}'
         for index, rule in enumerate(cfg.get('rules') or []):
-            if any(re.search(pattern, text, re.IGNORECASE) for pattern in rule['any']):
+            if any(re.search(pattern, text, RULE_FLAGS) for pattern in rule['any']):
                 cls = rule['class']
                 chosen = cfg['classes'][cls]
                 rule_id = rule.get('id') or f'rule-{index}'
