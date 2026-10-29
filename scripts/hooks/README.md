@@ -376,12 +376,16 @@ file; identities are piped to `check-leaks.py --identities-from -`.
 commits, so a leak introduced by a conflict resolution is seen) are written to a temporary file and scanned too, so
 content that one pushed commit adds and a later one removes is caught even though the tip is clean. Removed and context
 lines are blanked rather than deleted: a removed line was either added earlier in the range (and is caught there) or is
-already public, and blanking keeps the reported line numbers aligned with that command's output. The paths each pushed
-commit adds, copies, or renames to
-(`git log --name-only --diff-filter=ACR --cc --format='commit %h' --no-color <range>`) are appended to the same file,
-because a leak that lives only in a path (an empty file, a pure rename) has no added line. The script prints
-`pre-push: scanning <range>` first and, on findings, `pre-push: inspect with: <the patch command>` followed by
-`pre-push: and (paths): <the path command>`.
+already public, and blanking keeps the reported line numbers aligned with that command's output. NUL bytes are stripped
+from the patch (`tr -d '\000'`), because `check-leaks.py` treats a file with a NUL in its first 8 KiB as binary and
+would otherwise skip the whole scan. The awk filter admits any number of `--cc` prefix columns, so octopus merges are
+seen. The paths each pushed commit adds, copies, or renames to
+(`git -c core.quotePath=false log --name-only --diff-filter=ACR --cc --no-textconv --format='commit %h' --no-color <range>`;
+`core.quotePath=false` keeps non-ASCII paths from being octal-escaped) are appended to the same file, because a leak
+that lives only in a path (an empty file, a pure rename) has no added line. The script prints
+`pre-push: scanning <range>` first and, on findings, `pre-push: inspect with: <the patch command>`,
+`pre-push: and (paths): <the path command>`, and a line giving the patch section's length: a reported line past it is
+that many lines further into the path command's output.
 
 **File contents** at the tip are scanned by the separate `check-leaks-push-files` hook entry, which prek feeds the files
 changed between the two refs.
