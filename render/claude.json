@@ -74,6 +74,15 @@
             "command": "$HOME/.claude/hooks/shell-lint-on-edit.sh"
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/model-router.py post"
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -96,6 +105,15 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/secret-scanner.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/model-router.py pre"
           }
         ]
       }

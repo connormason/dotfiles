@@ -8,9 +8,10 @@ guidance in [`CLAUDE.md`](../CLAUDE.md).
 
 ## Reference
 
-| File                                       | Purpose                                                            |
-| ------------------------------------------ | ------------------------------------------------------------------ |
-| [RUN_PY_REFERENCE.md](RUN_PY_REFERENCE.md) | Full command reference for the `run.py` repository-management CLI. |
+| File                                       | Purpose                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------- |
+| [RUN_PY_REFERENCE.md](RUN_PY_REFERENCE.md) | Full command reference for the `run.py` repository-management CLI.   |
+| [MODEL_ROUTER.md](MODEL_ROUTER.md)         | Subagent model-router hook: behavior, config, decision log, rollout. |
 
 ## Notes
 
