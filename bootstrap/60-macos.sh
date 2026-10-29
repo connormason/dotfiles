@@ -123,7 +123,7 @@ run defaults write com.apple.dock wvous-tr-modifier -int 0
 # https://macos-defaults.com/finder/appleshowallfiles.html
 run defaults write com.apple.finder AppleShowAllFiles -bool true
 
-# Do not force all file extensions to be shown in Finder: extensions of unknown file types stay hidden (macOS default)
+# Do not force all extensions to be shown in Finder; it follows each file's own hide-extension setting (macOS default)
 # https://macos-defaults.com/finder/appleshowallextensions.html
 run defaults write NSGlobalDomain AppleShowAllExtensions -bool false
 
