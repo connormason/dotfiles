@@ -46,7 +46,7 @@ every port from the work repo passes through it.
 | Legacy personal survivors | Personal-only GUI apps, as the in-repo `profiles/personal-mac` overlay                     | User choice; macOS defaults, Dock layout, and the old Hammerspoon config are dropped.                 |
 | Claude Code settings      | Rendered merge of per-layer fragments into a real `settings.json`, with a drift guard      | Works for every launch path (CLI, IDE, desktop); the employer auth helper must never be missed.       |
 | VS Code settings          | Same render tool                                                                           | One mechanism; a fallback is recorded under Clarifications.                                           |
-| Git identity              | Personal default, work-overlay default, and `includeIf hasconfig:remote` for personal remotes | Correct identity per repo on both machines with no secrets; prevents work-email commits to public repos. |
+| Git identity              | Personal default, work-overlay default, and `includeIf hasconfig:remote` for personal remotes | Correct identity per repo on both machines with no secrets; reduces the chance of work-email commits to public repos (see the limits below). |
 | NAS Ansible               | Untouched (`roles/`, `playbooks/`, `library/`, `services/`, inventory/vault commands)      | Separate project.                                                                                     |
 
 ## Architecture
@@ -117,7 +117,7 @@ order.
 [include]
     path = ~/.gitconfig.overlay            ; work overlay: default identity = work email
 [includeIf "hasconfig:remote.*.url:git@github.com:connormason/**"]
-    path = ~/.config/git/identity-personal ; personal remotes always use the personal identity
+    path = ~/.config/git/identity-personal ; repos with a matching remote use the personal identity (limits below)
 [includeIf "hasconfig:remote.*.url:https://github.com/connormason/**"]
     path = ~/.config/git/identity-personal
 [includeIf "hasconfig:remote.*.url:ssh://git@github.com/connormason/**"]
@@ -128,6 +128,15 @@ order.
 
 Git ignores missing include files, so a machine without an overlay needs nothing extra. (`hasconfig:remote.*.url`
 requires git 2.36+; Homebrew git satisfies this, and `doctor` checks it.)
+
+**Limits.** The `includeIf` match is a case-sensitive glob against the remote URLs present when git reads its
+configuration, so it is a mitigation, not a guarantee. A repository falls back to the overlay's default identity when it
+has no remote yet (commits made before `git remote add` keep the default), when the owner or host differs in letter
+case, when the remote uses an SSH host alias or an explicit port, or when the URL is spelled any other way (for example
+`www.github.com`, or an `url.<base>.insteadOf` alias, which is matched as written). Mitigation: add the remote before
+the first commit, or set `user.name` and `user.email` in the repository (without that, `user.name` still comes from the
+overlay's default if it sets one, else from the personal default). The leak guard's `--identity` check is the backstop
+for patterns it knows.
 
 ### Render tool (`run.py render`, bootstrap stage `97-render`)
 

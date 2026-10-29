@@ -16,11 +16,17 @@ repeated.
 
 ## Registering the overlay
 
-Run from the repository root. This appends the profile to the overlays registry read by the bootstrap driver:
+Run from the repository root, once. This creates the registry directory if needed and appends the profile to the
+overlays registry read by the bootstrap driver. The location honours `DOTFILES_OVERLAYS_FILE`, then
+`$XDG_CONFIG_HOME/dotfiles/overlays`, defaulting to `~/.config/dotfiles/overlays` (the same resolution as
+`dotfiles_overlays_file` in [`bootstrap/lib.sh`](../../bootstrap/lib.sh)):
 
 ```bash
-echo "$PWD/profiles/personal-mac" >> ~/.config/dotfiles/overlays
+f="${DOTFILES_OVERLAYS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/overlays}"
+mkdir -p "$(dirname "$f")" && echo "$PWD/profiles/personal-mac" >> "$f"
 ```
+
+Registering the same layer twice makes the driver abort, so do not repeat the command.
 
 Verify the layer order (base first, then this profile):
 

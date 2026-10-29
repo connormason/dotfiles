@@ -30,7 +30,8 @@ if [[ ! $(command -v brew) ]]; then
     echo -e "Installing Homebrew..."
 
     # Download installer and verify checksum before execution
-    BREW_INSTALLER="/tmp/brew-install.sh"
+    BREW_INSTALLER="$(mktemp "${TMPDIR:-/tmp}/brew-install.XXXXXX")"
+    trap 'rm -f "$BREW_INSTALLER"' EXIT
     curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$BREW_INSTALLER"
 
     # Expected checksum - update when Homebrew installer changes
@@ -51,9 +52,8 @@ if [[ ! $(command -v brew) ]]; then
         echo -e ""
         echo -e "To proceed safely:"
         echo -e "  1. Verify the new checksum at https://github.com/Homebrew/install"
-        echo -e "  2. Update EXPECTED_CHECKSUM in bootstrap.sh"
+        echo -e "  2. Update EXPECTED_CHECKSUM in nas_bootstrap.sh"
         echo -e "  3. Re-run this script"
-        rm -f "$BREW_INSTALLER"
         exit 1
     fi
 

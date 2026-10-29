@@ -57,9 +57,9 @@ the home NAS (Debian Linux) and its Docker media-server / home-automation stack.
    - Add SSH key to ssh-agent: `ssh-add --apple-use-keychain ~/.ssh/id_ed25519`
    - Copy SSH key to clipboard: `pbcopy < ~/.ssh/id_ed25519.pub`
    - Add SSH key to github.com account
-4. Clone dotfiles repo: `git clone git@github.com:connormason/dotfiles-personal.git`
+4. Clone dotfiles repo: `git clone git@github.com:connormason/dotfiles.git`
 5. Run the bootstrap driver (preview first with `--dry-run`, list the stages with `--list`)
-   - `cd dotfiles-personal`
+   - `cd dotfiles`
    - `bootstrap/bootstrap.sh`
 
 The driver runs the numbered stages in [`bootstrap/`](bootstrap/README.md) (preflight, SSH key, Homebrew, macOS
@@ -235,7 +235,7 @@ make pre
 ## Project Structure<a name="project-structure"></a>
 
 ```
-dotfiles-personal/
+dotfiles/
 ├── run.py                                  # Python CLI for repository management
 ├── stow.sh                                 # Links stow packages into $HOME
 ├── nas_bootstrap.sh                        # NAS bootstrap script

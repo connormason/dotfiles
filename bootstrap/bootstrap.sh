@@ -112,11 +112,17 @@ while [ $# -gt 0 ]; do
         exit 0
         ;;
     --only)
-        ONLY="${2:-}"
+        if [ $# -lt 2 ] || [ -z "$2" ]; then
+            die "--only requires a non-empty stage name"
+        fi
+        ONLY="$2"
         shift
         ;;
     --from)
-        FROM="${2:-}"
+        if [ $# -lt 2 ] || [ -z "$2" ]; then
+            die "--from requires a non-empty stage name"
+        fi
+        FROM="$2"
         shift
         ;;
     --resume) RESUME=1 ;;
