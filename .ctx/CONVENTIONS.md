@@ -1,6 +1,6 @@
 # Conventions & Common Patterns
 
-Code style, file organization, and the recurring "how do I add X" patterns for the dotfiles-personal repository. Loaded
+Code style, file organization, and the recurring "how do I add X" patterns for the dotfiles repository. Loaded
 on demand from [`CLAUDE.md`](../CLAUDE.md).
 
 ## Code Style

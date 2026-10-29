@@ -38,6 +38,32 @@ Settings files that apps rewrite at runtime (`~/.claude/settings.json`, VS Code 
 are rendered from [`render/`](../render/) fragments by [`scripts/dotfiles/render.py`](../scripts/dotfiles/README.md),
 and `stow.sh` refuses any package that provides a render target.
 
+## Git identity
+
+[`git/.gitconfig`](git/.gitconfig) sets the personal identity as the default, then includes `~/.gitconfig.overlay`
+(which a work overlay may use to replace that default). Four `includeIf "hasconfig:remote.*.url:..."` blocks follow
+last, so they win: when any remote URL of a repository matches one of the globs below, the repository uses the personal
+identity from `~/.config/git/identity-personal`.
+
+- `git@github.com:connormason/**`
+- `https://github.com/connormason/**`
+- `ssh://git@github.com/connormason/**`
+- `https://*@github.com/connormason/**`
+
+This reduces the chance of a work-identity commit in a personal repository; it does not guarantee it. The match is a
+case-sensitive glob against the remote URLs configured at the moment git reads its configuration, so the repository
+falls back to the overlay's default identity when:
+
+- it has no remote yet (commits made before `git remote add` keep the default; later commits switch);
+- the owner or host differs in letter case (`ConnorMason`, `GitHub.com`);
+- the remote uses an SSH host alias (`git@github.com-personal:...`) or an explicit port (`ssh://git@github.com:22/...`);
+- the host is any other spelling (`www.github.com`, `ssh.github.com`), or the URL is rewritten from an alias by
+  `url.<base>.insteadOf` (the URL is matched as written, not as rewritten).
+
+To be certain, add the remote before the first commit or set `git config user.email` in the repository (a local setting
+overrides all of the above). In this repository, the [leak guard](../scripts/hooks/README.md#check-leakspy)'s
+`--identity` check additionally rejects a commit whose identity matches its patterns.
+
 ## Apply
 
 ```bash
