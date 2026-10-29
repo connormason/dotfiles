@@ -83,7 +83,7 @@ run defaults write com.apple.dock magnification -int 1
 # Set dock magnification level
 run defaults write com.apple.dock largesize -float 64
 
-# Disable animations when opening apps from the dock
+# Keep the launch animation (bouncing icon) when opening apps from the dock enabled; 1 is the macOS default
 run defaults write com.apple.dock launchanim -int 1
 
 # Show recently used apps in a separate section of the Dock
@@ -123,7 +123,7 @@ run defaults write com.apple.dock wvous-tr-modifier -int 0
 # https://macos-defaults.com/finder/appleshowallfiles.html
 run defaults write com.apple.finder AppleShowAllFiles -bool true
 
-# Show all file extensions in Finder
+# Do not force all file extensions to be shown in Finder: extensions of unknown file types stay hidden (macOS default)
 # https://macos-defaults.com/finder/appleshowallextensions.html
 run defaults write NSGlobalDomain AppleShowAllExtensions -bool false
 
@@ -148,10 +148,10 @@ run defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv"
 # Display full POSIX path in Finder window title
 run defaults write com.apple.finder _FXShowPosixPathInTitle -bool true
 
-# Set Documents as the default location for new Finder windows (target enable)
+# Open the home folder in new Finder windows (target type: PfLo = custom folder, given by the path below)
 run defaults write com.apple.finder NewWindowTarget -string "PfLo"
 
-# Set Documents as the default location for new Finder windows (path)
+# Open the home folder in new Finder windows (target path: the home folder)
 run defaults write com.apple.finder NewWindowTargetPath -string "file://${HOME}"
 
 # Show icons for external hard drives on desktop
