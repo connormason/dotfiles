@@ -186,3 +186,97 @@ class TestValidateConfig:
         Test that the shipped default passes validation
         """
         model_router.validate_config(_default_cfg())
+
+
+GP = 'general-purpose'
+
+
+def _cfg(**overrides: object) -> dict:
+    """
+    The default config with top-level settings replaced
+    """
+    return {**_default_cfg(), **overrides}
+
+
+class TestDecide:
+    """
+    Tests for the pure decision function
+    """
+    @pytest.mark.parametrize(
+        ('tool_input', 'overrides', 'action', 'model', 'reason'),
+        [
+            # classified by rule
+            ({'subagent_type': GP, 'prompt': 'rename the helper foo across the repo'},
+             {'mode': 'enforce'},                  'rewrite',     'haiku',  'rule'),
+            ({'subagent_type': GP, 'prompt': 'weigh the design trade-offs of two caches'},
+             {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
+            ({'subagent_type': GP, 'prompt': 'rename helpers, then explain the design tradeoffs'},
+             {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
+            ({'subagent_type': 'Explore', 'prompt': 'list all usages of foo'},
+             {'mode': 'enforce'},                  'rewrite',     'haiku',  'rule'),
+            ({'prompt': 'list all usages of foo'},
+             {'mode': 'enforce'},                  'rewrite',     'haiku',  'rule'),
+            ({'subagent_type': GP, 'description': 'grep for TODOs', 'prompt': 'do it'},
+             {'mode': 'enforce'},                  'rewrite',     'haiku',  'rule'),
+            # per-agent override
+            ({'subagent_type': 'Plan', 'prompt': 'draft a plan'},
+             {'mode': 'enforce'},                  'rewrite',     'opus',   'agent-override'),
+            # advise mode never rewrites
+            ({'subagent_type': GP, 'prompt': 'rename x'},
+             {},                                   'advise',      'haiku',  'rule'),
+            # floor lifts the chosen tier
+            ({'subagent_type': GP, 'prompt': 'rename x'},
+             {'mode': 'enforce', 'floor': 'sonnet'}, 'rewrite',   'sonnet', 'rule'),
+            # pass-through cases
+            ({'subagent_type': GP, 'prompt': 'summarize this module'},
+             {'mode': 'enforce'},                  'passthrough', None,     'unmatched'),
+            ({'subagent_type': 'file-searcher', 'prompt': 'rename x'},
+             {'mode': 'enforce'},                  'passthrough', None,     'unmatched'),
+            ({'subagent_type': GP, 'prompt': '~rename x'},
+             {'mode': 'enforce'},                  'passthrough', None,     'opt-out'),
+            ({'subagent_type': GP, 'prompt': 'rename x'},
+             {'mode': 'off'},                      'passthrough', None,     'mode-off'),
+            # caller already chose a model: never overridden, disagreement is still reported
+            ({'subagent_type': GP, 'prompt': 'rename x', 'model': 'sonnet'},
+             {'mode': 'enforce'},                  'passthrough', 'haiku',  'preset-disagree'),
+            ({'subagent_type': GP, 'prompt': 'rename x', 'model': 'haiku'},
+             {'mode': 'enforce'},                  'passthrough', 'haiku',  'preset-agree'),
+        ],
+    )
+    def test_decision_table(
+        self,
+        tool_input: dict,
+        overrides: dict,
+        action: str,
+        model: str | None,
+        reason: str,
+    ) -> None:
+        """
+        Test the decision flow across classification, overrides, opt-out, mode, floor, and preset models
+        """
+        decision = model_router.decide(tool_input, _cfg(**overrides))
+        assert (decision.action, decision.model, decision.reason) == (action, model, reason)
+
+    def test_rule_decision_carries_class_and_rule_id(self) -> None:
+        """
+        Test that a rule match reports its class and rule id
+        """
+        decision = model_router.decide({'subagent_type': GP, 'prompt': 'rename x'}, _cfg())
+        assert decision.cls  == 'mechanical'
+        assert decision.rule == 'mechanical-keywords'
+
+    def test_rule_without_id_gets_positional_id(self) -> None:
+        """
+        Test that an id-less rule is reported as rule-<index>
+        """
+        cfg = _cfg(rules=[{'class': 'hard', 'any': ['zzz']}])
+        decision = model_router.decide({'subagent_type': GP, 'prompt': 'zzz'}, cfg)
+        assert decision.rule == 'rule-0'
+
+    def test_apply_floor_ignores_unranked_models(self) -> None:
+        """
+        Test that a model outside the tier order is left untouched by the floor
+        """
+        assert model_router.apply_floor('fable', 'sonnet') == 'fable'
+        assert model_router.apply_floor('haiku', None) == 'haiku'
+        assert model_router.apply_floor('haiku', 'opus') == 'opus'

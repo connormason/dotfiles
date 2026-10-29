@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 # ==============================================================================
@@ -168,3 +169,81 @@ def load_config(cwd: Path, home: Path | None = None, default_path: Path = DEFAUL
         cfg = merge_layers(cfg, read_layer(path, required=False))
     validate_config(cfg)
     return cfg
+
+
+# ==============================================================================
+# Decision
+# ==============================================================================
+
+@dataclass
+class Decision:
+    """
+    Outcome of routing one spawn. For ``preset-*`` reasons, ``model`` is what the router would have chosen.
+    """
+    action: str
+    reason: str
+    model:  str | None = None
+    cls:    str | None = None
+    rule:   str | None = None
+
+
+def apply_floor(model: str, floor: str | None) -> str:
+    """
+    Lift ``model`` to ``floor`` when it ranks lower; models outside ``TIER_ORDER`` are returned unchanged.
+
+    :param model: the chosen model alias.
+    :param floor: minimum tier, or ``None`` for no floor.
+    :return: the model after applying the floor.
+    """
+    if floor in TIER_ORDER and model in TIER_ORDER and TIER_ORDER[model] < TIER_ORDER[floor]:
+        return floor
+    return model
+
+
+def decide(tool_input: dict, cfg: dict) -> Decision:
+    """
+    Decide how to route one ``Agent``/``Task`` call. First match wins; every early exit leaves the call untouched.
+
+    :param tool_input: the tool call's input (``subagent_type``, ``description``, ``prompt``, optional ``model``).
+    :param cfg: validated, merged config.
+    :return: the routing decision.
+    """
+    if cfg.get('mode') == 'off':
+        return Decision('passthrough', 'mode-off')
+
+    description = str(tool_input.get('description') or '')
+    prompt = str(tool_input.get('prompt') or '')
+    prefix = cfg.get('opt_out_prefix') or ''
+    if prefix and (prompt.lstrip().startswith(prefix) or description.lstrip().startswith(prefix)):
+        return Decision('passthrough', 'opt-out')
+
+    subagent_type = str(tool_input.get('subagent_type') or 'general-purpose')
+    chosen: str | None = None
+    cls: str | None = None
+    rule_id: str | None = None
+    reason = 'unmatched'
+
+    overrides = cfg.get('agent_overrides') or {}
+    if subagent_type in overrides:
+        chosen, reason = overrides[subagent_type], 'agent-override'
+    elif subagent_type in (cfg.get('classify_types') or []):
+        text = f'{description}\n{prompt}'
+        for index, rule in enumerate(cfg.get('rules') or []):
+            if any(re.search(pattern, text, re.IGNORECASE) for pattern in rule['any']):
+                cls = rule['class']
+                chosen = cfg['classes'][cls]
+                rule_id = rule.get('id') or f'rule-{index}'
+                reason = 'rule'
+                break
+
+    if chosen is None:
+        return Decision('passthrough', 'unmatched')
+
+    chosen = apply_floor(chosen, cfg.get('floor'))
+    preset = tool_input.get('model')
+    if preset:
+        verdict = 'preset-agree' if preset == chosen else 'preset-disagree'
+        return Decision('passthrough', verdict, chosen, cls, rule_id)
+
+    action = 'advise' if cfg.get('mode') == 'advise' else 'rewrite'
+    return Decision(action, reason, chosen, cls, rule_id)
