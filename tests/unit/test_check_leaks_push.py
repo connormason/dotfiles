@@ -45,7 +45,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv('DOTFILES_LEAK_PATTERNS', raising=False)
 
     # A developer's diff.renames, core.quotePath, etc. must not change what the script sees
-    monkeypatch.setenv('GIT_CONFIG_GLOBAL', os.devnull)
+    monkeypatch.setenv('GIT_CONFIG_GLOBAL',   os.devnull)
     monkeypatch.setenv('GIT_CONFIG_NOSYSTEM', '1')
 
     for role in ('AUTHOR', 'COMMITTER'):
@@ -79,18 +79,28 @@ def _write_commit(repo: Path, name: str, content: str, message: str) -> str:
 
 
 def _run(
-    repo: Path, from_ref: str | None, to_ref: str, locale: str | None = None
+    repo: Path,
+    from_ref: str | None,
+    to_ref: str,
+    locale: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """
     Run the pre-push script inside the fixture repo, optionally under a specific LC_ALL locale
     """
-    env = {**os.environ, 'PRE_COMMIT_TO_REF': to_ref}
+    env: dict[str, str] = {**os.environ, 'PRE_COMMIT_TO_REF': to_ref}
     if locale is not None:
         env['LC_ALL'] = locale
     if from_ref is not None:
         env['PRE_COMMIT_FROM_REF'] = from_ref
+
     return subprocess.run(
-        [str(SCRIPT)], cwd=repo, capture_output=True, text=True, errors='replace', check=False, env=env
+        [str(SCRIPT)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        errors='replace',
+        check=False,
+        env=env,
     )
 
 
@@ -284,9 +294,9 @@ class TestCheckLeaksPush:
         head   = _git(repo, 'rev-parse', 'HEAD')
         result = _run(repo, base, head, locale=UTF8_LOCALE)
         assert result.returncode == 1, result.stdout + result.stderr
-        assert 'Illegal byte sequence' not in result.stderr
+        assert 'Illegal byte sequence'        not in result.stderr
         assert 'multibyte conversion failure' not in result.stderr
-        assert CORP_DOMAIN not in result.stdout
+        assert CORP_DOMAIN                    not in result.stdout
 
     def test_non_ascii_leaky_path_fails(self, repo: Path, tmp_path: Path) -> None:
         """

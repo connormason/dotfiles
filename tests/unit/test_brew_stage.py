@@ -41,13 +41,13 @@ class Sandbox:
     """
     A hermetic run environment for the 50-brew stage plus the paths its stubs write to
     """
-    env:          dict[str, str]
-    stage:        Path
-    marker:       Path
-    sudo_marker:  Path
-    curl_args:    Path
-    tmpdir:       Path
-    payload:      bytes
+    env:         dict[str, str]
+    stage:       Path
+    marker:      Path
+    sudo_marker: Path
+    curl_args:   Path
+    tmpdir:      Path
+    payload:     bytes
 
 
 @pytest.fixture
@@ -59,12 +59,14 @@ def sandbox(tmp_path: Path) -> Sandbox:
     stages = tmp_path / 'base' / 'bootstrap'
     stages.mkdir(parents=True)
     (stages / 'lib.sh').write_bytes((REPO_ROOT / 'bootstrap' / 'lib.sh').read_bytes())
+
     stage = stages / '50-brew.sh'
     stage.write_bytes(STAGE.read_bytes())
 
     overlay = tmp_path / 'overlay'
     (overlay / 'bootstrap').mkdir(parents=True)
     (overlay / 'bootstrap' / 'env.sh').write_text(ENV_OVERRIDE, encoding='utf-8')
+
     registry = tmp_path / 'overlays'
     registry.write_text(f'{overlay}\n', encoding='utf-8')
 
@@ -73,7 +75,8 @@ def sandbox(tmp_path: Path) -> Sandbox:
 
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
-    curl_args = tmp_path / 'curl-args'
+
+    curl_args   = tmp_path / 'curl-args'
     sudo_marker = tmp_path / 'sudo-called'
     (bin_dir / 'curl').write_text(
         '#!/bin/sh\n'
@@ -100,7 +103,7 @@ def sandbox(tmp_path: Path) -> Sandbox:
         'DOTFILES_BREW_PREFIXES',
         'XDG_CONFIG_HOME',
     )
-    env = {
+    env: dict[str, str] = {
         **{key: value for key, value in os.environ.items() if key not in scrubbed},
         'HOME':                   str(tmp_path / 'home'),
         'PATH':                   f'{bin_dir}:/usr/bin:/bin',
@@ -142,6 +145,7 @@ class TestBrewInstallerChecksum:
         """
         Test that an installer whose SHA-256 equals the pin is executed and the temp file is cleaned up
         """
+
         # The pin cannot be satisfied by chosen bytes, so the copy pins the stub payload's real digest instead; shasum
         # and the comparison under test are untouched
         text = sandbox.stage.read_text(encoding='utf-8')
@@ -155,6 +159,7 @@ class TestBrewInstallerChecksum:
         assert 'installer checksum verified' in result.stdout
         assert 'raw.githubusercontent.com/Homebrew/install/HEAD/install.sh' in sandbox.curl_args.read_text('utf-8')
         assert sandbox.marker.exists()
+
         # Guards against a future sudo call being added; neither the stage nor the stub installer calls sudo today
         assert not sandbox.sudo_marker.exists()
         assert list(sandbox.tmpdir.iterdir()) == []
@@ -169,11 +174,13 @@ class TestBrewInstallerChecksum:
 
         result = _run(shell, sandbox)
         assert result.returncode != 0
-        assert 'Homebrew installer checksum mismatch' in result.stderr
-        assert f'expected: {pinned.group(1)}' in result.stderr
+        assert 'Homebrew installer checksum mismatch'                     in result.stderr
+        assert f'expected: {pinned.group(1)}'                             in result.stderr
         assert f'actual:   {hashlib.sha256(sandbox.payload).hexdigest()}' in result.stderr
+
         assert 'installer checksum verified' not in result.stdout
         assert not sandbox.marker.exists()
+
         # Guards against a future sudo call being added; neither the stage nor the stub installer calls sudo today
         assert not sandbox.sudo_marker.exists()
         assert list(sandbox.tmpdir.iterdir()) == []

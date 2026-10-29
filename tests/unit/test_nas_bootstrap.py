@@ -31,7 +31,6 @@ class TestNasBootstrapScript:
         Test that the Homebrew installer is not written to a fixed /tmp path
         """
         text = self.SCRIPT.read_text(encoding='utf-8')
-
         assert '/tmp/brew-install.sh' not in text
 
     def test_installer_uses_mktemp_with_exit_trap(self) -> None:
@@ -39,8 +38,7 @@ class TestNasBootstrapScript:
         Test that the installer is created with mktemp and removed by an EXIT trap
         """
         text = self.SCRIPT.read_text(encoding='utf-8')
-
-        assert re.search(r'BREW_INSTALLER="\$\(mktemp ', text)
+        assert re.search(r'BREW_INSTALLER="\$\(mktemp ',                 text)
         assert re.search(r"^\s*trap 'rm -f \"\$BREW_INSTALLER\"' EXIT$", text, re.MULTILINE)
 
     def test_checksum_hint_names_this_script(self) -> None:
@@ -48,8 +46,7 @@ class TestNasBootstrapScript:
         Test that the mismatch hint points at the file that defines EXPECTED_CHECKSUM
         """
         text = self.SCRIPT.read_text(encoding='utf-8')
-
-        assert 'EXPECTED_CHECKSUM=' in text
+        assert 'EXPECTED_CHECKSUM='                           in text
         assert 'Update EXPECTED_CHECKSUM in nas_bootstrap.sh' in text
 
     def test_installer_checksum_matches_macos_brew_stage(self) -> None:
