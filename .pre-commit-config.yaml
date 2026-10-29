@@ -271,8 +271,9 @@ repos:
         files: .*\.pkl$
         types: [file]
 
-      # Block employer-internal identifiers in staged content/paths and in the commit identity (public baseline +
-      # optional private patterns from ~/.config/dotfiles/leak-patterns.txt). CI scans the full tree separately
+      # Block employer-internal identifiers in staged content/paths and in the commit identity
+      # (public baseline + optional private patterns from ~/.config/dotfiles/leak-patterns.txt).
+      # CI scans the full tree separately
       - id: check-leaks
         name: "[check]  internal identifiers (leak guard)"
         stages: [pre-commit]
@@ -282,15 +283,16 @@ repos:
         types: [text]
         always_run: true
 
-      # Same scan applied to the commit message (prek passes the message file as the filename). Identity is already
-      # checked by the pre-commit entry above
+      # Same scan applied to the commit message (prek passes the message file as the filename).
+      # Identity is already checked by the pre-commit entry above
       - id: check-leaks-msg
         name: "[check]  internal identifiers in commit message"
         stages: [commit-msg]
         entry: scripts/hooks/check-leaks.py
         language: python
 
-      # pre-push: scan file contents changed in the pushed range (catches content committed with --no-verify)
+      # [pre-push] Scan file contents changed in the pushed range
+      #            (catches content committed with --no-verify)
       - id: check-leaks-push-files
         name: "[check]  internal identifiers in pushed files"
         stages: [pre-push]
@@ -299,7 +301,8 @@ repos:
         language: python
         types: [text]
 
-      # pre-push: scan identities, messages, and added lines of pushed commits (cherry-picks/rebases skip commit hooks)
+      # [pre-push] Scan identities, messages, and added lines of pushed commits
+      #            (cherry-picks/rebases skip commit hooks)
       - id: check-leaks-push-history
         name: "[check]  internal identifiers in pushed commits"
         stages: [pre-push]
@@ -342,16 +345,11 @@ repos:
         name: "[fix]    trailing whitespace"
         stages: [pre-commit]
         priority: 23
-        # These pre-commit reference docs: mdformat-config re-wraps long YAML code-block scalars with a trailing space,
-        # so the two hooks would fight forever; mdformat owns those files
         exclude: |
           (?x)(
               ^.gitignore|
               .config/istat_menus.ismp|
-              ^stow/claude/\.claude/skills/pre-commit-analysis/references/hook-catalog\.md$|
-              ^stow/claude/\.claude/skills/pre-commit-migration/references/migration-guide\.md$|
-              ^stow/claude/\.claude/skills/pre-commit-setup/references/hook-catalog\.md$|
-              ^stow/claude/\.claude/skills/pre-commit-setup/references/pre-commit-comprehensive\.md$
+              .*\.md
           )
 
   # ========================================================================================
@@ -405,12 +403,12 @@ repos:
         stages: [pre-commit]
         priority: 35
         types: [text]
+        files: ^\.claude/settings.*\.json$
         args:
           - "--no-ensure-ascii"
           - "--indent=2"
           - "--autofix"
           - "--top-keys=id,name,type,matcher,mode,command"
-        files: ^\.claude/settings.*\.json$
 
   - repo: https://github.com/ComPWA/taplo-pre-commit
     rev: v0.9.3
@@ -444,11 +442,6 @@ repos:
         name: "[format] markdown (mdformat)"
         stages: [pre-commit]
         priority: 35
-        exclude: |
-          (?x)^(
-            ^.ctx/.*|
-            ^docs/plans/.*
-          )$
         additional_dependencies:
           - mdformat-config
           - mdformat-footnote
@@ -458,6 +451,11 @@ repos:
           - mdformat-pyproject
           - mdformat-simple-breaks
           - mdformat-toc
+        exclude: |
+          (?x)^(
+            ^.ctx/.*|
+            ^docs/plans/.*
+          )$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.21

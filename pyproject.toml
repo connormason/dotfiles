@@ -165,7 +165,7 @@ exclude = [
 disallow_untyped_defs  = true
 exclude_gitignore      = true
 ignore_missing_imports = true
-python_version         = "3.9" # TODO: update
+python_version         = "3.9" # TODO: update?
 warn_unused_configs    = true
 
 exclude = [
