@@ -81,7 +81,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/model-router.py post"
+            "command": "python3 $HOME/.claude/hooks/model-router.py post",
+            "timeout": 10
           }
         ]
       }
@@ -114,7 +115,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/model-router.py pre"
+            "command": "python3 $HOME/.claude/hooks/model-router.py pre",
+            "timeout": 10
           }
         ]
       }
