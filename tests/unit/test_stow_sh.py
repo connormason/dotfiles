@@ -14,7 +14,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Inherited variables that would leak the developer's own configuration into the tests
-_SCRUBBED_VARS = (
+_SCRUBBED_VARS: tuple[str, ...] = (
     'DOTFILES_REPO',
     'DOTFILES_BREW_PREFIXES',
     'DOTFILES_LEAK_PATTERNS',
@@ -22,7 +22,10 @@ _SCRUBBED_VARS = (
     'STOW_VERBOSE',
 )
 
-pytestmark = pytest.mark.skipif(shutil.which('stow') is None, reason='GNU Stow not installed')
+pytestmark = pytest.mark.skipif(
+    shutil.which('stow') is None,
+    reason='GNU Stow not installed',
+)
 
 
 @pytest.fixture
@@ -33,16 +36,27 @@ def world(tmp_path: Path, shell: str) -> dict[str, Path]:
     repo = tmp_path / 'repo'
     (repo / 'bootstrap').mkdir(parents=True)
     (repo / 'scripts' / 'utility').mkdir(parents=True)
+
     shutil.copy2(REPO_ROOT / 'stow.sh', repo / 'stow.sh')
     shutil.copy2(REPO_ROOT / 'bootstrap' / 'lib.sh', repo / 'bootstrap' / 'lib.sh')
     shutil.copy2(REPO_ROOT / 'scripts' / 'utility' / 'summarize_stow.awk', repo / 'scripts' / 'utility')
+
     (repo / 'scripts' / 'dotfiles').mkdir()
     shutil.copy2(REPO_ROOT / 'scripts' / 'dotfiles' / 'render.py', repo / 'scripts' / 'dotfiles')
+
     overlay = tmp_path / 'overlay'
     (overlay / 'stow').mkdir(parents=True)
+
     home = tmp_path / 'home'
     home.mkdir()
-    return {'repo': repo, 'overlay': overlay, 'home': home, 'registry': tmp_path / 'overlays', 'shell': Path(shell)}
+
+    return {
+        'repo':     repo,
+        'overlay':  overlay,
+        'home':     home,
+        'registry': tmp_path / 'overlays',
+        'shell':    Path(shell),
+    }
 
 
 def _pkg(layer: Path, pkg: str, files: dict[str, str]) -> None:
@@ -66,10 +80,11 @@ def _stow(
     """
     if register_overlay:
         world['registry'].write_text(f'{world["overlay"]}\n', encoding='utf-8')
-    env = {
+
+    env: dict[str, str] = {
         **{key: value for key, value in os.environ.items() if key not in _SCRUBBED_VARS},
-        'HOME': str(world['home']),
-        'XDG_CONFIG_HOME': str(world['home'] / '.config'),
+        'HOME':                   str(world['home']),
+        'XDG_CONFIG_HOME':        str(world['home'] / '.config'),
         'DOTFILES_OVERLAYS_FILE': str(world['registry']),
         **(extra_env or {}),
     }
@@ -88,6 +103,7 @@ def _foreign_symlink(world: dict[str, Path], name: str) -> Path:
     """
     elsewhere = world['home'].parent / 'old-checkout'
     elsewhere.mkdir(exist_ok=True)
+
     link = world['home'] / name
     link.symlink_to(elsewhere)
     return link
@@ -108,8 +124,9 @@ class TestDiscovery:
         """
         Test that --list prints base packages, then overlay packages, with their layer roots
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        _pkg(world['repo'],    'shell',      {'.zshrc': 'x'})
         _pkg(world['overlay'], 'work-shell', {'.config/zsh/conf.d/31-work.zsh': 'x'})
+
         result = _stow(world, '--list')
         assert result.returncode == 0, result.stderr
         assert result.stdout.splitlines() == [
@@ -122,8 +139,10 @@ class TestDiscovery:
         Test that an exported DOTFILES_REPO from another checkout cannot change which base layer is used
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+
         decoy = tmp_path / 'decoy'
         _pkg(decoy, 'decoy-pkg', {'.decoyrc': 'x'})
+
         result = _stow(world, '--list', extra_env={'DOTFILES_REPO': str(decoy)})
         assert result.returncode == 0, result.stderr
         assert result.stdout.splitlines() == [
@@ -134,8 +153,9 @@ class TestDiscovery:
         """
         Test that a package name defined in two layers is rejected
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        _pkg(world['repo'],    'shell', {'.zshrc': 'x'})
         _pkg(world['overlay'], 'shell', {'.zprofile': 'x'})
+
         result = _stow(world, '--list')
         assert result.returncode == 1
         assert "package 'shell' is defined in two layers" in result.stderr
@@ -145,6 +165,7 @@ class TestDiscovery:
         Test that requesting an unknown package is an error
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+
         result = _stow(world, 'nope')
         assert result.returncode == 1
         assert 'unknown package: nope' in result.stderr
@@ -156,6 +177,7 @@ class TestDiscovery:
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
         world['registry'].write_text(f'{world["overlay"] / "gone"}\n', encoding='utf-8')
+
         result = _stow(world, register_overlay=False)
         assert result.returncode == 1
         assert not (world['home'] / '.zshrc').exists()
@@ -166,6 +188,7 @@ class TestDiscovery:
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
         world['registry'].write_text(f'{unreadable_overlay}\n{world["overlay"]}\n', encoding='utf-8')
+
         result = _stow(world, '--list', register_overlay=False)
         assert result.returncode != 0
         assert f'cannot resolve overlay: {unreadable_overlay}' in result.stderr
@@ -175,6 +198,7 @@ class TestDiscovery:
         Test that naming a package twice selects it once
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+
         result = _stow(world, 'shell', 'shell')
         assert result.returncode == 0, result.stderr
         assert 'stow: applied shell\n' in result.stdout
@@ -189,6 +213,7 @@ class TestCli:
         Test that --help prints usage without needing a valid overlay registry
         """
         world['registry'].write_text(f'{world["overlay"] / "gone"}\n', encoding='utf-8')
+
         result = _stow(world, '--help', register_overlay=False)
         assert result.returncode == 0, result.stderr
         assert 'Usage: stow.sh' in result.stdout
@@ -198,6 +223,7 @@ class TestCli:
         Test that a short-flag cluster such as -nv is an error instead of being forwarded to stow
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+
         result = _stow(world, '-nv')
         assert result.returncode == 1
         assert 'combined short flags' in result.stderr
@@ -210,11 +236,14 @@ class TestCli:
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
         (world['home'] / '.zshrc').write_text('home', encoding='utf-8')
+
         before = _tree(world['repo'])
         result = _stow(world, flag)
+
         assert result.returncode == 1
         assert f'unknown option: {flag}' in result.stderr
-        assert 'applied' not in result.stdout
+        assert 'applied'             not in result.stdout
+
         assert (world['home'] / '.zshrc').read_text(encoding='utf-8') == 'home'
         assert (world['repo'] / 'stow' / 'shell' / '.zshrc').read_text(encoding='utf-8') == 'x'
         assert _tree(world['repo']) == before
@@ -225,6 +254,7 @@ class TestCli:
         Test that STOW_VERBOSE must be a non-negative integer
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+
         result = _stow(world, extra_env={'STOW_VERBOSE': value})
         assert result.returncode == 1
         assert 'STOW_VERBOSE' in result.stderr
@@ -238,12 +268,13 @@ class TestOwnership:
         """
         Test that a package shipping a file render.py writes is rejected before anything is linked
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        _pkg(world['repo'],    'shell',  {'.zshrc': 'x'})
         _pkg(world['overlay'], 'claude', {'.claude/settings.json': '{}', '.claude/rules/a.md': 'x'})
+
         result = _stow(world)
         assert result.returncode == 1
         assert 'written by scripts/dotfiles/render.py' in result.stderr
-        assert '~/.claude/settings.json <- claude' in result.stderr
+        assert '~/.claude/settings.json <- claude'     in result.stderr
         assert not (world['home'] / '.zshrc').exists()
 
     def test_package_providing_a_render_target_parent_fails(self, world: dict[str, Path], tmp_path: Path) -> None:
@@ -252,9 +283,11 @@ class TestOwnership:
         """
         elsewhere = tmp_path / 'elsewhere'
         elsewhere.mkdir()
+
         package = world['repo'] / 'stow' / 'claude-link'
         package.mkdir(parents=True)
         (package / '.claude').symlink_to(elsewhere)
+
         result = _stow(world)
         assert result.returncode == 1
         assert '~/.claude/settings.json <- claude-link' in result.stderr
@@ -264,6 +297,7 @@ class TestOwnership:
         Test that a package may provide siblings of a render target, such as files under ~/.claude/
         """
         _pkg(world['repo'], 'claude', {'.claude/rules/a.md': 'x', '.claude/settings.local.json': '{}'})
+
         result = _stow(world)
         assert result.returncode == 0, result.stderr
         assert (world['home'] / '.claude' / 'rules' / 'a.md').is_symlink()
@@ -274,18 +308,20 @@ class TestOwnership:
         """
         (world['repo'] / 'scripts' / 'dotfiles' / 'render.py').write_text('', encoding='utf-8')
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+
         result = _stow(world)
         assert result.returncode == 1
         assert 'render targets' in result.stderr
-        assert 'empty' in result.stderr
+        assert 'empty'          in result.stderr
         assert not (world['home'] / '.zshrc').exists()
 
     def test_two_packages_same_path_fails_before_linking(self, world: dict[str, Path]) -> None:
         """
         Test that two packages providing one path abort the run and name both owners
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'a', '.zprofile': 'a'})
+        _pkg(world['repo'],    'shell',      {'.zshrc': 'a', '.zprofile': 'a'})
         _pkg(world['overlay'], 'work-shell', {'.zshrc': 'b'})
+
         result = _stow(world)
         assert result.returncode == 1
         assert '~/.zshrc <- shell,work-shell' in result.stderr
@@ -295,8 +331,9 @@ class TestOwnership:
         """
         Test that one package providing a path as a file and another providing files beneath it is rejected
         """
-        _pkg(world['repo'], 'a-pkg', {'.config/app': 'file', '.zshrc': 'x'})
+        _pkg(world['repo'],    'a-pkg', {'.config/app': 'file', '.zshrc': 'x'})
         _pkg(world['overlay'], 'b-pkg', {'.config/app/settings': 'nested'})
+
         result = _stow(world)
         assert result.returncode == 1
         assert '~/.config/app <- a-pkg (file), b-pkg (directory)' in result.stderr
@@ -306,8 +343,9 @@ class TestOwnership:
         """
         Test that ownership is checked across all packages even when only one is requested
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'a'})
+        _pkg(world['repo'],    'shell',      {'.zshrc': 'a'})
         _pkg(world['overlay'], 'work-shell', {'.zshrc': 'b'})
+
         result = _stow(world, 'shell')
         assert result.returncode == 1
         assert '~/.zshrc <- shell,work-shell' in result.stderr
@@ -316,7 +354,7 @@ class TestOwnership:
         """
         Test that package-root README files (ignored by stow) do not count as owned paths
         """
-        _pkg(world['repo'], 'shell', {'README.md': 'docs', '.zshrc': 'x'})
+        _pkg(world['repo'],    'shell',      {'README.md': 'docs', '.zshrc': 'x'})
         _pkg(world['overlay'], 'work-shell', {'README.md': 'docs'})
         assert _stow(world).returncode == 0
 
@@ -324,8 +362,9 @@ class TestOwnership:
         """
         Test that stow's README ignore is root-only, so a nested README still counts as an owned path
         """
-        _pkg(world['repo'], 'a-pkg', {'.config/app/README.md': 'a'})
+        _pkg(world['repo'],    'a-pkg', {'.config/app/README.md': 'a'})
         _pkg(world['overlay'], 'b-pkg', {'.config/app/README.md': 'b'})
+
         result = _stow(world)
         assert result.returncode == 1
         assert '~/.config/app/README.md <- a-pkg,b-pkg' in result.stderr
@@ -334,8 +373,9 @@ class TestOwnership:
         """
         Test that .DS_Store files neither collide across packages nor get linked
         """
-        _pkg(world['repo'], 'a-pkg', {'.DS_Store': 'a', '.config/app/.DS_Store': 'a', '.config/app/f': 'a'})
+        _pkg(world['repo'],    'a-pkg', {'.DS_Store': 'a', '.config/app/.DS_Store': 'a', '.config/app/f': 'a'})
         _pkg(world['overlay'], 'b-pkg', {'.DS_Store': 'b', '.bashrc': 'b'})
+
         result = _stow(world)
         assert result.returncode == 0, result.stderr
         assert (world['home'] / '.config' / 'app' / 'f').is_symlink()
@@ -346,8 +386,9 @@ class TestOwnership:
         """
         Test that .backups directories neither collide across packages nor get linked
         """
-        _pkg(world['repo'], 'a-pkg', {'.claude/.backups/CLAUDE.md.1.bak': 'a', '.claude/CLAUDE.md': 'a'})
+        _pkg(world['repo'],    'a-pkg', {'.claude/.backups/CLAUDE.md.1.bak': 'a', '.claude/CLAUDE.md':  'a'})
         _pkg(world['overlay'], 'b-pkg', {'.claude/.backups/CLAUDE.md.1.bak': 'b', '.claude/rules/r.md': 'b'})
+
         result = _stow(world)
         assert result.returncode == 0, result.stderr
         assert (world['home'] / '.claude' / 'CLAUDE.md').is_symlink()
@@ -357,8 +398,9 @@ class TestOwnership:
         """
         Test that only an exact COPYING at the package root is ignored, matching stow's built-in rules
         """
-        _pkg(world['repo'], 'a-pkg', {'COPYING': 'a', 'COPYING.txt': 'a'})
+        _pkg(world['repo'],    'a-pkg', {'COPYING': 'a', 'COPYING.txt': 'a'})
         _pkg(world['overlay'], 'b-pkg', {'COPYING': 'b'})
+
         result = _stow(world)
         assert result.returncode == 0, result.stderr
         assert (world['home'] / 'COPYING.txt').is_symlink()
@@ -378,10 +420,12 @@ class TestLinking:
         """
         Test that base and overlay files land in one real (unfolded) directory
         """
-        _pkg(world['repo'], 'shell', {'.config/zsh/conf.d/00-lib.zsh': 'base'})
+        _pkg(world['repo'],    'shell',      {'.config/zsh/conf.d/00-lib.zsh':  'base'})
         _pkg(world['overlay'], 'work-shell', {'.config/zsh/conf.d/31-work.zsh': 'work'})
+
         result = _stow(world)
         assert result.returncode == 0, result.stderr
+
         conf_d = world['home'] / '.config' / 'zsh' / 'conf.d'
         assert conf_d.is_dir()
         assert not conf_d.is_symlink()
@@ -403,6 +447,7 @@ class TestLinking:
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
         assert _stow(world).returncode == 0
+
         second = _stow(world)
         assert second.returncode == 0
         assert 'no changes' in second.stdout
@@ -412,6 +457,7 @@ class TestLinking:
         Test that -n simulates without creating links
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+
         result = _stow(world, '-n')
         assert result.returncode == 0
         assert not (world['home'] / '.zshrc').exists()
@@ -429,12 +475,15 @@ class TestConflicts:
         _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.foreign': 'repo', '.fresh': 'repo'})
         (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
         _foreign_symlink(world, '.foreign')
+
         before = _tree(world['home'])
         result = _stow(world)
         assert result.returncode == 1
+
         assert '--backup-conflicts' in result.stderr
-        assert '.zshrc' in result.stderr
-        assert '.foreign' in result.stderr
+        assert '.zshrc'             in result.stderr
+        assert '.foreign'           in result.stderr
+
         assert _tree(world['home']) == before
         assert (world['home'] / '.zshrc').read_text(encoding='utf-8') == 'old'
         assert not (world['home'] / '.fresh').exists()
@@ -446,12 +495,15 @@ class TestConflicts:
         _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.foreign': 'repo'})
         (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
         _foreign_symlink(world, '.foreign')
+
         before = _tree(world['home'])
         result = _stow(world, '-n', '--backup-conflicts')
         assert result.returncode == 0, result.stderr
-        assert 'stow: would back up existing .zshrc -> ' in result.stdout
-        assert 'stow: would back up existing .foreign -> ' in result.stdout
+
+        assert 'stow: would back up existing .zshrc -> '                     in result.stdout
+        assert 'stow: would back up existing .foreign -> '                   in result.stdout
         assert '2 conflicting file(s) would be backed up first, then linked' in result.stdout
+
         assert _tree(world['home']) == before
         assert (world['home'] / '.zshrc').read_text(encoding='utf-8') == 'old'
 
@@ -461,15 +513,19 @@ class TestConflicts:
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.foreign': 'repo'})
         (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
+
         foreign = _foreign_symlink(world, '.foreign')
-        target = foreign.readlink()
-        result = _stow(world, '--backup-conflicts')
+        target  = foreign.readlink()
+        result  = _stow(world, '--backup-conflicts')
         assert result.returncode == 0, result.stderr
+
         assert (world['home'] / '.zshrc').is_symlink()
         assert (world['home'] / '.foreign').is_symlink()
         assert (world['home'] / '.foreign').readlink() != target
-        zshrc_backups = list((world['home'] / '.dotfiles-backup').glob('*/.zshrc'))
+
+        zshrc_backups   = list((world['home'] / '.dotfiles-backup').glob('*/.zshrc'))
         foreign_backups = list((world['home'] / '.dotfiles-backup').glob('*/.foreign'))
+
         assert len(zshrc_backups) == 1
         assert zshrc_backups[0].read_text(encoding='utf-8') == 'old'
         assert len(foreign_backups) == 1
@@ -484,9 +540,11 @@ class TestConflicts:
         _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.config/app': 'repo', '.fresh': 'repo'})
         (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
         (world['home'] / '.config' / 'app').mkdir(parents=True)
+
         before = _tree(world['home'])
         result = _stow(world, '--backup-conflicts')
         assert result.returncode == 1
+
         assert '.config/app' in result.stderr
         assert _tree(world['home']) == before
         assert (world['home'] / '.zshrc').read_text(encoding='utf-8') == 'old'
@@ -505,9 +563,10 @@ class TestConflicts:
         """
         Test that a conflict in a later layer prevents any earlier layer from being linked
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'repo'})
+        _pkg(world['repo'],    'shell',      {'.zshrc': 'repo'})
         _pkg(world['overlay'], 'work-shell', {'.workrc': 'overlay'})
         (world['home'] / '.workrc').write_text('old', encoding='utf-8')
+
         result = _stow(world)
         assert result.returncode == 1
         assert not (world['home'] / '.zshrc').exists()
@@ -517,10 +576,12 @@ class TestConflicts:
         """
         Test that an unresolvable overlay conflict blocks the base layer even with --backup-conflicts
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.bashrc': 'repo'})
+        _pkg(world['repo'],    'shell',      {'.zshrc': 'repo', '.bashrc': 'repo'})
         _pkg(world['overlay'], 'work-shell', {'.workrc': 'overlay'})
+
         (world['home'] / '.bashrc').write_text('old', encoding='utf-8')
         (world['home'] / '.workrc').mkdir()
+
         result = _stow(world, '--backup-conflicts')
         assert result.returncode == 1
         assert not (world['home'] / '.zshrc').exists()
@@ -532,12 +593,15 @@ class TestConflicts:
         """
         _pkg(world['repo'], 'shell', {'.zshrc': 'repo', '.fresh': 'repo'})
         (world['home'] / '.zshrc').write_text('old', encoding='utf-8')
+
         real_stow = shutil.which('stow')
         assert real_stow is not None
+
         shim_dir = tmp_path / 'shim'
         shim_dir.mkdir()
-        shim = shim_dir / 'stow'
+
         # Once a backup directory exists, every simulated stow reports a fresh unresolvable conflict
+        shim = shim_dir / 'stow'
         shim.write_text(
             '#!/bin/sh\n'
             'if [ -d "$HOME/.dotfiles-backup" ]; then\n'
@@ -550,10 +614,12 @@ class TestConflicts:
             encoding='utf-8',
         )
         shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
+
         result = _stow(world, '--backup-conflicts', extra_env={'PATH': f'{shim_dir}{os.pathsep}{os.environ["PATH"]}'})
         assert result.returncode == 1
         assert str(world['home'] / '.dotfiles-backup') in result.stderr
         assert not (world['home'] / '.fresh').exists()
+
         backups = list((world['home'] / '.dotfiles-backup').glob('*/.zshrc'))
         assert len(backups) == 1
         assert backups[0].read_text(encoding='utf-8') == 'old'

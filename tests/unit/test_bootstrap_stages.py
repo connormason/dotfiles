@@ -33,15 +33,17 @@ def env(tmp_path: Path, overlay: Path) -> dict[str, str]:
         stub = bin_dir / tool
         stub.write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
         stub.chmod(0o755)
+
     registry = tmp_path / 'overlays'
     registry.write_text(f'{overlay}\n', encoding='utf-8')
-    scrubbed = ('DOTFILES_REPO', 'DOTFILES_LAYER', 'DOTFILES_BREW_PREFIXES', 'XDG_CONFIG_HOME')
+
+    scrubbed: tuple[str, ...] = ('DOTFILES_REPO', 'DOTFILES_LAYER', 'DOTFILES_BREW_PREFIXES', 'XDG_CONFIG_HOME')
     return {
         **{key: value for key, value in os.environ.items() if key not in scrubbed},
-        'HOME': str(tmp_path / 'home'),
-        'PATH': f'{bin_dir}:{os.environ["PATH"]}',
+        'HOME':                   str(tmp_path / 'home'),
+        'PATH':                   f'{bin_dir}:{os.environ["PATH"]}',
         'DOTFILES_OVERLAYS_FILE': str(registry),
-        'BOOTSTRAP_DRY_RUN': '1',
+        'BOOTSTRAP_DRY_RUN':      '1',
     }
 
 
@@ -63,9 +65,10 @@ class TestUvToolsManifest:
         (overlay / 'bootstrap' / 'uv-tools.txt').write_text('posting --with extra-pkg\nzz-overlay-only\n', 'utf-8')
         result = _stage(shell, env)
         assert result.returncode == 0, result.stderr
+
         installs = [line for line in result.stdout.splitlines() if 'uv tool install' in line]
         assert any(line.endswith('uv tool install posting --with extra-pkg') for line in installs)
-        assert not any(line.endswith('uv tool install posting') for line in installs)
+        assert not any(line.endswith('uv tool install posting')              for line in installs)
         assert installs[-1].endswith('uv tool install zz-overlay-only')
 
     def test_option_first_line_is_fatal(self, shell: str, env: dict[str, str], overlay: Path) -> None:
@@ -74,6 +77,7 @@ class TestUvToolsManifest:
         """
         manifest = overlay / 'bootstrap' / 'uv-tools.txt'
         manifest.write_text('# comment\nok-tool\n  --with stray\n', encoding='utf-8')
+
         result = _stage(shell, env)
         assert result.returncode != 0
         assert f'{manifest.resolve()}:3: a line must start with the tool name' in result.stderr

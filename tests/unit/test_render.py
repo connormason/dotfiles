@@ -22,7 +22,7 @@ REPO_ROOT   = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / 'scripts' / 'dotfiles' / 'render.py'
 
 # Inherited variables that would leak the developer's own configuration into the tests
-_SCRUBBED_VARS = (
+_SCRUBBED_VARS: tuple[str, ...] = (
     'DOTFILES_REPO',
     'DOTFILES_BREW_PREFIXES',
     'DOTFILES_LEAK_PATTERNS',
@@ -35,8 +35,9 @@ def _load_module() -> ModuleType:
     Import render.py as module ``render``
     """
     spec = importlib.util.spec_from_file_location('render', SCRIPT_PATH)
-    assert spec is not None
+    assert spec        is not None
     assert spec.loader is not None
+
     module = importlib.util.module_from_spec(spec)
     sys.modules['render'] = module
     spec.loader.exec_module(module)
@@ -53,20 +54,26 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     """
     for var in _SCRUBBED_VARS:
         monkeypatch.delenv(var, raising=False)
+
     repo = tmp_path / 'repo'
     (repo / 'bootstrap').mkdir(parents=True)
     (repo / 'render').mkdir()
     shutil.copy2(REPO_ROOT / 'bootstrap' / 'lib.sh', repo / 'bootstrap' / 'lib.sh')
+
     overlay = tmp_path / 'overlay'
     (overlay / 'render').mkdir(parents=True)
+
     home = tmp_path / 'home'
     home.mkdir()
+
     registry = tmp_path / 'overlays'
     registry.write_text(f'{overlay}\n', encoding='utf-8')
-    monkeypatch.setenv('HOME', str(home))
-    monkeypatch.setenv('XDG_CONFIG_HOME', str(home / '.config'))
-    monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path / 'state'))
+
+    monkeypatch.setenv('HOME',                   str(home))
+    monkeypatch.setenv('XDG_CONFIG_HOME',        str(home / '.config'))
+    monkeypatch.setenv('XDG_STATE_HOME',         str(tmp_path / 'state'))
     monkeypatch.setenv('DOTFILES_OVERLAYS_FILE', str(registry))
+
     return {'repo': repo, 'overlay': overlay, 'home': home, 'state': tmp_path / 'state'}
 
 
@@ -98,16 +105,16 @@ class TestMerge:
     @pytest.mark.parametrize(
         ('base', 'overlay', 'expected'),
         [
-            ({'a': 1, 'b': {'x': 1}}, {'b': {'y': 2}},   {'a': 1, 'b': {'x': 1, 'y': 2}}),
-            ({'a': 1},                {'a': 2},          {'a': 2}),
-            ({'a': 1, 'b': 2},        {'b': None},       {'a': 1}),
-            ({'a': {'x': 1}},         {'a': {'x': None}}, {'a': {}}),
+            ({'a': 1, 'b': {'x': 1}}, {'b': {'y': 2}},            {'a': 1, 'b': {'x': 1, 'y': 2}}),
+            ({'a': 1},                {'a': 2},                   {'a': 2}),
+            ({'a': 1, 'b': 2},        {'b': None},                {'a': 1}),
+            ({'a': {'x': 1}},         {'a': {'x': None}},         {'a': {}}),
             ({},                      {'n': {'k': None, 'v': 1}}, {'n': {'v': 1}}),
-            ([1, 2],                  [2, 3],            [1, 2, 3]),
-            ([{'m': 'x'}],            [{'m': 'x'}, {'m': 'y'}], [{'m': 'x'}, {'m': 'y'}]),
-            ({'a': [1]},              {'a': 'scalar'},   {'a': 'scalar'}),
-            ([1],                     [{'a': None, 'b': 1}], [1, {'b': 1}]),
-            ([{'b': 1}],              [{'a': None, 'b': 1}], [{'b': 1}]),
+            ([1, 2],                  [2, 3],                     [1, 2, 3]),
+            ([{'m': 'x'}],            [{'m': 'x'}, {'m': 'y'}],   [{'m': 'x'}, {'m': 'y'}]),
+            ({'a': [1]},              {'a': 'scalar'},            {'a': 'scalar'}),
+            ([1],                     [{'a': None, 'b': 1}],      [1, {'b': 1}]),
+            ([{'b': 1}],              [{'a': None, 'b': 1}],      [{'b': 1}]),
         ],
     )
     def test_merge(self, base: object, overlay: object, expected: object) -> None:
@@ -131,11 +138,16 @@ class TestCompose:
         """
         Test that overlays merge after the base and $unmanaged lists merge and are removed
         """
-        _fragment(world['repo'], 'claude', {'theme': 'dark', '$unmanaged': ['stateA']})
+        _fragment(world['repo'],    'claude', {'theme': 'dark',                     '$unmanaged': ['stateA']})
         _fragment(world['overlay'], 'claude', {'theme': 'light', 'env': {'X': '1'}, '$unmanaged': ['stateB']})
-        fragments = [world['repo'] / 'render' / 'claude.json', world['overlay'] / 'render' / 'claude.json']
+
+        fragments = [
+            world['repo']    / 'render' / 'claude.json',
+            world['overlay'] / 'render' / 'claude.json',
+        ]
         managed, unmanaged = render.compose(fragments)
-        assert managed == {'env': {'X': '1'}, 'theme': 'light'}
+
+        assert managed   == {'env': {'X': '1'}, 'theme': 'light'}
         assert unmanaged == ['stateA', 'stateB']
 
     def test_bad_unmanaged_type_is_config_error(self, world: dict[str, Path]) -> None:
@@ -170,6 +182,7 @@ class TestRender:
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         assert _run(world, 'claude') == 0
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'dark'}
+
         state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
         assert state.read_text(encoding='utf-8') == render.dumps({'theme': 'dark'})
 
@@ -179,14 +192,17 @@ class TestRender:
         """
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         assert _run(world, 'claude') == 0
+
         _claude(world).write_text('{"theme": "edited"}\n', encoding='utf-8')
         _fragment(world['repo'], 'claude', {'theme': 'dark', 'verbose': True})
+
         capsys.readouterr()
         assert _run(world, 'claude') == 1
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'edited'}
+
         err = capsys.readouterr().err
         assert 'ERROR' in err
-        assert '-  "theme": "dark"' in err
+        assert '-  "theme": "dark"'   in err
         assert '+  "theme": "edited"' in err
 
     def test_force_backs_up_and_overwrites(self, world: dict[str, Path]) -> None:
@@ -197,6 +213,7 @@ class TestRender:
         _claude(world).parent.mkdir(parents=True)
         _claude(world).write_text('{"theme": "hand-made"}\n', encoding='utf-8')
         assert _run(world, 'claude', '--force') == 0
+
         backups = list((world['home'] / '.dotfiles-backup').glob('*/.claude/settings.json'))
         assert len(backups) == 1
         assert 'hand-made' in backups[0].read_text(encoding='utf-8')
@@ -208,10 +225,13 @@ class TestRender:
         """
         _fragment(world['repo'], 'claude', {'theme': 'dark', '$unmanaged': ['installerHash']})
         assert _run(world, 'claude') == 0
+
         live = json.loads(_claude(world).read_text(encoding='utf-8'))
         live['installerHash'] = 'abc'
+
         _claude(world).write_text(json.dumps(live), encoding='utf-8')
         _fragment(world['repo'], 'claude', {'theme': 'light', '$unmanaged': ['installerHash']})
+
         assert _run(world, 'claude') == 0
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'installerHash': 'abc', 'theme': 'light'}
 
@@ -223,6 +243,7 @@ class TestRender:
         _claude(world).parent.mkdir(parents=True)
         _claude(world).write_text('{"theme": "dark"}', encoding='utf-8')
         assert _run(world, 'claude') == 0
+
         state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
         assert state.read_text(encoding='utf-8') == render.dumps({'theme': 'dark'})
         assert not (world['home'] / '.dotfiles-backup').exists()
@@ -233,13 +254,16 @@ class TestRender:
         """
         other = tmp_path / 'elsewhere.json'
         other.write_text('{"theme": "dark"}', encoding='utf-8')
+
         _claude(world).parent.mkdir(parents=True)
         _claude(world).symlink_to(other)
         _fragment(world['repo'], 'claude', {'theme': 'dark', 'verbose': True})
+
         assert _run(world, 'claude', '--force') == 0
         assert not _claude(world).is_symlink()
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'dark', 'verbose': True}
         assert json.loads(other.read_text(encoding='utf-8')) == {'theme': 'dark'}
+
         backups = list((world['home'] / '.dotfiles-backup').glob('*/.claude/settings.json'))
         assert len(backups) == 1
         assert json.loads(backups[0].read_text(encoding='utf-8')) == {'theme': 'dark'}
@@ -250,7 +274,8 @@ class TestRender:
         """
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         assert _run(world, 'claude', '--check') == 1
-        assert _run(world, 'claude', '--diff') == 0
+        assert _run(world, 'claude', '--diff')  == 0
+
         assert '"theme": "dark"' in capsys.readouterr().out
         assert not _claude(world).exists()
         assert _run(world, 'claude') == 0
@@ -338,6 +363,7 @@ class TestAtomicWrites:
         """
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         assert _run(world, 'claude') == 0
+
         _claude(world).chmod(0o600)
         _fragment(world['repo'], 'claude', {'theme': 'light'})
         assert _run(world, 'claude') == 0
@@ -351,9 +377,11 @@ class TestAtomicWrites:
         other = tmp_path / 'elsewhere.json'
         other.write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
         other.chmod(0o600)
+
         _claude(world).parent.mkdir(parents=True)
         _claude(world).symlink_to(other)
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
+
         assert _run(world, 'claude') == 0
         assert not _claude(world).is_symlink()
         assert stat.S_IMODE(_claude(world).stat().st_mode) == 0o600
@@ -374,7 +402,10 @@ class TestResilientState:
     """
     @pytest.mark.parametrize('content', ['{corrupt', '', '[1, 2]'])
     def test_bad_state_adopts_identical_live_file(
-        self, world: dict[str, Path], capsys: pytest.CaptureFixture[str], content: str,
+        self,
+        world: dict[str, Path],
+        capsys: pytest.CaptureFixture[str],
+        content: str,
     ) -> None:
         """
         Test that an unusable state file is ignored with a warning and the render proceeds
@@ -383,6 +414,7 @@ class TestResilientState:
         state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
         state.parent.mkdir(parents=True)
         state.write_text(content, encoding='utf-8')
+
         _claude(world).parent.mkdir(parents=True)
         _claude(world).write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
         assert _run(world, 'claude') == 0
@@ -398,11 +430,12 @@ class TestResilientState:
         state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
         state.parent.mkdir(parents=True)
         state.write_text(content, encoding='utf-8')
+
         _claude(world).parent.mkdir(parents=True)
         _claude(world).write_text('{"theme": "edited"}\n', encoding='utf-8')
+
         assert _run(world, 'claude') == 1
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'edited'}
-
 
     @pytest.mark.skipif(os.geteuid() == 0, reason='root ignores file permissions')
     def test_unreadable_state_is_repaired(self, world: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
@@ -410,16 +443,20 @@ class TestResilientState:
         Test that an unreadable state file is rewritten 0600 so later renders are not refused as drift
         """
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
+
         state = world['state'] / 'dotfiles' / 'render' / 'claude.json'
         state.parent.mkdir(parents=True)
         state.write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
         state.chmod(0o000)
+
         _claude(world).parent.mkdir(parents=True)
         _claude(world).write_text(render.dumps({'theme': 'dark'}), encoding='utf-8')
+
         assert _run(world, 'claude') == 0
         assert 'state' in capsys.readouterr().err
         assert stat.S_IMODE(state.stat().st_mode) == 0o600
         assert state.read_text(encoding='utf-8') == render.dumps({'theme': 'dark'})
+
         _fragment(world['repo'], 'claude', {'theme': 'light'})
         assert _run(world, 'claude') == 0
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'light'}
@@ -450,6 +487,7 @@ class TestIoErrors:
             assert _run(world, 'claude') == 2
         finally:
             _claude(world).parent.chmod(0o700)
+
         assert 'ERROR' in capsys.readouterr().err
         assert not _claude(world).exists()
 
@@ -465,6 +503,7 @@ class TestRiskPaths:
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         _claude(world).parent.mkdir(parents=True)
         _claude(world).write_text('{nope', encoding='utf-8')
+
         assert _run(world, 'claude') == 1
         assert _claude(world).read_text(encoding='utf-8') == '{nope'
         assert 'is not valid JSON' in capsys.readouterr().err
@@ -476,10 +515,12 @@ class TestRiskPaths:
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         _claude(world).parent.mkdir(parents=True)
         _claude(world).write_text('[1, 2]', encoding='utf-8')
+
         assert _run(world, 'claude') == 1
         assert _claude(world).read_text(encoding='utf-8') == '[1, 2]'
+
         err = capsys.readouterr().err
-        assert 'is not a JSON object' in err
+        assert 'is not a JSON object'  in err
         assert 'is not valid JSON' not in err
 
     def test_in_sync_symlink_is_replaced_without_force(self, world: dict[str, Path], tmp_path: Path) -> None:
@@ -488,9 +529,11 @@ class TestRiskPaths:
         """
         other = tmp_path / 'elsewhere.json'
         other.write_text('{"theme": "dark"}', encoding='utf-8')
+
         _claude(world).parent.mkdir(parents=True)
         _claude(world).symlink_to(other)
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
+
         assert _run(world, 'claude') == 0
         assert not _claude(world).is_symlink()
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'dark'}
@@ -498,7 +541,10 @@ class TestRiskPaths:
         assert not (world['home'] / '.dotfiles-backup').exists()
 
     def test_dangling_symlink_is_replaced_and_reported(
-        self, world: dict[str, Path], tmp_path: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        world: dict[str, Path],
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that a dangling symlink is replaced by a real file and its former target is reported
@@ -507,6 +553,7 @@ class TestRiskPaths:
         _claude(world).parent.mkdir(parents=True)
         _claude(world).symlink_to(missing)
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
+
         assert _run(world, 'claude') == 0
         assert not _claude(world).is_symlink()
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'dark'}
@@ -519,6 +566,7 @@ class TestRiskPaths:
         """
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         assert _run(world, 'claude') == 0
+
         _fragment(world['repo'], 'claude', {'theme': 'light'})
         assert _run(world, 'claude', '--force') == 0
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'light'}
@@ -533,8 +581,10 @@ class TestRiskPaths:
         _claude(world).write_text('{"theme": "hand-made"}\n', encoding='utf-8')
         _claude(world).chmod(0o644)
         assert _run(world, 'claude', '--force') == 0
-        root = world['home'] / '.dotfiles-backup'
+
+        root      = world['home'] / '.dotfiles-backup'
         (backup,) = root.glob('*/.claude/settings.json')
+
         assert stat.S_IMODE(backup.stat().st_mode) == 0o600
         for directory in (root, backup.parent.parent, backup.parent):
             assert stat.S_IMODE(directory.stat().st_mode) == 0o700
@@ -545,13 +595,16 @@ class TestRiskPaths:
         """
         _fragment(world['repo'], 'claude', {'theme': 'dark', '$unmanaged': ['installerHash']})
         assert _run(world, 'claude') == 0
+
         live = json.loads(_claude(world).read_text(encoding='utf-8'))
         live['installerHash'] = 'changed'
         _claude(world).write_text(json.dumps(live), encoding='utf-8')
         assert _run(world, 'claude', '--check') == 0
 
     def test_fragment_value_for_unmanaged_key_warns(
-        self, world: dict[str, Path], capsys: pytest.CaptureFixture[str],
+        self,
+        world: dict[str, Path],
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that a key both set by a fragment and listed as unmanaged is dropped with a warning
@@ -559,8 +612,9 @@ class TestRiskPaths:
         _fragment(world['repo'], 'claude', {'theme': 'dark', 'owned': 'x', '$unmanaged': ['owned']})
         managed, _unmanaged = render.compose([world['repo'] / 'render' / 'claude.json'])
         assert managed == {'theme': 'dark'}
+
         err = capsys.readouterr().err
-        assert 'owned' in err
+        assert 'owned'   in err
         assert 'WARNING' in err
 
     def test_multi_target_exit_code_is_the_maximum(self, world: dict[str, Path]) -> None:
@@ -570,8 +624,10 @@ class TestRiskPaths:
         _fragment(world['repo'], 'claude', {'theme': 'dark'})
         _fragment(world['repo'], 'vscode', {'editor.fontSize': 12})
         assert _run(world, 'claude') == 0
+
         _claude(world).write_text('{"theme": "edited"}\n', encoding='utf-8')
         assert _run(world, 'claude', 'vscode') == 1
+
         vscode = world['home'] / 'Library' / 'Application Support' / 'Code' / 'User' / 'settings.json'
         assert json.loads(vscode.read_text(encoding='utf-8')) == {'editor.fontSize': 12}
         assert json.loads(_claude(world).read_text(encoding='utf-8')) == {'theme': 'edited'}
@@ -614,7 +670,10 @@ class TestListTargets:
         Test that the script prints the list when executed directly, as stow.sh does
         """
         result = subprocess.run(
-            [sys.executable, str(SCRIPT_PATH), '--list-targets'], capture_output=True, text=True, check=False,
+            [sys.executable, str(SCRIPT_PATH), '--list-targets'],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         assert result.returncode == 0, result.stderr
         assert len(result.stdout.splitlines()) == len(render.TARGETS)
@@ -626,7 +685,10 @@ class TestUnexpectedErrors:
     """
     @pytest.mark.parametrize('mode', [(), ('--check',)])
     def test_crash_exits_2_with_error_line(
-        self, world: dict[str, Path], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+        self,
+        world: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
         mode: tuple[str, ...],
     ) -> None:
         """
@@ -637,6 +699,7 @@ class TestUnexpectedErrors:
 
         monkeypatch.setattr(render, 'prepare', _crash)
         assert _run(world, *mode) == 2
+
         err = capsys.readouterr().err
         assert 'render: ERROR: unexpected RuntimeError: kaboom' in err
-        assert 'Traceback' not in err
+        assert 'Traceback'                                  not in err

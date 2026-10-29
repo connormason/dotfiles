@@ -26,10 +26,9 @@ def _entries(brewfile: Path) -> list[tuple[str, str]]:
     """
     Parse the (kind, name) pairs of every non-comment Brewfile line
     """
-    entries = []
+    entries: list[tuple[str, str]] = []
     for line in brewfile.read_text(encoding='utf-8').splitlines():
-        match = _ENTRY.match(line.strip())
-        if match:
+        if match := _ENTRY.match(line.strip()):
             entries.append((match.group(1), match.group(2)))
     return entries
 
@@ -44,14 +43,16 @@ class TestPersonalMacProfile:
         """
         home = tmp_path / 'home'
         home.mkdir()
+
         registry = tmp_path / 'overlays'
         registry.write_text(f'{PROFILE}\n', encoding='utf-8')
-        env = {
+
+        env: dict[str, str] = {
             **{key: value for key, value in os.environ.items() if key not in _SCRUBBED_VARS},
-            'HOME': str(home),
-            'XDG_CONFIG_HOME': str(home / '.config'),
+            'HOME':                   str(home),
+            'XDG_CONFIG_HOME':        str(home / '.config'),
             'DOTFILES_OVERLAYS_FILE': str(registry),
-            'BOOTSTRAP_DRY_RUN': '0',
+            'BOOTSTRAP_DRY_RUN':      '0',
         }
         result = subprocess.run(
             [shell, '-c', f'source "{LIB}"\nmanifest_files Brewfile'],
@@ -61,6 +62,7 @@ class TestPersonalMacProfile:
             env=env,
             timeout=60,
         )
+
         assert result.returncode == 0, result.stderr
         assert result.stdout.splitlines() == [
             str(REPO_ROOT / 'bootstrap' / 'Brewfile'),
@@ -78,6 +80,7 @@ class TestPersonalMacProfile:
         Test that no profile Brewfile entry repeats a base Brewfile entry
         """
         assert _entries(BASE_BREWFILE), 'base Brewfile parsed as empty; the comparison below would pass vacuously'
+
         duplicates = set(_entries(PROFILE / 'bootstrap' / 'Brewfile')) & set(_entries(BASE_BREWFILE))
         assert not duplicates, f'already in bootstrap/Brewfile: {sorted(duplicates)}'
 

@@ -13,7 +13,11 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-__all__ = ['SHELLS', 'shell', 'unreadable_overlay']
+__all__ = [
+    'SHELLS',
+    'shell',
+    'unreadable_overlay',
+]
 
 
 def _discover_shells() -> list[str]:
@@ -21,15 +25,19 @@ def _discover_shells() -> list[str]:
     Find the bash interpreters to exercise (the system bash plus the PATH bash), deduplicated by resolved path
     """
     shells: list[str] = []
+
     seen: set[Path] = set()
     for candidate in ('/bin/bash', shutil.which('bash')):
-        if not candidate or not Path(candidate).exists():
+        if (not candidate) or (not Path(candidate).exists()):
             continue
+
         resolved = Path(candidate).resolve()
         if resolved in seen:
             continue
+
         seen.add(resolved)
         shells.append(candidate)
+
     return shells
 
 
@@ -51,8 +59,10 @@ def unreadable_overlay(tmp_path: Path) -> Iterator[Path]:
     """
     if os.geteuid() == 0:
         pytest.skip('root ignores directory permissions')
+
     path = tmp_path / 'unreadable-overlay'
     (path / 'bootstrap').mkdir(parents=True)
+
     path.chmod(0)
     yield path
     path.chmod(0o755)

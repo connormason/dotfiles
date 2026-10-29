@@ -123,8 +123,12 @@ class TestBootstrapStageDocs:
         """
         documented = _stage_ids_in_readme(REPO_ROOT)
         on_disk    = _stage_scripts_on_disk(REPO_ROOT)
+
         assert documented == on_disk, _out_of_sync_message(
-            'bootstrap/README.md stage table', documented, 'bootstrap/*.sh scripts', on_disk,
+            'bootstrap/README.md stage table',
+            documented,
+            'bootstrap/*.sh scripts',
+            on_disk,
         )
 
     def test_stage_table_is_not_empty(self) -> None:
@@ -148,8 +152,12 @@ class TestStowPackageDocs:
         """
         documented = set(_stow_readme_rows(REPO_ROOT))
         on_disk    = _stow_package_dirs(REPO_ROOT)
+
         assert documented == on_disk, _out_of_sync_message(
-            'stow/README.md package table', documented, 'stow/ directories', on_disk,
+            'stow/README.md package table',
+            documented,
+            'stow/ directories',
+            on_disk,
         )
 
     def test_package_table_is_not_empty(self) -> None:
@@ -162,7 +170,7 @@ class TestStowPackageDocs:
         """
         Each package row lists exactly the conf.d snippets its directory provides
         """
-        mismatches = []
+        mismatches: list[str] = []
         for package, rest in _stow_readme_rows(REPO_ROOT).items():
             documented = set(SNIPPET.findall(rest))
             on_disk    = _conf_d_snippets_on_disk(REPO_ROOT, package)
@@ -170,4 +178,5 @@ class TestStowPackageDocs:
                 mismatches.append(
                     f'{package}: documented {sorted(documented) or "none"}, on disk {sorted(on_disk) or "none"}',
                 )
+
         assert not mismatches, 'stow/README.md conf.d column is out of sync:\n  ' + '\n  '.join(mismatches)

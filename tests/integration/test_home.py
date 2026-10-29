@@ -23,8 +23,8 @@ FIXTURE   = REPO_ROOT / 'tests' / 'fixtures' / 'overlay'
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(shutil.which('stow') is None, reason='GNU Stow not installed'),
-    pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh not installed'),
-    pytest.mark.skipif(shutil.which('git') is None, reason='git not installed'),
+    pytest.mark.skipif(shutil.which('zsh')  is None, reason='zsh not installed'),
+    pytest.mark.skipif(shutil.which('git')  is None, reason='git not installed'),
 ]
 
 
@@ -41,7 +41,12 @@ class Home:
         Run a command inside this HOME
         """
         return subprocess.run(
-            list(cmd), capture_output=True, text=True, check=False, env=self.env, cwd=cwd or self.path
+            list(cmd),
+            capture_output=True,
+            text=True,
+            check=False,
+            env=self.env,
+            cwd=cwd or self.path,
         )
 
     def zsh(self, command: str) -> subprocess.CompletedProcess[str]:
@@ -92,6 +97,7 @@ def startup_budget() -> StartupBudget:
     """
     zsh = shutil.which('zsh')
     assert zsh is not None
+
     best = float('inf')
     for _ in range(5):
         start = time.monotonic()
@@ -99,18 +105,20 @@ def startup_budget() -> StartupBudget:
         best = min(best, time.monotonic() - start)
     calib_ms = best * 1000
 
-    override = os.environ.get('DOTFILES_STARTUP_BUDGET_MS', '')
-    if override:
+    if override := os.environ.get('DOTFILES_STARTUP_BUDGET_MS', ''):
         try:
             return StartupBudget(calib_ms, float(override), 'DOTFILES_STARTUP_BUDGET_MS override')
         except ValueError:
             pytest.fail(f'DOTFILES_STARTUP_BUDGET_MS must be a number of milliseconds, got {override!r}')
+
     scale = max(1.0, calib_ms / CALIBRATION_MS)
     return StartupBudget(calib_ms, STARTUP_BUDGET_MS * scale, f'calibrated x{scale:.2f}')
 
 
 def run_zsh_with_tty(
-    home: Home, command: str, extra_env: dict[str, str] | None = None
+    home: Home,
+    command: str,
+    extra_env: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[bytes], float]:
     """
     Run an interactive zsh command on a pseudo-terminal and return the result with its wall time
@@ -132,28 +140,38 @@ def run_zsh_with_tty(
         leader, follower = pty.openpty()
     except OSError as e:
         pytest.skip(f'no pseudo-terminal available: {e}')
+
     env  = {**home.env, 'TERM': 'xterm-256color', **(extra_env or {})}
     proc = None
     try:
         start = time.monotonic()
         proc  = subprocess.Popen(
             ['zsh', '-i', '-c', command],
-            stdin=follower, stdout=follower, stderr=follower, env=env, cwd=home.path, start_new_session=True,
+            stdin=follower,
+            stdout=follower,
+            stderr=follower,
+            env=env,
+            cwd=home.path,
+            start_new_session=True,
         )
+
         returncode = proc.wait(timeout=PTY_TIMEOUT)
         elapsed    = time.monotonic() - start
         output     = b''
         while select.select([leader], [], [], 0.1)[0]:
             output += os.read(leader, 65536)
+
     finally:
-        if proc is not None and proc.poll() is None:
+        if (proc is not None) and (proc.poll() is None):
             try:
                 os.killpg(proc.pid, signal.SIGKILL)  # start_new_session made the shell its group's leader
             except ProcessLookupError:
                 pass
             proc.wait()
+
         os.close(leader)
         os.close(follower)
+
     return subprocess.CompletedProcess(proc.args, returncode, output, b''), elapsed
 
 
@@ -166,19 +184,22 @@ def home(tmp_path_factory: pytest.TempPathFactory) -> Home:
     registry = path / '.config' / 'dotfiles' / 'overlays'
     registry.parent.mkdir(parents=True)
     registry.write_text(f'{FIXTURE}\n', encoding='utf-8')
-    env = {
-        'HOME': str(path),
-        'PATH': os.environ['PATH'],
-        'TERM': 'dumb',
-        'DOTFILES_NO_BANNER': '1',  # the banner slows and pollutes terminal runs; banner tests opt back in
-        'GIT_CONFIG_NOSYSTEM': '1',  # keep the machine's system gitconfig out of git assertions
-        'XDG_CONFIG_HOME': str(path / '.config'),
-        'XDG_STATE_HOME': str(path / '.local' / 'state'),
-        'XDG_DATA_HOME': str(path / '.local' / 'share'),
+
+    env: dict[str, str] = {
+        'HOME':                str(path),
+        'PATH':                os.environ['PATH'],
+        'TERM':                'dumb',
+        'DOTFILES_NO_BANNER':  '1',     # the banner slows and pollutes terminal runs; banner tests opt back in
+        'GIT_CONFIG_NOSYSTEM': '1',     # keep the machine's system gitconfig out of git assertions
+        'XDG_CONFIG_HOME':     str(path / '.config'),
+        'XDG_STATE_HOME':      str(path / '.local' / 'state'),
+        'XDG_DATA_HOME':       str(path / '.local' / 'share'),
     }
     result = Home(path, env)
+
     stowed = result.run('bash', str(REPO_ROOT / 'stow.sh'))
     assert stowed.returncode == 0, stowed.stdout + stowed.stderr
+
     rendered = result.run('python3', str(REPO_ROOT / 'scripts' / 'dotfiles' / 'render.py'), '--force')
     assert rendered.returncode == 0, rendered.stdout + rendered.stderr
     return result
@@ -235,13 +256,15 @@ class TestShell:
         Test that an interactive shell starts without stderr output within the startup budget (best of three warm runs)
         """
         home.zsh('exit')  # warm caches (compinit dump, generated completions) before timing
-        timings = []
+
+        timings: list[float] = []
         for _ in range(TIMING_SAMPLES):
             start  = time.monotonic()
             result = home.zsh('exit')
             timings.append(time.monotonic() - start)
             assert result.returncode == 0
-            assert result.stderr == ''
+            assert result.stderr     == ''
+
         startup_budget.check(timings, 'zsh -i')
 
     def test_overlay_snippet_is_sourced(self, home: Home) -> None:
@@ -273,9 +296,15 @@ class TestShell:
         """
         zsh    = shutil.which('zsh')
         assert zsh is not None
+
         env    = {**home.env, 'PATH': '/usr/bin:/bin', 'DOTFILES_BREW_PROBE': '0'}  # else the probe finds a local brew
         result = subprocess.run(
-            [zsh, '-i', '-c', 'cd / && cd ~'], capture_output=True, text=True, check=False, env=env, cwd=home.path
+            [zsh, '-i', '-c', 'cd / && cd ~'],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+            cwd=home.path,
         )
         assert result.returncode == 0
         assert result.stderr == ''
@@ -327,9 +356,9 @@ class TestStartupCaches:
         """
         return {
             **home.env,
-            'PATH': f'{root / "bin"}:/usr/bin:/bin',
+            'PATH':                f'{root / "bin"}:/usr/bin:/bin',
             'DOTFILES_BREW_PROBE': '0',
-            'XDG_CACHE_HOME': str(root / 'cache'),
+            'XDG_CACHE_HOME':      str(root / 'cache'),
             **extra,
         }
 
@@ -340,9 +369,15 @@ class TestStartupCaches:
         """
         zsh = shutil.which('zsh')
         assert zsh is not None
+
         return subprocess.run(
             [zsh, '-i', '-c', command],
-            capture_output=True, text=True, check=False, env=env, cwd=home.path, stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+            cwd=home.path,
+            stdin=subprocess.DEVNULL,
         )
 
     # ==============================================================================
@@ -357,11 +392,13 @@ class TestStartupCaches:
         """
         log = tmp_path / 'calls.log'
         write_fake_tool(tmp_path / 'bin' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
+
         env = self._env(home, tmp_path)
         for _ in range(2):
             result = self._zsh(home, env, self.PROBE)
             assert result.stderr == ''
             assert result.stdout.strip() == 'status=0 probe=loaded'
+
         assert invocations(log) == ['init zsh']
         assert (tmp_path / 'cache' / 'zsh' / 'fake.zsh').is_file()
         assert list((tmp_path / 'cache' / 'zsh').glob('*.tmp')) == []
@@ -373,9 +410,11 @@ class TestStartupCaches:
         log  = tmp_path / 'calls.log'
         tool = write_fake_tool(tmp_path / 'bin' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
         env  = self._env(home, tmp_path)
+
         self._zsh(home, env, self.PROBE)
         future = time.time() + 3600
         os.utime(tool, (future, future))
+
         result = self._zsh(home, env, self.PROBE)
         assert result.stdout.strip() == 'status=0 probe=loaded'
         assert invocations(log) == ['init zsh', 'init zsh']
@@ -387,18 +426,23 @@ class TestStartupCaches:
         log    = tmp_path / 'calls.log'
         target = write_fake_tool(tmp_path / 'Cellar' / 'v1' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
         link   = tmp_path / 'bin' / 'faketool'
+
         link.parent.mkdir()
         link.symlink_to(target)
         make_older(link, 7200)
+
         env = self._env(home, tmp_path)
         self._zsh(home, env, self.PROBE)
         future = time.time() + 3600
         os.utime(target, (future, future))
+
         self._zsh(home, env, self.PROBE)
         assert invocations(log) == ['init zsh', 'init zsh']
 
     def test_retargeted_symlink_regenerates_even_when_the_new_binary_is_older(
-        self, home: Home, tmp_path: Path
+        self,
+        home: Home,
+        tmp_path: Path,
     ) -> None:
         """
         Test that an upgrade which relinks to a binary built before the cache was written still regenerates it
@@ -407,13 +451,17 @@ class TestStartupCaches:
         old  = write_fake_tool(tmp_path / 'Cellar' / 'v1' / 'faketool', log, 'typeset -g CACHED_PROBE=v1')
         new  = write_fake_tool(tmp_path / 'Cellar' / 'v2' / 'faketool', log, 'typeset -g CACHED_PROBE=v2')
         link = tmp_path / 'bin' / 'faketool'
+
         link.parent.mkdir()
         link.symlink_to(old)
+
         env = self._env(home, tmp_path)
         assert self._zsh(home, env, self.PROBE).stdout.strip() == 'status=0 probe=v1'
+
         make_older(new, 86400)  # bottles keep their build-time mtimes, older than a cache written since
         link.unlink()
         link.symlink_to(new)
+
         assert self._zsh(home, env, self.PROBE).stdout.strip() == 'status=0 probe=v2'
         assert invocations(log) == ['init zsh', 'init zsh']
 
@@ -423,6 +471,7 @@ class TestStartupCaches:
         """
         log = tmp_path / 'calls.log'
         write_fake_tool(tmp_path / 'bin' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
+
         env = self._env(home, tmp_path)
         self._zsh(home, env, self.PROBE)
         self._zsh(home, env, self.PROBE.replace('init zsh', 'init zsh --cmd j'))
@@ -436,18 +485,24 @@ class TestStartupCaches:
         ],
     )
     def test_failed_or_empty_generation_is_not_cached(
-        self, home: Home, tmp_path: Path, output: str, status: int
+        self,
+        home: Home,
+        tmp_path: Path,
+        output: str,
+        status: int,
     ) -> None:
         """
         Test that a failing or silent generator leaves no cache, sources nothing, and is retried by the next shell
         """
         log = tmp_path / 'calls.log'
         write_fake_tool(tmp_path / 'bin' / 'faketool', log, output, status)
+
         env = self._env(home, tmp_path)
         for _ in range(2):
             result = self._zsh(home, env, self.PROBE)
             assert result.stderr == ''
             assert result.stdout.strip() == 'status=1 probe=unset'
+
         assert invocations(log) == ['init zsh', 'init zsh']
         assert list((tmp_path / 'cache' / 'zsh').glob('fake*')) == []
 
@@ -458,7 +513,9 @@ class TestStartupCaches:
         log     = tmp_path / 'calls.log'
         blocker = tmp_path / 'not-a-dir'
         blocker.write_text('', encoding='utf-8')
+
         write_fake_tool(tmp_path / 'bin' / 'faketool', log, 'typeset -g CACHED_PROBE=loaded')
+
         env    = self._env(home, tmp_path, XDG_CACHE_HOME=str(blocker))
         result = self._zsh(home, env, self.PROBE)
         assert result.stderr == ''
@@ -484,13 +541,19 @@ class TestStartupCaches:
         ],
     )
     def test_snippet_caches_generated_output(
-        self, home: Home, tmp_path: Path, tool: str, args: str, terminal: bool
+        self,
+        home: Home,
+        tmp_path: Path,
+        tool: str,
+        args: str,
+        terminal: bool,
     ) -> None:
         """
         Test that each snippet's generator runs on the first start only, and again once its binary is newer
         """
         if terminal and os.name != 'posix':
             pytest.skip('pseudo-terminals are POSIX-only')
+
         log    = tmp_path / 'calls.log'
         binary = write_fake_tool(tmp_path / 'bin' / tool, log, f'typeset -g CACHED_PROBE_{tool}=1')
         env    = self._env(home, tmp_path)
@@ -501,17 +564,20 @@ class TestStartupCaches:
                 overrides = {key: env[key] for key in ('PATH', 'DOTFILES_BREW_PROBE', 'XDG_CACHE_HOME')}
                 on_tty, _elapsed = run_zsh_with_tty(home, probe, overrides)
                 return on_tty.stdout.decode().strip()
+
             piped = self._zsh(home, env, probe)
             assert piped.stderr == ''
             return piped.stdout.strip()
 
-        counts = []
+        counts: list[int] = []
         for step in range(3):
             if step == 2:
                 future = time.time() + 3600
                 os.utime(binary, (future, future))
+
             assert start() == 'probe=1'
             counts.append(len(invocations(log)))
+
         assert counts == [1, 1, 2]
         assert set(invocations(log)) == {args}
 
@@ -537,6 +603,7 @@ class TestStartupCaches:
         """
         zsh = shutil.which('zsh')
         assert zsh is not None
+
         default = subprocess.run([zsh, '-f', '-c', 'print -r -- $FPATH'], capture_output=True, text=True, check=True)
         return f'{directory}:{default.stdout.strip()}'
 
@@ -554,12 +621,14 @@ class TestStartupCaches:
         """
         fndir, log = self._fake_compaudit(tmp_path)
         env        = self._env(home, tmp_path, FPATH=self._fpath_with(fndir))
+
         counts     = []
         for _ in range(2):
             result = self._zsh(home, env, 'exit')
             assert result.returncode == 0
-            assert result.stderr == ''
+            assert result.stderr     == ''
             counts.append(len(invocations(log)))
+
         assert counts == [1, 1]
         assert self._dump(tmp_path).stat().st_size > 0
 
@@ -569,13 +638,16 @@ class TestStartupCaches:
         """
         fndir, log = self._fake_compaudit(tmp_path)
         env        = self._env(home, tmp_path, FPATH=self._fpath_with(fndir))
+
         self._zsh(home, env, 'exit')
         make_older(self._dump(tmp_path), 25 * 3600)
-        counts = []
+
+        counts: list[int] = []
         for _ in range(2):
             result = self._zsh(home, env, 'exit')
             assert result.stderr == ''
             counts.append(len(invocations(log)))
+
         assert counts == [2, 2]
 
     def test_pkl_completion_does_not_rerun_compinit(self, home: Home, tmp_path: Path) -> None:
@@ -589,12 +661,14 @@ class TestStartupCaches:
         )
         env    = self._env(home, tmp_path, FPATH=self._fpath_with(fndir))
         probe  = 'print -r -- "probe=$CACHED_PROBE_pkl compinit=${+functions[compinit]}"'
-        counts = []
+
+        counts: list[int] = []
         for _ in range(2):
             result = self._zsh(home, env, probe)
             assert result.stderr == ''
             assert result.stdout.strip() == 'probe=1 compinit=1'
             counts.append(len(invocations(audits)))
+
         assert counts == [1, 1]
 
     @staticmethod
@@ -628,22 +702,26 @@ class TestStartupCaches:
             'print -r -- "compinit=${functions[compinit]}"; '
             'print -r -- "compdef=${functions[compdef]}"'
         )
+
         omz = self._fake_omz(home)
         try:
-            counts = []
+            counts: list[int] = []
             for _ in range(2):
                 result = self._zsh(home, env, probe)
                 assert result.returncode == 0
-                assert result.stderr == ''
+                assert result.stderr     == ''
+
                 comps, queue, compinit, *compdef = result.stdout.splitlines()
-                assert comps == 'comps=_fakeomz,_fakeomz'
-                assert queue == 'queue=0'
+                assert comps    == 'comps=_fakeomz,_fakeomz'
+                assert queue    == 'queue=0'
                 assert compinit == 'compinit=builtin autoload -XU'
                 assert '_omz_deferred_compdefs' not in '\n'.join(compdef)
                 counts.append(len(invocations(audits)))
+
             assert counts == [1, 1]
             assert list(home.path.glob('.zcompdump*')) == []
             assert self._dump(tmp_path).stat().st_size > 0
+
         finally:
             shutil.rmtree(omz)
 
@@ -653,8 +731,10 @@ class TestStartupCaches:
         """
         insecure = tmp_path / 'insecure'
         insecure.mkdir()
+
         (insecure / '_insecurefake').write_text('#compdef insecurefake\n', encoding='utf-8')
         insecure.chmod(0o777)
+
         env    = self._env(home, tmp_path, FPATH=self._fpath_with(insecure))
         result = self._zsh(home, env, 'print -r -- "comp=${_comps[insecurefake]-none}"')
         assert result.returncode == 0
@@ -707,10 +787,11 @@ class TestPythonNode:
         """
         config = home.path / 'Library' / 'Application Support' / 'hatch' / 'config.toml'
         assert config.is_symlink()
+
         text = config.read_text(encoding='utf-8')
         assert '[publish' not in text
-        assert 'email' not in text
-        assert '/Users/' not in text
+        assert 'email'    not in text
+        assert '/Users/'  not in text
 
 
 class TestClaude:
@@ -744,13 +825,14 @@ class TestClaude:
         """
         Test that every $HOME path in a rendered hook command, interpreter-prefixed or not, points at a stowed script
         """
-        scripts = [
+        scripts: list[Path] = [
             Path(token.strip('"').replace('$HOME', str(home.path), 1))
             for command in self._hook_commands(self._settings(home))
             for token in command.split()
             if token.strip('"').startswith('$HOME/')
         ]
         assert scripts, 'no home-relative hook commands rendered'
+
         missing = [str(script) for script in scripts if not script.is_file()]
         assert missing == []
 
@@ -758,7 +840,7 @@ class TestClaude:
         """
         Test that hook commands run without an interpreter prefix point at executable files
         """
-        direct = [
+        direct: list[Path] = [
             Path(command.split()[0].strip('"').replace('$HOME', str(home.path), 1))
             for command in self._hook_commands(self._settings(home))
             if command.startswith('$HOME/')
@@ -780,6 +862,7 @@ class TestClaude:
         """
         spinner = self._settings(home)['spinnerVerbs']
         assert isinstance(spinner, dict)
+
         verbs = spinner['verbs']
         assert verbs
         assert len(verbs) == len(set(verbs))
@@ -791,7 +874,7 @@ class TestClaude:
         result = home.zsh('alias cl; print -r -- "ca=${NODE_EXTRA_CA_CERTS-unset}"')
         assert result.returncode == 0, result.stderr
         assert result.stderr == ''
-        assert 'claude' in result.stdout
+        assert 'claude'   in result.stdout
         assert 'ca=unset' in result.stdout
 
     def test_cleanup_script_runs_dry(self, home: Home) -> None:
@@ -800,6 +883,7 @@ class TestClaude:
         """
         script = home.path / '.claude' / 'scripts' / 'dotclaude-cleanup.sh'
         assert script.is_symlink()
+
         result = home.run('bash', str(script), '--dry-run')
         assert result.returncode == 0, result.stderr
         assert 'DRY RUN complete' in result.stdout
@@ -817,9 +901,11 @@ class TestGit:
         Create a repo inside HOME, with an origin remote when one is given
         """
         repo = home.path / name
+
         commands: list[tuple[str, ...]] = [('git', 'init', '-q', '--template=', str(repo))]
         if remote is not None:
             commands.append(('git', '-C', str(repo), 'remote', 'add', 'origin', remote))
+
         for command in commands:
             result = home.run(*command)
             assert result.returncode == 0, result.stderr
@@ -828,21 +914,21 @@ class TestGit:
     @pytest.mark.parametrize(
         ('remote', 'expected'),
         [
-            ('git@github.com:connormason/x.git',            PERSONAL),
-            ('https://github.com/connormason/x.git',        PERSONAL),
-            ('ssh://git@github.com/connormason/x.git',      PERSONAL),
+            ('git@github.com:connormason/x.git',              PERSONAL),
+            ('https://github.com/connormason/x.git',          PERSONAL),
+            ('ssh://git@github.com/connormason/x.git',        PERSONAL),
             ('https://someuser@github.com/connormason/x.git', PERSONAL),
-            (None,                                          DEFAULT),
-            ('git@git.example.com:team/x.git',              DEFAULT),
-            ('git@github.com:connormason2/x.git',           DEFAULT),
+            (None,                                            DEFAULT),
+            ('git@git.example.com:team/x.git',                DEFAULT),
+            ('git@github.com:connormason2/x.git',             DEFAULT),
         ],
     )
     def test_identity_follows_remote(self, home: Home, remote: str | None, expected: str) -> None:
         """
         Test that personal GitHub remotes get the personal identity and everything else the overlay's default
         """
-        name = 'repo-' + ''.join(c if c.isalnum() else '-' for c in str(remote))
-        repo = self._repo(home, name, remote)
+        name   = 'repo-' + ''.join(c if c.isalnum() else '-' for c in str(remote))
+        repo   = self._repo(home, name, remote)
         result = home.run('git', 'config', 'user.email', cwd=repo)
         assert result.stdout.strip() == expected
 
@@ -878,8 +964,8 @@ class TestVSCode:
         Test that generic base keys survive the merge
         """
         settings = self._settings(home)
-        assert settings['editor.rulers'] == [120]
-        assert settings['python.languageServer'] == 'Pylance'
+        assert settings['editor.rulers']            == [120]
+        assert settings['python.languageServer']    == 'Pylance'
         assert settings['telemetry.telemetryLevel'] == 'off'
 
     @pytest.mark.parametrize(
@@ -940,7 +1026,7 @@ class TestTerminalEditor:
         Test that the iTerm2 profiles carry no hardcoded home path
         """
         text = (home.path / '.config' / 'iterm2' / 'com.googlecode.iterm2.plist').read_text(encoding='utf-8')
-        assert '/Users/' not in text
+        assert '/Users/'                                           not in text
         assert '<key>Working Directory</key>\n\t\t\t<string></string>' in text
 
     def test_hammerspoon_loads_optional_overlay_hotkeys(self, home: Home) -> None:
@@ -959,6 +1045,7 @@ class TestTerminalEditor:
         """
         text = (home.path / '.hammerspoon' / 'init.lua').read_text(encoding='utf-8')
         assert re.search(r'^\s*b\s*=\s*hs\.window\.filter\.new\(', text, re.MULTILINE)
+
         for letter in ('3', '4', 'q', 'r', 'w'):
             entry = rf"""^\s*(\[\s*['"]{letter}['"]\s*\]|{letter})\s*="""
             assert re.search(entry, text, re.MULTILINE) is None, letter
@@ -975,13 +1062,15 @@ class TestTerminalEditor:
         Test that an interactive shell with every terminal snippet sourced is clean and fast (best of three runs)
         """
         home.zsh('exit')  # warm caches before timing
-        timings = []
+
+        timings: list[float] = []
         for _ in range(TIMING_SAMPLES):
             start  = time.monotonic()
             result = home.zsh('exit')
             timings.append(time.monotonic() - start)
             assert result.returncode == 0
             assert result.stderr == ''
+
         startup_budget.check(timings, 'zsh -i')
 
     @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
@@ -1001,12 +1090,14 @@ class TestTerminalEditor:
         Test that a shell on a pseudo-terminal, where starship, fzf, and zoxide initialize, is clean and fast
         """
         run_zsh_with_tty(home, 'exit')  # warm caches before timing
-        timings = []
+
+        timings: list[float] = []
         for _ in range(TIMING_SAMPLES):
             result, elapsed = run_zsh_with_tty(home, 'exit')
             timings.append(elapsed)
             assert result.returncode == 0
             assert result.stdout.strip() == b'', result.stdout
+
         startup_budget.check(timings, 'tty zsh -i')
 
     @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
@@ -1024,6 +1115,7 @@ class TestTerminalEditor:
         """
         if shutil.which(tool) is None:
             pytest.skip(f'{tool} not installed')
+
         probe = f'print -r -- "defined=${{+functions[{function}]}}${{+widgets[{function}]}}"'
         result, _elapsed = run_zsh_with_tty(home, probe)
         assert result.returncode == 0
@@ -1048,7 +1140,10 @@ class TestTerminalEditor:
         assert zsh is not None
         return subprocess.run(
             [zsh, '-i', '-c', command],
-            capture_output=True, text=True, check=False, cwd=home.path,
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=home.path,
             env={**home.env, 'PATH': '/usr/bin:/bin', **env},
         )
 
@@ -1065,6 +1160,7 @@ class TestTerminalEditor:
         )
         assert result.returncode == 0
         assert result.stderr == ''
+
         exported, paths, fpath = (line.split() for line in result.stdout.strip().split('\n'))
         assert exported == [str(prefix), f'{prefix}/Cellar', str(prefix)]
         assert f'{prefix}/sbin' in paths
@@ -1077,6 +1173,7 @@ class TestTerminalEditor:
         """
         prefix = self._fake_prefix(tmp_path)
         result = self._zsh(home, 'print -r -- $HOMEBREW_PREFIX', PATH=f'{prefix}/bin:/usr/bin:/bin')
+
         assert result.returncode == 0
         assert result.stderr == ''
         assert result.stdout.strip() == str(prefix)
@@ -1090,6 +1187,7 @@ class TestTerminalEditor:
             home, 'print -r -- "prefix=${HOMEBREW_PREFIX-unset}"',
             DOTFILES_BREW_PREFIXES=str(prefix), DOTFILES_BREW_PROBE='0',
         )
+
         assert result.returncode == 0
         assert result.stderr == ''
         assert result.stdout.strip() == 'prefix=unset'
@@ -1121,8 +1219,9 @@ class TestTerminalEditor:
             "zsh -i -c 'print -r -- ${#path} ${#${(u)path}} ${#fpath} ${#${(u)fpath}}'"
         )
         assert result.returncode == 0
+
         path_len, path_unique, fpath_len, fpath_unique = result.stdout.split()
-        assert path_len == path_unique
+        assert path_len  == path_unique
         assert fpath_len == fpath_unique
 
 
@@ -1166,6 +1265,7 @@ class TestOsTools:
         eza.parent.mkdir()
         eza.write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
         eza.chmod(0o755)
+
         env    = {**home.env, 'PATH': f'{eza.parent}:{home.env["PATH"]}'}
         result = subprocess.run(
             ['zsh', '-i', '-c', 'print -r -- "${(t)EZA_CONFIG_DIR} $EZA_CONFIG_DIR"'],
@@ -1173,6 +1273,7 @@ class TestOsTools:
         )
         assert result.returncode == 0
         assert result.stderr == ''
+
         kind, _, value = result.stdout.strip().partition(' ')
         assert kind == 'scalar-export'
         assert Path(value) == home.path / '.config' / 'eza'
@@ -1192,7 +1293,11 @@ class TestOsTools:
         env    = {**home.env, 'PATH': '/usr/bin:/bin', 'DOTFILES_BREW_PROBE': '0'}
         result = subprocess.run(
             ['zsh', '-i', '-c', 'print -r -- "${aliases[ls]-unset}"'],
-            capture_output=True, text=True, check=False, env=env, cwd=home.path,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+            cwd=home.path,
         )
         assert result.returncode == 0
         assert result.stdout.strip() == 'unset'
@@ -1233,11 +1338,17 @@ class TestOsTools:
         """
         env    = {**home.env, 'PATH': f'{self._fake_fastfetch(tmp_path)}:{home.env["PATH"]}', 'DOTFILES_NO_BANNER': ''}
         result = subprocess.run(
-            ['zsh', '-i', '-c', 'exit'], capture_output=True, text=True, check=False, env=env, cwd=home.path
+            ['zsh', '-i', '-c', 'exit'],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+            cwd=home.path,
         )
+
         assert result.returncode == 0
-        assert result.stdout == ''
-        assert result.stderr == ''
+        assert result.stdout     == ''
+        assert result.stderr     == ''
 
     @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
     def test_banner_skips_nested_shells(self, home: Home, tmp_path: Path) -> None:
@@ -1246,6 +1357,7 @@ class TestOsTools:
         """
         path      = f'{self._fake_fastfetch(tmp_path)}:{home.env["PATH"]}'
         result, _ = run_zsh_with_tty(home, 'exit', {'PATH': path, 'DOTFILES_NO_BANNER': '', 'SHLVL': '2'})
+
         assert result.returncode == 0
         assert b'FASTFETCH-BANNER' not in result.stdout
 
@@ -1266,7 +1378,7 @@ class TestSsh:
         Test that base and overlay host files are stowed into one real config.d directory
         """
         config_d = home.path / '.ssh' / 'config.d'
-        assert config_d.is_dir()
+        assert     config_d.is_dir()
         assert not config_d.is_symlink()
         assert (config_d / 'personal').is_symlink()
         assert (config_d / 'fixture').is_symlink()
@@ -1276,7 +1388,7 @@ class TestSsh:
         Test that ~/.ssh is a real directory, so keys and known_hosts never land in the repository
         """
         ssh_dir = home.path / '.ssh'
-        assert ssh_dir.is_dir()
+        assert     ssh_dir.is_dir()
         assert not ssh_dir.is_symlink()
 
     @pytest.mark.parametrize('relpath', ['config', 'config.d/personal', 'config.d/fixture'])
@@ -1296,7 +1408,7 @@ class TestSsh:
         text = (home.path / '.ssh' / 'config.d' / 'personal').read_text(encoding='utf-8')
         assert text.splitlines()[:2] == ['Host nas', '    HostName nas']
         assert re.search(r'^\s*User\s', text, re.MULTILINE) is None
-        assert re.search(r'\d+\.\d+\.\d+\.\d+', text) is None
+        assert re.search(r'\d+\.\d+\.\d+\.\d+', text)       is None
 
     def test_keychain_option_is_ignorable_where_unsupported(self, home: Home) -> None:
         """
@@ -1315,6 +1427,7 @@ class TestSsh:
         """
         config = (home.path / '.ssh' / 'config').read_text(encoding='utf-8')
         copy   = tmp_path / 'ssh_config'
+
         copy.write_text(config.replace('~/.ssh/config.d', str(home.path / '.ssh' / 'config.d')), encoding='utf-8')
         for host, expected in (('nas', 'nas'), ('fixture-host', 'fixture.example.com')):
             result = home.run('ssh', '-G', '-F', str(copy), host)
@@ -1334,6 +1447,7 @@ class TestVendoredNotices:
         """
         notice  = (REPO_ROOT / 'NOTICE').read_text(encoding='utf-8')
         shipped = sorted(p.name for p in (REPO_ROOT / self.RANGER_DIR).iterdir())
+
         assert shipped == ['commands.py', 'rc.conf', 'rifle.conf', 'scope.sh']
         for name in shipped:
             assert f'{self.RANGER_DIR.as_posix()}/{name}' in notice
@@ -1344,7 +1458,7 @@ class TestVendoredNotices:
         """
         text = (REPO_ROOT / 'docs' / 'licenses' / 'ranger-GPL-3.0.txt').read_text(encoding='utf-8')
         assert 'GNU GENERAL PUBLIC LICENSE' in text
-        assert 'Version 3, 29 June 2007' in text
+        assert 'Version 3, 29 June 2007'    in text
 
     def test_modified_ranger_file_is_marked(self) -> None:
         """

@@ -31,9 +31,11 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """
     monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path / 'xdg'))
     monkeypatch.delenv('DOTFILES_LEAK_PATTERNS', raising=False)
+
     for role in ('AUTHOR', 'COMMITTER'):
-        monkeypatch.setenv(f'GIT_{role}_NAME', 'Jane Doe')
+        monkeypatch.setenv(f'GIT_{role}_NAME',  'Jane Doe')
         monkeypatch.setenv(f'GIT_{role}_EMAIL', 'jane@example.org')
+
     path = tmp_path / 'repo'
     path.mkdir()
     _git(path, 'init', '-q', '-b', 'main', '--template=')
@@ -45,7 +47,7 @@ def _commit(repo: Path, message: str, email: str = 'jane@example.org') -> str:
     """
     Create an empty commit and return its sha
     """
-    env = {**os.environ, 'GIT_AUTHOR_EMAIL': email, 'GIT_COMMITTER_EMAIL': email}
+    env: dict[str, str] = {**os.environ, 'GIT_AUTHOR_EMAIL': email, 'GIT_COMMITTER_EMAIL': email}
     _git(repo, 'commit', '-q', '--allow-empty', '-m', message, env=env)
     return _git(repo, 'rev-parse', 'HEAD')
 
@@ -86,9 +88,10 @@ class TestCheckLeaksPush:
         """
         Test that a corporate domain in a pushed commit message is rejected
         """
-        base = _git(repo, 'rev-parse', 'HEAD')
-        head = _commit(repo, f'fix: talk to pkgs.{CORP_DOMAIN}')
+        base   = _git(repo, 'rev-parse', 'HEAD')
+        head   = _commit(repo, f'fix: talk to pkgs.{CORP_DOMAIN}')
         result = _run(repo, base, head)
+
         assert result.returncode == 1
         assert CORP_DOMAIN not in result.stdout
 
@@ -122,11 +125,14 @@ class TestCheckLeaksPush:
         """
         base = _git(repo, 'rev-parse', 'HEAD')
         _write_commit(repo, 'notes.txt', f'mirror: pkgs.{CORP_DOMAIN}\n', 'docs: add notes')
-        head = _write_commit(repo, 'notes.txt', 'mirror: example.org\n', 'docs: scrub notes')
+
+        head   = _write_commit(repo, 'notes.txt', 'mirror: example.org\n', 'docs: scrub notes')
         result = _run(repo, base, head)
+
         assert result.returncode == 1
-        assert CORP_DOMAIN not in result.stdout
+        assert CORP_DOMAIN                      not in result.stdout
         assert f'pre-push: scanning {base}..{head}' in result.stdout
+
         hint = (
             "pre-push: inspect with: git log -p -U0 --cc --no-textconv --format='commit %h' --no-color "
             f'{base}..{head}'
@@ -137,20 +143,22 @@ class TestCheckLeaksPush:
         """
         Test that a pushed commit which only deletes already-published content is not rejected for the deleted lines
         """
-        base = _write_commit(repo, 'notes.txt', f'mirror: pkgs.{CORP_DOMAIN}\nkeep: example.org\n', 'docs: old notes')
-        head = _write_commit(repo, 'notes.txt', 'keep: example.org\n', 'docs: scrub notes')
+        base   = _write_commit(repo, 'notes.txt', f'mirror: pkgs.{CORP_DOMAIN}\nkeep: example.org\n', 'docs: old notes')
+        head   = _write_commit(repo, 'notes.txt', 'keep: example.org\n', 'docs: scrub notes')
         result = _run(repo, base, head)
+
         assert result.returncode == 0, result.stdout
         assert f'pre-push: scanning {base}..{head}' in result.stdout
-        assert 'inspect with' not in result.stdout
+        assert 'inspect with'                   not in result.stdout
 
     def test_empty_file_with_leaky_path_fails(self, repo: Path) -> None:
         """
         Test that a leak present only in the path of a pushed empty file is caught
         """
-        base = _git(repo, 'rev-parse', 'HEAD')
-        head = _write_commit(repo, f'pkgs.{CORP_DOMAIN}.txt', '', 'docs: add placeholder')
+        base   = _git(repo, 'rev-parse', 'HEAD')
+        head   = _write_commit(repo, f'pkgs.{CORP_DOMAIN}.txt', '', 'docs: add placeholder')
         result = _run(repo, base, head)
+
         assert result.returncode == 1
         assert CORP_DOMAIN not in result.stdout
 
@@ -161,7 +169,8 @@ class TestCheckLeaksPush:
         base = _write_commit(repo, 'notes.txt', 'keep: example.org\n', 'docs: add notes')
         _git(repo, 'mv', 'notes.txt', f'pkgs.{CORP_DOMAIN}.txt')
         _git(repo, 'commit', '-q', '-m', 'docs: rename notes')
-        head = _git(repo, 'rev-parse', 'HEAD')
+
+        head   = _git(repo, 'rev-parse', 'HEAD')
         result = _run(repo, base, head)
         assert result.returncode == 1
         assert CORP_DOMAIN not in result.stdout
@@ -171,17 +180,21 @@ class TestCheckLeaksPush:
         Test that a leak introduced only by a merge's conflict resolution is caught
         """
         _write_commit(repo, 'notes.txt', 'mirror: example.org\n', 'docs: add notes')
+
         base = _git(repo, 'rev-parse', 'HEAD')
         _git(repo, 'checkout', '-q', '-b', 'side')
         _write_commit(repo, 'notes.txt', 'mirror: side.example.org\n', 'docs: side notes')
         _git(repo, 'checkout', '-q', 'main')
         _write_commit(repo, 'notes.txt', 'mirror: main.example.org\n', 'docs: main notes')
+
         merge = subprocess.run(['git', '-C', str(repo), 'merge', 'side'], capture_output=True, text=True, check=False)
         assert merge.returncode != 0
+
         (repo / 'notes.txt').write_text(f'mirror: pkgs.{CORP_DOMAIN}\n', encoding='utf-8')
         _git(repo, 'add', 'notes.txt')
         _git(repo, 'commit', '-q', '--no-edit')
-        head = _git(repo, 'rev-parse', 'HEAD')
+
+        head   = _git(repo, 'rev-parse', 'HEAD')
         result = _run(repo, base, head)
         assert result.returncode == 1
         assert CORP_DOMAIN not in result.stdout

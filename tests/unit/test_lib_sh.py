@@ -26,13 +26,14 @@ def env(tmp_path: Path) -> dict[str, str]:
     """
     home = tmp_path / 'home'
     home.mkdir()
-    base = {key: value for key, value in os.environ.items() if key not in _SCRUBBED_VARS}
+
+    base: dict[str, str] = {key: value for key, value in os.environ.items() if key not in _SCRUBBED_VARS}
     return {
         **base,
-        'HOME': str(home),
-        'XDG_CONFIG_HOME': str(home / '.config'),
+        'HOME':                   str(home),
+        'XDG_CONFIG_HOME':        str(home / '.config'),
         'DOTFILES_OVERLAYS_FILE': str(tmp_path / 'overlays'),
-        'BOOTSTRAP_DRY_RUN': '0',
+        'BOOTSTRAP_DRY_RUN':      '0',
     }
 
 
@@ -50,6 +51,7 @@ def bash(shell: str, env: dict[str, str]) -> BashRunner:
             env=environ if environ is not None else env,
             timeout=60,
         )
+
     return _run
 
 
@@ -89,6 +91,7 @@ class TestDotfilesLayers:
         first  = _overlay(tmp_path, 'first')
         second = _overlay(Path(env['HOME']), 'second')
         _register(env, f'# overlays\n\n{first}   # trailing comment\n~/second\n')
+
         result = bash('dotfiles_layers')
         assert result.returncode == 0
         assert result.stdout.splitlines() == [str(REPO_ROOT), str(first.resolve()), str(second.resolve())]
@@ -99,6 +102,7 @@ class TestDotfilesLayers:
         """
         overlay = _overlay(tmp_path, 'crlf')
         _register(env, f'# overlays\r\n{overlay}\r\n')
+
         result = bash('dotfiles_layers')
         assert result.returncode == 0
         assert result.stdout.splitlines() == [str(REPO_ROOT), str(overlay.resolve())]
@@ -109,6 +113,7 @@ class TestDotfilesLayers:
         """
         overlay = _overlay(tmp_path, 'with space')
         _register(env, f'{overlay}\n')
+
         result = bash('dotfiles_layers')
         assert result.returncode == 0
         assert result.stdout.splitlines() == [str(REPO_ROOT), str(overlay.resolve())]
@@ -119,6 +124,7 @@ class TestDotfilesLayers:
         """
         overlay = _overlay(tmp_path, 'last')
         _register(env, f'{overlay}')
+
         result = bash('dotfiles_layers')
         assert result.returncode == 0
         assert result.stdout.splitlines() == [str(REPO_ROOT), str(overlay.resolve())]
@@ -148,11 +154,13 @@ class TestDotfilesLayers:
         """
         registry = Path(env['DOTFILES_OVERLAYS_FILE'])
         _register(env, '# overlays\n')
+
         registry.chmod(0)
         try:
             result = bash('true')
         finally:
             registry.chmod(0o644)
+
         assert result.returncode != 0
         assert f'cannot read overlays registry: {registry}' in result.stderr
 
@@ -163,6 +171,7 @@ class TestDotfilesLayers:
         overlay = _overlay(tmp_path, 'twice')
         alias   = tmp_path / 'alias'
         alias.symlink_to(overlay)
+
         _register(env, f'{overlay}\n{alias}\n')
         result = bash('true')
         assert result.returncode != 0
@@ -178,13 +187,17 @@ class TestDotfilesLayers:
         assert f'layer listed twice: {REPO_ROOT}' in result.stderr
 
     def test_repo_root_is_canonical_through_symlink(
-        self, shell: str, env: dict[str, str], tmp_path: Path,
+        self,
+        shell: str,
+        env: dict[str, str],
+        tmp_path: Path,
     ) -> None:
         """
         Test that DOTFILES_REPO is the physical path even when lib.sh is sourced through a symlink
         """
         link = tmp_path / 'repo-link'
         link.symlink_to(REPO_ROOT)
+
         result = subprocess.run(
             [shell, '-c', f'source "{link}/bootstrap/lib.sh"\ndotfiles_layers'],
             capture_output=True,
@@ -200,7 +213,7 @@ class TestDotfilesLayers:
         """
         Test that a pre-set DOTFILES_REPO is used as the base layer
         """
-        base = _overlay(tmp_path, 'fake-base')
+        base   = _overlay(tmp_path, 'fake-base')
         result = bash('dotfiles_layers', {**env, 'DOTFILES_REPO': str(base)})
         assert result.returncode == 0
         assert result.stdout.splitlines() == [str(base)]
@@ -211,7 +224,10 @@ class TestManifestFiles:
     Tests for manifest_files
     """
     def test_lists_existing_fragments_in_layer_order(
-        self, bash: BashRunner, env: dict[str, str], tmp_path: Path,
+        self,
+        bash: BashRunner,
+        env: dict[str, str],
+        tmp_path: Path,
     ) -> None:
         """
         Test that manifest fragments are listed base first, skipping layers without the file
@@ -220,11 +236,14 @@ class TestManifestFiles:
         without_file = _overlay(tmp_path, 'without')
         (with_file / 'bootstrap' / 'repos.txt').write_text('x\n', encoding='utf-8')
         _register(env, f'{without_file}\n{with_file}\n')
+
         result = bash('manifest_files repos.txt')
         assert result.returncode == 0
+
         expected = [str(with_file.resolve() / 'bootstrap' / 'repos.txt')]
         if (REPO_ROOT / 'bootstrap' / 'repos.txt').exists():
             expected.insert(0, str(REPO_ROOT / 'bootstrap' / 'repos.txt'))
+
         assert result.stdout.splitlines() == expected
 
     def test_fails_when_overlay_disappears(self, bash: BashRunner, env: dict[str, str], tmp_path: Path) -> None:
@@ -242,6 +261,7 @@ class TestManifestFiles:
         """
         readable = _overlay(tmp_path, 'readable')
         (readable / 'bootstrap' / 'repos.txt').write_text('x\n', encoding='utf-8')
+
         script = (
             f'printf "%s\\n%s\\n" "{unreadable_overlay}" "{readable}" > "$DOTFILES_OVERLAYS_FILE"\n'
             'manifest_files repos.txt'
@@ -261,6 +281,7 @@ class TestLayerEnv:
         """
         overlay = _overlay(tmp_path, 'ov')
         (overlay / 'bootstrap' / 'env.sh').write_text('export LAYER_ENV_PROBE=from-overlay\n', encoding='utf-8')
+
         _register(env, f'{overlay}\n')
         result = bash('printf "%s" "$LAYER_ENV_PROBE"')
         assert result.stdout == 'from-overlay'
@@ -274,13 +295,17 @@ class TestLayerEnv:
             'declare -x DECL_PROBE=bar\ntypeset ARR_PROBE=(a b)\n',
             encoding='utf-8',
         )
+
         _register(env, f'{overlay}\n')
         result = bash('printf "%s|%s" "$DECL_PROBE" "${ARR_PROBE[*]}"')
         assert result.returncode == 0
         assert result.stdout == 'bar|a b'
 
     def test_layer_order_base_first_later_overlay_wins(
-        self, bash: BashRunner, env: dict[str, str], tmp_path: Path,
+        self,
+        bash: BashRunner,
+        env: dict[str, str],
+        tmp_path: Path,
     ) -> None:
         """
         Test that env.sh files run base first and that a later overlay overrides an earlier one
@@ -288,11 +313,13 @@ class TestLayerEnv:
         base   = _overlay(tmp_path, 'base')
         first  = _overlay(tmp_path, 'first')
         second = _overlay(tmp_path, 'second')
+
         for name, layer in (('base', base), ('first', first), ('second', second)):
             (layer / 'bootstrap' / 'env.sh').write_text(
                 f'ORDER_PROBE="${{ORDER_PROBE:-}}{name} "\nWINNER_PROBE={name}\n',
                 encoding='utf-8',
             )
+
         _register(env, f'{first}\n{second}\n')
         result = bash('printf "%s|%s" "$ORDER_PROBE" "$WINNER_PROBE"', {**env, 'DOTFILES_REPO': str(base)})
         assert result.returncode == 0
@@ -308,6 +335,7 @@ class TestLayerEnv:
             f'printf x >> "{counter}"\nsource "{LIB}"\n',
             encoding='utf-8',
         )
+
         _register(env, f'{overlay}\n')
         result = bash('true')
         assert result.returncode == 0
@@ -325,6 +353,7 @@ class TestEnsureBrewOnPath:
         """
         prefix = tmp_path / 'fakebrew'
         brew   = prefix / 'bin' / 'brew'
+
         brew.parent.mkdir(parents=True)
         brew.write_text('#!/bin/sh\n', encoding='utf-8')
         brew.chmod(0o755)
@@ -337,20 +366,25 @@ class TestEnsureBrewOnPath:
         prefix = self._fake_brew(tmp_path)
         result = bash('printf "%s" "$PATH"', {**env, 'DOTFILES_BREW_PREFIXES': str(prefix)})
         assert result.returncode == 0
+
         entries = result.stdout.split(':')
         assert entries.count(f'{prefix}/bin') == 1
         assert result.stdout.endswith(f':{prefix}/bin:{prefix}/sbin')
         assert entries[0] != f'{prefix}/bin'
 
     def test_prefix_already_on_path_is_not_duplicated(
-        self, bash: BashRunner, env: dict[str, str], tmp_path: Path,
+        self,
+        bash: BashRunner,
+        env: dict[str, str],
+        tmp_path: Path,
     ) -> None:
         """
         Test that a prefix whose bin is already on PATH is left alone
         """
         prefix  = self._fake_brew(tmp_path)
         environ = {**env, 'DOTFILES_BREW_PREFIXES': str(prefix), 'PATH': f'{prefix}/bin:{env["PATH"]}'}
-        result  = bash('printf "%s" "$PATH"', environ)
+
+        result = bash('printf "%s" "$PATH"', environ)
         assert result.returncode == 0
         assert result.stdout.split(':').count(f'{prefix}/bin') == 1
         assert f'{prefix}/sbin' not in result.stdout
@@ -362,6 +396,7 @@ class TestEnsureBrewOnPath:
         default = next((p for p in ('/opt/homebrew', '/usr/local') if (Path(p) / 'bin' / 'brew').exists()), None)
         if default is None:
             pytest.skip('no default Homebrew prefix on this machine')
+
         environ = {**env, 'DOTFILES_BREW_PREFIXES': str(tmp_path / 'no-such-prefix'), 'PATH': '/usr/bin:/bin'}
         result  = bash('printf "%s" "$PATH"', environ)
         assert result.returncode == 0
@@ -373,7 +408,8 @@ class TestEnsureBrewOnPath:
         """
         prefix  = self._fake_brew(tmp_path)
         environ = {**env, 'DOTFILES_BREW_PREFIXES': str(prefix), 'PATH': '/usr/bin:/bin'}
-        result  = bash('printf "%s" "$PATH"', environ)
+
+        result = bash('printf "%s" "$PATH"', environ)
         assert result.returncode == 0
         assert result.stdout == f'/usr/bin:/bin:{prefix}/bin:{prefix}/sbin'
 
@@ -394,6 +430,7 @@ class TestRun:
         """
         marker = tmp_path / 'marker'
         result = bash(f'run touch "{marker}"', {**env, 'BOOTSTRAP_DRY_RUN': '1'})
+
         assert result.returncode == 0
         assert not marker.exists()
         assert '[dry-run]' in result.stdout

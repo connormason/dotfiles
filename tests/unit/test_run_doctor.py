@@ -51,6 +51,7 @@ class TestDoctorChecks:
             'stow: simulated foo (dry-run, no changes written)\n'
         )
         monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, stdout))
+
         check = run.check_links()
         assert not check.ok
         assert check.fix is not None
@@ -62,6 +63,7 @@ class TestDoctorChecks:
         """
         stderr = 'stow: these existing files block linking (nothing was changed):\n  ~/.foorc\n'
         monkeypatch.setattr(run, '_capture', lambda cmd: _completed(1, '', stderr))
+
         check = run.check_links()
         assert not check.ok
         assert 'block linking' in check.detail
@@ -73,6 +75,7 @@ class TestDoctorChecks:
         Test that render --check exit 1 fails the check and offers a fix
         """
         monkeypatch.setattr(run, '_capture', lambda cmd: _completed(1))
+
         check = run.check_render()
         assert not check.ok
         assert check.fix is not None
@@ -89,6 +92,7 @@ class TestDoctorChecks:
         Test that render exit 2 (config or I/O error) fails without offering a blind re-render
         """
         monkeypatch.setattr(run, '_capture', lambda cmd: _completed(2, '', 'render: bad fragment\n'))
+
         check = run.check_render()
         assert not check.ok
         assert check.fix is None
@@ -97,9 +101,9 @@ class TestDoctorChecks:
     @pytest.mark.parametrize(
         ('version_line', 'ok'),
         [
-            ('git version 2.36.0', True),
+            ('git version 2.36.0',                  True),
             ('git version 2.47.1 (Vendor Git-154)', True),
-            ('git version 2.35.9', False),
+            ('git version 2.35.9',                  False),
         ],
     )
     def test_git_version(self, monkeypatch: pytest.MonkeyPatch, version_line: str, ok: bool) -> None:
@@ -121,6 +125,7 @@ class TestDoctorChecks:
         Test that the layers check reports the base layer plus each overlay
         """
         monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, '/repo\n/overlay\n'))
+
         check = run.check_layers()
         assert check.ok
         assert '2 layer(s)' in check.detail
@@ -132,11 +137,14 @@ class TestDoctorChecks:
         overlay = tmp_path / 'overlay'
         (overlay / 'bootstrap').mkdir(parents=True)
         (overlay / 'bootstrap' / 'env.sh').write_text('echo NOT-A-LAYER\n', encoding='utf-8')
+
         registry = tmp_path / 'overlays'
         registry.write_text(f'{overlay}\n', encoding='utf-8')
-        monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+
+        monkeypatch.setenv('HOME',                   str(tmp_path / 'home'))
         monkeypatch.setenv('DOTFILES_OVERLAYS_FILE', str(registry))
         monkeypatch.delenv('DOTFILES_BREW_PREFIXES', raising=False)
+
         check = run.check_layers()
         assert check.ok, check.detail
         assert check.detail == '2 layer(s): base + 1 overlay(s)'
@@ -146,6 +154,7 @@ class TestDoctorChecks:
         Test that a missing required tool fails the tools check and is named
         """
         monkeypatch.setattr(run.shutil, 'which', lambda name: None if name == 'stow' else f'/usr/bin/{name}')
+
         check = run.check_tools()
         assert not check.ok
         assert 'stow' in check.detail
@@ -191,6 +200,7 @@ class TestDoctorReadOnly:
         """
         seen = self._record(monkeypatch, f'{run.DOTFILES_DIR}\n')
         run.check_layers()
+
         assert len(seen) == 1
         assert seen[0][:2] == ['bash', '-c']
         assert 'export DOTFILES_REPO="$1"' in seen[0][2]
@@ -226,8 +236,8 @@ class TestDoctorCommand:
         """
         Test that dependent checks are skipped when tools or layers fail
         """
-        monkeypatch.setattr(run, 'check_tools', lambda: run.DoctorCheck('tools', False, 'missing: stow'))
-        monkeypatch.setattr(run, 'check_layers', lambda: run.DoctorCheck('layers', True, '1 layer(s)'))
+        monkeypatch.setattr(run, 'check_tools',  lambda: run.DoctorCheck('tools',  False, 'missing: stow'))
+        monkeypatch.setattr(run, 'check_layers', lambda: run.DoctorCheck('layers', True,  '1 layer(s)'))
         assert [c.name for c in run.doctor_checks()] == ['tools', 'layers']
 
     def test_doctor_exits_nonzero_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -251,8 +261,8 @@ class TestDoctorCommand:
         Test that --fix runs each failing check's fix command and re-runs the checks
         """
         results = iter([
-            [run.DoctorCheck('links', False, 'pending', ['echo', 'fix'])],
-            [run.DoctorCheck('links', True, 'all packages linked')],
+            [run.DoctorCheck('links', False, 'pending',             ['echo', 'fix'])],
+            [run.DoctorCheck('links', True,  'all packages linked')],
         ])
         ran: list[list[str]] = []
 
@@ -299,6 +309,7 @@ class TestForwarding:
         args = run.argparse.Namespace(simulate=True, backup_conflicts=True, verbose=True, packages=['zsh', 'git'])
         with pytest.raises(SystemExit) as exc_info:
             run.cmd_stow(args)
+
         assert exc_info.value.code == 0
         assert seen[0][2:] == ['-n', '--backup-conflicts', '--verbose', 'zsh', 'git']
         assert seen[0][1] == str(run.STOW_SCRIPT)
@@ -319,10 +330,17 @@ class TestForwarding:
         """
         seen = self._capture_cmd(monkeypatch)
         args = run.argparse.Namespace(
-            dry_run=True, list=False, resume=True, verify=True, no_log=True, only='00-preflight', from_stage='20-x',
+            dry_run=True,
+            list=False,
+            resume=True,
+            verify=True,
+            no_log=True,
+            only='00-preflight',
+            from_stage='20-x',
         )
         with pytest.raises(SystemExit):
             run.cmd_bootstrap(args)
+
         assert seen[0][2:] == [
             '--dry-run', '--resume', '--verify', '--no-log', '--only', '00-preflight', '--from', '20-x',
         ]

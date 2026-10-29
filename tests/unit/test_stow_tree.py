@@ -16,7 +16,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TREES     = ('stow', 'render', 'profiles', 'tests/fixtures')
 NOISE     = ('.DS_Store', '__pycache__', '.pyc', '/.backups/')
 
-pytestmark = pytest.mark.skipif(shutil.which('git') is None, reason='git not installed')
+pytestmark = pytest.mark.skipif(
+    shutil.which('git') is None,
+    reason='git not installed',
+)
 
 
 def list_others(*flags: str) -> list[str]:
@@ -28,9 +31,15 @@ def list_others(*flags: str) -> list[str]:
     """
     result = subprocess.run(
         ['git', 'ls-files', '--others', *flags, '--exclude-standard', '--', *TREES],
-        capture_output=True, text=True, check=True, cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=REPO_ROOT,
     )
-    return [line for line in result.stdout.splitlines() if not any(noise in line for noise in NOISE)]
+    return [
+        line for line in result.stdout.splitlines()
+        if not any(noise in line for noise in NOISE)
+    ]
 
 
 class TestStowTree:

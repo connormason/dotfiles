@@ -14,7 +14,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Inherited variables that would leak the developer's own configuration into the tests
-_SCRUBBED_VARS = (
+_SCRUBBED_VARS: tuple[str, ...] = (
     'BOOTSTRAP_DRY_RUN',
     'DOTFILES_REPO',
     'DOTFILES_LAYER',
@@ -33,6 +33,7 @@ def base(tmp_path: Path) -> Path:
     stages.mkdir(parents=True)
     for name in ('bootstrap.sh', 'lib.sh'):
         shutil.copy2(REPO_ROOT / 'bootstrap' / name, stages / name)
+
     (stages / '00-preflight.sh').write_text('#!/usr/bin/env bash\ntrue\n', encoding='utf-8')
     return stages.parent.resolve()
 
@@ -45,6 +46,7 @@ def overlay(tmp_path: Path) -> Path:
     root = tmp_path / 'overlay'
     stages = root / 'bootstrap'
     stages.mkdir(parents=True)
+
     (stages / '98-selftest-ok.sh').write_text(
         '#!/usr/bin/env bash\n'
         'printf "%s|%s|%s" "$DOTFILES_REPO" "$DOTFILES_LAYER" "$BOOTSTRAP_DRY_RUN" > "$PROBE_FILE"\n',
@@ -63,10 +65,10 @@ def env(tmp_path: Path, overlay: Path) -> dict[str, str]:
     registry.write_text(f'{overlay}\n', encoding='utf-8')
     return {
         **{key: value for key, value in os.environ.items() if key not in _SCRUBBED_VARS},
-        'HOME': str(tmp_path / 'home'),
+        'HOME':                   str(tmp_path / 'home'),
         'DOTFILES_OVERLAYS_FILE': str(registry),
-        'BOOTSTRAP_LOG_DIR': str(tmp_path / 'state'),
-        'PROBE_FILE': str(tmp_path / 'probe'),
+        'BOOTSTRAP_LOG_DIR':      str(tmp_path / 'state'),
+        'PROBE_FILE':             str(tmp_path / 'probe'),
     }
 
 
@@ -88,12 +90,17 @@ class TestStageDiscovery:
         """
         result = _drive(base, shell, env, '--list')
         assert result.returncode == 0, result.stderr
+
         lines = result.stdout.splitlines()
-        assert lines[0] == '00-preflight'
+        assert lines[0]   == '00-preflight'
         assert lines[-2:] == [f'98-selftest-ok  ({overlay.resolve()})', f'99-selftest-fail  ({overlay.resolve()})']
 
     def test_list_interleaves_overlay_stages_by_number(
-        self, base: Path, shell: str, env: dict[str, str], overlay: Path,
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        overlay: Path,
     ) -> None:
         """
         Test that an overlay stage numbered between base stages sorts between them rather than after them
@@ -104,7 +111,11 @@ class TestStageDiscovery:
         assert result.stdout.splitlines()[:2] == ['00-preflight', f'05-overlay-early  ({overlay.resolve()})']
 
     def test_list_without_overlays_shows_base_only(
-        self, base: Path, shell: str, env: dict[str, str], tmp_path: Path,
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        tmp_path: Path,
     ) -> None:
         """
         Test that with an empty registry --list shows plain stage names with no layer suffix
@@ -113,23 +124,32 @@ class TestStageDiscovery:
         result = _drive(base, shell, env, '--list')
         assert result.returncode == 0, result.stderr
         assert '00-preflight' in result.stdout.splitlines()
-        assert '(' not in result.stdout
+        assert '('        not in result.stdout
 
     def test_duplicate_number_across_layers_fails(
-        self, base: Path, shell: str, env: dict[str, str], overlay: Path,
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        overlay: Path,
     ) -> None:
         """
         Test that a stage number reused by an overlay is fatal
         """
         (overlay / 'bootstrap' / '00-overlay-dup.sh').write_text('#!/usr/bin/env bash\n', encoding='utf-8')
         result = _drive(base, shell, env, '--list')
+
         assert result.returncode != 0
-        assert 'stage number 00 is used twice' in result.stderr
-        assert str(base / 'bootstrap' / '00-preflight.sh') in result.stderr
+        assert 'stage number 00 is used twice'                            in result.stderr
+        assert str(base / 'bootstrap' / '00-preflight.sh')                in result.stderr
         assert str(overlay.resolve() / 'bootstrap' / '00-overlay-dup.sh') in result.stderr
 
     def test_duplicate_number_within_overlay_fails(
-        self, base: Path, shell: str, env: dict[str, str], overlay: Path,
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        overlay: Path,
     ) -> None:
         """
         Test that two stages sharing a number inside one overlay are fatal
@@ -149,7 +169,12 @@ class TestStageDiscovery:
         assert 'overlay not found' in result.stderr
 
     def test_unreadable_overlay_is_fatal(
-        self, base: Path, shell: str, env: dict[str, str], overlay: Path, unreadable_overlay: Path,
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        overlay: Path,
+        unreadable_overlay: Path,
     ) -> None:
         """
         Test that an overlay that exists but cannot be entered aborts discovery instead of being skipped
@@ -165,20 +190,31 @@ class TestStageExecution:
     Tests for running stages
     """
     def test_overlay_stage_gets_layer_env(
-        self, base: Path, shell: str, env: dict[str, str], overlay: Path, tmp_path: Path,
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        overlay: Path,
+        tmp_path: Path,
     ) -> None:
         """
         Test that a stage sees DOTFILES_REPO (base), DOTFILES_LAYER (its own layer), and the dry-run flag
         """
         result = _drive(base, shell, env, '--dry-run', '--no-log', '--only', '98-selftest-ok')
         assert result.returncode == 0, result.stderr
+
         repo, layer, dry_run = (tmp_path / 'probe').read_text(encoding='utf-8').split('|')
-        assert Path(repo).resolve() == base
+        assert Path(repo).resolve()  == base
         assert Path(layer).resolve() == overlay.resolve()
         assert dry_run == '1'
 
     def test_stage_runs_under_driver_interpreter(
-        self, base: Path, shell: str, env: dict[str, str], overlay: Path, tmp_path: Path,
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        overlay: Path,
+        tmp_path: Path,
     ) -> None:
         """
         Test that stages run under the bash that runs the driver, not whichever bash is first on PATH
@@ -188,17 +224,26 @@ class TestStageExecution:
             f'printf "%s" "${{BASH_VERSINFO[0]}}" > "{probe}"\n',
             encoding='utf-8',
         )
+
         expected = subprocess.run(
-            [shell, '-c', 'printf "%s" "${BASH_VERSINFO[0]}"'], capture_output=True, text=True, check=True,
+            [shell, '-c', 'printf "%s" "${BASH_VERSINFO[0]}"'],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout
+
         result = _drive(base, shell, env, '--dry-run', '--no-log', '--only', '97-selftest-bash')
         assert result.returncode == 0, result.stderr
         assert probe.read_text(encoding='utf-8') == expected
-        if shell == '/bin/bash' and sys.platform == 'darwin':
+        if (shell == '/bin/bash') and (sys.platform == 'darwin'):
             assert expected == '3'
 
     def test_inherited_dotfiles_repo_does_not_redirect_base_layer(
-        self, base: Path, shell: str, env: dict[str, str], tmp_path: Path
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        tmp_path: Path,
     ) -> None:
         """
         Test that an exported DOTFILES_REPO from another checkout cannot change which base layer is used
@@ -206,13 +251,19 @@ class TestStageExecution:
         elsewhere = tmp_path / 'other-checkout'
         (elsewhere / 'bootstrap').mkdir(parents=True)
         (elsewhere / 'bootstrap' / '77-impostor.sh').write_text('#!/usr/bin/env bash\n', encoding='utf-8')
+
         result = _drive(base, shell, {**env, 'DOTFILES_REPO': str(elsewhere)}, '--list')
         assert result.returncode == 0, result.stderr
         assert '77-impostor' not in result.stdout
         assert result.stdout.splitlines()[0] == '00-preflight'
 
     def test_stages_run_in_number_order(
-        self, base: Path, shell: str, env: dict[str, str], overlay: Path, tmp_path: Path,
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        overlay: Path,
+        tmp_path: Path,
     ) -> None:
         """
         Test that --from runs the named stage and everything after it, in order
@@ -220,10 +271,11 @@ class TestStageExecution:
         (overlay / 'bootstrap' / '97-selftest-first.sh').write_text('#!/usr/bin/env bash\ntrue\n', encoding='utf-8')
         result = _drive(base, shell, env, '--dry-run', '--no-log', '--from', '97-selftest-first')
         output = result.stdout
+
         assert result.returncode != 0
         assert '00-preflight' not in output
         assert output.index('=== stage: 97-selftest-first') < output.index('=== stage: 98-selftest-ok')
-        assert output.index('=== stage: 98-selftest-ok') < output.index('=== stage: 99-selftest-fail')
+        assert output.index('=== stage: 98-selftest-ok')    < output.index('=== stage: 99-selftest-fail')
 
     def test_failing_stage_reports_and_hints_resume(self, base: Path, shell: str, env: dict[str, str]) -> None:
         """
@@ -231,8 +283,9 @@ class TestStageExecution:
         """
         result = _drive(base, shell, env, '--dry-run', '--no-log', '--only', '99-selftest-fail')
         output = result.stdout + result.stderr
+
         assert result.returncode != 0
-        assert '99-selftest-fail' in output
+        assert '99-selftest-fail'        in output
         assert '--from 99-selftest-fail' in output
 
     def test_failure_stops_later_stages(self, base: Path, shell: str, env: dict[str, str], overlay: Path) -> None:
@@ -241,10 +294,11 @@ class TestStageExecution:
         """
         early_fail = overlay / 'bootstrap' / '96-selftest-early-fail.sh'
         early_fail.write_text('#!/usr/bin/env bash\nexit 3\n', encoding='utf-8')
+
         result = _drive(base, shell, env, '--dry-run', '--no-log', '--from', '96-selftest-early-fail')
         assert result.returncode == 3
         assert 'failed at stage: 96-selftest-early-fail' in result.stderr
-        assert '=== stage: 98-selftest-ok' not in result.stdout
+        assert '=== stage: 98-selftest-ok'           not in result.stdout
         assert not Path(env['PROBE_FILE']).exists()
 
     def test_unknown_only_fails(self, base: Path, shell: str, env: dict[str, str]) -> None:
@@ -284,6 +338,7 @@ class TestStageExecution:
         state = Path(env['BOOTSTRAP_LOG_DIR'])
         state.mkdir(parents=True)
         (state / 'last-completed-stage').write_text('98-selftest-ok\n', encoding='utf-8')
+
         result = _drive(base, shell, env, '--dry-run', '--no-log', '--resume')
         assert 'resuming from stage: 99-selftest-fail' in result.stdout + result.stderr
 
@@ -294,6 +349,7 @@ class TestStageExecution:
         state = Path(env['BOOTSTRAP_LOG_DIR'])
         state.mkdir(parents=True)
         (state / 'last-completed-stage').write_text('99-selftest-fail\n', encoding='utf-8')
+
         result = _drive(base, shell, env, '--dry-run', '--no-log', '--resume')
         assert result.returncode == 0, result.stderr
         assert 'nothing to resume' in result.stdout
@@ -306,6 +362,7 @@ class TestStageExecution:
         state = Path(env['BOOTSTRAP_LOG_DIR'])
         state.mkdir(parents=True)
         (state / 'last-completed-stage').write_text('42-gone\n', encoding='utf-8')
+
         result = _drive(base, shell, env, '--dry-run', '--no-log', '--resume')
         assert "recorded stage '42-gone' no longer exists" in result.stderr
 
@@ -320,12 +377,15 @@ class TestDryRun:
         """
         bin_dir = tmp_path / 'bin'
         bin_dir.mkdir()
+
         sentinel = tmp_path / 'sudo-called'
         stub = bin_dir / 'sudo'
         stub.write_text(f'#!/bin/sh\ntouch "{sentinel}"\nexit 1\n', encoding='utf-8')
         stub.chmod(0o755)
+
         stubbed = {**env, 'PATH': f'{bin_dir}:{env["PATH"]}'}
-        result = _drive(base, shell, stubbed, '--dry-run', '--no-log', '--only', '98-selftest-ok')
+        result  = _drive(base, shell, stubbed, '--dry-run', '--no-log', '--only', '98-selftest-ok')
+
         assert result.returncode == 0, result.stderr
         assert 'would prime sudo' in result.stdout
         assert not sentinel.exists()
