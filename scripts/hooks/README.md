@@ -6,9 +6,11 @@
 
 Custom pre-commit hook scripts for checks and transforms not covered by standard hooks. The Python scripts follow the
 same interface contract as `pre-commit`: they accept a list of filenames as positional arguments and exit `0` on success
-or non-zero on failure. They are wired into [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) as `local` repo
-hooks and run via `prek` / `make pre`. Each is a self-contained PEP 723 script, so `uv run` resolves any dependencies in
-isolation. [`uv-public.sh`](#uv-publicsh) is the exception: a shell wrapper around `uv` that consumes no filenames.
+or non-zero on failure. All but [`sort-json-array.py`](#sort-json-arraypy) are wired into
+[`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) as `local` repo hooks and run via `prek` / `make pre`;
+`sort-json-array.py` is available but not wired. Each Python script is a self-contained PEP 723 script, so `uv run`
+resolves any dependencies in isolation. [`uv-public.sh`](#uv-publicsh) and [`check-leaks-push.sh`](#check-leaks-pushsh)
+are the exceptions: shell scripts rather than PEP 723 scripts.
 
 <!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
 
@@ -65,15 +67,17 @@ isolation. [`uv-public.sh`](#uv-publicsh) is the exception: a shell wrapper arou
 | [`check-leaks-push.sh`](#check-leaks-pushsh) | Pre-push scan of pushed commits' identities, messages, and added lines  | `check-leaks-push-history`, `check-leaks-push-files` | 10 (check phase)  |
 | [`check-pkl.py`](#check-pklpy)               | Validate Pkl files by running `pkl eval --format yaml`                  | `check-pkl`                                          | 10 (check phase)  |
 | [`format-pkl.py`](#format-pklpy)             | Auto-format Pkl files via `pkl format`                                  | `format-pkl`                                         | 35 (format phase) |
-| [`sort-json-array.py`](#sort-json-arraypy)   | Sort a top-level JSON array of objects by a key                         | `sort-json-array`                                    | 30 (sort phase)   |
+| [`sort-json-array.py`](#sort-json-arraypy)   | Sort a top-level JSON array of objects by a key                         | — (not wired)                                        | —                 |
 | [`uv-public.sh`](#uv-publicsh)               | Run uv against public PyPI only (wraps `uv-lock`/`uv-sync`/`uv-export`) | `uv-*`                                               | 0–5 (sync phase)  |
 
 > [!NOTE]
-> this repository does not currently contain any `.json5`, `.pkl`, or `keybindings.json` files, so the JSON5, Pkl, and
-> sort hooks are staged for future use. Each is scoped so it matches nothing today and fires automatically the moment a
-> matching file lands. `check-leaks` runs on every commit; the `uv-*` hooks run through `uv-public.sh` but fire only on
-> their own triggers (`uv-lock` when `uv.lock`, `pyproject.toml`, or `uv.toml` is staged; `uv-sync` after checkout,
-> merge, or rewrite).
+> This repository currently tracks no `.json5` or `.pkl` files, so `check-pkl` and `format-pkl` match nothing today and
+> fire automatically the moment a matching file lands. `check-json5` also matches `stow/zed/**/*.json` and therefore
+> validates the tracked Zed settings file today. `sort-json-array.py` is **not wired**: no hook in
+> `.pre-commit-config.yaml` invokes it, so the tracked `keybindings.json` under `stow/vscode/` is not sorted or checked
+> by it (it is currently already sorted by `command`). `check-leaks` runs on every commit; the `uv-*` hooks run through
+> `uv-public.sh` but fire only on their own triggers (`uv-lock` when `uv.lock`, `pyproject.toml`, or `uv.toml` is
+> staged; `uv-sync` after checkout, merge, or rewrite).
 
 ## Pre-Commit Wiring<a name="pre-commit-wiring"></a>
 
@@ -86,13 +90,15 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
     hooks:
       - id: check-json5
         name: '[check]  json5 syntax'
+        stages: [pre-commit, manual]
         priority: 10
         entry: scripts/hooks/check-json5.py
         language: python
-        files: .*\.json5$
+        files: .*\.json5$|^stow/zed/.*\.json$
 
       - id: check-pkl
         name: '[check]  pkl syntax'
+        stages: [pre-commit, manual]
         priority: 10
         entry: scripts/hooks/check-pkl.py
         language: python
@@ -116,17 +122,6 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
 
   - repo: local
     hooks:
-      - id: sort-json-array
-        name: '[format] sorting (keybindings.json)'
-        priority: 30
-        stages: [pre-commit]
-        entry: scripts/hooks/sort-json-array.py
-        language: python
-        files: .*keybindings\.json$
-        args: [--key, command]
-
-  - repo: local
-    hooks:
       - id: format-pkl
         name: '[format] pkl (pkl format)'
         priority: 35
@@ -144,14 +139,13 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
 | 0–6           | Dependency sync   | `uv-lock`, `uv-sync`, `uv-export` (via `uv-public.sh`), `sync-with-uv`, `sync-pre-commit-deps` |
 | 10            | Read-only checks  | Run in parallel; `check-json5`, `check-pkl`, `check-leaks` live here                           |
 | 20–23         | Whitespace fixers | `fix-byte-order-marker`, `end-of-file-fixer`, `trailing-whitespace`, etc.                      |
-| 30–35         | Formatters        | `keep-sorted`, `sort-json-array` (30); `shfmt`, `format-pkl`, etc. (35)                        |
+| 30–35         | Formatters        | `keep-sorted` (30); `shfmt`, `format-pkl`, etc. (35)                                           |
 | 40            | Linters           | `ruff`, `mypy`, `yamllint`, `shellcheck`, `codespell`                                          |
 
 The `format-pkl` hook carries `stages: [pre-commit]` so it is skipped when the config is run in CI (`manual` stage).
-`check-pkl` and `check-json5` run in all stages (`check-leaks` is `pre-commit` only and `check-leaks-msg` is
-`commit-msg` only; the `check-leaks-push-*` hooks are `pre-push` only; CI runs its own job). `sort-json-array` runs at
-priority 30 (before the priority-35 `pretty-format-json` formatter) so a reordered array is normalized once and surfaces
-in the diff to re-stage rather than landing silently.
+`check-pkl` and `check-json5` run in the `pre-commit` and `manual` (CI) stages (`check-leaks` is `pre-commit` only and
+`check-leaks-msg` is `commit-msg` only; the `check-leaks-push-*` hooks are `pre-push` only; CI runs its own leak-guard
+job). `sort-json-array` has no hook entry, so it has no priority.
 
 Both Pkl hooks are tolerant of environments where `pkl` is not installed: by default they print a warning and exit `0`.
 Pass `--require-pkl` to make the missing binary a hard failure.
@@ -162,8 +156,9 @@ Pass `--require-pkl` to make the missing binary a hard failure.
 
 ### Synopsis<a name="synopsis"></a>
 
-Validates that every supplied `.json5` file parses successfully via `pyjson5`. Declared as a PEP 723 inline-script with
-`pyjson5` as a dependency so `uv run` can execute it in isolation.
+Validates that every supplied file parses successfully via `pyjson5`. Wired for `.json5` files and the Zed configuration
+under `stow/zed/` (JSONC: comments and trailing commas, which strict `check-json` rejects). Declared as a PEP 723
+inline-script with `pyjson5` as a dependency so `uv run` can execute it in isolation.
 
 ```
 python3 scripts/hooks/check-json5.py [OPTIONS] [FILENAMES...]
@@ -173,7 +168,7 @@ python3 scripts/hooks/check-json5.py [OPTIONS] [FILENAMES...]
 
 | Flag              | Description                                       | Default |
 | ----------------- | ------------------------------------------------- | ------- |
-| `FILENAMES`       | One or more `.json5` files to validate            | —       |
+| `FILENAMES`       | One or more files to validate                     | —       |
 | `-v`, `--verbose` | Print a per-file `INFO` line for every valid file | off     |
 | `-h`, `--help`    | Show help and exit                                | —       |
 
@@ -202,11 +197,13 @@ All output is ANSI-colored. The script exits non-zero if any file fails.
   - id: check-json5
     entry: scripts/hooks/check-json5.py
     language: python
-    files: .*\.json5$
+    files: .*\.json5$|^stow/zed/.*\.json$
+    stages: [pre-commit, manual]
 ```
 
-pre-commit passes all staged `.json5` files as positional arguments. The `language: python` runtime means pre-commit
-manages the `pyjson5` dependency automatically using the inline PEP 723 metadata.
+pre-commit passes all staged files matching `files` (`.json5` files and `stow/zed/**/*.json`) as positional arguments.
+The `language: python` runtime means pre-commit manages the `pyjson5` dependency automatically using the inline PEP 723
+metadata.
 
 ---
 
@@ -376,12 +373,16 @@ file; identities are piped to `check-leaks.py --identities-from -`.
 commits, so a leak introduced by a conflict resolution is seen) are written to a temporary file and scanned too, so
 content that one pushed commit adds and a later one removes is caught even though the tip is clean. Removed and context
 lines are blanked rather than deleted: a removed line was either added earlier in the range (and is caught there) or is
-already public, and blanking keeps the reported line numbers aligned with that command's output. The paths each pushed
-commit adds, copies, or renames to
-(`git log --name-only --diff-filter=ACR --cc --format='commit %h' --no-color <range>`) are appended to the same file,
-because a leak that lives only in a path (an empty file, a pure rename) has no added line. The script prints
-`pre-push: scanning <range>` first and, on findings, `pre-push: inspect with: <the patch command>` followed by
-`pre-push: and (paths): <the path command>`.
+already public, and blanking keeps the reported line numbers aligned with that command's output. NUL bytes are stripped
+from the patch (`tr -d '\000'`), because `check-leaks.py` treats a file with a NUL in its first 8 KiB as binary and
+would otherwise skip the whole scan. The awk filter admits any number of `--cc` prefix columns, so octopus merges are
+seen. The paths each pushed commit adds, copies, or renames to
+(`git -c core.quotePath=false log --name-only --diff-filter=ACR --cc --no-textconv --format='commit %h' --no-color <range>`;
+`core.quotePath=false` keeps non-ASCII paths from being octal-escaped) are appended to the same file, because a leak
+that lives only in a path (an empty file, a pure rename) has no added line. The script prints
+`pre-push: scanning <range>` first and, on findings, `pre-push: inspect with: <the patch command>`,
+`pre-push: and (paths): <the path command>`, and a line giving the patch section's length: a reported line past it is
+that many lines further into the path command's output.
 
 **File contents** at the tip are scanned by the separate `check-leaks-push-files` hook entry, which prek feeds the files
 changed between the two refs.
@@ -617,6 +618,12 @@ For each filename:
 
 ### Pre-Commit Integration<a name="pre-commit-integration-5"></a>
 
+**Not wired.** `.pre-commit-config.yaml` has no `sort-json-array` entry, so nothing runs this script automatically. It
+can be run by hand (`scripts/hooks/uv-public.sh run scripts/hooks/sort-json-array.py <file>`), for example against
+`stow/vscode/Library/Application Support/Code/User/keybindings.json`, the repository's only `keybindings.json`, which is
+currently already sorted by `command`. Because the default `--key` is `command`, a hook entry along these lines would
+fit keybindings-style files:
+
 ```yaml
   - id: sort-json-array
     entry: scripts/hooks/sort-json-array.py
@@ -624,11 +631,6 @@ For each filename:
     args: [--key, command]
     files: .*keybindings\.json$
 ```
-
-Scoped to any `keybindings.json`, this keeps such a file's array ordered by each entry's `command` value. It runs at
-priority 30 (before the priority-35 `pretty-format-json` formatter), so a reordered file is normalized once and surfaces
-in the diff to re-stage rather than landing silently. The default `--key command` also makes the hook usable as-is for
-other keybindings-style JSON.
 
 ---
 

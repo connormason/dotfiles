@@ -317,6 +317,26 @@ class TestStageExecution:
         assert result.returncode != 0
         assert 'unknown stage: 42-nope' in result.stderr
 
+    @pytest.mark.parametrize('flag', ['--only', '--from'])
+    def test_empty_stage_value_fails(self, base: Path, shell: str, env: dict[str, str], flag: str) -> None:
+        """
+        Test that an empty --only/--from value is rejected instead of silently selecting every stage
+        """
+        result = _drive(base, shell, env, '--dry-run', '--no-log', flag, '')
+        assert result.returncode != 0
+        assert f'{flag} requires a non-empty stage name' in result.stderr
+        assert '=== stage:' not in result.stdout
+
+    @pytest.mark.parametrize('flag', ['--only', '--from'])
+    def test_missing_stage_value_fails(self, base: Path, shell: str, env: dict[str, str], flag: str) -> None:
+        """
+        Test that a trailing --only/--from with no value reports the option instead of exiting silently
+        """
+        result = _drive(base, shell, env, '--dry-run', '--no-log', flag)
+        assert result.returncode != 0
+        assert f'{flag} requires a non-empty stage name' in result.stderr
+        assert '=== stage:' not in result.stdout
+
     def test_unknown_argument_fails(self, base: Path, shell: str, env: dict[str, str]) -> None:
         """
         Test that an unrecognised flag is rejected

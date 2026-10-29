@@ -1,6 +1,6 @@
 # Build / Test / Run
 
-Full command reference for the dotfiles-personal repository. Loaded on demand from [`CLAUDE.md`](../CLAUDE.md).
+Full command reference for the dotfiles repository. Loaded on demand from [`CLAUDE.md`](../CLAUDE.md).
 
 ## Bootstrapping
 

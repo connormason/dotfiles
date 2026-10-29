@@ -1,6 +1,6 @@
 # Architecture
 
-Directory layout, key components, and provisioning flow for the dotfiles-personal repository. Loaded on demand from
+Directory layout, key components, and provisioning flow for the dotfiles repository. Loaded on demand from
 [`CLAUDE.md`](../CLAUDE.md).
 
 ## Two Provisioning Systems
