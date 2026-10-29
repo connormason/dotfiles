@@ -1,0 +1,35 @@
+# `hatch` global configuration
+
+mode    = "local"
+project = ""
+shell   = ""
+verbose = true
+
+[dirs]
+project = []
+python  = "isolated"
+
+[dirs.env]
+
+[projects]
+
+[template]
+name = "Connor Mason"
+
+[template.licenses]
+headers = true
+default = ["MIT"]
+
+[template.plugins.default]
+tests      = true
+ci         = false
+src-layout = true
+
+[terminal.styles]
+info    = "bold"
+success = "bold cyan"
+error   = "bold red"
+warning = "bold yellow"
+waiting = "bold magenta"
+debug   = "bold"
+spinner = "simpleDotsScrolling"

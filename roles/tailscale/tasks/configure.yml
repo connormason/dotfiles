@@ -1,8 +1,4 @@
 ---
-- name: Set Tailscale CLI path
-  ansible.builtin.set_fact:
-    _tailscale_cli: "{{ tailscale_macos_cli if ansible_facts['os_family'] == 'Darwin' else 'tailscale' }}"
-
 - name: Build tailscale set arguments
   ansible.builtin.set_fact:
     _tailscale_set_args: >-
@@ -13,13 +9,13 @@
 - name: Apply Tailscale configuration
   become: "{{ ansible_facts['os_family'] == 'Debian' }}"
   ansible.builtin.command:
-    cmd: "{{ _tailscale_cli }} set {{ _tailscale_set_args }}"
+    cmd: "tailscale set {{ _tailscale_set_args }}"
   changed_when: false
 
 - name: Check Tailscale backend state
   become: "{{ ansible_facts['os_family'] == 'Debian' }}"
   ansible.builtin.command:
-    cmd: "{{ _tailscale_cli }} status --json"
+    cmd: "tailscale status --json"
   register: tailscale_status
   changed_when: false
   failed_when: false
@@ -31,7 +27,7 @@
 - name: Authenticate with Tailscale
   become: "{{ ansible_facts['os_family'] == 'Debian' }}"
   ansible.builtin.command:
-    cmd: "{{ _tailscale_cli }} login --authkey={{ tailscale_auth_key }}"
+    cmd: "tailscale login --authkey={{ tailscale_auth_key }}"
   when: _tailscale_backend_state != "Running"
   no_log: true
   changed_when: true

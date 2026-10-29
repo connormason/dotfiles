@@ -16,6 +16,9 @@ description = "Repo-specific allowlist"
 # hashes of previously-audited findings, never plaintext secrets. Gitleaks' generic-api-key /
 # high-entropy rules flag those hashes as false positives, so exclude the file from scanning —
 # matching the `should_exclude_file` filter detect-secrets itself applies to this path.
+# VS Code keybindings.json holds only chord strings (`"key": "shift+alt+down"`), which the generic-api-key rule
+# mistakes for key material.
 paths = [
     '''\.secrets\.baseline$''',
+    '''stow/vscode/.*/keybindings\.json$''',
 ]

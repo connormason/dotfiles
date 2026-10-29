@@ -1,0 +1,17 @@
+# profiles/personal-mac/bootstrap/Brewfile — applications for the personal MacBook only.
+#
+# 50-brew runs `brew bundle --file` on this file after the base bootstrap/Brewfile, once this profile is registered as
+# an overlay. Entries already in the base Brewfile do not belong here.
+
+# Casks
+# keep-sorted start
+cask "claude-code"
+cask "macdown"
+cask "spotify"
+# keep-sorted end
+
+# Mac App Store (requires `mas` and an authenticated App Store session)
+# keep-sorted start
+mas "Tailscale", id: 1475387142
+mas "iStat Menus", id: 1319778037
+# keep-sorted end

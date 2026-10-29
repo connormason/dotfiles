@@ -107,17 +107,14 @@ def extract_parser_options(parser: argparse.ArgumentParser) -> list[CompletionOp
             help_text = help_text.split('[')[0].strip()
             help_text = help_text.splitlines()[0].strip() if help_text else ''
 
-        takes_value = not isinstance(
-            action,
-            (
-                argparse._StoreTrueAction,
-                argparse._StoreFalseAction,
-                argparse._StoreConstAction,
-                argparse._CountAction,
-                argparse._HelpAction,
-                argparse.BooleanOptionalAction,
-            ),
-        )
+        takes_value = not isinstance(action, (
+            argparse._StoreTrueAction,
+            argparse._StoreFalseAction,
+            argparse._StoreConstAction,
+            argparse._CountAction,
+            argparse._HelpAction,
+            argparse.BooleanOptionalAction,
+        ))
 
         choices = tuple(str(c) for c in action.choices) if action.choices else None
         metavar = action.metavar if isinstance(action.metavar, str) else None

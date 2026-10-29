@@ -26,41 +26,47 @@ isolation. [`uv-public.sh`](#uv-publicsh) is the exception: a shell wrapper arou
   - [Behavior](#behavior-1)
   - [Exit Codes](#exit-codes-1)
   - [Pre-Commit Integration](#pre-commit-integration-1)
-- [`check-pkl.py`](#check-pklpy)
+- [`check-leaks-push.sh`](#check-leaks-pushsh)
   - [Synopsis](#synopsis-2)
-  - [Options](#options-2)
   - [Behavior](#behavior-2)
   - [Exit Codes](#exit-codes-2)
   - [Pre-Commit Integration](#pre-commit-integration-2)
-- [`format-pkl.py`](#format-pklpy)
+- [`check-pkl.py`](#check-pklpy)
   - [Synopsis](#synopsis-3)
-  - [Options](#options-3)
+  - [Options](#options-2)
   - [Behavior](#behavior-3)
   - [Exit Codes](#exit-codes-3)
   - [Pre-Commit Integration](#pre-commit-integration-3)
-- [`sort-json-array.py`](#sort-json-arraypy)
+- [`format-pkl.py`](#format-pklpy)
   - [Synopsis](#synopsis-4)
-  - [Options](#options-4)
+  - [Options](#options-3)
   - [Behavior](#behavior-4)
   - [Exit Codes](#exit-codes-4)
   - [Pre-Commit Integration](#pre-commit-integration-4)
-- [`uv-public.sh`](#uv-publicsh)
+- [`sort-json-array.py`](#sort-json-arraypy)
   - [Synopsis](#synopsis-5)
+  - [Options](#options-4)
   - [Behavior](#behavior-5)
+  - [Exit Codes](#exit-codes-5)
   - [Pre-Commit Integration](#pre-commit-integration-5)
+- [`uv-public.sh`](#uv-publicsh)
+  - [Synopsis](#synopsis-6)
+  - [Behavior](#behavior-6)
+  - [Pre-Commit Integration](#pre-commit-integration-6)
 
 <!-- mdformat-toc end -->
 
 ## Scripts<a name="scripts"></a>
 
-| Script                                     | What it does                                                            | Hook id                          | Priority          |
-| ------------------------------------------ | ----------------------------------------------------------------------- | -------------------------------- | ----------------- |
-| [`check-json5.py`](#check-json5py)         | Validate JSON5 file syntax via `pyjson5`                                | `check-json5`                    | 10 (check phase)  |
-| [`check-leaks.py`](#check-leakspy)         | Block employer-internal identifiers (content, paths, git identity)      | `check-leaks`, `check-leaks-msg` | 10 (check phase)  |
-| [`check-pkl.py`](#check-pklpy)             | Validate Pkl files by running `pkl eval --format yaml`                  | `check-pkl`                      | 10 (check phase)  |
-| [`format-pkl.py`](#format-pklpy)           | Auto-format Pkl files via `pkl format`                                  | `format-pkl`                     | 35 (format phase) |
-| [`sort-json-array.py`](#sort-json-arraypy) | Sort a top-level JSON array of objects by a key                         | `sort-json-array`                | 30 (sort phase)   |
-| [`uv-public.sh`](#uv-publicsh)             | Run uv against public PyPI only (wraps `uv-lock`/`uv-sync`/`uv-export`) | `uv-*`                           | 0–5 (sync phase)  |
+| Script                                       | What it does                                                            | Hook id                                              | Priority          |
+| -------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------- | ----------------- |
+| [`check-json5.py`](#check-json5py)           | Validate JSON5 file syntax via `pyjson5`                                | `check-json5`                                        | 10 (check phase)  |
+| [`check-leaks.py`](#check-leakspy)           | Block employer-internal identifiers (content, paths, git identity)      | `check-leaks`, `check-leaks-msg`                     | 10 (check phase)  |
+| [`check-leaks-push.sh`](#check-leaks-pushsh) | Pre-push scan of pushed commits' identities, messages, and added lines  | `check-leaks-push-history`, `check-leaks-push-files` | 10 (check phase)  |
+| [`check-pkl.py`](#check-pklpy)               | Validate Pkl files by running `pkl eval --format yaml`                  | `check-pkl`                                          | 10 (check phase)  |
+| [`format-pkl.py`](#format-pklpy)             | Auto-format Pkl files via `pkl format`                                  | `format-pkl`                                         | 35 (format phase) |
+| [`sort-json-array.py`](#sort-json-arraypy)   | Sort a top-level JSON array of objects by a key                         | `sort-json-array`                                    | 30 (sort phase)   |
+| [`uv-public.sh`](#uv-publicsh)               | Run uv against public PyPI only (wraps `uv-lock`/`uv-sync`/`uv-export`) | `uv-*`                                               | 0–5 (sync phase)  |
 
 > [!NOTE]
 > this repository does not currently contain any `.json5`, `.pkl`, or `keybindings.json` files, so the JSON5, Pkl, and
@@ -143,9 +149,9 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
 
 The `format-pkl` hook carries `stages: [pre-commit]` so it is skipped when the config is run in CI (`manual` stage).
 `check-pkl` and `check-json5` run in all stages (`check-leaks` is `pre-commit` only and `check-leaks-msg` is
-`commit-msg` only; CI runs its own job). `sort-json-array` runs at priority 30 (before the priority-35
-`pretty-format-json` formatter) so a reordered array is normalized once and surfaces in the diff to re-stage rather than
-landing silently.
+`commit-msg` only; the `check-leaks-push-*` hooks are `pre-push` only; CI runs its own job). `sort-json-array` runs at
+priority 30 (before the priority-35 `pretty-format-json` formatter) so a reordered array is normalized once and surfaces
+in the diff to re-stage rather than landing silently.
 
 Both Pkl hooks are tolerant of environments where `pkl` is not installed: by default they print a warning and exit `0`.
 Pass `--require-pkl` to make the missing binary a hard failure.
@@ -344,9 +350,72 @@ the commit; amend the wording and commit again.
 
 ---
 
-## `check-pkl.py`<a name="check-pklpy"></a>
+## `check-leaks-push.sh`<a name="check-leaks-pushsh"></a>
 
 ### Synopsis<a name="synopsis-2"></a>
+
+Pre-push leak scan of the commits being pushed: their author/committer identities, commit messages, and every line they
+add, fed to [`check-leaks.py`](#check-leakspy). `cherry-pick`, `rebase`, `am`, and `git commit --no-verify` bypass the
+`pre-commit` and `commit-msg` hooks, so this is the last local gate before content reaches the public remote. It takes
+no arguments.
+
+### Behavior<a name="behavior-2"></a>
+
+**Range.** Read from the environment prek exports to `pre-push` hooks, `PRE_COMMIT_FROM_REF` and `PRE_COMMIT_TO_REF`
+(`to` defaults to `HEAD`):
+
+1. `FROM..TO` when the from-ref resolves to a commit in the local repository.
+2. Otherwise `merge-base(TO, origin/main)..TO` (a new branch, or a from-ref that is not present locally).
+3. Otherwise the tip commit only (`-1 TO`).
+
+Commits before the range are not scanned. Commit messages are written to a temporary file and scanned like any other
+file; identities are piped to `check-leaks.py --identities-from -`.
+
+**Patches.** The added lines of every pushed commit
+(`git log -p -U0 --cc --no-textconv --format='commit %h' --no-color <range>`; `--cc` shows the combined diff of merge
+commits, so a leak introduced by a conflict resolution is seen) are written to a temporary file and scanned too, so
+content that one pushed commit adds and a later one removes is caught even though the tip is clean. Removed and context
+lines are blanked rather than deleted: a removed line was either added earlier in the range (and is caught there) or is
+already public, and blanking keeps the reported line numbers aligned with that command's output. The paths each pushed
+commit adds, copies, or renames to
+(`git log --name-only --diff-filter=ACR --cc --format='commit %h' --no-color <range>`) are appended to the same file,
+because a leak that lives only in a path (an empty file, a pure rename) has no added line. The script prints
+`pre-push: scanning <range>` first and, on findings, `pre-push: inspect with: <the patch command>` followed by
+`pre-push: and (paths): <the path command>`.
+
+**File contents** at the tip are scanned by the separate `check-leaks-push-files` hook entry, which prek feeds the files
+changed between the two refs.
+
+### Exit Codes<a name="exit-codes-2"></a>
+
+Those of `check-leaks.py`: `0` clean, `1` findings, `2` configuration error (for example an unreadable private pattern
+file).
+
+### Pre-Commit Integration<a name="pre-commit-integration-2"></a>
+
+```yaml
+  - id: check-leaks-push-files
+    entry: scripts/hooks/check-leaks.py
+    language: python
+    types: [text]
+    stages: [pre-push]
+
+  - id: check-leaks-push-history
+    entry: scripts/hooks/check-leaks-push.sh
+    language: system
+    pass_filenames: false
+    always_run: true
+    stages: [pre-push]
+```
+
+`pre-push` is listed in `default_install_hook_types`, so `prek install` installs its shim. To exercise the hooks without
+pushing: `prek run --hook-stage pre-push --from-ref origin/main --to-ref HEAD`.
+
+---
+
+## `check-pkl.py`<a name="check-pklpy"></a>
+
+### Synopsis<a name="synopsis-3"></a>
 
 Validates Pkl configuration files by running `pkl eval --format yaml` against each file. If `pkl` is not found on `PATH`
 the script warns and exits `0` (non-blocking) unless `--require-pkl` is set.
@@ -396,7 +465,7 @@ python3 scripts/hooks/check-pkl.py [OPTIONS] [FILENAMES...]
 | -------------- | ------------------ |
 | `-h`, `--help` | Show help and exit |
 
-### Behavior<a name="behavior-2"></a>
+### Behavior<a name="behavior-3"></a>
 
 1. Checks `shutil.which(args.executable)`. If not found: warn and return `0`, or error and return `1` if `--require-pkl`
    is set.
@@ -407,14 +476,14 @@ python3 scripts/hooks/check-pkl.py [OPTIONS] [FILENAMES...]
 5. On success with `--verbose` — prints `INFO <filename>` followed by `Valid Pkl`.
 6. With `--dump-yaml` — prints the evaluated YAML output below the per-file status line.
 
-### Exit Codes<a name="exit-codes-2"></a>
+### Exit Codes<a name="exit-codes-3"></a>
 
 | Code | Meaning                                                                                 |
 | ---- | --------------------------------------------------------------------------------------- |
 | `0`  | All files valid, or `pkl` not installed (without `--require-pkl`), or no files supplied |
 | `1`  | One or more files failed validation, or `pkl` not found with `--require-pkl`            |
 
-### Pre-Commit Integration<a name="pre-commit-integration-2"></a>
+### Pre-Commit Integration<a name="pre-commit-integration-3"></a>
 
 ```yaml
   - id: check-pkl
@@ -428,7 +497,7 @@ python3 scripts/hooks/check-pkl.py [OPTIONS] [FILENAMES...]
 
 ## `format-pkl.py`<a name="format-pklpy"></a>
 
-### Synopsis<a name="synopsis-3"></a>
+### Synopsis<a name="synopsis-4"></a>
 
 Auto-formats Pkl files in-place using `pkl format`. Detects files that need formatting (exit code `11` from
 `pkl format --diff-name-only`) and rewrites them with `--write`. Reports `MODIFIED` or `UNMODIFIED` per file. If `pkl`
@@ -466,7 +535,7 @@ python3 scripts/hooks/format-pkl.py [OPTIONS] [FILENAMES...]
 | `-v`, `--verbose` | Print `UNMODIFIED` line for files that needed no changes | off     |
 | `-h`, `--help`    | Show help and exit                                       | —       |
 
-### Behavior<a name="behavior-3"></a>
+### Behavior<a name="behavior-4"></a>
 
 1. Checks `shutil.which(args.executable)`. If not found: warn and return `0`, or error and return `1` if
    `--require-pkl`.
@@ -481,7 +550,7 @@ python3 scripts/hooks/format-pkl.py [OPTIONS] [FILENAMES...]
 
 The exit code of the hook is the maximum non-zero return code seen across all files, or `0` if all succeeded.
 
-### Exit Codes<a name="exit-codes-3"></a>
+### Exit Codes<a name="exit-codes-4"></a>
 
 | Code     | Meaning                                                                                               |
 | -------- | ----------------------------------------------------------------------------------------------------- |
@@ -489,7 +558,7 @@ The exit code of the hook is the maximum non-zero return code seen across all fi
 | `1`      | `pkl` not found with `--require-pkl`, or an unexpected exception occurred                             |
 | `N` (>0) | Maximum `pkl format` exit code across all failing files                                               |
 
-### Pre-Commit Integration<a name="pre-commit-integration-3"></a>
+### Pre-Commit Integration<a name="pre-commit-integration-4"></a>
 
 ```yaml
   - id: format-pkl
@@ -507,7 +576,7 @@ pipelines run `check-pkl` (read-only) instead of attempting in-place formatting.
 
 ## `sort-json-array.py`<a name="sort-json-arraypy"></a>
 
-### Synopsis<a name="synopsis-4"></a>
+### Synopsis<a name="synopsis-5"></a>
 
 Sorts a top-level JSON array of objects in-place by the value of a chosen object key. Pure-stdlib PEP 723 script (no
 dependencies). The file is rewritten only when the sorted result differs from the original.
@@ -526,7 +595,7 @@ python3 scripts/hooks/sort-json-array.py [OPTIONS] [FILENAMES...]
 | `-v`, `--verbose` | Print a per-file `INFO` line for already-sorted files | off       |
 | `-h`, `--help`    | Show help and exit                                    | —         |
 
-### Behavior<a name="behavior-4"></a>
+### Behavior<a name="behavior-5"></a>
 
 For each filename:
 
@@ -539,14 +608,14 @@ For each filename:
    `Sorted array by '<key>'`.
 5. If already sorted — with `--verbose`, prints `INFO <filename>` / `Already sorted by '<key>'`.
 
-### Exit Codes<a name="exit-codes-4"></a>
+### Exit Codes<a name="exit-codes-5"></a>
 
 | Code | Meaning                                                                           |
 | ---- | --------------------------------------------------------------------------------- |
 | `0`  | Every file already sorted (or no files supplied)                                  |
 | `1`  | One or more files were rewritten, failed to parse, or are not an array of objects |
 
-### Pre-Commit Integration<a name="pre-commit-integration-4"></a>
+### Pre-Commit Integration<a name="pre-commit-integration-5"></a>
 
 ```yaml
   - id: sort-json-array
@@ -565,7 +634,7 @@ other keybindings-style JSON.
 
 ## `uv-public.sh`<a name="uv-publicsh"></a>
 
-### Synopsis<a name="synopsis-5"></a>
+### Synopsis<a name="synopsis-6"></a>
 
 Shell wrapper that runs `uv` against public PyPI only. Work machines inject an internal package index, and a plain `uv`
 invocation there rewrites `uv.lock` to reference that index, which would leak it into this public repository. Unlike the
@@ -575,7 +644,7 @@ Python scripts above it consumes no filenames; it forwards all arguments to `uv`
 scripts/hooks/uv-public.sh <uv arguments...>
 ```
 
-### Behavior<a name="behavior-5"></a>
+### Behavior<a name="behavior-6"></a>
 
 The wrapper neutralizes the internal index through **both** channels it arrives by, then `exec`s `uv`:
 
@@ -596,7 +665,7 @@ that was regenerated with the internal index is rewritten back to public PyPI be
 **Always use it instead of bare `uv` in this repo** (for example `scripts/hooks/uv-public.sh run pytest`, or
 `scripts/hooks/uv-public.sh sync --group test`).
 
-### Pre-Commit Integration<a name="pre-commit-integration-5"></a>
+### Pre-Commit Integration<a name="pre-commit-integration-6"></a>
 
 ```yaml
   - id: uv-lock

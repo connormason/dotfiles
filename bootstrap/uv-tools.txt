@@ -1,0 +1,41 @@
+# bootstrap/uv-tools.txt — base uv tools, installed by the 90-python bootstrap stage.
+#
+# One tool per line: the package name, optionally followed by `uv tool install` flags
+# (e.g. `--with PKG`, `--python VERSION`, `--prerelease allow`). `#` starts a comment.
+#
+# 90-python reads this file, then every overlay's bootstrap/uv-tools.txt in layer order; a later layer's line for the
+# same tool replaces the earlier one. A tool that is already installed is skipped, so a changed line takes effect only
+# after `uv tool install --force <line>` (or `uv tool uninstall <tool>` and a re-run).
+
+ansible-lint
+bandit
+editorconfig-checker
+flake8
+git-filter-repo
+harlequin
+interrogate
+ipython
+mdformat --with mdformat-config --with mdformat-footnote --with mdformat-front-matters --with mdformat-gfm --with mdformat-gfm-alerts --with mdformat-pyproject --with mdformat-simple-breaks --with mdformat-toc
+mk
+pew
+pex
+poetry
+posting
+pre-commit
+prek
+pydoclint
+pyinstaller
+pylint
+pyright
+pyupgrade
+ranger-fm
+reorder-python-imports
+rich-cli
+s3ranger
+shellcheck-py
+shfmt-py
+shiv
+ty --prerelease allow
+validate-pyproject
+yamllint
+zipapps

@@ -51,8 +51,39 @@ StyleColor = Union[int, tuple[int, int, int], str]
 # ==================
 
 
+ANSI_COLOR: dict[str, int] = {
+    'black':   30, 'bright_black':   90,
+    'red':     31, 'bright_red':     91,
+    'green':   32, 'bright_green':   92,
+    'yellow':  33, 'bright_yellow':  93,
+    'blue':    34, 'bright_blue':    94,
+    'magenta': 35, 'bright_magenta': 95,
+    'cyan':    36, 'bright_cyan':    96,
+    'white':   37, 'bright_white':   97,
+    'reset':   39,
+}
+ANSI_RESET_ALL = '\033[0m'
+
+
+def _interpret_color(_color: StyleColor, offset: int = 0) -> str:
+    """
+    Resolve a color name, integer, or RGB tuple to an ANSI SGR parameter string.
+
+    :param _color: color as a named string, 256-color int, or ``(r, g, b)`` tuple
+    :param offset: offset added to the base code (0 for foreground, 10 for background)
+    :return: ANSI SGR parameter fragment (e.g. ``"32"`` or ``"38;2;255;0;0"``)
+    """
+    if isinstance(_color, int):
+        return f'{38 + offset};5;{_color:d}'
+    if isinstance(_color, (tuple, list)):
+        r, g, b = _color
+        return f'{38 + offset};2;{r:d};{g:d};{b:d}'
+    _color = cast('str', _color)
+    return str(ANSI_COLOR[_color] + offset)
+
+
 def style(
-    text: Any,
+    text: Any = '',
     *,
     fg: StyleColor | None = None,
     bg: StyleColor | None = None,
@@ -83,45 +114,16 @@ def style(
     :param reset: add a reset-all code at the end of the string
     :return: styled text
     """
-    _ansi_colors: dict[str, int] = {
-        'black':   30, 'bright_black':   90,
-        'red':     31, 'bright_red':     91,
-        'green':   32, 'bright_green':   92,
-        'yellow':  33, 'bright_yellow':  93,
-        'blue':    34, 'bright_blue':    94,
-        'magenta': 35, 'bright_magenta': 95,
-        'cyan':    36, 'bright_cyan':    96,
-        'white':   37, 'bright_white':   97,
-        'reset':   39,
-    }
-    _ansi_reset_all = '\033[0m'
-
-    def _interpret_color(_color: StyleColor, offset: int = 0) -> str:
-        """
-        Resolve a color name, integer, or RGB tuple to an ANSI SGR parameter string.
-
-        :param _color: color as a named string, 256-color int, or ``(r, g, b)`` tuple
-        :param offset: offset added to the base code (0 for foreground, 10 for background)
-        :return: ANSI SGR parameter fragment (e.g. ``"32"`` or ``"38;2;255;0;0"``)
-        """
-        if isinstance(_color, int):
-            return f'{38 + offset};5;{_color:d}'
-        if isinstance(_color, (tuple, list)):
-            r, g, b = _color
-            return f'{38 + offset};2;{r:d};{g:d};{b:d}'
-        _color = cast('str', _color)
-        return str(_ansi_colors[_color] + offset)
-
     if not isinstance(text, str):
         text = str(text)
 
     bits: list[str] = []
-    if fg:
+    if fg is not None:
         try:
             bits.append(f'\033[{_interpret_color(fg)}m')
         except KeyError:
             raise TypeError(f'Unknown color {fg!r}') from None
-    if bg:
+    if bg is not None:
         try:
             bits.append(f'\033[{_interpret_color(bg, 10)}m')
         except KeyError:
@@ -145,7 +147,7 @@ def style(
 
     bits.append(text)
     if reset:
-        bits.append(_ansi_reset_all)
+        bits.append(ANSI_RESET_ALL)
     return ''.join(bits)
 
 
@@ -223,11 +225,11 @@ class Args(argparse.Namespace):
     """
     :class:`argparse.Namespace` annotated with args supported by this script.
     """
-    filenames:       Sequence[str]          # positional arg(s)
-    require_pkl:     bool                   # --require-pkl
-    executable:      str                    # --executable
-    grammar_version: GrammarVersion         # --grammar-version
-    verbose:         bool                   # --verbose
+    filenames:       Sequence[str]      # positional arg(s)
+    require_pkl:     bool               # --require-pkl
+    executable:      str                # --executable
+    grammar_version: GrammarVersion     # --grammar-version
+    verbose:         bool               # --verbose
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:

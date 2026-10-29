@@ -9,7 +9,8 @@ Self-contained conventions for styled terminal output in CLI scripts (does not d
 ## Reference implementation
 
 [`run.py`](../../run.py) is the canonical in-repo implementation of the styling contract — match its patterns when
-adding styled output to `run.py` or scripts under [`scripts/`](../../scripts) (`env/`, `install/`). It provides:
+adding styled output to `run.py` or scripts under [`scripts/`](../../scripts) (`dotfiles/`, `hooks/`, `utility/`). It
+provides:
 
 | Function     | Purpose                                                                   |
 | ------------ | ------------------------------------------------------------------------- |
@@ -26,5 +27,5 @@ shape for new CLI options.
 - Route verbose/debug output to **stderr** so it never contaminates stdout.
 - Use emoji-prefixed status lines (🟢 available, 🔴 failed, 🟡 warning, ✅ success) with a reinforcing text color; action
   messages (🔎 analyzing, 🧹 cleaning, 📦 building) use a cyan-ish accent. Keep it consistent with `run.py`.
-- Custom **Ansible modules** live in [`library/`](../../library) (e.g. `configure_network_interfaces.py`,
-  `osx_pmset.py`); they follow the same Python style rules but are executed by Ansible, not via `uv`.
+- Shell scripts under [`bootstrap/`](../../bootstrap) and [`stow.sh`](../../stow.sh) have their own helpers
+  (`bootstrap/lib.sh`); Python helpers live in [`scripts/`](../../scripts) and follow the same Python style rules.

@@ -1,0 +1,20 @@
+---
+# Authentication
+tailscale_auth_key: ""                          # Override in vault — role fails if empty
+
+# Node configuration
+tailscale_hostname: "{{ inventory_hostname }}"
+tailscale_ssh_enabled: true
+tailscale_accept_dns: true
+
+# HTTPS (NAS only)
+tailscale_https_enabled: false
+tailscale_tailnet_name: ""                      # e.g., "tail1234.ts.net"
+tailscale_cert_dir: "/etc/tailscale/certs"
+tailscale_caddy_config_dir: "/etc/caddy"
+tailscale_services: []                          # List of {name, port, path} dicts
+tailscale_plex_port: 32443                      # Dedicated Caddy port for Plex
+
+# Platform
+tailscale_version: ""                           # Empty = latest available
+tailscale_macos_cli: "/Applications/Tailscale.app/Contents/MacOS/Tailscale"

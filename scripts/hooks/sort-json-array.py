@@ -111,12 +111,12 @@ def style(
         text = str(text)
 
     bits: list[str] = []
-    if fg:
+    if fg is not None:
         try:
             bits.append(f'\033[{_interpret_color(fg)}m')
         except KeyError:
             raise TypeError(f'Unknown color {fg!r}') from None
-    if bg:
+    if bg is not None:
         try:
             bits.append(f'\033[{_interpret_color(bg, 10)}m')
         except KeyError:
@@ -212,10 +212,10 @@ class Args(argparse.Namespace):
     """
     :class:`argparse.Namespace` annotated with args supported by this script.
     """
-    filenames: Sequence[str]        # positional arg(s)
-    key:       str                  # --key
-    indent:    int                  # --indent
-    verbose:   bool                 # --verbose
+    filenames: Sequence[str]    # positional arg(s)
+    key:       str              # --key
+    indent:    int              # --indent
+    verbose:   bool             # --verbose
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:

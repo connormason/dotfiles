@@ -2,20 +2,27 @@
 
 Full command reference for the dotfiles-personal repository. Loaded on demand from [`CLAUDE.md`](../CLAUDE.md).
 
-## Running Ansible Playbooks
+## Bootstrapping
 
 ```bash
-# Bootstrap local Mac (interactive, asks for sudo password)
-chmod u+x local_bootstrap.sh && ./local_bootstrap.sh
+# Bootstrap a Mac (stow engine + numbered stages; --dry-run previews, --list shows stages, --resume continues)
+bootstrap/bootstrap.sh
 
-# Bootstrap NAS server
+# Bootstrap NAS server (Ansible; asks for the sudo password)
 chmod u+x nas_bootstrap.sh && ./nas_bootstrap.sh
+```
 
+## Running Ansible Playbooks (NAS)
+
+```bash
 # Run specific tags only
-ansible-playbook playbooks/local_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags git,zsh
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags git,zsh
 
 # Run with extra variables
-ansible-playbook playbooks/local_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -e "some_var=value"
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -e "some_var=value"
+
+# Syntax check
+ansible-playbook --syntax-check -i localhost, playbooks/nas_bootstrap.yml
 ```
 
 ## Python Script Commands (`run.py`)
@@ -35,6 +42,33 @@ python3 run.py pre
 
 # Generate Makefile from run.py commands
 python3 run.py makefile
+```
+
+## Layered Dev Environment (`run.py` Dotfiles group)
+
+Wrappers over `stow.sh`, `bootstrap/bootstrap.sh`, and `scripts/dotfiles/render.py`; see
+[`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. Prefer `scripts/hooks/uv-public.sh run python`
+over bare `python3` when running them from this repo.
+
+```bash
+# Stages across all layers / simulate every stage / run them
+python3 run.py bootstrap --list
+python3 run.py bootstrap --dry-run
+python3 run.py bootstrap --verify
+
+# Link stow packages from every layer (-n previews, --backup-conflicts moves blockers aside)
+python3 run.py stow -n
+python3 run.py stow --backup-conflicts
+
+# Render settings from per-layer fragments (--diff previews, --check exits 1 on drift)
+python3 run.py render --check
+
+# Verify tools, overlay registry, git version, links, and rendered settings (--fix repairs, then re-checks)
+python3 run.py doctor
+python3 run.py doctor --fix
+
+# Run the test suite through the public-index uv wrapper
+python3 run.py test
 ```
 
 ## Using Make (auto-generated)

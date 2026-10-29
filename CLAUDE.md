@@ -1,13 +1,13 @@
 # CLAUDE.md
 
-Personal dotfiles repository using **Ansible** for automated system configuration on macOS and Debian Linux. Manages
-dotfiles, applications, system settings, and home infrastructure (a NAS with a media-server / home-automation stack).
+Personal dotfiles repository. macOS is configured by a layered **stow engine** plus numbered `bootstrap/` stage scripts;
+the home NAS (Debian Linux, with a media-server / home-automation stack) is configured by **Ansible**.
 
 For detailed reference, load on-demand:
 
-- [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) — bootstrap flow, inventory, role system, `run.py`, Docker stack, macOS
-  layers
-- [`.ctx/BUILD.md`](.ctx/BUILD.md) — full command reference (playbooks / `run.py` / make / prek / lint)
+- [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) — macOS stow/bootstrap layers, NAS bootstrap flow, inventory, role
+  system, `run.py`, Docker stack
+- [`.ctx/BUILD.md`](.ctx/BUILD.md) — full command reference (bootstrap / playbooks / `run.py` / make / prek / lint)
 - [`.ctx/CONVENTIONS.md`](.ctx/CONVENTIONS.md) — code style pointers and the "adding a dotfile / role / macOS app"
   patterns
 - [`.claude/rules/`](.claude/rules) — self-contained Python / script / README style rules for this repo
@@ -15,14 +15,14 @@ For detailed reference, load on-demand:
 
 ## Entry Points
 
-1. **`local_bootstrap.sh`** → `playbooks/local_bootstrap.yml` — personal Mac configuration.
+1. **`bootstrap/bootstrap.sh`** — personal Mac configuration (stow packages in `stow/`, overlays in `profiles/`).
 2. **`nas_bootstrap.sh`** → `playbooks/nas_bootstrap.yml` — home NAS / server configuration.
-3. **`run.py`** — repository-management CLI (inventory pull, codebase chores). `Makefile` wraps these (`make help`).
-   Full command reference in [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
+3. **`run.py`** — repository-management CLI (inventory pull, codebase chores, wrappers for the macOS engine). `Makefile`
+   wraps these (`make help`). Full command reference in [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 
-Both bootstrap scripts validate the repo, install Homebrew (checksum-verified) and Ansible, then run their playbook. See
-[`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flow and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation (tags /
-extra-vars).
+`nas_bootstrap.sh` validates the repo, installs Homebrew (checksum-verified) and Ansible, then runs the NAS playbook.
+See [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flows and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation
+(stage flags / tags / extra-vars).
 
 ## Inventory
 
@@ -35,6 +35,11 @@ secrets. See [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) "Inventory Managemen
 All secrets are `ansible-vault`-encrypted in the `inventory/` clone. The password lives in `vault_password.txt`
 (gitignored, created manually; referenced by `ansible.cfg`'s `vault_password_file`). Never commit the vault password or
 decrypted secrets.
+
+## Archive
+
+[`archive/ansible-macos/`](archive/ansible-macos/README.md) is the frozen pre-stow Ansible macOS setup, kept for
+reference. It is not maintained and is skipped by the lint tooling; do not edit it or treat it as active configuration.
 
 ## Plans & Docs
 

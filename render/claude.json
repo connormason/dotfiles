@@ -1,0 +1,240 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "autoMemoryEnabled": true,
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Run the project toolchain non-interactively: `uv run ...`, `pytest`, `ruff check [--fix]`, `mypy`, `interrogate`, `mdformat`, `shellcheck`, `pkl eval`, `nox`, `make`, `pre-commit`/`prek`.",
+      "Read-only git inspection (`status`, `diff`, `log`, `show`, `branch`) and local branch/worktree creation.",
+      "Create and edit files within the repository being worked on."
+    ],
+    "environment": [
+      "$defaults",
+      "Python is managed exclusively with `uv`; never invoke bare `python`, `python3`, `pip`, or `hatch`.",
+      "`ruff format` is banned repo-wide (enforced by a PreToolUse hook). Use `ruff check --fix` for Python and `mdformat` for Markdown.",
+      "Write temporary files under `$TMPDIR`, never `/tmp`.",
+      "Plans and design docs live under each project's `docs/plans/<YYYY-MM>/`; pre-commit / prek hooks must pass before work is complete."
+    ],
+    "hard_deny": [
+      "$defaults",
+      "`ruff format` / `uv run ruff format` — never run the ruff formatter.",
+      "Direct pushes to `main`/`master`, history rewrites on `main`, or `git push --force` to a shared branch.",
+      "Reading, printing, or committing secrets: `vault_password.txt`, `.env*`, `*.pem`/`*.key`/`*.crt`, or decrypted vault contents.",
+      "Destructive resets without explicit confirmation: `rm -rf` on a repo root or `$HOME`, `git reset --hard`, `git clean -fdx`."
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Deleting files, git branches, or worktrees.",
+      "Bare `python`/`python3`/`pip`/`hatch` for running scripts or installing packages — always use `uv`.",
+      "Running `bootstrap/bootstrap.sh` or any bootstrap stage in real (non-`--dry-run`) mode, or other host-mutating commands (Homebrew installs, macOS `defaults write`, sudo)."
+    ]
+  },
+  "effortLevel": "high",
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "900000",
+    "BASH_MAX_TIMEOUT_MS": "900000",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
+    "COLUMNS": "255",
+    "DISABLE_TELEMETRY": "1",
+    "ENABLE_TOOL_SEARCH": "true",
+    "FORCE_AUTOUPDATE_PLUGINS": "1"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/file-size-monitor.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/check-comment-replacement.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/ruff-fix-on-edit.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/shell-lint-on-edit.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/block-ruff-format.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/settings-backup.sh"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/secret-scanner.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/delegate-search-nudge.py"
+          }
+        ]
+      }
+    ]
+  },
+  "model": "claude-opus-4-8[1m]",
+  "modelSettings": {
+    "claude-opus-4-8": {
+      "effortLevel": "xhigh"
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(bash -n:*)",
+      "Bash(brew info:*)",
+      "Bash(bump-my-version:*)",
+      "Bash(chmod:*)",
+      "Bash(claude config --help)",
+      "Bash(cmp:*)",
+      "Bash(cp:*)",
+      "Bash(curl:*)",
+      "Bash(echo:*)",
+      "Bash(gh:*)",
+      "Bash(git:*)",
+      "Bash(interrogate:*)",
+      "Bash(jq:*)",
+      "Bash(ls:*)",
+      "Bash(make:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(mypy:*)",
+      "Bash(nox:*)",
+      "Bash(pkl eval:*)",
+      "Bash(pre-commit:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(shellcheck:*)",
+      "Bash(test:*)",
+      "Bash(touch:*)",
+      "Bash(tree:*)",
+      "Bash(uv:*)",
+      "Bash(wc:*)",
+      "Bash(xargs:*)",
+      "Edit",
+      "Glob",
+      "Write",
+      "Skill(superpowers:brainstorming)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Skill(superpowers:test-driven-development)",
+      "Skill(superpowers:using-git-worktrees)",
+      "Skill(superpowers:writing-plans)"
+    ],
+    "defaultMode": "auto",
+    "deny": [
+      "WebSearch",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Bash(hatch:*)",
+      "Read(.env)",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.*.local)",
+      "Read(**/.environment)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/*.crt)",
+      "Read(**/*.cert)",
+      "Read(**/secrets/**)",
+      "Read(**/credentials/**)"
+    ]
+  },
+  "preferredNotifChannel": "iterm2",
+  "sandbox": {
+    "enabled": false
+  },
+  "skipWebFetchPreflight": true,
+  "skipWorkflowUsageWarning": true,
+  "spinnerVerbs": {
+    "mode": "replace",
+    "verbs": [
+      "Crusin' in the Rollie burnin' tokens and a stoagie",
+      "Doin' the damn thanggg",
+      "Literally just vibing bro",
+      "Taking a fat rip",
+      "Sippin' on that sizzurp",
+      "Puff, puff, passin'",
+      "Fuckin' around and finding out",
+      "Stackin' that cash and smackin' some ass",
+      "Puffin' on that loud, my head up in the clouds",
+      "Straight up sendin' it",
+      "Cookin' with no recipe",
+      "Rawdoggin' the backlog",
+      "Mobbin' on that mf infra",
+      "Ballin' on borrowed compute",
+      "Twerkin' on that tech debt"
+    ]
+  },
+  "statusLineConfig": {
+    "colorTheme": "neon",
+    "components": [
+      "directory",
+      "git",
+      "active-tool",
+      "todos",
+      "model",
+      "effort",
+      "context",
+      "duration",
+      "messages",
+      "tools",
+      "quota",
+      "agent",
+      "api-base"
+    ],
+    "contextStyle": "line",
+    "directoryStyle": "short",
+    "iconSet": "nerd-font",
+    "lines": 1,
+    "modelStyle": "full",
+    "prUrlFormat": "number",
+    "separator": "│",
+    "style": "icon-pill",
+    "truncation": "wrap"
+  },
+  "theme": "dark",
+  "verbose": true,
+  "worktree": {
+    "baseRef": "head"
+  }
+}

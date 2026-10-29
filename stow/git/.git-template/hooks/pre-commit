@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Git template pre-commit hook (installed into new clones via init.templateDir).
+# Delegates to prek when the repository has a pre-commit config (warning on stderr if prek is missing); otherwise does
+# nothing.
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+if [[ -f "$repo_root/.pre-commit-config.yaml" ]]; then
+    if command -v prek >/dev/null 2>&1; then
+        exec prek run
+    fi
+    echo "warning: .pre-commit-config.yaml found but prek is not on PATH; skipping pre-commit checks" >&2
+fi
+exit 0

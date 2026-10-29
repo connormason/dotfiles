@@ -1,0 +1,4 @@
+# shellcheck shell=bash
+# =====================================================================================================================
+# This file solely exists so it is easily visible/tracked in my dotfiles repo if any tools make changes to this file
+# =====================================================================================================================

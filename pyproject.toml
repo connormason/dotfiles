@@ -115,7 +115,7 @@ default = true
 [tool.codespell]
 count = true
 summary = true
-skip = "smb.conf.j2"
+skip = "smb.conf.j2,archive"
 ignore-words-list = [
     # keep-sorted start
     "*.css",
@@ -165,11 +165,14 @@ exclude = [
 disallow_untyped_defs  = true
 exclude_gitignore      = true
 ignore_missing_imports = true
-python_version         = "3.9" # TODO: update
+python_version         = "3.9" # TODO: update?
 warn_unused_configs    = true
 
 exclude = [
+    # keep-sorted start
+    "archive/",
     "services/homeassistant/",
+    # keep-sorted end
 ]
 
 [[tool.mypy.overrides]]
@@ -189,6 +192,7 @@ target-version    = "py39"
 extend-exclude = [
     "docs/",
     "services/homeassistant/config/custom_components/",
+    "stow/os_tools/.config/ranger/commands.py",         # vendored from upstream ranger 1.9.4 (GPL-3.0); lint-exempt
 ]
 
 # `ruff check` linter configuration
@@ -302,6 +306,7 @@ ignore = [
 # keep-sorted start
 "run.py"                                                   = ["S112"]
 "services/homeassistant/config/scripts/get_lutron_cert.py" = ["S"]
+"stow/**/startup/*.py"                                     = ["INP001"]                # IPython startup scripts are not a package
 "tests/**"                                                 = ["B", "S", "SIM", "PERF"]
 # keep-sorted end
 
@@ -407,10 +412,12 @@ addopts = """
 
 markers = [
     # keep-sorted start
+    "integration: Throwaway-home integration tests",
     "macos_only: Tests that only run on macOS",
     "requires_homebrew: Tests that require Homebrew to be installed",
     "role: Role-specific tests",
     "slow: Tests that take significant time",
+    "timing: Load-sensitive startup-time tests (calibrated budget; DOTFILES_STARTUP_BUDGET_MS overrides)",
     # keep-sorted end
 ]
 norecursedirs = [

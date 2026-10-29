@@ -7,7 +7,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-""" Module metadata """
+# ====================================================================================================
+# Module metadata
+# ====================================================================================================
 
 
 ANSIBLE_METADATA: dict[str, Any] = {
@@ -41,7 +43,9 @@ RETURN = r""" # """
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
-""" Parsing/regexes """
+# ====================================================================================================
+# Parsing/regexes
+# ====================================================================================================
 
 
 PMSET_SECTION_REGEX = re.compile(r'^(?P<section>.+):$')
@@ -66,9 +70,9 @@ def parse_pmset_output(output: str) -> dict[str, dict[str, Any]]:
     return data
 
 
-"""
-Core module logic
-"""
+# ====================================================================================================
+# Core module logic
+# ====================================================================================================
 
 
 def build_module() -> AnsibleModule:

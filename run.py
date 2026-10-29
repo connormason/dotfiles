@@ -86,9 +86,9 @@ if TYPE_CHECKING:
 # TODO: some commands have dependency on `yaml`. Maybe we should add `uv` metadata to top of script?
 
 
-"""
-Constants/configuration
-"""
+# ====================================================================================================
+# Constants/configuration
+# ====================================================================================================
 
 
 # Filepaths - All absolute paths relative to script location
@@ -99,6 +99,16 @@ INVENTORY_DIR:  Path = DOTFILES_DIR  / 'inventory'
 INVENTORY_FILE: Path = INVENTORY_DIR / 'inventory.yml'
 VAULT_PASSWORD: Path = DOTFILES_DIR  / 'vault_password.txt'
 PLAYBOOKS_DIR:  Path = DOTFILES_DIR  / 'playbooks'
+
+# Layered dev-env engine (stow.sh, bootstrap driver, settings renderer)
+STOW_SCRIPT:      Path = DOTFILES_DIR / 'stow.sh'
+BOOTSTRAP_SCRIPT: Path = DOTFILES_DIR / 'bootstrap' / 'bootstrap.sh'
+RENDER_SCRIPT:    Path = DOTFILES_DIR / 'scripts' / 'dotfiles' / 'render.py'
+UV_PUBLIC:        Path = DOTFILES_DIR / 'scripts' / 'hooks' / 'uv-public.sh'
+
+# Doctor requirements
+REQUIRED_TOOLS:  tuple[str, ...] = ('brew', 'git', 'stow', 'uv', 'zsh')
+MIN_GIT_VERSION: tuple[int, int] = (2, 36)  # includeIf "hasconfig:remote.*.url:" support
 
 # Glob patterns for finding vault files within inventory
 VAULT_FILE_PATTERNS: list[str] = [
@@ -144,9 +154,9 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 }
 
 
-"""
-Basic types
-"""
+# ====================================================================================================
+# Basic types
+# ====================================================================================================
 
 
 F        = TypeVar('F',        bound=Callable[..., Any])
@@ -165,24 +175,24 @@ class SupportsWrite(Protocol[T_contra]):
     def write(self, s: T_contra, /) -> object: ...
 
 
-"""
-Command registration
-
-The @command decorator provides a declarative way to register command functions:
-- Extracts command name from function name (strips 'cmd_' or 'command_' prefix)
-- Automatically builds argparse subparsers with help text from docstrings
-- Supports optional argument addition via add_arguments callback
-- Allows grouping commands for organized help text
-- Enables filtering commands for script-only or Makefile-only visibility
-
-Example::
-
-    @command(group='Inventory', add_arguments=add_custom_args)
-    def cmd_update_inventory(args: argparse.Namespace) -> None:
-        '''Update inventory from remote repository'''
-        # Implementation here
-
-"""
+# ====================================================================================================
+# Command registration
+#
+# The @command decorator provides a declarative way to register command functions:
+#   - Extracts command name from function name (strips 'cmd_' or 'command_' prefix)
+#   - Automatically builds argparse subparsers with help text from docstrings
+#   - Supports optional argument addition via add_arguments callback
+#   - Allows grouping commands for organized help text
+#   - Enables filtering commands for script-only or Makefile-only visibility
+#
+# Example::
+#
+#     @command(group='Inventory', add_arguments=add_custom_args)
+#     def cmd_update_inventory(args: argparse.Namespace) -> None:
+#         '''Update inventory from remote repository'''
+#         # Implementation here
+#
+# ====================================================================================================
 
 
 @dataclasses.dataclass
@@ -312,22 +322,53 @@ def get_command_groups(exclude: Iterable[str] | None = None) -> dict[str, dict[s
     return command_groups
 
 
-"""
-Formatting
+# ====================================================================================================
+# Formatting
+#
+# ANSI styling functions for terminal output. The style() function is inspired by Click's style implementation but
+# standalone (no external dependencies)
+#
+# Supports:
+#   - Foreground/background colors (named, 256-color palette, RGB tuples)
+#   - Text attributes (bold, dim, italic, underline, etc.)
+#   - Auto-reset by default to prevent style leakage
+#
+# The printf() function wraps style() for common use cases and supports:
+#   - Debug mode filtering (only prints if RUN_DEBUG=true)
+#   - Text indentation
+#   - Automatic text-to-str conversion
+# ====================================================================================================
 
-ANSI styling functions for terminal output. The style() function is inspired by Click's style implementation but
-standalone (no external dependencies)
 
-Supports:
-- Foreground/background colors (named, 256-color palette, RGB tuples)
-- Text attributes (bold, dim, italic, underline, etc.)
-- Auto-reset by default to prevent style leakage
+ANSI_COLOR: dict[str, int] = {
+    'black':   30, 'bright_black':   90,
+    'red':     31, 'bright_red':     91,
+    'green':   32, 'bright_green':   92,
+    'yellow':  33, 'bright_yellow':  93,
+    'blue':    34, 'bright_blue':    94,
+    'magenta': 35, 'bright_magenta': 95,
+    'cyan':    36, 'bright_cyan':    96,
+    'white':   37, 'bright_white':   97,
+    'reset':   39,
+}
+ANSI_RESET_ALL = '\033[0m'
 
-The printf() function wraps style() for common use cases and supports:
-- Debug mode filtering (only prints if RUN_DEBUG=true)
-- Text indentation
-- Automatic text-to-str conversion
-"""
+
+def _interpret_color(_color: StyleColor, offset: int = 0) -> str:
+    """
+    Resolve a color name, integer, or RGB tuple to an ANSI SGR parameter string.
+
+    :param _color: color as a named string, 256-color int, or ``(r, g, b)`` tuple
+    :param offset: offset added to the base code (0 for foreground, 10 for background)
+    :return: ANSI SGR parameter fragment (e.g. ``"32"`` or ``"38;2;255;0;0"``)
+    """
+    if isinstance(_color, int):
+        return f'{38 + offset};5;{_color:d}'
+    if isinstance(_color, (tuple, list)):
+        r, g, b = _color
+        return f'{38 + offset};2;{r:d};{g:d};{b:d}'
+    _color = cast('str', _color)
+    return str(ANSI_COLOR[_color] + offset)
 
 
 def style(
@@ -346,71 +387,36 @@ def style(
     reset: bool = True,
 ) -> str:
     """
-    Styles a text with ANSI styles and returns the new string. By default, the styling is self-contained. This means
-    that at the end of the string, a reset code is issued. This can be prevented by passing ``reset=False``
-
-    Examples::
-
-        print(style('Hello World!', fg='green'))
-        print(style('ATTENTION!', blink=True))
-        print(style('Some things', reverse=True, fg='cyan'))
-        print(style('More colors', fg=(255, 12, 128), bg=117))
+    Style text with ANSI escape codes.
 
     :param text: the string to style with ansi codes
-    :param fg: if provided this will become the foreground color
-    :param bg: if provided this will become the background color
-    :param bold: if provided this will enable or disable bold mode
-    :param dim: if provided this will enable or disable dim mode. This is badly supported
-    :param underline: if provided this will enable or disable underline
-    :param overline: if provided this will enable or disable overline
-    :param italic: if provided this will enable or disable italic
-    :param blink: if provided this will enable or disable blinking
-    :param reverse: if provided this will enable or disable inverse rendering (foreground becomes background and the
-                    other way round)
-    :param strikethrough: if provided this will enable or disable striking through text
-    :param reset: by default a reset-all code is added at the end of the string which means that styles do not carry
-                  over. This can be disabled to compose styles
-    :raises TypeError: if invalid fg/bg color requested
+    :param fg: foreground color
+    :param bg: background color
+    :param bold: enable or disable bold mode
+    :param dim: enable or disable dim mode
+    :param underline: enable or disable underline
+    :param overline: enable or disable overline
+    :param italic: enable or disable italic
+    :param blink: enable or disable blinking
+    :param reverse: enable or disable inverse rendering
+    :param strikethrough: enable or disable striking through text
+    :param reset: add a reset-all code at the end of the string
     :return: styled text
     """
-    _ansi_colors: dict[str, int] = {
-        'black':   30, 'bright_black':   90,
-        'red':     31, 'bright_red':     91,
-        'green':   32, 'bright_green':   92,
-        'yellow':  33, 'bright_yellow':  93,
-        'blue':    34, 'bright_blue':    94,
-        'magenta': 35, 'bright_magenta': 95,
-        'cyan':    36, 'bright_cyan':    96,
-        'white':   37, 'bright_white':   97,
-        'reset':   39,
-    }
-    _ansi_reset_all = '\033[0m'
-
-    def _interpret_color(_color: StyleColor, offset: int = 0) -> str:
-        if isinstance(_color, int):
-            return f'{38 + offset};5;{_color:d}'
-        if isinstance(_color, (tuple, list)):
-            r, g, b = _color
-            return f'{38 + offset};2;{r:d};{g:d};{b:d}'
-        _color = cast('str', _color)
-        return str(_ansi_colors[_color] + offset)
-
     if not isinstance(text, str):
         text = str(text)
 
     bits: list[str] = []
-    if fg:
+    if fg is not None:
         try:
             bits.append(f'\033[{_interpret_color(fg)}m')
         except KeyError:
             raise TypeError(f'Unknown color {fg!r}') from None
-
-    if bg:
+    if bg is not None:
         try:
             bits.append(f'\033[{_interpret_color(bg, 10)}m')
         except KeyError:
             raise TypeError(f'Unknown color {bg!r}') from None
-
     if bold is not None:
         bits.append(f'\033[{1 if bold else 22}m')
     if dim is not None:
@@ -430,7 +436,7 @@ def style(
 
     bits.append(text)
     if reset:
-        bits.append(_ansi_reset_all)
+        bits.append(ANSI_RESET_ALL)
     return ''.join(bits)
 
 
@@ -507,21 +513,21 @@ def arg_note(name: str, val: str, *, dim: bool = True, color: StyleColor | None 
     ])
 
 
-"""
-Command utils
-
-Subprocess execution with enhanced error handling and output formatting
-
-The shell_command() function provides two execution modes:
-1. capture_output=True: Captures stdout/stderr for programmatic use
-2. capture_output=False with indent: Streams output live via pty with indentation
-
-Key features:
-- Automatic environment variable injection (RUN_COMMAND_ENVVARS)
-- SSH error detection with helpful troubleshooting suggestions
-- Timeout support with graceful degradation
-- Custom ShellCommandError with formatted output
-"""
+# ====================================================================================================
+# Command utils
+#
+# Subprocess execution with enhanced error handling and output formatting
+#
+# The shell_command() function provides two execution modes:
+#   1. capture_output=True: Captures stdout/stderr for programmatic use
+#   2. capture_output=False with indent: Streams output live via pty with indentation
+#
+# Key features:
+#   - Automatic environment variable injection (RUN_COMMAND_ENVVARS)
+#   - SSH error detection with helpful troubleshooting suggestions
+#   - Timeout support with graceful degradation
+#   - Custom ShellCommandError with formatted output
+# ====================================================================================================
 
 
 RUN_COMMAND_ENVVARS: dict[str, str] = {}
@@ -792,13 +798,13 @@ def handle_command_error(e: subprocess.CalledProcessError, context: str, *, sugg
         printf(f'   └─ 💡 {suggestion}',                                         fg='yellow')
 
 
-"""
-Other utility functions
-
-Includes:
-- retry_on_failure: Decorator for exponential backoff retry logic
-- parse_extra_vars: Parse ansible-playbook -e key=value arguments
-"""
+# ====================================================================================================
+# Other utility functions
+#
+# Includes:
+#   - retry_on_failure: Decorator for exponential backoff retry logic
+#   - parse_extra_vars: Parse ansible-playbook -e key=value arguments
+# ====================================================================================================
 
 
 def retry_on_failure(
@@ -865,30 +871,21 @@ def parse_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
     return extra_vars
 
 
-"""
-Bootstrap commands
-"""
-
-
-# TODO: implement bootstrap command(s)
-
-
-"""
-Inventory commands
-
-Commands for managing the standalone inventory git repository
-
-The inventory is NOT a git submodule - it's a separate repository cloned into the inventory/ directory by run.py.
-This approach simplifies the mental model for personal dotfiles usage.
-
-Key commands:
-- list-hosts: Parse inventory.yml and display available bootstrap targets
-- inventory-status: Show git status and metadata for inventory directory
-- update-inventory: Clone (if missing) or pull (if exists) inventory repo
-  - Supports --force flag to reset uncommitted changes before pulling
-  - Includes retry logic with exponential backoff for network resilience
-  - Provides SSH error detection and troubleshooting guidance
-"""
+# ====================================================================================================
+# Inventory commands
+#
+# Commands for managing the standalone inventory git repository
+#
+# The inventory is NOT a git submodule - it's a separate repository cloned into the inventory/ directory by run.py.
+#
+# Key commands:
+# - list-hosts:       Parse inventory.yml and display available bootstrap targets
+# - inventory-status: Show git status and metadata for inventory directory
+# - update-inventory: Clone (if missing) or pull (if exists) inventory repo
+#   - Supports --force flag to reset uncommitted changes before pulling
+#   - Includes retry logic with exponential backoff for network resilience
+#   - Provides SSH error detection and troubleshooting guidance
+# ====================================================================================================
 
 
 @command(group='Inventory')
@@ -1147,7 +1144,7 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def _find_vault_files() -> list[Path]:
+def find_vault_files() -> list[Path]:
     """
     Find all vault.yml files in the inventory directory
 
@@ -1159,7 +1156,7 @@ def _find_vault_files() -> list[Path]:
     return sorted(vault_files)
 
 
-def _require_vault_password() -> None:
+def require_vault_password() -> None:
     """
     Validate that the vault password file exists and exit with an error if not
 
@@ -1172,7 +1169,7 @@ def _require_vault_password() -> None:
         sys.exit(1)
 
 
-def _require_inventory() -> None:
+def require_inventory() -> None:
     """
     Validate that the inventory directory exists and exit with an error if not
 
@@ -1190,10 +1187,10 @@ def cmd_vault_decrypt(args: argparse.Namespace) -> None:
     """
     Decrypt all inventory vault files for editing
     """
-    _require_vault_password()
-    _require_inventory()
+    require_vault_password()
+    require_inventory()
 
-    vault_files = _find_vault_files()
+    vault_files = find_vault_files()
     if not vault_files:
         printf('⚠️  No vault files found in inventory', fg='yellow')
         return
@@ -1208,10 +1205,11 @@ def cmd_vault_decrypt(args: argparse.Namespace) -> None:
                 capture_output=True,
             )
             printf(f'  └─ {style(str(relative), fg="green")} decrypted', indent=1)
+
+        # ansible-vault returns error if file is already decrypted
         except subprocess.CalledProcessError as e:
-            # ansible-vault returns error if file is already decrypted
             stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
-            if 'is not vault encrypted' in stderr or 'input is not vault encrypted' in stderr:
+            if ('is not vault encrypted' in stderr) or ('input is not vault encrypted' in stderr):
                 printf(f'  └─ {style(str(relative), fg="yellow")} already decrypted, skipping', indent=1)
             else:
                 printf(f'  └─ {style(str(relative), fg="red")} failed to decrypt', indent=1)
@@ -1231,10 +1229,10 @@ def cmd_vault_encrypt(args: argparse.Namespace) -> None:
     """
     Re-encrypt all inventory vault files after editing
     """
-    _require_vault_password()
-    _require_inventory()
+    require_vault_password()
+    require_inventory()
 
-    vault_files = _find_vault_files()
+    vault_files = find_vault_files()
     if not vault_files:
         printf('⚠️  No vault files found in inventory', fg='yellow')
         return
@@ -1249,6 +1247,7 @@ def cmd_vault_encrypt(args: argparse.Namespace) -> None:
                 capture_output=True,
             )
             printf(f'  └─ {style(str(relative), fg="green")} encrypted', indent=1)
+
         except subprocess.CalledProcessError as e:
             stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
             if 'input is already encrypted' in stderr:
@@ -1266,18 +1265,18 @@ def cmd_vault_encrypt(args: argparse.Namespace) -> None:
         printf('✅ All vault files encrypted', fg='bright_green')
 
 
-"""
-Codebase commands
-
-General repository maintenance commands:
-- clean: Remove build artifacts, caches, and temporary files
-- pre: Run prek hooks on all files
-- makefile: Generate Makefile targets from @command-registered functions
-  - Parses all registered commands and creates equivalent Make targets
-  - Organizes targets by command group
-  - Preserves command descriptions in Make comments
-  - Auto-generates help target with formatted command listing
-"""
+# ====================================================================================================
+# Codebase commands
+#
+# General repository maintenance commands:
+# - clean:    Remove build artifacts, caches, and temporary files
+# - pre:      Run prek hooks on all files
+# - makefile: Generate Makefile targets from @command-registered functions
+#   - Parses all registered commands and creates equivalent Make targets
+#   - Organizes targets by command group
+#   - Preserves command descriptions in Make comments
+#   - Auto-generates help target with formatted command listing
+# ====================================================================================================
 
 
 @command(group='Codebase')
@@ -1358,6 +1357,7 @@ def cmd_makefile(args: argparse.Namespace) -> None:
     """
     command_groups: dict[str, dict[str, CommandInfo]] = {}
     command_names:  list[str]                         = []
+
     for group_name, commands in get_command_groups().items():
         for cmd_name, cmd_info in commands.items():
             if not cmd_info.script_only:
@@ -1406,21 +1406,387 @@ def cmd_makefile(args: argparse.Namespace) -> None:
     printf('✅ Makefile updated', fg='bright_green')
 
 
-"""
-Core runner entry point logic
+# ====================================================================================================
+# Dotfiles commands
+#
+# Thin wrappers over the layered engine (stow.sh, bootstrap/bootstrap.sh, scripts/dotfiles/render.py)
+# plus a doctor that checks the overlay registry, link state, render drift, git version, and required tools:
+#   - bootstrap: Run the layered bootstrap stages
+#   - stow:      Link stow packages from every layer into $HOME
+#   - render:    Render settings files from per-layer fragments
+#   - doctor:    Verify the environment (``--fix`` runs each failing check's repair command, then re-checks)
+#   - test:      Run the test suite through the public-index uv wrapper
+# ====================================================================================================
 
-The main() function handles:
-1. Building the argument parser from registered commands
-2. Parsing command-line arguments
-3. Enabling debug mode if requested
-4. Dispatching to the appropriate command function
-5. Handling keyboard interrupts and unexpected errors gracefully
 
-The build_parser() function:
-- Creates main parser with custom help text organized by command group
-- Registers subparsers for each @command-decorated function
-- Integrates command-specific argument handlers via add_arguments callbacks
-"""
+@dataclasses.dataclass(frozen=True)
+class DoctorCheck:
+    """
+    Result of one doctor check
+
+    :param name: short check name
+    :param ok: whether the check passed
+    :param detail: one-line explanation
+    :param fix: command that repairs the problem, if one exists
+    """
+    name:   str
+    ok:     bool
+    detail: str
+    fix:    list[str] | None = None
+
+
+def _capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    """
+    Run a command quietly and capture its output (patched in tests)
+
+    :param cmd: command and arguments
+    :return: completed process with text stdout/stderr
+    """
+    return subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=DOTFILES_DIR)
+
+
+def _first_line(text: str, default: str) -> str:
+    """
+    Get the first non-empty line of command output with ANSI styling removed
+
+    :param text: command output
+    :param default: value returned when the output has no text
+    :return: first non-empty line, or ``default``
+    """
+    for line in unstyle(text).splitlines():
+        if line.strip():
+            return line.strip()
+    return default
+
+
+def check_layers() -> DoctorCheck:
+    """
+    Check that every registered overlay exists
+    """
+
+    # DOTFILES_REPO is pinned to this checkout so an inherited value from another one cannot redirect the base layer.
+    # Anything lib.sh or a layer env.sh prints while loading goes to stderr so it cannot be counted as a layer.
+    script = 'export DOTFILES_REPO="$1"; source "$1/bootstrap/lib.sh" >&2 && dotfiles_layers'
+    result = _capture(['bash', '-c', script, 'doctor', str(DOTFILES_DIR)])
+    if result.returncode != 0:
+        return DoctorCheck('layers', False, _first_line(result.stderr, 'overlay registry error'))
+
+    count = len([line for line in result.stdout.splitlines() if line])
+    return DoctorCheck('layers', True, f'{count} layer(s): base + {count - 1} overlay(s)')
+
+
+def check_links() -> DoctorCheck:
+    """
+    Check that stowing would change nothing
+    """
+    result = _capture(['bash', str(STOW_SCRIPT), '-n'])
+    if (
+        (result.returncode == 0) and
+        (('stow: no changes' in result.stdout) or ('stow: no packages found' in result.stdout))
+    ):
+        return DoctorCheck('links', True, 'all packages linked')
+
+    fix = ['bash', str(STOW_SCRIPT), '--backup-conflicts']
+    if result.returncode != 0:
+        return DoctorCheck('links', False, _first_line(result.stderr or result.stdout, 'stow simulation failed'), fix)
+
+    summary = next((line for line in result.stdout.splitlines() if re.match(r'stow: \d+ added', line)), '')
+    return DoctorCheck('links', False, summary or 'stow reports pending changes', fix)
+
+
+def check_render() -> DoctorCheck:
+    """
+    Check that rendered settings files match their fragments
+    """
+    result = _capture([sys.executable, str(RENDER_SCRIPT), '--check'])
+    if result.returncode == 0:
+        return DoctorCheck('render', True, 'rendered settings in sync')
+
+    if result.returncode == 1:
+        return DoctorCheck(
+            'render',
+            False,
+            'rendered settings out of sync (see: run.py render --diff)',
+            [sys.executable, str(RENDER_SCRIPT)],
+        )
+
+    # Exit 2 (or anything else): bad fragment/registry or I/O error, which re-rendering cannot repair
+    return DoctorCheck('render', False, _first_line(result.stderr, f'render failed (exit {result.returncode})'))
+
+
+def check_git_version() -> DoctorCheck:
+    """
+    Check that git supports ``includeIf "hasconfig:remote.*.url:..."`` (git >= 2.36)
+    """
+    result = _capture(['git', '--version'])
+    match  = re.search(r'(\d+)\.(\d+)', result.stdout)
+    if match is None:
+        return DoctorCheck('git', False, 'could not determine git version')
+
+    version = (int(match.group(1)), int(match.group(2)))
+    want    = '.'.join(map(str, MIN_GIT_VERSION))
+    return DoctorCheck(
+        'git',
+        version >= MIN_GIT_VERSION,
+        f'git {version[0]}.{version[1]} (need >= {want} for per-remote identity)',
+    )
+
+
+def check_tools() -> DoctorCheck:
+    """
+    Check that required command-line tools are on PATH
+    """
+    if missing := [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]:
+        return DoctorCheck('tools', False, f'missing: {", ".join(missing)}')
+    return DoctorCheck('tools', True, ', '.join(REQUIRED_TOOLS))
+
+
+def doctor_checks() -> list[DoctorCheck]:
+    """
+    Run every doctor check (tools and layers first; the rest depend on them)
+    """
+    first = [check_tools(), check_layers()]
+    if not all(c.ok for c in first):
+        return first
+    return [*first, check_git_version(), check_links(), check_render()]
+
+
+def add_doctor_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register doctor options
+    """
+    parser.add_argument(
+        '-f',
+        '--fix',
+        action='store_true',
+        help=(
+            'Run the fix for each failing check, then re-check '
+            '(links: stow.sh --backup-conflicts, which moves blocking files into ~/.dotfiles-backup/<timestamp>/)'
+        ),
+    )
+
+
+@command(group='Dotfiles', add_arguments=add_doctor_arguments)
+def cmd_doctor(args: argparse.Namespace) -> None:
+    """
+    Check overlay registry, links, rendered settings, git version, and tools
+    """
+    checks = doctor_checks()
+
+    if args.fix:
+        for check in checks:
+            if not check.ok and check.fix:
+                printf(f'🔧 {check.name}: {shlex.join(check.fix)}', fg='bright_cyan')
+                shell_command(check.fix, indent=3, check=False)
+        checks = doctor_checks()
+
+    for check in checks:
+        emoji = '🟢' if check.ok else '🔴'
+        printf(f'{emoji} {style(check.name, fg="white", bold=True)}  {check.detail}', indent=3)
+
+    if not all(check.ok for check in checks):
+        sys.exit(1)
+
+
+def add_bootstrap_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register bootstrap driver options
+    """
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Simulate every stage',
+    )
+    parser.add_argument(
+        '--list',
+        action='store_true',
+        help='List stages across layers',
+    )
+    parser.add_argument(
+        '--only',
+        metavar='STAGE',
+        help='Run a single stage',
+    )
+    parser.add_argument(
+        '--from',
+        dest='from_stage',
+        metavar='STAGE',
+        help='Run from STAGE onward',
+    )
+    parser.add_argument(
+        '--resume',
+        action='store_true',
+        help='Continue after the last completed stage',
+    )
+    parser.add_argument(
+        '--verify',
+        action='store_true',
+        help='Run doctor after all stages succeed',
+    )
+    parser.add_argument(
+        '--no-log',
+        action='store_true',
+        help='Do not tee output to the bootstrap log',
+    )
+
+
+@command(group='Dotfiles', add_arguments=add_bootstrap_arguments)
+def cmd_bootstrap(args: argparse.Namespace) -> None:
+    """
+    Run the layered bootstrap stages (bootstrap/bootstrap.sh)
+    """
+    cmd: list[str] = ['bash', str(BOOTSTRAP_SCRIPT)]
+    for flag, enabled in (
+        ('--dry-run', args.dry_run),
+        ('--list',    args.list),
+        ('--resume',  args.resume),
+        ('--verify',  args.verify),
+        ('--no-log',  args.no_log),
+    ):
+        if enabled:
+            cmd.append(flag)
+
+    if args.only:
+        cmd.extend(['--only', args.only])
+    if args.from_stage:
+        cmd.extend(['--from', args.from_stage])
+
+    sys.exit(
+        shell_command(cmd, check=False).returncode
+    )
+
+
+def add_stow_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register stow options
+    """
+    parser.add_argument(
+        'packages',
+        nargs='*',
+        help='Packages to stow (default: all, across layers)',
+    )
+    parser.add_argument(
+        '-n',
+        '--simulate',
+        action='store_true',
+        help='Preview without changing $HOME',
+    )
+    parser.add_argument(
+        '--backup-conflicts',
+        action='store_true',
+        help='Move blocking files to ~/.dotfiles-backup',
+    )
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='store_true',
+        help='Show the raw stow log',
+    )
+
+
+@command(group='Dotfiles', add_arguments=add_stow_arguments)
+def cmd_stow(args: argparse.Namespace) -> None:
+    """
+    Link stow packages from every layer into the home directory (stow.sh)
+    """
+    cmd: list[str] = ['bash', str(STOW_SCRIPT)]
+    if args.simulate:
+        cmd.append('-n')
+    if args.backup_conflicts:
+        cmd.append('--backup-conflicts')
+    if args.verbose:
+        cmd.append('--verbose')
+
+    sys.exit(
+        shell_command([*cmd, *args.packages], check=False).returncode,
+    )
+
+
+def add_render_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register render options
+    """
+    parser.add_argument(
+        'targets',
+        nargs='*',
+        help='Targets (default: all)',
+    )
+    parser.add_argument(
+        '--diff',
+        action='store_true',
+        help='Preview differences; write nothing',
+    )
+    parser.add_argument(
+        '--check',
+        action='store_true',
+        help='Exit 1 if out of sync; write nothing',
+    )
+    parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Overwrite in-app edits after backing them up',
+    )
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='store_true',
+        help='Report skipped/current targets',
+    )
+
+
+@command(group='Dotfiles', add_arguments=add_render_arguments)
+def cmd_render(args: argparse.Namespace) -> None:
+    """
+    Render settings files from per-layer fragments (scripts/dotfiles/render.py)
+    """
+    cmd: list[str] = [sys.executable, str(RENDER_SCRIPT), *args.targets]
+    for flag, enabled in (
+        ('--diff',  args.diff),
+        ('--check', args.check),
+        ('--force', args.force),
+        ('-v',      args.verbose),
+    ):
+        if enabled:
+            cmd.append(flag)
+
+    sys.exit(
+        shell_command(cmd, check=False).returncode,
+    )
+
+
+def add_test_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register test options
+    """
+    parser.add_argument('paths', nargs='*', help='Test paths (default: tests/)')
+
+
+@command(group='Dotfiles', add_arguments=add_test_arguments)
+def cmd_test(args: argparse.Namespace) -> None:
+    """
+    Run the test suite via uv (public-index wrapper)
+    """
+    cmd: list[str] = [str(UV_PUBLIC), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])]
+    sys.exit(
+        shell_command(cmd, check=False).returncode,
+    )
+
+
+# ====================================================================================================
+# Core runner entry point logic
+#
+# The main() function handles:
+#   1. Building the argument parser from registered commands
+#   2. Parsing command-line arguments
+#   3. Enabling debug mode if requested
+#   4. Dispatching to the appropriate command function
+#   5. Handling keyboard interrupts and unexpected errors gracefully
+#
+# The build_parser() function:
+#   - Creates main parser with custom help text organized by command group
+#   - Registers subparsers for each @command-decorated function
+#   - Integrates command-specific argument handlers via add_arguments callbacks
+# ====================================================================================================
 
 
 def build_parser_help_text(col1_width: int = 30) -> str:
@@ -1475,7 +1841,7 @@ def build_parser() -> argparse.ArgumentParser:
         subparser = subparsers.add_parser(
             cmd.name,
             description=cmd.description or f'Run {cmd.name} command',
-            help=cmd.description or f'Run {cmd.name} command',
+            help=cmd.description        or f'Run {cmd.name} command',
             epilog=cmd.epilog,
             formatter_class=cmd.formatter_class,
         )

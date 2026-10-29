@@ -5,7 +5,7 @@ globs: '**/*.py'
 # Python Style
 
 Self-contained Python style for this repository (does not depend on any global `~/.claude/rules/`). Python here is
-`run.py`, custom Ansible modules under `library/`, and helper scripts under `scripts/`.
+`run.py`, the engine tooling under `scripts/dotfiles/`, and helper scripts under `scripts/`.
 
 ## Tooling (non-negotiable)
 
