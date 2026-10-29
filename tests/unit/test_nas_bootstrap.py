@@ -15,6 +15,10 @@ FQCN_MODULE = re.compile(r'^\s*(?:-\s+)?([a-z0-9_]+)\.([a-z0-9_]+)\.[a-z0-9_]+:'
 # A collection entry in requirements.yml (e.g. ``  - name: community.docker``)
 REQUIREMENT = re.compile(r'^\s*-\s+name:\s*([a-z0-9_]+\.[a-z0-9_]+)\s*$', re.MULTILINE)
 
+# The pinned Homebrew installer SHA-256 in nas_bootstrap.sh and in bootstrap/50-brew.sh (group 1 is the digest)
+NAS_PIN  = re.compile(r'^\s*EXPECTED_CHECKSUM="([0-9a-f]{64})"', re.MULTILINE)
+BREW_PIN = re.compile(r'^BREW_INSTALLER_SHA256="([0-9a-f]{64})"', re.MULTILINE)
+
 
 class TestNasBootstrapScript:
     """
@@ -47,6 +51,17 @@ class TestNasBootstrapScript:
 
         assert 'EXPECTED_CHECKSUM=' in text
         assert 'Update EXPECTED_CHECKSUM in nas_bootstrap.sh' in text
+
+    def test_installer_checksum_matches_macos_brew_stage(self) -> None:
+        """
+        Test that nas_bootstrap.sh and bootstrap/50-brew.sh pin the same Homebrew installer SHA-256
+        """
+        nas  = NAS_PIN.search(self.SCRIPT.read_text(encoding='utf-8'))
+        brew = BREW_PIN.search((REPO_ROOT / 'bootstrap' / '50-brew.sh').read_text(encoding='utf-8'))
+
+        assert nas,  'EXPECTED_CHECKSUM pin not found in nas_bootstrap.sh'
+        assert brew, 'BREW_INSTALLER_SHA256 pin not found in bootstrap/50-brew.sh'
+        assert nas.group(1) == brew.group(1)
 
 
 class TestRolesRequirements:
