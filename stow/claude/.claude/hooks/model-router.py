@@ -18,19 +18,20 @@ from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
+from typing import Any
 
 # ==============================================================================
 # Constants
 # ==============================================================================
 
-VALID_MODELS = ('haiku', 'sonnet', 'opus', 'fable')
-VALID_MODES = ('off', 'advise', 'enforce')
-TIER_ORDER = {'haiku': 0, 'sonnet': 1, 'opus': 2}
-ROUTED_TOOLS = ('Agent', 'Task')
+VALID_MODELS   = ('haiku', 'sonnet', 'opus', 'fable')
+VALID_MODES    = ('off', 'advise', 'enforce')
+TIER_ORDER     = {'haiku': 0, 'sonnet': 1, 'opus': 2}
+ROUTED_TOOLS   = ('Agent', 'Task')
 DEFAULT_CONFIG = Path(__file__).with_name('model-router.default.json')
-CONFIG_NAME = 'model-router.json'
-LOG_MAX_BYTES = 1_000_000
-RULE_FLAGS = re.IGNORECASE | re.DOTALL
+CONFIG_NAME    = 'model-router.json'
+LOG_MAX_BYTES  = 1_000_000
+RULE_FLAGS     = re.IGNORECASE | re.DOTALL
 
 
 # ==============================================================================
@@ -41,6 +42,7 @@ class ConfigError(ValueError):
     """
     Raised when a config layer is unreadable or fails validation.
     """
+    pass
 
 
 def read_layer(path: Path, *, required: bool) -> dict:
@@ -56,10 +58,12 @@ def read_layer(path: Path, *, required: bool) -> dict:
         if required:
             raise ConfigError(f'missing config: {path}')
         return {}
+
     try:
         data = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError) as e:
         raise ConfigError(f'unreadable config {path}: {e!s}') from e
+
     if not isinstance(data, dict):
         raise ConfigError(f'config root must be an object: {path}')
     return data
@@ -75,7 +79,7 @@ def merge_layers(base: dict, override: dict) -> dict:
     """
     merged = dict(base)
     for key, value in override.items():
-        if key == 'rules' and isinstance(value, list) and isinstance(base.get(key), list):
+        if (key == 'rules') and isinstance(value, list) and isinstance(base.get(key), list):
             merged[key] = value + base[key]
         elif isinstance(value, dict) and isinstance(base.get(key), dict):
             merged[key] = merge_layers(base[key], value)
@@ -99,12 +103,15 @@ def _validate_rule(rule: object, index: int, classes: dict) -> None:
     where = f'rules[{index}]'
     if not isinstance(rule, dict):
         raise ConfigError(f'{where}: must be an object')
+
     name = rule.get('class')
     if not isinstance(name, str) or name not in classes:
         raise ConfigError(f'{where}.class: {rule.get("class")!r} is not a defined class')
+
     patterns = rule.get('any')
     if not isinstance(patterns, list) or not patterns or not all(isinstance(p, str) for p in patterns):
         raise ConfigError(f'{where}.any: must be a non-empty list of strings')
+
     for pattern in patterns:
         try:
             re.compile(pattern, RULE_FLAGS)
@@ -164,14 +171,17 @@ def load_config(cwd: Path, home: Path | None = None, default_path: Path = DEFAUL
     :return: the merged, validated config.
     """
     home = home or Path.home()
-    cfg = read_layer(default_path, required=True)
+    cfg  = read_layer(default_path, required=True)
+
     seen: list[Path] = []
     for root in (home, cwd):
         path = (root / '.claude' / CONFIG_NAME).resolve()
         if path in seen:
             continue
+
         seen.append(path)
         cfg = merge_layers(cfg, read_layer(path, required=False))
+
     validate_config(cfg)
     return cfg
 
@@ -200,7 +210,7 @@ def apply_floor(model: str, floor: str | None) -> str:
     :param floor: minimum tier, or ``None`` for no floor.
     :return: the model after applying the floor.
     """
-    if floor in TIER_ORDER and model in TIER_ORDER and TIER_ORDER[model] < TIER_ORDER[floor]:
+    if (floor in TIER_ORDER) and (model in TIER_ORDER) and (TIER_ORDER[model] < TIER_ORDER[floor]):
         return floor
     return model
 
@@ -217,15 +227,16 @@ def decide(tool_input: dict, cfg: dict) -> Decision:
         return Decision('passthrough', 'mode-off')
 
     description = str(tool_input.get('description') or '')
-    prompt = str(tool_input.get('prompt') or '')
-    prefix = cfg.get('opt_out_prefix') or ''
+    prompt      = str(tool_input.get('prompt') or '')
+    prefix      = cfg.get('opt_out_prefix') or ''
     if prefix and (prompt.lstrip().startswith(prefix) or description.lstrip().startswith(prefix)):
         return Decision('passthrough', 'opt-out')
 
-    subagent_type = str(tool_input.get('subagent_type') or 'general-purpose')
-    chosen: str | None = None
-    cls: str | None = None
+    chosen:  str | None = None
+    cls:     str | None = None
     rule_id: str | None = None
+
+    subagent_type = str(tool_input.get('subagent_type') or 'general-purpose')
     reason = 'unmatched'
 
     overrides = cfg.get('agent_overrides') or {}
@@ -235,18 +246,17 @@ def decide(tool_input: dict, cfg: dict) -> Decision:
         text = f'{description}\n{prompt}'
         for index, rule in enumerate(cfg.get('rules') or []):
             if any(re.search(pattern, text, RULE_FLAGS) for pattern in rule['any']):
-                cls = rule['class']
-                chosen = cfg['classes'][cls]
+                cls     = rule['class']
+                chosen  = cfg['classes'][cls]
                 rule_id = rule.get('id') or f'rule-{index}'
-                reason = 'rule'
+                reason  = 'rule'
                 break
 
     if chosen is None:
         return Decision('passthrough', 'unmatched')
 
     chosen = apply_floor(chosen, cfg.get('floor'))
-    preset = tool_input.get('model')
-    if preset:
+    if preset := tool_input.get('model'):
         verdict = 'preset-agree' if preset == chosen else 'preset-disagree'
         return Decision('passthrough', verdict, chosen, cls, rule_id)
 
@@ -308,8 +318,9 @@ def handle_pre(payload: dict, cfg: dict) -> tuple[dict | None, dict]:
     :return: ``(hook_output, log_record)``; the record never contains prompt text.
     """
     tool_input = payload.get('tool_input') or {}
-    decision = decide(tool_input, cfg)
-    record = {
+    decision   = decide(tool_input, cfg)
+
+    record: dict[str, Any] = {
         'event':           'pre',
         'ts':              now_iso(),
         'session_id':      payload.get('session_id'),
@@ -382,9 +393,11 @@ def write_log(record: dict) -> None:
     try:
         directory = state_dir()
         directory.mkdir(parents=True, exist_ok=True)
+
         path = directory / 'decisions.jsonl'
-        if path.is_file() and path.stat().st_size > LOG_MAX_BYTES:
+        if path.is_file() and (path.stat().st_size > LOG_MAX_BYTES):
             path.replace(directory / 'decisions.jsonl.1')
+
         with path.open('a', encoding='utf-8') as handle:
             handle.write(json.dumps(record, sort_keys=True) + '\n')
     except OSError:
@@ -405,7 +418,7 @@ def run(mode: str, raw: str) -> dict | None:
     """
     try:
         payload = json.loads(raw or '{}')
-        if not isinstance(payload, dict) or payload.get('tool_name') not in ROUTED_TOOLS:
+        if (not isinstance(payload, dict)) or (payload.get('tool_name') not in ROUTED_TOOLS):
             return None
 
         cfg = load_config(Path(payload.get('cwd') or Path.cwd()))
@@ -416,9 +429,11 @@ def run(mode: str, raw: str) -> dict | None:
             output, record = handle_pre(payload, cfg)
         else:
             output, record = None, handle_post(payload)
+
         if cfg.get('log', True):
             write_log(record)
         return output
+
     except Exception as e:
         write_log({'event': 'error', 'ts': now_iso(), 'mode': mode, 'error': f'{type(e).__name__}: {e!s}'})
         return None
