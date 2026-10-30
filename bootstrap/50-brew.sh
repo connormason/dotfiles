@@ -43,9 +43,9 @@ install_homebrew() {
         warn "Homebrew installer checksum mismatch"
         warn "  expected: $BREW_INSTALLER_SHA256"
         warn "  actual:   $actual"
-        warn "either Homebrew updated its installer (normal) or the download was tampered with."
-        warn "verify the new checksum at https://github.com/Homebrew/install and update BREW_INSTALLER_SHA256 in $0"
-        die "Homebrew installer checksum mismatch; re-run after updating: bootstrap.sh --from 50-brew"
+        warn "the URL is pinned to an upstream commit: treat this as a bad or tampered download, not a Homebrew update"
+        warn "retry first; re-pin $0 and nas_bootstrap.sh together only to adopt a newer upstream commit (README.md)"
+        die "Homebrew installer checksum mismatch; retry with: bootstrap.sh --from 50-brew"
     fi
     log "installer checksum verified"
 

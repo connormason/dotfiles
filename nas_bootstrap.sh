@@ -49,14 +49,15 @@ if [[ ! $(command -v brew) ]]; then
         echo -e "Expected: $EXPECTED_CHECKSUM"
         echo -e "Actual:   $ACTUAL_CHECKSUM"
         echo -e ""
-        echo -e "This could indicate:"
-        echo -e "  1. The Homebrew installer has been updated (normal)"
-        echo -e "  2. A security issue (man-in-the-middle attack, DNS hijacking)"
+        echo -e "The installer URL is pinned to an upstream commit, so its content does not change when Homebrew"
+        echo -e "updates install.sh. A mismatch indicates a bad download or a security issue (man-in-the-middle"
+        echo -e "attack, DNS hijacking), not a Homebrew update."
         echo -e ""
         echo -e "To proceed safely:"
-        echo -e "  1. Verify the new checksum at https://github.com/Homebrew/install"
-        echo -e "  2. Update EXPECTED_CHECKSUM in nas_bootstrap.sh"
-        echo -e "  3. Re-run this script"
+        echo -e "  1. Re-run this script; if the mismatch persists, do not run the installer"
+        echo -e "  2. Only to adopt a newer upstream commit on purpose: put its SHA in the installer URL in this script."
+        echo -e "     Update EXPECTED_CHECKSUM in nas_bootstrap.sh to the SHA-256 of that URL, and mirror both values"
+        echo -e "     in bootstrap/50-brew.sh in the same commit (a test keeps them identical), then re-run"
         exit 1
     fi
 
