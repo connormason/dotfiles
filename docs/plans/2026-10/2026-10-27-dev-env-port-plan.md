@@ -848,8 +848,9 @@ Constraints above governed Phase A only. Every `run.py` command below runs from 
      rewrites `settings.json` on its own (drift guard noise).
   3. The 2026-10-29 model-router spike already showed that hooks supplied through `claude -p ... --settings` run
      (`docs/plans/2026-10/2026-10-29-model-router-design.md`, "Spike results"); this probe resolves only the two points
-     still open: whether a project hook runs alongside the `--settings` hook, and which `env` value wins. In a terminal
-     (not inside Claude Code), probe `--settings` layering: in an empty directory create
+     still open: whether a project hook runs alongside the `--settings` hook, and which `env` value wins (it also
+     exercises a SessionStart hook supplied via `--settings`). In a terminal (not inside Claude Code), probe
+     `--settings` layering: in an empty directory create
      `.claude/settings.json` = `{"env": {"LAYER_PROJ": "project"}, "hooks": {"SessionStart": [{"hooks": [{"type":
      "command", "command": "echo project-hook >> out.txt"}]}]}}` and `overlay.json` = `{"env": {"LAYER_OVERLAY":
      "overlay", "LAYER_PROJ": "overlay"}, "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "echo
