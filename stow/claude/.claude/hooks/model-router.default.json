@@ -1,0 +1,39 @@
+{
+  "mode": "advise",
+  "opt_out_prefix": "~",
+  "classes": {
+    "mechanical": "haiku",
+    "standard": "sonnet",
+    "hard": "opus"
+  },
+  "agent_overrides": {
+    "Plan": "opus"
+  },
+  "classify_types": ["general-purpose", "Explore"],
+  "rules": [
+    {
+      "id": "hard-keywords",
+      "class": "hard",
+      "any": [
+        "\\barchitect",
+        "\\bdesign\\b.*\\btrade-?offs?\\b",
+        "\\broot cause\\b",
+        "\\bsecurity (review|audit)\\b",
+        "\\brace condition\\b"
+      ]
+    },
+    {
+      "id": "mechanical-keywords",
+      "class": "mechanical",
+      "any": [
+        "\\brename\\b",
+        "\\bgrep\\b",
+        "\\blist all\\b",
+        "\\bfind (all|every)\\b",
+        "\\bwhere (is|are)\\b"
+      ]
+    }
+  ],
+  "floor": "haiku",
+  "log": true
+}

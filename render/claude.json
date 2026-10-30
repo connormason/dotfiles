@@ -37,6 +37,7 @@
     "BASH_DEFAULT_TIMEOUT_MS": "900000",
     "BASH_MAX_TIMEOUT_MS": "900000",
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "COLUMNS": "255",
     "DISABLE_TELEMETRY": "1",
     "ENABLE_TOOL_SEARCH": "true",
@@ -74,6 +75,16 @@
             "command": "$HOME/.claude/hooks/shell-lint-on-edit.sh"
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/model-router.py post",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -96,6 +107,16 @@
           {
             "type": "command",
             "command": "$HOME/.claude/hooks/secret-scanner.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/model-router.py pre",
+            "timeout": 10
           }
         ]
       }

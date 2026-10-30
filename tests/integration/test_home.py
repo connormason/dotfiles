@@ -848,6 +848,13 @@ class TestClaude:
         assert direct
         assert [str(script) for script in direct if not os.access(script, os.X_OK)] == []
 
+    def test_model_router_default_config_stowed_beside_script(self, home: Home) -> None:
+        """
+        Test that the model-router default config is stowed beside the script, since a missing default silently
+        disables routing (the hook fails open on a missing config)
+        """
+        assert (home.path / '.claude' / 'hooks' / 'model-router.default.json').is_file()
+
     def test_base_settings_carry_no_overlay_only_keys(self, home: Home) -> None:
         """
         Test that keys the work overlay owns are absent when only the base and fixture overlay are rendered
