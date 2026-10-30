@@ -153,6 +153,7 @@ class TestBrewInstallerChecksum:
         # and the comparison under test are untouched
         text = sandbox.stage.read_text(encoding='utf-8')
         assert PINNED_SHA.search(text)
+
         pinned_url = PINNED_URL.search(text)
         assert pinned_url
         assert re.search(r'/Homebrew/install/[0-9a-f]{40}/install\.sh$', pinned_url.group(1))

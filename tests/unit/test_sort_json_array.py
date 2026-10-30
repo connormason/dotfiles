@@ -89,8 +89,8 @@ class TestSortFile:
         """
         path = tmp_path / 'in.json'
         _write_json(path, [{'command': 'z'}, {'command': 'a'}])
-
         assert sort_json_array.sort_file(path, key='command', indent=4) == 1
+
         rewritten = path.read_text(encoding='utf-8')
         assert sort_json_array.sort_file(path, key='command', indent=4) == 0
         assert path.read_text(encoding='utf-8') == rewritten
