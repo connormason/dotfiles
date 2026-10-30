@@ -746,18 +746,20 @@ worktree, so Step 1 backs staging up first. (These steps were previously in the 
 
 ## Phase B — Personal MacBook (runbook, executed by the user with assistance)
 
-These steps run on the personal MacBook against `main` at or after e76def5 (PRs #18, #19 and #22 merged). They are a
-checklist, not subagent tasks; the Global Constraints above governed Phase A only. Every `run.py` command below runs
-from the checkout root as `python3 run.py <command>`, the form `README.md` and `docs/RUN_PY_REFERENCE.md` use.
+These steps run on the personal MacBook against `main` once the close-out follow-ups PR is merged (it carries the
+commit-pinned Homebrew installer and the `60-macos` fixes; PRs #18, #19 and #22 are already merged); the file:line
+references below hold only for `main` after that merge. They are a checklist, not subagent tasks; the Global
+Constraints above governed Phase A only. Every `run.py` command below runs from the checkout root as
+`python3 run.py <command>`, the form `README.md` and `docs/RUN_PY_REFERENCE.md` use.
 
 > **Before you start: resolve these three blockers first.** This runbook does not decide them; the open questions they
 > depend on are listed at the end of Phase B.
 >
 > 1. **The old checkout (Q1).** An Ansible-era checkout of this same repo likely exists on this Mac: the Ansible roles
->    linked files from, and pointed iTerm2 at, paths under `<checkout>/roles/` (`archive/ansible-macos/README.md`, "How
->    the tree was designed to run"), and those paths no longer exist on `main`. Its location is not recorded here. Locate
->    it, run `git status` in it, and take a dereferenced backup (`cp -RL` or `rsync -aL`) before anything clones into it
->    or pulls it.
+>    linked files from, and pointed iTerm2 at, paths under `<checkout>/roles/` (`archive/ansible-macos/README.md`,
+>    "How the tree was designed to run"), and those paths no longer exist on `main`. Its location is not recorded here.
+>    Locate it, run `git status` in it, and take a dereferenced backup (`cp -RL` or `rsync -aL`) before anything clones
+>    into it or pulls it.
 > 2. **Brewfile entries that can fail (Q3, Q4).** `50-brew` runs `brew bundle --file` for each Brewfile under `set -e`
 >    (`bootstrap/50-brew.sh:75`), and the driver stops at the first failed stage, so one failed entry (a paid `mas` app
 >    the Apple ID never acquired, a cask already installed by hand, no App Store sign-in) stops the whole run. Once
@@ -768,6 +770,9 @@ from the checkout root as `python3 run.py <command>`, the form `README.md` and `
 >    installed yet; preview skipped`). Install it first (`brew install stow`, once Homebrew is present) and treat the
 >    preview as a hard checkpoint: do not start the real run in B3 until the dry run has printed the
 >    `stow: would back up existing …` lines or `stow: simulated …`.
+>
+> If Homebrew is absent, neither check (items 2 and 3) can run before the real run: stage `50-brew` installs Homebrew
+> and applies the Brewfiles in one step (`bootstrap/50-brew.sh:55-85`); how to proceed then is an open question.
 
 - [ ] **B1. Prepare:** macOS updated; `xcode-select --install`; `git clone git@github.com:connormason/dotfiles.git
   ~/dotfiles-personal`; register the profile from the checkout root with the snippet in
@@ -789,23 +794,25 @@ from the checkout root as `python3 run.py <command>`, the form `README.md` and `
   comments (move anything worth keeping into `render/vscode.json` first).
   **Homebrew pin:** if `brew` is absent, `50-brew` downloads the installer from a commit-pinned URL and verifies it
   against `BREW_INSTALLER_SHA256` before running it (`bootstrap/50-brew.sh:9-17`, `:41-49`); the dry run neither
-  downloads nor verifies it. If the real run stops on a checksum mismatch, follow the README section "Homebrew Checksum
-  Mismatch": update both pins (`bootstrap/50-brew.sh` and `nas_bootstrap.sh`, URL and checksum) in one commit
-  (`tests/unit/test_nas_bootstrap.py` fails unless they are identical), then continue with `bootstrap.sh --resume`.
+  downloads nor verifies it. Content at a commit-pinned URL does not change, so a mismatch in the real run means a bad
+  or tampered download, not a Homebrew update: treat it as a bad download first and re-run (README "Homebrew Checksum
+  Mismatch"), with `bootstrap.sh --resume --verify` so the doctor run still follows. Re-pin both scripts
+  (`bootstrap/50-brew.sh` and `nas_bootstrap.sh`, URL and checksum, in one commit; `tests/unit/test_nas_bootstrap.py`
+  fails unless they are identical) only when deliberately moving to a newer upstream commit.
 - **Rollback (manual; nothing here is scripted).** Derived from the code:
   - *Links.* `stow.sh` rejects `-D` and `--adopt` (`stow.sh:66-68`), so unlink with stow itself, using the flags
     `stow.sh` passes (`stow.sh:271-272`) with `-D` in place of `--restow`. `./stow.sh --list` prints each package with
     its layer; with only `personal-mac` registered every package is in the base layer (the profile has no `stow/`).
-    Preview with `-n`, then run the same command without it:
+    Preview with `-n -v` (without `-v` stow prints only its simulation warning), then run it without `-n`:
 
     ```bash
     cd ~/dotfiles-personal
     stow --dir "$PWD/stow" --target "$HOME" --no-folding --ignore='\.DS_Store' --ignore='\.backups' \
-        -n -D $(./stow.sh --list | cut -f1)
+        -n -v -D $(./stow.sh --list | cut -f1)
     ```
 
     For any other layer `--list` prints, repeat with `--dir <layer>/stow` and that layer's packages. The real
-    directories created for the links (`stow.sh` always uses `--no-folding`) stay behind, empty.
+    directories created for the links (`stow.sh` always uses `--no-folding`) stay behind (stow removes only links).
   - *Files moved aside.* `stow.sh --backup-conflicts` moves blocking files to
     `~/.dotfiles-backup/<YYYYmmdd-HHMMSS>/<path relative to ~>` (`stow.sh:369`, `:399-405`); after unlinking, move each
     one back to the same path under `~`. B2's copies are in `~/.dotfiles-backup/pre-base/`.
@@ -814,8 +821,9 @@ from the checkout root as `python3 run.py <command>`, the form `README.md` and `
     live file only when `--force` overwrites a drifted one, into its own `~/.dotfiles-backup/<YYYYmmdd-HHMMSS>/`
     directory (`render.py:358-384`, `:449-450`): copy that file back, or delete a target that did not exist before.
     Clear the render state with `rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/render"`
-    (`render.py:280-288`); without it, the next render refuses any live file that differs from the fragments
-    (`render.py:430-442`).
+    (`render.py:280-288`). Once the state is gone, the next render treats any existing live file that differs from the
+    fragments as drift and refuses it without `--force`; clearing it keeps a stale record from authorising a silent
+    overwrite (`render.py:430-442`).
   - *Bootstrap state.* `${BOOTSTRAP_LOG_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-bootstrap}/` holds
     `last-completed-stage` (read by `--resume`) and one `bootstrap-<YYYYmmdd-HHMMSS>.log` per run
     (`bootstrap/bootstrap.sh:146-149`, `:182-196`). Delete `last-completed-stage` so a later `--resume` starts from the
@@ -824,9 +832,10 @@ from the checkout root as `python3 run.py <command>`, the form `README.md` and `
     no backup, so preference changes have no automatic restore point. Whether to take a `defaults export` copy before
     the first real run is open question Q8.
   - Homebrew installs, the oh-my-zsh install and plugin clones, and the other stages' installs have no undo step here.
-- [ ] **B4. Verify:** in a new terminal, `zsh -i -c exit 2>&1 | wc -c` prints `0` and `time zsh -i -c exit` stays under
-  the 300 ms startup budget (Task 7); inside `~/dotfiles-personal`, `git config --show-origin user.email` names the
-  personal identity file (`file:` followed by the absolute path of `~/.config/git/identity-personal`) as its origin;
+- [ ] **B4. Verify:** in a new terminal, `zsh -i -c exit 2>&1 | wc -c` prints `0`, and on a second (warm) run
+  `time zsh -i -c exit` stays under the 300 ms startup budget (Task 7); inside `~/dotfiles-personal`,
+  `git config --show-origin user.email` names the personal identity file (`file:` followed by the absolute path of
+  `~/.config/git/identity-personal`) as its origin;
   `ssh -v -G nas 2>&1 | grep -E 'config\.d/personal'` prints the `Reading configuration data …/.ssh/config.d/personal`
   and `Applying options for nas` lines, which proves the `Include` (a bare `ssh -G nas` prints `hostname nas` even with
   no ssh config at all); `which -a claude` and `claude --version` show which copy runs (a native install in
@@ -849,8 +858,8 @@ from the checkout root as `python3 run.py <command>`, the form `README.md` and `
 - [ ] **B6. Record findings** in `docs/plans/2026-11/<date>-phase-b-findings.md`, update the spec's Clarifications
   section, and open a small PR with the `render/claude.json` plugin set and any fixes.
 
-**Open owner questions referenced above** (undecided; numbered as in the 2026-10-30 dry review of this runbook, whose
-other questions stay open there):
+**Open owner questions referenced above** (undecided; only the questions this runbook depends on are listed, hence the
+gaps in numbering):
 
 - **Q1:** Where is the Ansible-era checkout on this Mac, and does it have uncommitted changes? Clone fresh, or update
   that checkout in place after the dereferenced backup?
