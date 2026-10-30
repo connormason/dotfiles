@@ -6,9 +6,8 @@
 
 Custom pre-commit hook scripts for checks and transforms not covered by standard hooks. The Python scripts follow the
 same interface contract as `pre-commit`: they accept a list of filenames as positional arguments and exit `0` on success
-or non-zero on failure. All but [`sort-json-array.py`](#sort-json-arraypy) are wired into
-[`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) as `local` repo hooks and run via `prek` / `make pre`;
-`sort-json-array.py` is available but not wired. Each Python script is a self-contained PEP 723 script, so `uv run`
+or non-zero on failure. Every script here is wired into [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) as a
+`local` repo hook and runs via `prek` / `make pre`. Each Python script is a self-contained PEP 723 script, so `uv run`
 resolves any dependencies in isolation. [`uv-public.sh`](#uv-publicsh) and [`check-leaks-push.sh`](#check-leaks-pushsh)
 are the exceptions: shell scripts rather than PEP 723 scripts.
 
@@ -67,17 +66,16 @@ are the exceptions: shell scripts rather than PEP 723 scripts.
 | [`check-leaks-push.sh`](#check-leaks-pushsh) | Pre-push scan of pushed commits' identities, messages, and added lines  | `check-leaks-push-history`, `check-leaks-push-files` | 10 (check phase)  |
 | [`check-pkl.py`](#check-pklpy)               | Validate Pkl files by running `pkl eval --format yaml`                  | `check-pkl`                                          | 10 (check phase)  |
 | [`format-pkl.py`](#format-pklpy)             | Auto-format Pkl files via `pkl format`                                  | `format-pkl`                                         | 35 (format phase) |
-| [`sort-json-array.py`](#sort-json-arraypy)   | Sort a top-level JSON array of objects by a key                         | — (not wired)                                        | —                 |
+| [`sort-json-array.py`](#sort-json-arraypy)   | Sort a top-level JSON array of objects by a key                         | `sort-json-array`                                    | 35 (format phase) |
 | [`uv-public.sh`](#uv-publicsh)               | Run uv against public PyPI only (wraps `uv-lock`/`uv-sync`/`uv-export`) | `uv-*`                                               | 0–5 (sync phase)  |
 
 > [!NOTE]
 > This repository currently tracks no `.json5` or `.pkl` files, so `check-pkl` and `format-pkl` match nothing today and
 > fire automatically the moment a matching file lands. `check-json5` also matches `stow/zed/**/*.json` and therefore
-> validates the tracked Zed settings file today. `sort-json-array.py` is **not wired**: no hook in
-> `.pre-commit-config.yaml` invokes it, so the tracked `keybindings.json` under `stow/vscode/` is not sorted or checked
-> by it (it is currently already sorted by `command`). `check-leaks` runs on every commit; the `uv-*` hooks run through
-> `uv-public.sh` but fire only on their own triggers (`uv-lock` when `uv.lock`, `pyproject.toml`, or `uv.toml` is
-> staged; `uv-sync` after checkout, merge, or rewrite).
+> validates the tracked Zed settings file today. `sort-json-array` is scoped to the one tracked `keybindings.json` under
+> `stow/vscode/` (already sorted by `command`, so it is a no-op until that file changes). `check-leaks` runs on every
+> commit; the `uv-*` hooks run through `uv-public.sh` but fire only on their own triggers (`uv-lock` when `uv.lock`,
+> `pyproject.toml`, or `uv.toml` is staged; `uv-sync` after checkout, merge, or rewrite).
 
 ## Pre-Commit Wiring<a name="pre-commit-wiring"></a>
 
@@ -132,6 +130,8 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
         types: [file]
 ```
 
+The `sort-json-array` entry is shown [in its own section](#pre-commit-integration-5).
+
 **Priority scheme** used across the whole config:
 
 | Priority band | Phase             | Notes                                                                                          |
@@ -139,13 +139,13 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
 | 0–6           | Dependency sync   | `uv-lock`, `uv-sync`, `uv-export` (via `uv-public.sh`), `sync-with-uv`, `sync-pre-commit-deps` |
 | 10            | Read-only checks  | Run in parallel; `check-json5`, `check-pkl`, `check-leaks` live here                           |
 | 20–23         | Whitespace fixers | `fix-byte-order-marker`, `end-of-file-fixer`, `trailing-whitespace`, etc.                      |
-| 30–35         | Formatters        | `keep-sorted` (30); `shfmt`, `format-pkl`, etc. (35)                                           |
+| 30–35         | Formatters        | `keep-sorted` (30); `shfmt`, `format-pkl`, `sort-json-array`, etc. (35)                        |
 | 40            | Linters           | `ruff`, `mypy`, `yamllint`, `shellcheck`, `codespell`                                          |
 
-The `format-pkl` hook carries `stages: [pre-commit]` so it is skipped when the config is run in CI (`manual` stage).
-`check-pkl` and `check-json5` run in the `pre-commit` and `manual` (CI) stages (`check-leaks` is `pre-commit` only and
-`check-leaks-msg` is `commit-msg` only; the `check-leaks-push-*` hooks are `pre-push` only; CI runs its own leak-guard
-job). `sort-json-array` has no hook entry, so it has no priority.
+The `format-pkl` and `sort-json-array` hooks carry `stages: [pre-commit]` so they are skipped when the config is run in
+CI (`manual` stage). `check-pkl` and `check-json5` run in the `pre-commit` and `manual` (CI) stages (`check-leaks` is
+`pre-commit` only and `check-leaks-msg` is `commit-msg` only; the `check-leaks-push-*` hooks are `pre-push` only; CI
+runs its own leak-guard job).
 
 Both Pkl hooks are tolerant of environments where `pkl` is not installed: by default they print a warning and exit `0`.
 Pass `--require-pkl` to make the missing binary a hard failure.
@@ -618,19 +618,32 @@ For each filename:
 
 ### Pre-Commit Integration<a name="pre-commit-integration-5"></a>
 
-**Not wired.** `.pre-commit-config.yaml` has no `sort-json-array` entry, so nothing runs this script automatically. It
-can be run by hand (`scripts/hooks/uv-public.sh run scripts/hooks/sort-json-array.py <file>`), for example against
-`stow/vscode/Library/Application Support/Code/User/keybindings.json`, the repository's only `keybindings.json`, which is
-currently already sorted by `command`. Because the default `--key` is `command`, a hook entry along these lines would
-fit keybindings-style files:
+**Wired** for the repository's only `keybindings.json`,
+`stow/vscode/Library/Application Support/Code/User/keybindings.json` (the `files` regex is anchored to that exact path).
+The file is already sorted by `command`, so the hook is a no-op until an entry is added out of order, at which point it
+rewrites the file and fails the commit so the sorted result can be re-staged. The entry in
+[`.pre-commit-config.yaml`](../../.pre-commit-config.yaml):
 
 ```yaml
   - id: sort-json-array
+    name: '[format] json array sort (keybindings)'
+    stages: [pre-commit]
+    priority: 35
     entry: scripts/hooks/sort-json-array.py
     language: python
     args: [--key, command]
-    files: .*keybindings\.json$
+    files: ^stow/vscode/Library/Application Support/Code/User/keybindings\.json$
 ```
+
+`stages: [pre-commit]` follows the other formatters that rewrite files (`keep-sorted`, `pretty-format-json`,
+`format-pkl`): it runs on `git commit` and `make pre` but not in CI. The script can also be run by hand with
+`scripts/hooks/uv-public.sh run scripts/hooks/sort-json-array.py <file>`.
+
+> [!CAUTION]
+> VS Code evaluates keybindings in file order, and when two entries share the same `key` and `when`, the later one wins.
+> Sorting by `command` can therefore change precedence for such conflicting pairs. The tracked file has none today (no
+> two entries share a `key` and `when` pair; the three chords that appear twice (`shift+alt+down`, `shift+alt+up` and
+> `ctrl+g`) each differ in `when`), but check for new conflicts before adding entries.
 
 ---
 
