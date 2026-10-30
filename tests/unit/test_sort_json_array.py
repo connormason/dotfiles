@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -173,15 +174,17 @@ class TestMain:
 
         assert sort_json_array.main(['--key', 'command', str(sorted_path), str(unsorted_path)]) == 1
 
-    def test_tracked_keybindings_already_sorted(self) -> None:
+    def test_tracked_keybindings_already_sorted(self, tmp_path: Path) -> None:
         """
         Test that the tracked VS Code keybindings.json is sorted, so the wired hook is a no-op on it
         """
-        path     = REPO_ROOT / KEYBINDINGS
-        original = path.read_bytes()
+        tracked  = REPO_ROOT / KEYBINDINGS
+        original = tracked.read_bytes()
+        copy     = tmp_path / 'keybindings.json'
+        shutil.copy(tracked, copy)
 
-        assert sort_json_array.sort_file(path, key='command', indent=4) == 0
-        assert path.read_bytes() == original
+        assert sort_json_array.sort_file(copy, key='command', indent=4) == 0
+        assert copy.read_bytes() == original
 
 
 class TestPreCommitWiring:
@@ -194,6 +197,8 @@ class TestPreCommitWiring:
         """
         hook = _wired_hook()
 
+        assert hook['name']     == '[format] json array sort (keybindings)'
+        assert hook['priority'] == 35
         assert hook['entry']    == 'scripts/hooks/sort-json-array.py'
         assert hook['language'] == 'python'
         assert hook['args']     == ['--key', 'command']
