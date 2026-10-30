@@ -90,7 +90,7 @@ run defaults write com.apple.dock launchanim -int 1
 # https://macos-defaults.com/dock/show-recents.html
 run defaults write com.apple.dock show-recents -bool true
 
-# Set Dock minimize animation to "suck" (hidden value, not available in System Preferences)
+# Set Dock minimize animation to "suck" (hidden value, not available in System Settings)
 # https://macos-defaults.com/dock/mineffect.html
 run defaults write com.apple.dock mineffect -string "suck"
 
