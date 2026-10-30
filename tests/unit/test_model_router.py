@@ -17,7 +17,7 @@ import pytest
 if TYPE_CHECKING:
     from types import ModuleType
 
-HOOKS_DIR = Path(__file__).resolve().parents[2] / 'stow' / 'claude' / '.claude' / 'hooks'
+HOOKS_DIR   = Path(__file__).resolve().parents[2] / 'stow' / 'claude' / '.claude' / 'hooks'
 SCRIPT_PATH = HOOKS_DIR / 'model-router.py'
 
 
@@ -31,6 +31,7 @@ def _load_module() -> ModuleType:
 
     module = importlib.util.module_from_spec(spec)
     sys.modules['model_router'] = module
+
     # The script lives in a stow package: keep exec_module from leaving a __pycache__ that stow would link into $HOME
     previous = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
@@ -38,6 +39,7 @@ def _load_module() -> ModuleType:
         spec.loader.exec_module(module)
     finally:
         sys.dont_write_bytecode = previous
+
     return module
 
 
@@ -58,11 +60,12 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Env:
     """
     Point HOME and XDG_STATE_HOME at throwaway directories so no real config or log is touched
     """
-    home = tmp_path / 'home'
+    home    = tmp_path / 'home'
     project = tmp_path / 'proj'
     home.mkdir()
     project.mkdir()
-    monkeypatch.setenv('HOME', str(home))
+
+    monkeypatch.setenv('HOME',           str(home))
     monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path / 'state'))
     return Env(home, tmp_path / 'state', project)
 
@@ -106,7 +109,7 @@ class TestLoadConfig:
         """
         Test that the project layer beats the user layer
         """
-        _write_layer(env.home, {'mode': 'enforce'})
+        _write_layer(env.home,    {'mode': 'enforce'})
         _write_layer(env.project, {'mode': 'off'})
         assert model_router.load_config(env.project)['mode'] == 'off'
 
@@ -114,8 +117,9 @@ class TestLoadConfig:
         """
         Test that project rules are evaluated before user rules, which precede the defaults
         """
-        _write_layer(env.home, {'rules': [{'id': 'user', 'class': 'hard', 'any': ['zzz']}]})
+        _write_layer(env.home,    {'rules': [{'id': 'user', 'class': 'hard', 'any': ['zzz']}]})
         _write_layer(env.project, {'rules': [{'id': 'proj', 'class': 'hard', 'any': ['yyy']}]})
+
         ids = [rule['id'] for rule in model_router.load_config(env.project)['rules']]
         assert ids[:2] == ['proj', 'user']
         assert 'hard-keywords' in ids
@@ -125,8 +129,9 @@ class TestLoadConfig:
         Test that overriding one class keeps the others
         """
         _write_layer(env.home, {'classes': {'standard': 'opus'}})
+
         classes = model_router.load_config(env.project)['classes']
-        assert classes['standard'] == 'opus'
+        assert classes['standard']   == 'opus'
         assert classes['mechanical'] == 'haiku'
 
     def test_same_layer_not_applied_twice(self, env: Env) -> None:
@@ -214,47 +219,137 @@ class TestDecide:
         ('tool_input', 'overrides', 'action', 'model', 'reason'),
         [
             # classified by rule
-            ({'subagent_type': GP, 'prompt': 'rename the helper foo across the repo'},
-             {'mode': 'enforce'},                  'rewrite',     'haiku',  'rule'),
-            ({'subagent_type': GP, 'prompt': 'weigh the design trade-offs of two caches'},
-             {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
-            ({'subagent_type': GP, 'prompt': 'rename helpers, then explain the design tradeoffs'},
-             {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
+            (
+                {'subagent_type': GP, 'prompt': 'rename the helper foo across the repo'},
+                {'mode': 'enforce'},
+                'rewrite',
+                'haiku',
+                'rule',
+            ),
+            (
+                {'subagent_type': GP, 'prompt': 'weigh the design trade-offs of two caches'},
+                {'mode': 'enforce'},
+                'rewrite',
+                'opus',
+                'rule',
+            ),
+            (
+                {'subagent_type': GP, 'prompt': 'rename helpers, then explain the design tradeoffs'},
+                {'mode': 'enforce'},
+                'rewrite',
+                'opus',
+                'rule',
+            ),
+
             # patterns span lines and the description/prompt boundary: `.` matches newlines
-            ({'subagent_type': GP, 'description': 'Cache design review',
-              'prompt': 'Evaluate the design.\nList the trade-offs. Use grep to locate callers.'},
-             {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
-            ({'subagent_type': GP, 'prompt': 'weigh the design\nand the trade-offs of two caches'},
-             {'mode': 'enforce'},                  'rewrite',     'opus',   'rule'),
-            ({'subagent_type': 'Explore', 'prompt': 'list all usages of foo'},
-             {'mode': 'enforce'},                  'rewrite',     'haiku',  'rule'),
-            ({'prompt': 'list all usages of foo'},
-             {'mode': 'enforce'},                  'rewrite',     'haiku',  'rule'),
-            ({'subagent_type': GP, 'description': 'grep for TODOs', 'prompt': 'do it'},
-             {'mode': 'enforce'},                  'rewrite',     'haiku',  'rule'),
+            (
+                {
+                    'subagent_type': GP,
+                    'description':  'Cache design review',
+                    'prompt':       'Evaluate the design.\nList the trade-offs. Use grep to locate callers.',
+                },
+                {'mode': 'enforce'},
+                'rewrite',
+                'opus',
+                'rule',
+            ),
+            (
+                {'subagent_type': GP, 'prompt': 'weigh the design\nand the trade-offs of two caches'},
+                {'mode': 'enforce'},
+                'rewrite',
+                'opus',
+                'rule',
+            ),
+            (
+                {'subagent_type': 'Explore', 'prompt': 'list all usages of foo'},
+                {'mode': 'enforce'},
+                'rewrite',
+                'haiku',
+                'rule',
+            ),
+            (
+                {'prompt': 'list all usages of foo'},
+                {'mode': 'enforce'},
+                'rewrite',
+                'haiku',
+                'rule',
+            ),
+            (
+                {'subagent_type': GP, 'description': 'grep for TODOs', 'prompt': 'do it'},
+                {'mode': 'enforce'},
+                'rewrite',
+                'haiku',
+                'rule',
+            ),
+
             # per-agent override
-            ({'subagent_type': 'Plan', 'prompt': 'draft a plan'},
-             {'mode': 'enforce'},                  'rewrite',     'opus',   'agent-override'),
+            (
+                {'subagent_type': 'Plan', 'prompt': 'draft a plan'},
+                {'mode': 'enforce'},
+                'rewrite',
+                'opus',
+                'agent-override',
+            ),
+
             # advise mode never rewrites
-            ({'subagent_type': GP, 'prompt': 'rename x'},
-             {},                                   'advise',      'haiku',  'rule'),
+            (
+                {'subagent_type': GP, 'prompt': 'rename x'},
+                {},
+                'advise',
+                'haiku',
+                'rule',
+            ),
+
             # floor lifts the chosen tier
-            ({'subagent_type': GP, 'prompt': 'rename x'},
-             {'mode': 'enforce', 'floor': 'sonnet'}, 'rewrite',   'sonnet', 'rule'),
+            (
+                {'subagent_type': GP, 'prompt': 'rename x'},
+                {'mode': 'enforce', 'floor': 'sonnet'},
+                'rewrite',
+                'sonnet',
+                'rule',
+            ),
+
             # pass-through cases
-            ({'subagent_type': GP, 'prompt': 'summarize this module'},
-             {'mode': 'enforce'},                  'passthrough', None,     'unmatched'),
-            ({'subagent_type': 'file-searcher', 'prompt': 'rename x'},
-             {'mode': 'enforce'},                  'passthrough', None,     'unmatched'),
-            ({'subagent_type': GP, 'prompt': '~rename x'},
-             {'mode': 'enforce'},                  'passthrough', None,     'opt-out'),
-            ({'subagent_type': GP, 'prompt': 'rename x'},
-             {'mode': 'off'},                      'passthrough', None,     'mode-off'),
+            (
+                {'subagent_type': GP, 'prompt': 'summarize this module'},
+                {'mode': 'enforce'},
+                'passthrough', None,
+                'unmatched',
+            ),
+            (
+                {'subagent_type': 'file-searcher', 'prompt': 'rename x'},
+                {'mode': 'enforce'},
+                'passthrough', None,
+                'unmatched',
+            ),
+            (
+                {'subagent_type': GP, 'prompt': '~rename x'},
+                {'mode': 'enforce'},
+                'passthrough', None,
+                'opt-out',
+            ),
+            (
+                {'subagent_type': GP, 'prompt': 'rename x'},
+                {'mode': 'off'},
+                'passthrough', None,
+                'mode-off',
+            ),
+
             # caller already chose a model: never overridden, disagreement is still reported
-            ({'subagent_type': GP, 'prompt': 'rename x', 'model': 'sonnet'},
-             {'mode': 'enforce'},                  'passthrough', 'haiku',  'preset-disagree'),
-            ({'subagent_type': GP, 'prompt': 'rename x', 'model': 'haiku'},
-             {'mode': 'enforce'},                  'passthrough', 'haiku',  'preset-agree'),
+            (
+                {'subagent_type': GP, 'prompt': 'rename x', 'model': 'sonnet'},
+                {'mode': 'enforce'},
+                'passthrough',
+                'haiku',
+                'preset-disagree',
+            ),
+            (
+                {'subagent_type': GP, 'prompt': 'rename x', 'model': 'haiku'},
+                {'mode': 'enforce'},
+                'passthrough',
+                'haiku',
+                'preset-agree',
+            ),
         ],
     )
     def test_decision_table(
@@ -283,7 +378,7 @@ class TestDecide:
         """
         Test that an id-less rule is reported as rule-<index>
         """
-        cfg = _cfg(rules=[{'class': 'hard', 'any': ['zzz']}])
+        cfg      = _cfg(rules=[{'class': 'hard', 'any': ['zzz']}])
         decision = model_router.decide({'subagent_type': GP, 'prompt': 'zzz'}, cfg)
         assert decision.rule == 'rule-0'
 
@@ -292,8 +387,8 @@ class TestDecide:
         Test that a model outside the tier order is left untouched by the floor
         """
         assert model_router.apply_floor('fable', 'sonnet') == 'fable'
-        assert model_router.apply_floor('haiku', None) == 'haiku'
-        assert model_router.apply_floor('haiku', 'opus') == 'opus'
+        assert model_router.apply_floor('haiku', None)     == 'haiku'
+        assert model_router.apply_floor('haiku', 'opus')   == 'opus'
 
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / 'fixtures' / 'model_router'
@@ -303,15 +398,14 @@ def _event(tool_input: dict, env: Env, tool_name: str = 'Agent', **extra: object
     """
     Serialize a hook event payload
     """
-    payload = {
-        'session_id': 'session-1',
+    return json.dumps({
+        'session_id':  'session-1',
         'tool_use_id': 'toolu_1',
-        'cwd': str(env.project),
-        'tool_name': tool_name,
-        'tool_input': tool_input,
+        'cwd':         str(env.project),
+        'tool_name':   tool_name,
+        'tool_input':  tool_input,
         **extra,
-    }
-    return json.dumps(payload)
+    })
 
 
 def _log_path(env: Env) -> Path:
@@ -343,8 +437,9 @@ class TestBuildPreOutput:
         Test that a rewrite returns updatedInput with only model added, and never a permission decision
         """
         decision = model_router.decide(MECHANICAL, _cfg(mode='enforce'))
-        output = model_router.build_pre_output(MECHANICAL, decision)
+        output   = model_router.build_pre_output(MECHANICAL, decision)
         specific = output['hookSpecificOutput']
+
         assert specific['hookEventName'] == 'PreToolUse'
         assert specific['updatedInput'] == {**MECHANICAL, 'model': 'haiku'}
         assert 'permissionDecision' not in specific
@@ -355,8 +450,9 @@ class TestBuildPreOutput:
         """
         decision = model_router.decide(MECHANICAL, _cfg(mode='advise'))
         specific = model_router.build_pre_output(MECHANICAL, decision)['hookSpecificOutput']
-        assert 'updatedInput' not in specific
-        assert "model='haiku'" in specific['additionalContext']
+
+        assert 'updatedInput'    not in specific
+        assert "model='haiku'"       in specific['additionalContext']
         assert 'mechanical-keywords' in specific['additionalContext']
 
     def test_passthrough_emits_nothing(self) -> None:
@@ -376,15 +472,16 @@ class TestRun:
         Test that enforce mode rewrites the model and logs a record that omits the prompt
         """
         _write_layer(env.home, {'mode': 'enforce'})
+
         output = model_router.run('pre', _event(MECHANICAL, env))
         assert output['hookSpecificOutput']['updatedInput']['model'] == 'haiku'
 
         [record] = _records(env)
-        assert record['action'] == 'rewrite'
+        assert record['action']        == 'rewrite'
         assert record['decided_model'] == 'haiku'
-        assert record['rule'] == 'mechanical-keywords'
-        assert record['tool_use_id'] == 'toolu_1'
-        assert record['prompt_len'] == len(MECHANICAL['prompt'])
+        assert record['rule']          == 'mechanical-keywords'
+        assert record['tool_use_id']   == 'toolu_1'
+        assert record['prompt_len']    == len(MECHANICAL['prompt'])
         assert 'rename' not in _log_path(env).read_text(encoding='utf-8')
 
     def test_default_advise_does_not_rewrite(self, env: Env) -> None:
@@ -441,8 +538,8 @@ class TestRun:
         assert model_router.run('post', event) is None
 
         [record] = _records(env)
-        assert record['event'] == 'post'
-        assert record['tool_use_id'] == 'toolu_1'
+        assert record['event']          == 'post'
+        assert record['tool_use_id']    == 'toolu_1'
         assert record['resolved_model'] == 'claude-haiku-5-5'
 
     def test_log_rotates_above_size_cap(self, env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -466,7 +563,7 @@ class TestRecordedPostPayload:
         """
         Test that handle_post extracts the resolved model from the captured payload
         """
-        payload = json.loads((FIXTURE_DIR / 'post_agent_payload.json').read_text(encoding='utf-8'))
+        payload  = json.loads((FIXTURE_DIR / 'post_agent_payload.json').read_text(encoding='utf-8'))
         expected = payload.pop('_expected_resolved_model')
         assert model_router.handle_post(payload)['resolved_model'] == expected
 
@@ -483,7 +580,11 @@ class TestCli:
         child_env = {**os.environ, 'HOME': str(env.home), 'XDG_STATE_HOME': str(env.state)}
         return subprocess.run(
             [sys.executable, str(SCRIPT_PATH), *args],
-            input=stdin, capture_output=True, text=True, env=child_env, check=False,
+            input=stdin,
+            capture_output=True,
+            text=True,
+            env=child_env,
+            check=False,
         )
 
     def test_pre_prints_hook_json(self, env: Env) -> None:
@@ -491,6 +592,7 @@ class TestCli:
         Test that pre prints the rewrite JSON on stdout and exits 0
         """
         _write_layer(env.home, {'mode': 'enforce'})
+
         result = self._invoke(env, ['pre'], _event(MECHANICAL, env))
         assert result.returncode == 0
         assert json.loads(result.stdout)['hookSpecificOutput']['updatedInput']['model'] == 'haiku'
@@ -510,4 +612,4 @@ class TestCli:
         """
         result = self._invoke(env, args, stdin)
         assert result.returncode == 0
-        assert result.stdout == ''
+        assert result.stdout     == ''
