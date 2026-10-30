@@ -19,6 +19,13 @@ REQUIREMENT = re.compile(r'^\s*-\s+name:\s*([a-z0-9_]+\.[a-z0-9_]+)\s*$', re.MUL
 NAS_PIN  = re.compile(r'^\s*EXPECTED_CHECKSUM="([0-9a-f]{64})"', re.MULTILINE)
 BREW_PIN = re.compile(r'^BREW_INSTALLER_SHA256="([0-9a-f]{64})"', re.MULTILINE)
 
+# The Homebrew installer download URL in nas_bootstrap.sh (the curl line) and bootstrap/50-brew.sh (group 1 is the URL)
+NAS_URL  = re.compile(r'^\s*curl -fsSL (\S+) -o "\$BREW_INSTALLER"$', re.MULTILINE)
+BREW_URL = re.compile(r'^BREW_INSTALLER_URL="([^"]+)"$', re.MULTILINE)
+
+# A commit-pinned upstream installer URL: the ref segment is a full 40-hex commit SHA, never a moving ref such as HEAD
+COMMIT_PINNED_URL = re.compile(r'^https://raw\.githubusercontent\.com/Homebrew/install/[0-9a-f]{40}/install\.sh$')
+
 
 class TestNasBootstrapScript:
     """
@@ -59,6 +66,19 @@ class TestNasBootstrapScript:
         assert nas,  'EXPECTED_CHECKSUM pin not found in nas_bootstrap.sh'
         assert brew, 'BREW_INSTALLER_SHA256 pin not found in bootstrap/50-brew.sh'
         assert nas.group(1) == brew.group(1)
+
+    def test_installer_url_is_commit_pinned_and_identical_in_both_scripts(self) -> None:
+        """
+        Test that both scripts download the same installer URL and that it is pinned to a 40-hex commit, not HEAD
+        """
+        nas  = NAS_URL.search(self.SCRIPT.read_text(encoding='utf-8'))
+        brew = BREW_URL.search((REPO_ROOT / 'bootstrap' / '50-brew.sh').read_text(encoding='utf-8'))
+
+        assert nas,  'installer curl line not found in nas_bootstrap.sh'
+        assert brew, 'BREW_INSTALLER_URL not found in bootstrap/50-brew.sh'
+        assert nas.group(1) == brew.group(1)
+        assert COMMIT_PINNED_URL.match(nas.group(1)), nas.group(1)
+        assert '/HEAD/' not in nas.group(1)
 
 
 class TestRolesRequirements:

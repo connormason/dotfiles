@@ -51,9 +51,11 @@ chmod u+x nas_bootstrap.sh
 The script validates the repository layout (`run.py`, `nas_bootstrap.sh`, `playbooks/`), installs Homebrew (installer
 checksum-verified before execution) and Ansible if missing, then runs the playbook with `--ask-become-pass -vv`.
 
-When the Homebrew installer legitimately changes, verify it at https://github.com/Homebrew/install, regenerate the
-checksum (`curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256`), and update
-`EXPECTED_CHECKSUM` and its "Last updated" comment in `nas_bootstrap.sh`.
+The Homebrew installer URL is pinned to an upstream commit. To update the pin, pick a commit SHA from the history of
+`install.sh` at https://github.com/Homebrew/install, put it in the URL, regenerate the checksum of that exact URL
+(`curl -fsSL https://raw.githubusercontent.com/Homebrew/install/<commit-sha>/install.sh | shasum -a 256`), and update
+the URL, `EXPECTED_CHECKSUM` and its "Last updated" comment in `nas_bootstrap.sh` (and the matching values in
+`bootstrap/50-brew.sh`).
 
 ### Direct execution
 

@@ -131,6 +131,7 @@ Media server and home automation stack in `roles/docker/files/docker-compose.yml
 
 ## Bootstrap Script Security
 
-- Homebrew installer checksum verified before execution (`nas_bootstrap.sh`, `bootstrap/50-brew.sh`)
-- Update the checksum when the Homebrew installer changes:
-  `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256`
+- Homebrew installer pinned to an upstream commit URL and checksum-verified before execution (`nas_bootstrap.sh`,
+  `bootstrap/50-brew.sh`; a test keeps the two pins identical)
+- To update, put a commit SHA from the upstream history of `install.sh` in the URL, then take the SHA-256 of that exact
+  URL: `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/<commit-sha>/install.sh | shasum -a 256`

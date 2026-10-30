@@ -32,12 +32,15 @@ if [[ ! $(command -v brew) ]]; then
     # Download installer and verify checksum before execution
     BREW_INSTALLER="$(mktemp "${TMPDIR:-/tmp}/brew-install.XXXXXX")"
     trap 'rm -f "$BREW_INSTALLER"' EXIT
-    curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$BREW_INSTALLER"
+    # Pinned to an upstream commit so the content cannot drift when Homebrew edits install.sh on HEAD
+    curl -fsSL https://raw.githubusercontent.com/Homebrew/install/09c62fc577ec170172b0a184060f141a2c622dc1/install.sh -o "$BREW_INSTALLER"
 
-    # Expected checksum - update when Homebrew installer changes
-    # To update: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256
-    # Last updated: 2026-01-11
-    EXPECTED_CHECKSUM="b2ffbf7e7f451c6db3b5d1976fc6a9c2faecf58ee5e1dbf6e498643c91f0d3bc"
+    # Expected checksum of the installer at the commit-pinned URL above
+    # To update: pick a commit SHA from https://github.com/Homebrew/install/commits/HEAD/install.sh, put it in the URL
+    # above (and in bootstrap/50-brew.sh), then edit EXPECTED_CHECKSUM in nas_bootstrap.sh to the SHA-256 of that URL:
+    #   curl -fsSL <installer URL> | shasum -a 256
+    # Last updated: 2026-10-30
+    EXPECTED_CHECKSUM="5f333bbe53bc490e51e7ccb1df8779b3dd6ee73a1a7379efda216edb08ccb148" # pragma: allowlist secret
 
     # Verify checksum
     ACTUAL_CHECKSUM=$(shasum -a 256 "$BREW_INSTALLER" | awk '{print $1}')
