@@ -16,7 +16,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib.sh"
 
 # Close System Settings so it does not override changes.
-run osascript -e 'tell application "System Preferences" to quit' || true
+run osascript -e 'tell application "System Settings" to quit' || true
 
 # ------------------------------------------------------------------------------------------------
 # Activity Monitor (com.apple.ActivityMonitor)
@@ -88,9 +88,9 @@ run defaults write com.apple.dock launchanim -int 1
 
 # Show recently used apps in a separate section of the Dock
 # https://macos-defaults.com/dock/show-recents.html
-run defaults write com.apple.dock show-recents -bool false
+run defaults write com.apple.dock show-recents -bool true
 
-# Set Dock minimize animation to "suck" (hidden value, not available in System Preferences)
+# Set Dock minimize animation to "suck" (hidden value, not available in System Settings)
 # https://macos-defaults.com/dock/mineffect.html
 run defaults write com.apple.dock mineffect -string "suck"
 
@@ -187,7 +187,7 @@ run defaults write com.apple.frameworks.diskimages auto-open-rw-root -bool true
 # Automatically open new Finder window when a removable disk is mounted
 run defaults write com.apple.finder OpenWindowForNewRemovableDisk -bool true
 
-# Enable spring loading for directories and disable delay
+# Enable spring loading for directories
 run defaults write NSGlobalDomain com.apple.springing.enabled -bool true
 
 # Show the ~/Library directory (hidden by default)

@@ -358,6 +358,7 @@ repos:
   #   - Priority 30    any file type                  keep-sorted
   #   - Priority 35    shell scripts                  shfmt
   #                    json (.claude)                 pretty-format-json
+  #                    json (vscode keybindings)      sort-json-array
   #                    toml                           taplo
   #                    pkl                            format-pkl
   #                    markdown                       mdformat
@@ -432,6 +433,16 @@ repos:
         language: python
         files: .*\.pkl$
         types: [file]
+
+      # Sort the VS Code keybindings array by `command`; rewrites the file, so pre-commit only (not run in CI)
+      - id: sort-json-array
+        name: "[format] json array sort (keybindings)"
+        stages: [pre-commit]
+        priority: 35
+        entry: scripts/hooks/sort-json-array.py
+        language: python
+        args: [--key, command]
+        files: ^stow/vscode/Library/Application Support/Code/User/keybindings\.json$
 
   - repo: https://github.com/hukkin/mdformat
     rev: 1.0.0

@@ -32,12 +32,15 @@ if [[ ! $(command -v brew) ]]; then
     # Download installer and verify checksum before execution
     BREW_INSTALLER="$(mktemp "${TMPDIR:-/tmp}/brew-install.XXXXXX")"
     trap 'rm -f "$BREW_INSTALLER"' EXIT
-    curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$BREW_INSTALLER"
+    # Pinned to an upstream commit so the content cannot drift when Homebrew edits install.sh on HEAD
+    curl -fsSL https://raw.githubusercontent.com/Homebrew/install/09c62fc577ec170172b0a184060f141a2c622dc1/install.sh -o "$BREW_INSTALLER"
 
-    # Expected checksum - update when Homebrew installer changes
-    # To update: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256
-    # Last updated: 2026-01-11
-    EXPECTED_CHECKSUM="b2ffbf7e7f451c6db3b5d1976fc6a9c2faecf58ee5e1dbf6e498643c91f0d3bc"
+    # Expected checksum of the installer at the commit-pinned URL above
+    # To update: pick a commit SHA from https://github.com/Homebrew/install/commits/HEAD/install.sh, put it in the URL
+    # above (and in bootstrap/50-brew.sh), then edit EXPECTED_CHECKSUM in nas_bootstrap.sh to the SHA-256 of that URL:
+    #   curl -fsSL <installer URL> | shasum -a 256
+    # Last updated: 2026-10-30
+    EXPECTED_CHECKSUM="5f333bbe53bc490e51e7ccb1df8779b3dd6ee73a1a7379efda216edb08ccb148" # pragma: allowlist secret
 
     # Verify checksum
     ACTUAL_CHECKSUM=$(shasum -a 256 "$BREW_INSTALLER" | awk '{print $1}')
@@ -46,14 +49,15 @@ if [[ ! $(command -v brew) ]]; then
         echo -e "Expected: $EXPECTED_CHECKSUM"
         echo -e "Actual:   $ACTUAL_CHECKSUM"
         echo -e ""
-        echo -e "This could indicate:"
-        echo -e "  1. The Homebrew installer has been updated (normal)"
-        echo -e "  2. A security issue (man-in-the-middle attack, DNS hijacking)"
+        echo -e "The installer URL is pinned to an upstream commit, so its content does not change when Homebrew"
+        echo -e "updates install.sh. A mismatch indicates a bad download or a security issue (man-in-the-middle"
+        echo -e "attack, DNS hijacking), not a Homebrew update."
         echo -e ""
         echo -e "To proceed safely:"
-        echo -e "  1. Verify the new checksum at https://github.com/Homebrew/install"
-        echo -e "  2. Update EXPECTED_CHECKSUM in nas_bootstrap.sh"
-        echo -e "  3. Re-run this script"
+        echo -e "  1. Re-run this script; if the mismatch persists, do not run the installer"
+        echo -e "  2. Only to adopt a newer upstream commit on purpose: put its SHA in the installer URL in this script."
+        echo -e "     Update EXPECTED_CHECKSUM in nas_bootstrap.sh to the SHA-256 of that URL, and mirror both values"
+        echo -e "     in bootstrap/50-brew.sh in the same commit (a test keeps them identical), then re-run"
         exit 1
     fi
 

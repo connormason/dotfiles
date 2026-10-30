@@ -16,17 +16,21 @@ repeated.
 
 ## Registering the overlay
 
-Run from the repository root, once. This creates the registry directory if needed and appends the profile to the
-overlays registry read by the bootstrap driver. The location honours `DOTFILES_OVERLAYS_FILE`, then
-`$XDG_CONFIG_HOME/dotfiles/overlays`, defaulting to `~/.config/dotfiles/overlays` (the same resolution as
-`dotfiles_overlays_file` in [`bootstrap/lib.sh`](../../bootstrap/lib.sh)):
+Run from the repository root. This creates the registry directory if needed and appends the profile to the overlays
+registry read by the bootstrap driver, unless that exact line is already there, so repeating it is harmless. The
+location honours `DOTFILES_OVERLAYS_FILE`, then `$XDG_CONFIG_HOME/dotfiles/overlays`, defaulting to
+`~/.config/dotfiles/overlays` (the same resolution as `dotfiles_overlays_file` in
+[`bootstrap/lib.sh`](../../bootstrap/lib.sh)):
 
 ```bash
 f="${DOTFILES_OVERLAYS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/overlays}"
-mkdir -p "$(dirname "$f")" && echo "$PWD/profiles/personal-mac" >> "$f"
+p="$PWD/profiles/personal-mac"
+mkdir -p "$(dirname "$f")"
+grep -qxF "$p" "$f" 2>/dev/null || echo "$p" >> "$f"
 ```
 
-Registering the same layer twice makes the driver abort, so do not repeat the command.
+The driver aborts if the registry lists the same layer twice. It compares resolved paths, so a second line naming this
+directory another way (`~/...`, or through a symlink) also counts; the check above only skips an identical line.
 
 Verify the layer order (base first, then this profile):
 

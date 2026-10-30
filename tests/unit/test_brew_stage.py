@@ -27,6 +27,9 @@ INSTALLER_PAYLOAD = (
 # The pinned digest assignment in the stage; group 1 is the digest
 PINNED_SHA = re.compile(r'^BREW_INSTALLER_SHA256="([0-9a-f]{64})"', re.MULTILINE)
 
+# The pinned installer URL assignment in the stage; group 1 is the URL
+PINNED_URL = re.compile(r'^BREW_INSTALLER_URL="([^"]+)"$', re.MULTILINE)
+
 # Replaces ensure_brew_on_path so the stage never discovers a real Homebrew in /opt/homebrew or /usr/local
 ENV_OVERRIDE = (
     'ensure_brew_on_path() {\n'
@@ -151,13 +154,17 @@ class TestBrewInstallerChecksum:
         text = sandbox.stage.read_text(encoding='utf-8')
         assert PINNED_SHA.search(text)
 
+        pinned_url = PINNED_URL.search(text)
+        assert pinned_url
+        assert re.search(r'/Homebrew/install/[0-9a-f]{40}/install\.sh$', pinned_url.group(1))
+
         digest = hashlib.sha256(sandbox.payload).hexdigest()
         sandbox.stage.write_text(PINNED_SHA.sub(f'BREW_INSTALLER_SHA256="{digest}"', text), encoding='utf-8')
 
         result = _run(shell, sandbox)
         assert result.returncode == 0, result.stderr
         assert 'installer checksum verified' in result.stdout
-        assert 'raw.githubusercontent.com/Homebrew/install/HEAD/install.sh' in sandbox.curl_args.read_text('utf-8')
+        assert pinned_url.group(1) in sandbox.curl_args.read_text('utf-8')
         assert sandbox.marker.exists()
 
         # Guards against a future sudo call being added; neither the stage nor the stub installer calls sudo today

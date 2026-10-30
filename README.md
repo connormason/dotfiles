@@ -401,11 +401,22 @@ See [run.py documentation](docs/RUN_PY_REFERENCE.md#inventory-management) for de
 
 ### Homebrew Checksum Mismatch<a name="homebrew-checksum-mismatch"></a>
 
-1. Verify if Homebrew installer was legitimately updated at https://github.com/Homebrew/install
-2. Generate new checksum:
-   `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256`
-3. Update the checksum constant in the script that failed: `EXPECTED_CHECKSUM` in `nas_bootstrap.sh`, or
-   `BREW_INSTALLER_SHA256` in `bootstrap/50-brew.sh`
+The installer is pinned to an upstream commit (URL) and verified against a SHA-256 before it runs, so a mismatch means
+the download differs from the pinned content. Content at a commit-pinned URL does not change when Homebrew updates
+`install.sh`, so a mismatch points to a bad or tampered download, not to an outdated pin.
+
+Treat it as a bad download first: re-run (`bootstrap/bootstrap.sh --resume` on macOS, `./nas_bootstrap.sh` on the NAS).
+If the mismatch persists, do not run the installer by other means; find out why the download differs.
+
+Re-pin only when deliberately moving to a newer upstream commit, and change both scripts in one commit:
+
+1. Pick a commit SHA from the upstream history of `install.sh` at
+   https://github.com/Homebrew/install/commits/HEAD/install.sh and put it in the installer URL in both scripts
+   (`nas_bootstrap.sh` and `bootstrap/50-brew.sh`; a test keeps them identical)
+2. Generate the new checksum of that exact URL:
+   `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/<commit-sha>/install.sh | shasum -a 256`
+3. Update the checksum constant in both scripts: `EXPECTED_CHECKSUM` in `nas_bootstrap.sh` and `BREW_INSTALLER_SHA256`
+   in `bootstrap/50-brew.sh`
 
 ### Role Failures<a name="role-failures"></a>
 

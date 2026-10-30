@@ -6,12 +6,15 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh disable=SC1091
 source "$HERE/lib.sh"
 
-BREW_INSTALLER_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+# Pinned to an upstream commit so the content cannot drift when Homebrew edits install.sh on HEAD.
+BREW_INSTALLER_URL="https://raw.githubusercontent.com/Homebrew/install/09c62fc577ec170172b0a184060f141a2c622dc1/install.sh"
 
-# SHA-256 of the installer at BREW_INSTALLER_URL; a mismatch aborts the install. Update when Homebrew changes it:
-#   curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | shasum -a 256
-# Last updated: 2026-01-11
-BREW_INSTALLER_SHA256="b2ffbf7e7f451c6db3b5d1976fc6a9c2faecf58ee5e1dbf6e498643c91f0d3bc" # pragma: allowlist secret
+# SHA-256 of the installer at BREW_INSTALLER_URL; a mismatch aborts the install. To update: pick a commit SHA from the
+# upstream history of install.sh (https://github.com/Homebrew/install/commits/HEAD/install.sh), put it in the URL above,
+# then take the SHA-256 of that exact URL:
+#   curl -fsSL <BREW_INSTALLER_URL> | shasum -a 256
+# Last updated: 2026-10-30
+BREW_INSTALLER_SHA256="5f333bbe53bc490e51e7ccb1df8779b3dd6ee73a1a7379efda216edb08ccb148" # pragma: allowlist secret
 BREW_INSTALLER=""
 
 # shellcheck disable=SC2329  # invoked via the EXIT trap
@@ -40,9 +43,9 @@ install_homebrew() {
         warn "Homebrew installer checksum mismatch"
         warn "  expected: $BREW_INSTALLER_SHA256"
         warn "  actual:   $actual"
-        warn "either Homebrew updated its installer (normal) or the download was tampered with."
-        warn "verify the new checksum at https://github.com/Homebrew/install and update BREW_INSTALLER_SHA256 in $0"
-        die "Homebrew installer checksum mismatch; re-run after updating: bootstrap.sh --from 50-brew"
+        warn "the URL is pinned to an upstream commit: treat this as a bad or tampered download, not a Homebrew update"
+        warn "retry first; re-pin $0 and nas_bootstrap.sh together only to adopt a newer upstream commit (README.md)"
+        die "Homebrew installer checksum mismatch; retry with: bootstrap.sh --from 50-brew"
     fi
     log "installer checksum verified"
 

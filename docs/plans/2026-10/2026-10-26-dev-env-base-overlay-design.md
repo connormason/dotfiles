@@ -245,8 +245,12 @@ and the git version. The Phase D snapshot diff is the cutover acceptance test.
 1. How Claude Code merges `enabledPlugins` when the same plugin is reachable through two marketplaces.
 2. Whether VS Code rewrites its `settings.json` often enough to make the drift guard noisy. If it does, VS Code falls back
    to base-only settings, with machine-specific values applied through a VS Code profile.
-3. `claude --settings` layering semantics. These could not be verified from the work machine, which blocks both the docs
-   and nested sessions. The design does not depend on them; they are recorded for completeness.
+3. `claude --settings` layering semantics. The 2026-10-29 model-router spike
+   (`docs/plans/2026-10/2026-10-29-model-router-design.md`, "Spike results") answered one part: hooks supplied through
+   `claude -p ... --settings` run (its `PreToolUse`/`PostToolUse` hooks fired, and the `PreToolUse` input rewrite took
+   effect). Still open: whether a project's `.claude/settings.json` hooks run alongside `--settings` hooks, and which
+   value wins when both set the same `env` key; Phase B step B5.3 probes those two points. The design does not depend
+   on them; they are recorded for completeness.
 
 ## Out of Scope
 
