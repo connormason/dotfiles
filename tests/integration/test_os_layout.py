@@ -111,3 +111,24 @@ class TestLinuxLayout:
         assert config.is_symlink()
         assert config.read_text(encoding='utf-8') == darwin.read_text(encoding='utf-8')
         assert not (home / 'Library').exists()
+
+    @pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh not installed')
+    def test_interactive_zsh_is_clean_with_the_linux_layout(self, tmp_path: Path) -> None:
+        """
+        Test that an interactive zsh over the linux layout starts without any error output
+        """
+        linked_paths(tmp_path, 'linux')
+        home = tmp_path / 'home-linux'
+
+        env: dict[str, str] = {
+            'HOME':               str(home),
+            'PATH':               os.environ['PATH'],
+            'TERM':               'dumb',
+            'DOTFILES_NO_BANNER': '1',
+            'XDG_CONFIG_HOME':    str(home / '.config'),
+            'XDG_STATE_HOME':     str(home / '.local' / 'state'),
+            'XDG_DATA_HOME':      str(home / '.local' / 'share'),
+        }
+        result = subprocess.run(['zsh', '-i', '-c', 'true'], capture_output=True, text=True, check=False, env=env)
+        assert result.returncode == 0
+        assert result.stderr == ''

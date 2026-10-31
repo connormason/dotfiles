@@ -2,9 +2,15 @@
 # Default tools and directories
 # =============================================================================
 
-# Set default pager/editor
+# Set default pager/editor: Sublime Text on macOS; elsewhere (the headless NAS) micro from the shared Brewfile, which
+# also stands in for Sublime's `st` so the config aliases below work
 export PAGER=moor
-export VISUAL=subl
+if [[ $OSTYPE == darwin* ]]; then
+    export VISUAL=subl
+else
+    export VISUAL=micro
+    alias st=micro
+fi
 
 # =============================================================================
 # Config file aliases
@@ -30,5 +36,8 @@ alias cp="cp -v"
 alias mv="mv -v"
 
 # Generic command aliases
-alias o="open ."
+# macOS only: Linux's `open` is openvt
+if [[ $OSTYPE == darwin* ]]; then
+    alias o="open ."
+fi
 alias clr="clear"

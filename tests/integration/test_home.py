@@ -11,6 +11,7 @@ import shutil
 import signal
 import stat
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -1482,3 +1483,42 @@ class TestVendoredNotices:
         """
         readme = (REPO_ROOT / 'README.md').read_text(encoding='utf-8')
         assert 'Third-party files are under their own licenses; see [NOTICE](NOTICE).' in readme
+
+
+class TestPortability:
+    """
+    Tests for the OS-conditional shell settings (they follow the host's $OSTYPE, whatever layout is stowed)
+    """
+    MACOS = sys.platform == 'darwin'
+
+    def test_visual_editor(self, home: Home) -> None:
+        """
+        Test that VISUAL is Sublime Text on macOS and micro elsewhere
+        """
+        result = home.zsh('print -r -- $VISUAL')
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == ('subl' if self.MACOS else 'micro')
+
+    def test_open_alias_is_macos_only(self, home: Home) -> None:
+        """
+        Test that `o` opens Finder on macOS and is not defined elsewhere
+        """
+        result = home.zsh('print -r -- "${aliases[o]-unset}"')
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == ('open .' if self.MACOS else 'unset')
+
+    @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
+    def test_banner_logo_follows_the_os(self, home: Home, tmp_path: Path) -> None:
+        """
+        Test that fastfetch gets the macOS logo on macOS only
+        """
+        tool = tmp_path / 'ffargs' / 'fastfetch'
+        tool.parent.mkdir()
+        tool.write_text('#!/bin/sh\necho "FFARGS:$*"\n', encoding='utf-8')
+        tool.chmod(0o755)
+
+        env       = {'PATH': f'{tool.parent}:{home.env["PATH"]}', 'DOTFILES_NO_BANNER': ''}
+        result, _ = run_zsh_with_tty(home, 'exit', env)
+        assert result.returncode == 0
+        assert b'FFARGS:' in result.stdout
+        assert (b'--logo macOS2' in result.stdout) is self.MACOS
