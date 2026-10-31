@@ -20,9 +20,9 @@ content; you report precise, located findings so the main agent can fix them.
   here targets the Debian NAS.
 - Tasks carry **tags** (e.g. `configfile`, `preferences`) for selective execution; new tasks/blocks should be tagged
   consistently with their role.
-- `mode:` is typically driven by a role `defaults/` variable (e.g. `git_config_mode`), not a hardcoded literal.
+- `mode:` is typically driven by a role `defaults/` variable, not a hardcoded literal.
 - Secrets are `ansible-vault`-encrypted in the separate `inventory/` clone; `vault_password_file=vault_password.txt`.
-- The NAS playbook runs with `--ask-become-pass`; `become` is scoped per-task/block, not assumed global.
+- The NAS playbook sets `ansible_become_pass` from the vault; `become` is scoped per-task/block, not assumed global.
 
 ## What to check, in priority order
 
@@ -63,7 +63,7 @@ Lead with a one-line verdict (idempotent & safe / issues found). Then list findi
 <verdict>
 
 - roles/docker/tasks/main.yml:24 — [idempotency] `command: docker compose pull` has no `changed_when`; reports changed every run. Add `changed_when: false` (read-ish) or gate on image digest.
-- roles/git/tasks/main.yml:31 — [idempotency] `command: ln -s …` reports changed every run. Use `ansible.builtin.file` with `state: link`.
+- roles/example/tasks/main.yml:31 — [idempotency] `command: ln -s …` reports changed every run. Use `ansible.builtin.file` with `state: link`.
 - roles/README.md — [drift] no entry for the new `tailscale` role.
 ```
 

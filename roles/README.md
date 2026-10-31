@@ -11,16 +11,15 @@ as a frozen snapshot in [`archive/ansible-macos/`](../archive/ansible-macos/READ
 
 Roles are included in the order the playbook runs them; each is selectable with the Ansible tag of the same name.
 
-| Role                               | Purpose                                                                                |
-| ---------------------------------- | -------------------------------------------------------------------------------------- |
-| [`debian`](debian/README.md)       | Setup tasks for Debian Linux                                                           |
-| [`zfs`](zfs/README.md)             | Dependencies for the ZFS filesystem                                                    |
-| [`samba`](samba/README.md)         | Samba file sharing                                                                     |
-| [`docker`](docker/README.md)       | Docker-based media server and home-automation stack                                    |
-| [`git`](git/README.md)             | Global git config (rendered from a template), git template hooks, global ignore file   |
-| [`ssh`](ssh/README.md)             | SSH key pair generation                                                                |
-| [`tailscale`](tailscale/README.md) | Tailscale install and configuration, plus HTTPS certificates and Caddy for the NAS     |
-| [`zsh`](zsh/README.md)             | oh-my-zsh, Powerlevel10k, default shell, and `.zshrc` / `.zprofile` / `.p10k.zsh` copy |
+| Role                               | Purpose                                                                                 |
+| ---------------------------------- | --------------------------------------------------------------------------------------- |
+| [`debian`](debian/README.md)       | Setup tasks for Debian Linux                                                            |
+| [`zfs`](zfs/README.md)             | Dependencies for the ZFS filesystem                                                     |
+| [`samba`](samba/README.md)         | Samba file sharing                                                                      |
+| [`docker`](docker/README.md)       | Docker-based media server and home-automation stack                                     |
+| [`tailscale`](tailscale/README.md) | Tailscale install and configuration, plus HTTPS certificates and Caddy for the NAS      |
+| [`dotfiles`](dotfiles/README.md)   | `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh` |
+| [`haos`](haos/README.md)           | Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)                        |
 
 ## External dependencies
 
@@ -37,11 +36,11 @@ ansible-galaxy install -r roles/requirements.yml
 ./nas_bootstrap.sh
 
 # A single role (or several) by tag
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags git
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags zsh,git,ssh
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags dotfiles
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags dotfiles,haos
 
 # Every role tagged configfile
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags configfile
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags configfile
 ```
 
 ## Adding a role
@@ -52,7 +51,8 @@ ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-be
 2. Include it in `playbooks/nas_bootstrap.yml` with `include_role` and matching `tags`:
 
    ```yaml
-     - include_role:
+     - name: <what the role does>
+       ansible.builtin.include_role:
          name: roles/<name>
          apply:
            tags: <name>
@@ -70,7 +70,8 @@ Use fully-qualified module names, a `defaults/` variable for file modes, and `be
 ## Variables
 
 Role variables come from role `defaults/` and from the vault-encrypted inventory clone in `inventory/` (`group_vars/`
-and `host_vars/`). Common ones: `dotfiles_home` (repository root on the target), `ansible_user`, and `admin_password`.
+and `host_vars/`). Common ones: `dotfiles_repo_dir` (the NAS clone, a play variable), `ansible_user`, and
+`admin_password`.
 
 ## Validation
 

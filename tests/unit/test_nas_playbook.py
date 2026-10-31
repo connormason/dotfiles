@@ -212,3 +212,27 @@ class TestHaosRole:
         assert 'rc | default(1)' in setup['failed_when']
         assert setup['failed_when'].count('stdout_lines | default([])') == 1
         assert 'stdout_lines | default([])' in setup['changed_when']
+
+
+EXPECTED_ORDER = ['debian', 'zfs', 'samba', 'docker', 'tailscale', 'dotfiles', 'haos']
+
+
+class TestPlaybookOrder:
+    """
+    Tests for which roles the playbook runs, and in what order
+    """
+    def test_role_order(self) -> None:
+        """
+        Test that the playbook includes exactly the expected roles in order
+        """
+        play     = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
+        key      = 'ansible.builtin.include_role'
+        included = [task[key]['name'] for task in play['tasks'] if key in task]
+        assert [name.removeprefix('roles/') for name in included] == EXPECTED_ORDER
+
+    @pytest.mark.parametrize('role', ['git', 'ssh', 'zsh'])
+    def test_retired_roles_are_gone(self, role: str) -> None:
+        """
+        Test that the forked dev-environment roles no longer exist
+        """
+        assert not (ROLES / role).exists()

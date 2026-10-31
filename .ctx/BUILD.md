@@ -16,10 +16,10 @@ chmod u+x nas_bootstrap.sh && ./nas_bootstrap.sh
 
 ```bash
 # Run specific tags only
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags git,zsh
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags dotfiles,haos
 
 # Run with extra variables
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -e "some_var=value"
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -e "some_var=value"
 
 # Syntax check
 ansible-playbook --syntax-check -i localhost, playbooks/nas_bootstrap.yml

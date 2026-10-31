@@ -210,13 +210,13 @@ See [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md) for the corresponding `
 
 ```bash
 # Full NAS bootstrap
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv
 
 # Update specific role
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass --tags git -vv
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --tags dotfiles -vv
 
 # Update only Docker stack
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass --tags docker -vv
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --tags docker -vv
 ```
 
 ### Using Make Targets<a name="using-make-targets"></a>

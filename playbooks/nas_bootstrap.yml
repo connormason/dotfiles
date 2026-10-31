@@ -22,7 +22,8 @@
         cache_valid_time: 86400   # One day
 
     # Tasks for Debian Linux
-    - include_role:
+    - name: Configure Debian
+      ansible.builtin.include_role:
         name: roles/debian
         apply:
           tags: debian
@@ -31,7 +32,8 @@
         - configfile
 
     # Tasks for ZFS filesystem
-    - include_role:
+    - name: Install ZFS
+      ansible.builtin.include_role:
         name: roles/zfs
         apply:
           tags: zfs
@@ -40,7 +42,8 @@
         - configfile
 
     # Tasks for Samba file sharing
-    - include_role:
+    - name: Configure Samba file sharing
+      ansible.builtin.include_role:
         name: roles/samba
         apply:
           tags: samba
@@ -49,7 +52,8 @@
         - configfile
 
     # Tasks for Docker
-    - include_role:
+    - name: Configure Docker and the container stack
+      ansible.builtin.include_role:
         name: roles/docker
         apply:
           tags: docker
@@ -58,40 +62,14 @@
         - configfile
         - homeassistant
 
-    # Tasks for git configuration
-    - include_role:
-        name: roles/git
-        apply:
-          tags: git
-      tags:
-        - git
-        - configfile
-
-    # Tasks for SSH configuration
-    - include_role:
-        name: roles/ssh
-        apply:
-          tags: ssh
-      tags:
-        - ssh
-        - configfile
-
     # Tasks for Tailscale configuration
-    - include_role:
+    - name: Configure Tailscale
+      ansible.builtin.include_role:
         name: roles/tailscale
         apply:
           tags: tailscale
       tags:
         - tailscale
-        - configfile
-
-    # Tasks for zsh configuration
-    - include_role:
-        name: roles/zsh
-        apply:
-          tags: zsh
-      tags:
-        - zsh
         - configfile
 
     # $HOME: clone the repo, register profiles/nas, login shell, run the stow engine as the user

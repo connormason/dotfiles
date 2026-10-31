@@ -563,7 +563,7 @@ repos:
         name: "[lint]   shell scripts"
         stages: [pre-commit, manual]
         priority: 40
-        # shellcheck does not support zsh: *.zsh files (e.g. roles/zsh/files/p10k.zsh) and stowed zsh dotfiles
+        # shellcheck does not support zsh: *.zsh files (e.g. stow/shell/.config/zsh/conf.d/*.zsh) and stowed zsh dotfiles
         exclude: |
           (?x)(
               \.zsh$|
