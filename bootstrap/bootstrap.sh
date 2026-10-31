@@ -203,10 +203,10 @@ fi
 
 # Per-run change ledger: stages record each mutation (under --dry-run, each one a real run would make) with lib.sh
 # note_change; the summary lists them and ends with a machine-readable `bootstrap: changes=N` line that unattended
-# callers (the NAS `dotfiles` Ansible role) key their changed status off. Always a fresh file: an inherited path from
-# an enclosing run must not be appended to. Lives in TMPDIR and is deleted on exit, so dry runs still leave no state.
-BOOTSTRAP_CHANGES_FILE="$(mktemp "${TMPDIR:-/tmp}/bootstrap-changes.XXXXXX")" || die "cannot create the change ledger"
-export BOOTSTRAP_CHANGES_FILE
+# callers (the NAS `dotfiles` Ansible role) key their changed status off. Created just before the EXIT trap below so
+# that nothing can exit between creating the file and arming its deletion; until then the path is empty (never an
+# inherited one) and note_change is a no-op.
+export BOOTSTRAP_CHANGES_FILE=""
 
 # Per-stage timing + end-of-run summary state (parallel arrays, indexed together). Distinct from
 # STAGE_NAMES/STAGE_PATHS above, which hold every discovered stage rather than the ones that ran.
@@ -276,6 +276,10 @@ cleanup() {
     rm -f "$BOOTSTRAP_CHANGES_FILE"
     exit "$rc"
 }
+# Always a fresh file: an inherited path from an enclosing run must not be appended to. Lives in TMPDIR and is deleted
+# by cleanup(), so dry runs still leave no state.
+BOOTSTRAP_CHANGES_FILE="$(mktemp "${TMPDIR:-/tmp}/bootstrap-changes.XXXXXX")" || die "cannot create the change ledger"
+export BOOTSTRAP_CHANGES_FILE
 trap cleanup EXIT
 # Convert Ctrl-C / TERM into a normal exit so the single EXIT trap still reaps the sudo keep-alive
 # loop and prints the summary/resume hint (bash does not run EXIT traps on an untrapped signal death).
