@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -469,17 +468,19 @@ class TestGitStatus:
         """
         assert statusline.git_status('bad\x00dir') is None
 
-    @pytest.mark.skipif(not shutil.which('git'), reason='Git not available')
-    def test_undecodable_output_is_replaced(self, tmp_path: Path) -> None:
+    def test_undecodable_output_is_replaced(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """
         Replace undecodable bytes in git's output instead of raising
         """
-        subprocess.run(['git', 'init', '-q', '-b', 'trunk', str(tmp_path)], check=True)
-        try:
-            (tmp_path / os.fsdecode(b'caf\xe9.txt')).write_text('x', encoding='utf-8')
-        except OSError:
-            pytest.skip('filesystem rejects non-UTF-8 names')
-        subprocess.run(['git', '-C', str(tmp_path), 'config', 'core.quotepath', 'false'], check=True)
+        bin_dir  = tmp_path / 'bin'
+        fake_git = bin_dir / 'git'
+        bin_dir.mkdir()
+        fake_git.write_text(
+            "#!/bin/sh\nprintf '# branch.oid abc\\n# branch.head trunk\\n? file\\351.txt\\n'\n",
+            encoding='utf-8',
+        )
+        fake_git.chmod(0o755)
+        monkeypatch.setenv('PATH', str(bin_dir))
         assert statusline.git_status(str(tmp_path)) == statusline.GitStatus('trunk', dirty=True)
 
 
