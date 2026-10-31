@@ -2,7 +2,15 @@
   "$unmanaged": ["tui"],
   "model": "sonnet",
   "enabledPlugins": {
-    "pyright-lsp@claude-plugins-official": true
+    "claude-md-management@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
   },
   "hooks": {
     "Notification": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],

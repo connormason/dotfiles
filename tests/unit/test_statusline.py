@@ -1175,3 +1175,24 @@ class TestRenderedSettings:
         """
         components = rendered_settings['statusLineConfig']['components']
         assert set(components) <= set(statusline.COMPONENTS)
+
+    def test_public_plugins_are_enabled(self, rendered_settings: dict[str, Any]) -> None:
+        """
+        Enable the official-marketplace plugins carried over from the work setup
+        """
+        expected = {
+            f'{name}@claude-plugins-official'
+            for name in (
+                'claude-md-management',
+                'code-simplifier',
+                'commit-commands',
+                'feature-dev',
+                'frontend-design',
+                'pr-review-toolkit',
+                'pyright-lsp',
+                'skill-creator',
+                'superpowers',
+            )
+        }
+        enabled = {name for name, on in rendered_settings['enabledPlugins'].items() if on}
+        assert expected <= enabled
