@@ -264,14 +264,16 @@ class TestLinuxbrewInstall:
         assert 'env NONINTERACTIVE=1 /bin/bash <temp file>' in result.stdout
 
 
-# A brew that is already installed: `bundle check` passes iff $BREW_STATE/satisfied exists; `bundle --file` appends a
-# formula to the installed list iff $BREW_STATE/bundle-installs exists; `list`/`tap` print the state. `list <formula>`
+# A brew that is already installed: `bundle check` passes iff $BREW_STATE/satisfied exists; `bundle --file` creates
+# $BREW_STATE/bundle-ran and appends a formula to the installed list iff $BREW_STATE/bundle-installs exists;
+# `list`/`tap` print the state. `list <formula>`
 # fails, so the darwin-only legacy-starship check never depends on the host's /usr/local/bin/starship.
 BREW_STUB = (
     '#!/bin/sh\n'
     'case "$1 $2" in\n'
     '"bundle check") [ -f "$BREW_STATE/satisfied" ]; exit $? ;;\n'
-    '"bundle --file") [ -f "$BREW_STATE/bundle-installs" ] && echo "newpkg 1.0" >> "$BREW_STATE/formulae"; exit 0 ;;\n'
+    '"bundle --file") touch "$BREW_STATE/bundle-ran"\n'
+    '                 [ -f "$BREW_STATE/bundle-installs" ] && echo "newpkg 1.0" >> "$BREW_STATE/formulae"; exit 0 ;;\n'
     '"list --formula") cat "$BREW_STATE/formulae" 2>/dev/null; exit 0 ;;\n'
     '"list --cask") exit 0 ;;\n'
     '"list "*) exit 1 ;;\n'
@@ -325,6 +327,7 @@ class TestBundleChanges:
         assert result.returncode == 0, result.stderr
         assert len(_ledger(sandbox)) == 1
         assert _ledger(sandbox)[0].startswith('brew bundle changed installed packages (')
+        assert (state / 'bundle-ran').exists()
 
     def test_no_op_bundle_is_not_recorded(self, shell: str, sandbox: Sandbox, tmp_path: Path) -> None:
         """
@@ -336,6 +339,7 @@ class TestBundleChanges:
         result = _run(shell, sandbox)
         assert result.returncode == 0, result.stderr
         assert _ledger(sandbox) == []
+        assert (state / 'bundle-ran').exists()
 
     @pytest.mark.parametrize(
         ('satisfied', 'recorded'),
