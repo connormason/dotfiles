@@ -1,6 +1,9 @@
 {
   "$unmanaged": ["tui"],
   "model": "sonnet",
+  "enabledPlugins": {
+    "pyright-lsp@claude-plugins-official": true
+  },
   "hooks": {
     "Notification": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
     "PermissionRequest": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],

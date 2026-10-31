@@ -66,9 +66,11 @@ including right after a reboot, and record what prints.
 
 ## Still open (Phase B, B5)
 
-1. Install the wanted public plugin marketplaces and plugins in Claude Code, then run `python3 run.py render --diff
+1. ~~Install the wanted public plugin marketplaces and plugins in Claude Code, then run `python3 run.py render --diff
    claude` and move `enabledPlugins` / `extraKnownMarketplaces` into `profiles/personal-mac/render/claude.json`
-   (spec Clarification 1).
+   (spec Clarification 1).~~ Done 2026-10-31: the plugin set is `pyright-lsp@claude-plugins-official` (the built-in
+   official marketplace, so no `extraKnownMarketplaces`), now in `render/claude.json`; `render --check claude` exits 0.
+   Duplicate-across-marketplaces behavior was not exercised, since only one marketplace is installed.
 2. Use VS Code for a few days with `python3 run.py render --check vscode` daily; record whether VS Code rewrites its
    settings (Clarification 2).
 3. ~~Probe `--settings` layering as written in B5.3 (Clarification 3).~~ Done; see "B5.3 results" below.
