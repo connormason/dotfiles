@@ -85,7 +85,11 @@ jobs:
       - name: Pytest
         run: uv run pytest
       - name: Bootstrap dry run (throwaway HOME)
-        run: mkdir -p "$RUNNER_TEMP/home" && HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/home"
+          HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log | tee "$RUNNER_TEMP/dry.log"
+          tail -n1 "$RUNNER_TEMP/dry.log" | grep -Eqx 'bootstrap: changes=[0-9]+'
 
   pytest-linux:
     name: pytest (Linux)
@@ -113,4 +117,8 @@ jobs:
       - name: Pytest
         run: uv run pytest
       - name: Bootstrap dry run (throwaway HOME)
-        run: mkdir -p "$RUNNER_TEMP/home" && HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/home"
+          HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log | tee "$RUNNER_TEMP/dry.log"
+          tail -n1 "$RUNNER_TEMP/dry.log" | grep -Eqx 'bootstrap: changes=[0-9]+'
