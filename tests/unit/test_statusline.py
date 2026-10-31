@@ -1118,3 +1118,19 @@ class TestEntryPoint:
         result = self._run(tmp_path, 'not json', PWD='/x/y')
         assert result.returncode == 0
         assert result.stdout     == 'y\n'
+
+    def test_lone_surrogate_is_replaced(self, tmp_path: Path) -> None:
+        """
+        Exit 0 and replace a lone surrogate in the directory name instead of failing to encode it
+        """
+        result = self._run(tmp_path, '{"cwd": "/a/b\\ud800"}')
+        assert result.returncode == 0
+        assert result.stdout     == 'b?\n'
+
+    def test_deeply_nested_stdin(self, tmp_path: Path) -> None:
+        """
+        Exit 0 and fall back to $PWD when the session JSON nests past the recursion limit
+        """
+        result = self._run(tmp_path, '[' * 200_000, PWD='/x/y')
+        assert result.returncode == 0
+        assert result.stdout     == 'y\n'

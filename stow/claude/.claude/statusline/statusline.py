@@ -926,11 +926,11 @@ def read_session(stream: BinaryIO) -> dict[str, Any]:
     Parse the session JSON
 
     :param stream: binary stdin
-    :return: the session object, or an empty dict for anything unparsable
+    :return: the session object, or an empty dict for anything unparsable or nested past the recursion limit
     """
     try:
         data = json.loads(stream.read())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -979,8 +979,9 @@ def main() -> int:
     except Exception:
         output = fallback_line(data)
 
-    # Write UTF-8 bytes directly so a non-UTF-8 locale cannot turn a glyph into an encoding error
-    sys.stdout.buffer.write(f'{output}\n'.encode())
+    # Write UTF-8 bytes directly so a non-UTF-8 locale cannot turn a glyph into an encoding error. 'replace' keeps a
+    # lone surrogate (possible in JSON input such as "\ud800") from aborting the write.
+    sys.stdout.buffer.write(f'{output}\n'.encode('utf-8', 'replace'))
     sys.stdout.buffer.flush()
     return 0
 
