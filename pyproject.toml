@@ -115,7 +115,7 @@ default = true
 [tool.codespell]
 count = true
 summary = true
-skip = "smb.conf.j2,archive"
+skip = "smb.conf.j2,archive,venv"
 ignore-words-list = [
     # keep-sorted start
     "*.css",

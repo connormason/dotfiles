@@ -12,8 +12,10 @@ tap "jesseduffield/lazydocker"
 # keep-sorted end
 
 # Formulae
+# Homebrew 7+ refuses to load formulae from non-official taps unless trusted. `trusted: true` on the formula entry
+# trusts just that formula (not the whole tap) when `brew bundle` runs, so trust stays declared and reviewed in the repo.
 # keep-sorted start
-brew "Adembc/homebrew-tap/lazyssh"
+brew "Adembc/homebrew-tap/lazyssh", trusted: true
 brew "bat"
 brew "btop"
 brew "cmake"
@@ -37,12 +39,12 @@ brew "git-lfs"
 brew "gitui"
 brew "go-task"
 brew "graphviz"
-brew "gu1llaum-3/sshm/sshm"
+brew "gu1llaum-3/sshm/sshm", trusted: true
 brew "hatch"
 brew "hk"
 brew "htop"
 brew "hub"
-brew "jesseduffield/lazydocker/lazydocker"
+brew "jesseduffield/lazydocker/lazydocker", trusted: true
 brew "jq"
 brew "just"
 brew "lazygit"
