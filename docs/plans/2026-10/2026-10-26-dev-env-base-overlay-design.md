@@ -242,8 +242,8 @@ and the git version. The Phase D snapshot diff is the cutover acceptance test.
 
 ## Clarifications Needed (resolve by experiment in Phases A/B)
 
-Status after the first real run (2026-10-31, `docs/plans/2026-10/2026-10-31-phase-b-findings.md`): all three remain
-open and wait on Phase B step B5.
+Status after the first real run (2026-10-31, `docs/plans/2026-10/2026-10-31-phase-b-findings.md`): item 3 was resolved
+by the B5.3 probe the same day; items 1 and 2 remain open and wait on Phase B step B5.
 
 1. How Claude Code merges `enabledPlugins` when the same plugin is reachable through two marketplaces.
 2. Whether VS Code rewrites its `settings.json` often enough to make the drift guard noisy. If it does, VS Code falls back
@@ -251,9 +251,10 @@ open and wait on Phase B step B5.
 3. `claude --settings` layering semantics. The 2026-10-29 model-router spike
    (`docs/plans/2026-10/2026-10-29-model-router-design.md`, "Spike results") answered one part: hooks supplied through
    `claude -p ... --settings` run (its `PreToolUse`/`PostToolUse` hooks fired, and the `PreToolUse` input rewrite took
-   effect). Still open: whether a project's `.claude/settings.json` hooks run alongside `--settings` hooks, and which
-   value wins when both set the same `env` key; Phase B step B5.3 probes those two points. The design does not depend
-   on them; they are recorded for completeness.
+   effect). The B5.3 probe (2026-10-31, Claude Code 2.1.309, `claude -p` with a project `.claude/settings.json` and a
+   `--settings` file) answered the rest: a project's `SessionStart` hook runs alongside the `--settings` hook (hooks
+   add, they do not replace), and when both set the same `env` key the `--settings` value wins
+   (`LAYER_PROJ=overlay`); keys set by only one source are both present. The design does not depend on this.
 
 ## Out of Scope
 
