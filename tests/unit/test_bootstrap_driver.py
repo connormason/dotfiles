@@ -4,6 +4,7 @@ Unit tests for bootstrap/bootstrap.sh (layered stage driver)
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,7 @@ _SCRUBBED_VARS: tuple[str, ...] = (
     'DOTFILES_REPO',
     'DOTFILES_LAYER',
     'DOTFILES_BREW_PREFIXES',
+    'DOTFILES_OS',
     'DOTFILES_OVERLAYS_FILE',
     'XDG_STATE_HOME',
 )
@@ -207,6 +209,39 @@ class TestStageExecution:
         assert Path(repo).resolve()  == base
         assert Path(layer).resolve() == overlay.resolve()
         assert dry_run == '1'
+
+    @pytest.mark.parametrize(
+        ('override', 'expected'),
+        [
+            ('linux',  'linux'),
+            ('darwin', 'darwin'),
+            (None,     {'Darwin': 'darwin', 'Linux': 'linux'}[platform.system()]),
+        ],
+    )
+    def test_stage_sees_resolved_dotfiles_os(
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        overlay: Path,
+        tmp_path: Path,
+        override: str | None,
+        expected: str,
+    ) -> None:
+        """
+        Test that the driver exports DOTFILES_OS to stages: the override when set, else the host OS id
+        """
+        probe = tmp_path / 'os-probe'
+        (overlay / 'bootstrap' / '97-selftest-os.sh').write_text(
+            f'printf "%s" "$DOTFILES_OS" > "{probe}"\n',
+            encoding='utf-8',
+        )
+        if override is not None:
+            env = {**env, 'DOTFILES_OS': override}
+
+        result = _drive(base, shell, env, '--dry-run', '--no-log', '--only', '97-selftest-os')
+        assert result.returncode == 0, result.stderr
+        assert probe.read_text(encoding='utf-8') == expected
 
     def test_stage_runs_under_driver_interpreter(
         self,
@@ -403,12 +438,49 @@ class TestDryRun:
         stub.write_text(f'#!/bin/sh\ntouch "{sentinel}"\nexit 1\n', encoding='utf-8')
         stub.chmod(0o755)
 
-        stubbed = {**env, 'PATH': f'{bin_dir}:{env["PATH"]}'}
+        stubbed = {**env, 'PATH': f'{bin_dir}:{env["PATH"]}', 'DOTFILES_OS': 'darwin'}
         result  = _drive(base, shell, stubbed, '--dry-run', '--no-log', '--only', '98-selftest-ok')
 
         assert result.returncode == 0, result.stderr
         assert 'would prime sudo' in result.stdout
         assert not sentinel.exists()
+
+    def test_linux_never_primes_sudo(self, base: Path, shell: str, env: dict[str, str], tmp_path: Path) -> None:
+        """
+        Test that a real run on linux never invokes sudo (no Linux stage needs root; Ansible owns root)
+        """
+        bin_dir = tmp_path / 'bin'
+        bin_dir.mkdir()
+
+        sentinel = tmp_path / 'sudo-called'
+        stub = bin_dir / 'sudo'
+        stub.write_text(f'#!/bin/sh\ntouch "{sentinel}"\nexit 1\n', encoding='utf-8')
+        stub.chmod(0o755)
+
+        stubbed = {**env, 'PATH': f'{bin_dir}:{env["PATH"]}', 'DOTFILES_OS': 'linux'}
+        result  = _drive(base, shell, stubbed, '--no-log', '--only', '98-selftest-ok')
+
+        assert result.returncode == 0, result.stderr
+        assert not sentinel.exists()
+
+    def test_darwin_still_primes_sudo(self, base: Path, shell: str, env: dict[str, str], tmp_path: Path) -> None:
+        """
+        Test that a real run on darwin primes sudo exactly as before
+        """
+        bin_dir = tmp_path / 'bin'
+        bin_dir.mkdir()
+
+        # `sudo -v` succeeds and records the call; `sudo -n true` fails so the keep-alive loop exits at once
+        sentinel = tmp_path / 'sudo-called'
+        stub = bin_dir / 'sudo'
+        stub.write_text(f'#!/bin/sh\n[ "$1" = "-v" ] || exit 1\ntouch "{sentinel}"\n', encoding='utf-8')
+        stub.chmod(0o755)
+
+        stubbed = {**env, 'PATH': f'{bin_dir}:{env["PATH"]}', 'DOTFILES_OS': 'darwin'}
+        result  = _drive(base, shell, stubbed, '--no-log', '--only', '98-selftest-ok')
+
+        assert result.returncode == 0, result.stderr
+        assert sentinel.exists()
 
     def test_dry_run_writes_no_state(self, base: Path, shell: str, env: dict[str, str]) -> None:
         """

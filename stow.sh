@@ -6,6 +6,8 @@
 #   Options    only those above and -h|--help; any other option is an error (none is passed through to stow)
 #   Layers     <repo>/stow, then <overlay>/stow for each overlay in the registry (bootstrap/lib.sh: dotfiles_layers)
 #   Packages   every directory in a layer's stow/; a package name may exist in only one layer
+#   OS         a package's optional .dotfiles-os file lists the OS ids it applies to (darwin, linux; one per line, '#'
+#              comments); packages without one apply everywhere. Other packages are invisible on this OS
 #   Ownership  no two packages may provide the same $HOME-relative path (or a file where another has a directory), and
 #              none may provide a file render.py writes (render.py --list-targets) or a path above one; checked before
 #              anything is linked
@@ -70,11 +72,45 @@ for arg in "$@"; do
     esac
 done
 
+CURRENT_OS="$(dotfiles_os)" || exit 1
+
+# package_os_ok DIR -> succeed if the package at DIR applies to CURRENT_OS (see "OS" in the header). Dies on an unknown
+# OS id or a marker that lists none.
+package_os_ok() {
+    local marker="$1/.dotfiles-os" line any=0 found=0
+    if [ ! -f "$marker" ]; then
+        return 0
+    fi
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%%#*}"
+        line="${line//[[:space:]]/}"
+        if [ -z "$line" ]; then
+            continue
+        fi
+        case "$line" in
+        darwin | linux) ;;
+        *) die "unknown OS '$line' in $marker (expected darwin or linux, one per line)" ;;
+        esac
+        any=1
+        if [ "$line" = "$CURRENT_OS" ]; then
+            found=1
+        fi
+    done <"$marker"
+    if [ "$any" = 0 ]; then
+        die "$marker lists no OS (expected darwin and/or linux)"
+    fi
+    [ "$found" = 1 ]
+}
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Discovery: parallel arrays (bash 3.2 has no associative arrays)
 # ---------------------------------------------------------------------------------------------------------------------
 PKG_NAMES=()
 PKG_LAYERS=()
+# Every package in every layer (for the one-layer-per-name rule), and the packages whose marker excludes this OS
+SEEN_NAMES=()
+SEEN_LAYERS=()
+SKIPPED_NAMES=()
 
 pkg_index() { # print the index of package $1, or return 1
     local i
@@ -97,11 +133,19 @@ while IFS= read -r layer; do
             continue
         fi
         pkg="$(basename "$dir")"
-        if idx="$(pkg_index "$pkg")"; then
-            die "package '$pkg' is defined in two layers: ${PKG_LAYERS[$idx]} and $layer"
+        for i in ${SEEN_NAMES[@]+"${!SEEN_NAMES[@]}"}; do
+            if [ "${SEEN_NAMES[$i]}" = "$pkg" ]; then
+                die "package '$pkg' is defined in two layers: ${SEEN_LAYERS[$i]} and $layer"
+            fi
+        done
+        SEEN_NAMES+=("$pkg")
+        SEEN_LAYERS+=("$layer")
+        if package_os_ok "${dir%/}"; then
+            PKG_NAMES+=("$pkg")
+            PKG_LAYERS+=("$layer")
+        else
+            SKIPPED_NAMES+=("$pkg")
         fi
-        PKG_NAMES+=("$pkg")
-        PKG_LAYERS+=("$layer")
     done
 done <<EOF
 $LAYERS_OUT
@@ -114,7 +158,7 @@ if [ "$LIST_ONLY" = 1 ]; then
     exit 0
 fi
 
-if [ ${#PKG_NAMES[@]} -eq 0 ]; then
+if [ ${#PKG_NAMES[@]} -eq 0 ] && [ ${#WANT[@]} -eq 0 ]; then
     echo "stow: no packages found"
     exit 0
 fi
@@ -124,7 +168,14 @@ if [ ${#WANT[@]} -eq 0 ]; then
     SEL=("${!PKG_NAMES[@]}")
 else
     for pkg in "${WANT[@]}"; do
-        idx="$(pkg_index "$pkg")" || die "unknown package: $pkg"
+        if ! idx="$(pkg_index "$pkg")"; then
+            for skipped in ${SKIPPED_NAMES[@]+"${SKIPPED_NAMES[@]}"}; do
+                if [ "$skipped" = "$pkg" ]; then
+                    die "package '$pkg' does not apply to $CURRENT_OS (see its .dotfiles-os)"
+                fi
+            done
+            die "unknown package: $pkg"
+        fi
         already=0
         for i in ${SEL[@]+"${SEL[@]}"}; do
             if [ "$i" = "$idx" ]; then
@@ -147,14 +198,15 @@ done
 # no package provides a file at a path another package uses as a directory.
 # The prune list and root-level ignores mirror stow's built-in ignore list (Stow.pm, __DATA__): file names such as
 # README.md only count as ignored at the package root, and only an exact COPYING is ignored there. .DS_Store and
-# .backups/ (editor-hook backup directories) are pruned everywhere, matching the --ignore flags passed to stow below.
+# .backups/ (editor-hook backup directories) and .dotfiles-os markers are pruned everywhere, matching the --ignore flags
+# passed to stow below.
 # ---------------------------------------------------------------------------------------------------------------------
 package_files() { # $1=index: $HOME-relative paths the package provides, honoring stow's default ignores
     (
         cd "${PKG_LAYERS[$1]}/stow/${PKG_NAMES[$1]}" &&
             find . \( -name .git -o -name .gitignore -o -name .gitmodules -o -name .DS_Store -o -name .backups \
-                -o -name RCS -o -name CVS -o -name .cvsignore -o -name .svn -o -name _darcs -o -name .hg \
-                -o -name '?*,v' -o -name '?*~' -o -name '.#?*' -o -name '#*#' \) \
+                -o -name .dotfiles-os -o -name RCS -o -name CVS -o -name .cvsignore -o -name .svn -o -name _darcs \
+                -o -name .hg -o -name '?*,v' -o -name '?*~' -o -name '.#?*' -o -name '#*#' \) \
                 -prune -o \( -type f -o -type l \) -print |
             sed 's|^\./||' | grep -v -E '^(README.*|LICENSE.*|COPYING)$' || true
     )
@@ -269,7 +321,7 @@ run_layer() { # $1=layer, $2=simulate (1|0): sets LAYER_OUT and LAYER_RC
     load_pkgs "$1"
     LAYER_RC=0
     LAYER_OUT="$(stow --dir "$1/stow" --target "$HOME" --no-folding --ignore='\.DS_Store' --ignore='\.backups' \
-        --restow ${VERBOSE[@]+"${VERBOSE[@]}"} ${mode[@]+"${mode[@]}"} "${PKGS[@]}" 2>&1)" ||
+        --ignore='\.dotfiles-os' --restow ${VERBOSE[@]+"${VERBOSE[@]}"} ${mode[@]+"${mode[@]}"} "${PKGS[@]}" 2>&1)" ||
         LAYER_RC=$?
 }
 

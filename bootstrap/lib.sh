@@ -20,6 +20,48 @@ die() {
 # have NAME -> success if NAME is an executable on PATH
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# dotfiles_os -> print the engine's OS id: "darwin" or "linux". DOTFILES_OS overrides detection (tests, previews of
+# another OS's layout). Dies on an invalid override or an unsupported kernel. Callers capture it with
+# os="$(dotfiles_os)" so a failure aborts under `set -e`.
+dotfiles_os() {
+    local os="${DOTFILES_OS:-}"
+    if [ -z "$os" ]; then
+        case "$(uname -s)" in
+        Darwin) os=darwin ;;
+        Linux) os=linux ;;
+        *) die "unsupported OS: $(uname -s) (the engine supports macOS and Linux)" ;;
+        esac
+    fi
+    case "$os" in
+    darwin | linux) printf '%s\n' "$os" ;;
+    *) die "DOTFILES_OS must be darwin or linux (got '$os')" ;;
+    esac
+}
+
+# require_os OS... -> return if the current OS is one of OS...; otherwise log the skip and exit the calling stage with
+# status 0, so an OS-specific stage is a clean no-op elsewhere. Call it right after sourcing this file.
+require_os() {
+    local current want
+    current="$(dotfiles_os)" || exit 1
+    for want in "$@"; do
+        if [ "$want" = "$current" ]; then
+            return 0
+        fi
+    done
+    log "skipped ($* only; this is $current)"
+    exit 0
+}
+
+# sha256_of FILE -> print FILE's SHA-256 hex digest. macOS ships shasum; on Linux it comes with perl, so fall back to
+# coreutils' sha256sum when shasum is absent.
+sha256_of() {
+    if have shasum; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    else
+        sha256sum "$1" | awk '{print $1}'
+    fi
+}
+
 # fmt_duration SECONDS -> human-readable duration ("42s" under a minute, else "m:ss")
 fmt_duration() {
     local s="${1:-0}"
@@ -84,10 +126,11 @@ confirm() {
 
 # Append the first Homebrew prefix that has bin/brew to PATH. Appended (not prepended) so an active virtualenv's python
 # is not shadowed. A layer's bootstrap/env.sh may set DOTFILES_BREW_PREFIXES (space-separated) to add prefixes; these
-# are checked before the defaults (/opt/homebrew, /usr/local) and the first prefix with bin/brew wins.
+# are checked before the defaults (/opt/homebrew, /usr/local, /home/linuxbrew/.linuxbrew) and the first prefix with
+# bin/brew wins. Keep the defaults in sync with stow/homebrew/.config/zsh/conf.d/05-homebrew.zsh.
 ensure_brew_on_path() {
     local prefix
-    for prefix in ${DOTFILES_BREW_PREFIXES:-} /opt/homebrew /usr/local; do
+    for prefix in ${DOTFILES_BREW_PREFIXES:-} /opt/homebrew /usr/local /home/linuxbrew/.linuxbrew; do
         if [ -x "$prefix/bin/brew" ]; then
             case ":$PATH:" in
             *":$prefix/bin:"*) ;;

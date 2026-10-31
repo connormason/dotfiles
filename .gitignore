@@ -392,9 +392,11 @@ tags
 
 !services/compose.base.yml
 
+# CI check reports
 .reports/
 
 # Inventory private repo
+inventory/
 /inventory/*
 !/inventory/.gitkeep
 
