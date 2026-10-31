@@ -19,7 +19,7 @@ BASE_BREWFILE = REPO_ROOT / 'bootstrap' / 'Brewfile'
 _SCRUBBED_VARS = ('DOTFILES_REPO', 'DOTFILES_BREW_PREFIXES', 'DOTFILES_LEAK_PATTERNS', 'DOTFILES_OVERLAYS_FILE')
 
 # `<kind> "<name>"` as written in a Brewfile (taps, formulae, casks, mas apps)
-_ENTRY = re.compile(r'^(tap|brew|cask|mas)\s+"([^"]+)"')
+_ENTRY = re.compile(r'^\s*(tap|brew|cask|mas)\s+"([^"]+)"')
 
 
 def _entries(brewfile: Path) -> list[tuple[str, str]]:

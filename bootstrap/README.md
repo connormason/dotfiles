@@ -85,7 +85,7 @@ Base stages, in run order. Overlays interleave their own stages by number. Every
 
 | File                                             | Format                                                       | Read by     |
 | ------------------------------------------------ | ------------------------------------------------------------ | ----------- |
-| [`Brewfile`](Brewfile)                           | `brew bundle` syntax                                         | `50-brew`   |
+| [`Brewfile`](Brewfile)                           | `brew bundle` syntax; macOS-only entries inside `if OS.mac?` | `50-brew`   |
 | [`vscode-extensions.txt`](vscode-extensions.txt) | One `publisher.name` extension ID per line                   | `72-vscode` |
 | [`repos.txt`](repos.txt)                         | `name url`, separated by spaces or tabs                      | `80-repos`  |
 | [`uv-tools.txt`](uv-tools.txt)                   | Package name, optionally followed by `uv tool install` flags | `90-python` |
