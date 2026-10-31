@@ -14,12 +14,15 @@
       tags:
         - always
 
-    # Update the apt package index
+    # Update the apt package index (tagged always so tag-scoped runs still refresh a stale cache; the cache window keeps
+    # it `ok` on re-runs)
     - name: Update apt package index
       become: true
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 86400   # One day
+      tags:
+        - always
 
     # Tasks for Debian Linux
     - name: Configure Debian

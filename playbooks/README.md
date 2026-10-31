@@ -26,7 +26,8 @@ The playbook:
 
 **Execution order:**
 
-1. **APT update** - updates the package index (cached for 24 hours)
+1. **APT update** - updates the package index (cached for 24 hours; tagged `always`, so tag-scoped runs refresh a stale
+   cache too)
 2. **debian** - base system packages and configuration. Tags: `debian`, `configfile`
 3. **zfs** - ZFS filesystem configuration. Tags: `zfs`, `configfile`
 4. **samba** - file sharing via SMB/CIFS. Tags: `samba`, `configfile`
@@ -75,7 +76,9 @@ ansible-playbook --syntax-check -i localhost, playbooks/nas_bootstrap.yml
 
 ### Tags
 
-Each role has a tag matching its name; `configfile` selects every role that writes configuration files.
+Each role has a tag matching its name; `configfile` selects every role that writes configuration files. Note that
+`--tags configfile` therefore also runs the full stow engine (including `brew bundle`) via the `dotfiles` role and root
+`setup.sh` via the `haos` role.
 
 ```bash
 ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags docker
@@ -83,12 +86,12 @@ ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --ta
 ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags dotfiles,haos
 ```
 
-| Tag             | Selects                                             |
-| --------------- | --------------------------------------------------- |
-| `configfile`    | Roles that create or link configuration files       |
-| `docker`        | Docker and container services                       |
-| `homeassistant` | Home Assistant configuration inside the docker role |
-| `always`        | Tasks that always run (setting the become password) |
+| Tag             | Selects                                                                       |
+| --------------- | ----------------------------------------------------------------------------- |
+| `configfile`    | Roles that create or link configuration files                                 |
+| `docker`        | Docker and container services                                                 |
+| `homeassistant` | Home Assistant configuration inside the docker role                           |
+| `always`        | Tasks that always run (setting the become password, refreshing the apt index) |
 
 ## Vault
 

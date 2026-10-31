@@ -245,3 +245,12 @@ class TestPlaybookOrder:
         Test that the forked dev-environment roles no longer exist
         """
         assert not (ROLES / role).exists()
+
+    def test_apt_index_refresh_survives_tag_scoped_runs(self) -> None:
+        """
+        Test that the apt index task is tagged always and keeps its cache window (so re-runs stay ok)
+        """
+        play = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
+        task = next(task for task in play['tasks'] if task.get('name') == 'Update apt package index')
+        assert 'always' in task['tags']
+        assert task['ansible.builtin.apt']['cache_valid_time'] == 86400
