@@ -2964,7 +2964,9 @@ TAGS=(--tags debian,zfs,dotfiles,haos)
   anything Stage 1 predicted.
 - [ ] **Stage 4 — idempotence.** `"${PLAY[@]}" "${TAGS[@]}" 2>&1 | tee "$TMPDIR/nas-4-rerun.txt"`. Required:
   `changed=0` in the recap. If a task still reports changed, fix it on the branch (`ansible-idempotency-reviewer`
-  first), push, and repeat Stages 3–4.
+  first), push, and repeat Stages 3–4. Run it immediately after Stage 3: a lone change from `brew bundle changed
+  installed packages` (an upstream formula update between runs) is real drift, not an idempotency bug — re-run once
+  more before investigating.
 - [ ] **Stage 5 — acceptance on the NAS** (`ssh connormason@192.168.68.79`):
 
   ```bash

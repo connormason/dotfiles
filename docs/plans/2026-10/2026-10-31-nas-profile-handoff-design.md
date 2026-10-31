@@ -22,7 +22,7 @@ them; everything not mentioned here follows the parent design.
 | sudo requires a password                                                                 | `become` keeps using the vault-supplied `ansible_become_pass`                   |
 | `br0` up with **192.168.68.79/22**; HAOS VM `haos` running; Docker drop-in present        | `haos` role's bridge check passes; inventory's `ansible_host: 192.168.68.74` is stale |
 | User not in the `libvirt` group                                                          | The first `haos` run reports one change (`usermod -aG libvirt`)                  |
-| sshd listening on :22; Tailscale up (`nas`, 100.123.182.80)                              | Ansible reaches the NAS over the LAN from the owner's terminal                  |
+| sshd listening on :22; Tailscale up (`nas`, tailnet address)                             | Ansible reaches the NAS over the LAN from the owner's terminal                  |
 
 The Claude Code session on the work Mac cannot open LAN sockets (`connect: Operation not permitted`, a local policy on
 that process, not the NAS), so every live NAS step runs from the owner's terminal and its output is handed back as a
