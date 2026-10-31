@@ -1,25 +1,52 @@
 ---
+# Sleep targets are masked with systemctl because the systemd module's `masked` did not take effect on them. Reading
+# each state first keeps a converged host at changed=0.
+- name: Read sleep target states
+  ansible.builtin.command:
+    argv: [systemctl, is-enabled, "{{ debian_sleep_target.unit }}"]
+  loop: "{{ debian_sleep_targets }}"
+  loop_control:
+    loop_var: debian_sleep_target
+    label: "{{ debian_sleep_target.unit }}"
+  register: debian_sleep_target_states
+  changed_when: false
+  failed_when: false
+  check_mode: false
 
-# NOTE: Using commands here instead of `ansible.builtin.systemd` because for some reason masking was not working
-- name: Configure sleep/suspend/hibernate
-  block:
-    - name: "{{ 'Enable' if systemd_allow_sleep else 'Disable' }} sleep"
-      become: true
-      ansible.builtin.command: "sudo systemctl {{ 'unmask' if systemd_allow_sleep else 'mask' }} sleep.target"
-
-    - name: "{{ 'Enable' if systemd_allow_suspend else 'Disable' }} suspend"
-      become: true
-      ansible.builtin.command: "sudo systemctl {{ 'unmask' if systemd_allow_suspend else 'mask' }} suspend.target"
-
-    - name: "{{ 'Enable' if systemd_allow_hibernate else 'Disable' }} hibernate"
-      become: true
-      ansible.builtin.command: "sudo systemctl {{ 'unmask' if systemd_allow_hibernate else 'mask' }} hibernate.target"
-
-    - name: "{{ 'Enable' if systemd_allow_hybrid_sleep else 'Disable' }} hybrid sleep"
-      become: true
-      ansible.builtin.command: "sudo systemctl {{ 'unmask' if systemd_allow_hybrid_sleep else 'mask' }} hybrid-sleep.target"
+# `is-enabled` prints "masked" for a masked unit; act only where that disagrees with the unit's allow flag
+- name: Mask or unmask sleep targets
+  become: true
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - "{{ 'unmask' if debian_target_state.debian_sleep_target.allow | bool else 'mask' }}"
+      - "{{ debian_target_state.debian_sleep_target.unit }}"
+  loop: "{{ debian_sleep_target_states.results }}"
+  loop_control:
+    loop_var: debian_target_state
+    label: "{{ debian_target_state.debian_sleep_target.unit }}"
+  when: (debian_target_state.stdout == 'masked') == (debian_target_state.debian_sleep_target.allow | bool)
+  changed_when: true
 
 - name: Install apt packages
   become: true
   ansible.builtin.apt:
-    name: "{{ apt_packages }}"
+    name: "{{ debian_engine_packages + debian_apt_packages }}"
+
+- name: Create the Homebrew parent directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ debian_linuxbrew_prefix | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the Homebrew prefix, owned by the user
+  become: true
+  ansible.builtin.file:
+    path: "{{ debian_linuxbrew_prefix }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
