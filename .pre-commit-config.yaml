@@ -248,6 +248,8 @@ repos:
         stages: [pre-commit, manual]
         priority: 10
         args: [--pytest-test-first]
+        # tests/golden.py is a shared helper module, not a test file
+        exclude: ^tests/golden\.py$
 
   - repo: local
     hooks:

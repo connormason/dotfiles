@@ -1,0 +1,70 @@
+"""
+OS layout regression tests: which $HOME paths the base layer links on each OS
+"""
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from tests.golden import check_golden
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(shutil.which('stow') is None, reason='GNU Stow not installed'),
+]
+
+
+def linked_paths(tmp_path: Path, os_name: str) -> list[str]:
+    """
+    Stow the base layer (no overlays) into an empty HOME as os_name and list the symlinks it created
+
+    :param tmp_path: scratch directory for the HOME
+    :param os_name: value for DOTFILES_OS
+    :return: sorted HOME-relative symlink paths
+    """
+    home = tmp_path / f'home-{os_name}'
+    home.mkdir()
+
+    env: dict[str, str] = {
+        'HOME':                   str(home),
+        'PATH':                   os.environ['PATH'],
+        'XDG_CONFIG_HOME':        str(home / '.config'),
+        'DOTFILES_OVERLAYS_FILE': str(tmp_path / 'no-overlays'),
+        'DOTFILES_OS':            os_name,
+    }
+    result = subprocess.run(
+        ['bash', str(REPO_ROOT / 'stow.sh'), '--no-summary'],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return sorted(str(path.relative_to(home)) for path in home.rglob('*') if path.is_symlink())
+
+
+class TestDarwinLayout:
+    """
+    Tests pinning the darwin link set to the pre-Linux-support golden file
+    """
+    @pytest.mark.skipif(sys.platform != 'darwin', reason='the golden file is regenerated on macOS only')
+    def test_darwin_links_match_golden(self, tmp_path: Path) -> None:
+        """
+        Test that the base layer links exactly the golden set of paths on darwin
+        """
+        check_golden('darwin-links.txt', linked_paths(tmp_path, 'darwin'))
+
+    def test_darwin_links_match_golden_on_any_host(self, tmp_path: Path) -> None:
+        """
+        Test that DOTFILES_OS=darwin reproduces the golden set even on a Linux host
+        """
+        if os.environ.get('DOTFILES_UPDATE_GOLDEN') == '1':
+            pytest.skip('golden files are being rewritten')
+        check_golden('darwin-links.txt', linked_paths(tmp_path, 'darwin'))
