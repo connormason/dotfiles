@@ -1,0 +1,16 @@
+{
+  "$unmanaged": ["tui"],
+  "model": "sonnet",
+  "hooks": {
+    "Notification": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
+    "PermissionRequest": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
+    "PostToolUse": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
+    "PreToolUse": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
+    "SessionEnd": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
+    "SessionStart": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
+    "Stop": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
+    "StopFailure": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
+    "SubagentStop": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}],
+    "UserPromptSubmit": [{"hooks": [{"command": "$HOME/.config/iterm2/cc-status", "type": "command"}]}]
+  }
+}

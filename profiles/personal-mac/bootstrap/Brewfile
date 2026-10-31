@@ -6,7 +6,6 @@
 # Casks
 # keep-sorted start
 cask "claude-code"
-cask "macdown"
 cask "spotify"
 # keep-sorted end
 

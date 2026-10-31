@@ -2,14 +2,15 @@
 
 # personal-mac
 
-Overlay for the personal MacBook: applications that should not be installed on other machines. It follows the
-[overlay contract](../../bootstrap/README.md#overlay-contract) and contributes a single manifest fragment.
+Overlay for the personal MacBook: applications and Claude Code settings that should not apply to other machines. It
+follows the [overlay contract](../../bootstrap/README.md#overlay-contract).
 
 ## Contents
 
-| File                                       | Purpose                                                                                                  |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| [`bootstrap/Brewfile`](bootstrap/Brewfile) | Casks and Mac App Store apps, applied by `50-brew` after the base [`Brewfile`](../../bootstrap/Brewfile) |
+| File                                       | Purpose                                                                                                                                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`bootstrap/Brewfile`](bootstrap/Brewfile) | Casks and Mac App Store apps, applied by `50-brew` after the base [`Brewfile`](../../bootstrap/Brewfile)                                                                         |
+| [`render/claude.json`](render/claude.json) | Claude Code settings merged after the base fragment: pins `model`, adds the iTerm2 `cc-status` hooks, and leaves `tui` to the app (`$unmanaged`) so `/tui` never counts as drift |
 
 The profile Brewfile lists only what the base Brewfile does not already install; a unit test fails if an entry is
 repeated.
