@@ -9,18 +9,18 @@ These files are deployed to the NAS at `~/docker/` by the `roles/docker` Ansible
 `docker compose -f compose.base.yml -f <service>/compose.yml up -d <service>`.
 
 A service is **disabled** by renaming its `compose.yml` to `compose.yml.disabled`: both `deploy.sh` and the CI deploy
-workflow only pick up directories containing a `compose.yml`. `pihole` is currently disabled.
+workflow only pick up directories containing a `compose.yml`. `pihole` and `homeassistant` are currently disabled.
 
 ## Quick Reference
 
 All host ports below are bound on the NAS itself. Services without a host port are reachable only from inside the
-`nas-network` bridge (or, for Home Assistant, the host network namespace).
+`nas-network` bridge.
 
 | Container        | Image                               | Host Port(s)                                  | Purpose                                     |
 | ---------------- | ----------------------------------- | --------------------------------------------- | ------------------------------------------- |
 | `caddy`          | `caddy:2-alpine`                    | `443/tcp`, `32443/tcp`                        | Tailscale HTTPS reverse proxy (see below)   |
 | `glance`         | `glanceapp/glance`                  | `8080/tcp`                                    | Dashboard / homepage                        |
-| `home-assistant` | `homeassistant/home-assistant`      | host networking (default `8123/tcp`)          | Home automation hub                         |
+| `home-assistant` | `homeassistant/home-assistant`      | host networking (default `8123/tcp`)          | Home automation hub (**disabled**)          |
 | `pihole`         | `pihole/pihole`                     | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80 | DNS, ad-blocking, DHCP (**disabled**)       |
 | `plex`           | `linuxserver/plex`                  | `32400/tcp`                                   | Media streaming server                      |
 | `jellyfin`       | `linuxserver/jellyfin`              | `8096/tcp`, `7359/udp`                        | Media streaming server (Plex alternative)   |
@@ -32,7 +32,7 @@ All host ports below are bound on the NAS itself. Services without a host port a
 | `autoplex`       | `danielmmetz/autoplex` (built)      | none                                          | Copies completed downloads into Plex layout |
 
 LAN access is `http://<nas-host>:<port>` (e.g. `http://nas.local:8989` for Sonarr). The PiHole admin UI is
-`http://<nas-host>:8053/admin`. Home Assistant listens directly on the host network at port `8123`.
+`http://<nas-host>:8053/admin`. Home Assistant now runs as a VM with its own LAN address (see below).
 
 ## Tailscale / HTTPS
 
@@ -64,15 +64,17 @@ container status. Loads environment from a sibling `.env` file rendered by Ansib
 
 ### `home-assistant`
 
-Runs on the host network (`network_mode: host`) so it can discover devices via mDNS/SSDP and reach the Lutron Caseta
-bridge directly. `homeassistant/config/` starts empty and is populated by Home Assistant itself on first boot;
-integrations are configured through the UI rather than YAML checked into this repo.
+**Disabled** (`compose.yml.disabled`) in favor of Home Assistant OS running as a libvirt VM, which adds the Supervisor
+(apps, managed backups, OS updates). See [`vms/haos/`](../vms/haos/README.md) for the VM and the cutover steps.
+
+The container ran on the host network (`network_mode: host`) for mDNS/SSDP discovery; `homeassistant/config/` was
+populated by Home Assistant itself on first boot.
 
 ### `pihole`
 
-**Disabled** (`compose.yml.disabled`). When re-enabling: libvirt's default network runs `dnsmasq` on `192.168.122.1:53`,
-which blocks Docker from binding `0.0.0.0:53` — either disable that libvirt network or bind the DNS ports to the NAS's
-LAN address.
+**Disabled** (`compose.yml.disabled`). When re-enabling, confirm nothing else holds `:53`: libvirt's `default` network
+runs `dnsmasq` on `192.168.122.1:53`, which blocks Docker from binding `0.0.0.0:53`. [`vms/haos/setup.sh`](../vms/haos/)
+disables that network; otherwise bind the DNS ports to the NAS's LAN address.
 
 DNS server and DHCP-capable ad-blocker. Binds privileged DNS/DHCP ports on the host; the admin UI is remapped to host
 port `8053` to avoid colliding with other web services. `FTLCONF_webserver_api_password` is sourced from the environment

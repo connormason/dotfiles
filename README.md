@@ -98,7 +98,7 @@ Configures the home NAS server with:
 - **File sharing**: Samba (SMB/CIFS)
 - **Media stack**: Plex, Sonarr, Radarr, Transmission, Prowlarr (via Docker)
 - **Network services**: PiHole DNS/ad-blocking, Tailscale
-- **Home automation**: Home Assistant, Glance dashboard
+- **Home automation**: Home Assistant OS (libvirt VM, see [`vms/haos/`](vms/haos/README.md)), Glance dashboard
 - **Base system**: Debian packages, git, ssh, zsh
 
 ### Core Components<a name="core-components"></a>
@@ -311,7 +311,7 @@ Comprehensive media server and home automation:
 
 - **Media services**: Plex, Sonarr, Radarr, Transmission, Prowlarr, Flaresolverr
 - **Network services**: PiHole (DNS/ad-blocking)
-- **Automation**: Home Assistant, Glance dashboard
+- **Automation**: Glance dashboard (Home Assistant runs as a VM; see [`vms/haos/`](vms/haos/README.md))
 - **Support**: Autoplex (automated file organization)
 
 ### Python CLI (`run.py`)<a name="python-cli-runpy"></a>
