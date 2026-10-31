@@ -72,7 +72,7 @@ Ansible roles, all run by `playbooks/nas_bootstrap.yml`:
 **Linux system roles**:
 
 - `debian`: System packages and configuration
-- `docker`: Docker setup with compose stack (Plex, Sonarr, Radarr, PiHole, Home Assistant, etc.)
+- `docker`: Docker setup with compose stack (Plex, Sonarr, Radarr, PiHole, etc.)
 - `zfs`: ZFS filesystem configuration
 - `samba`: File sharing setup
 
@@ -115,7 +115,7 @@ Media server and home automation stack in `roles/docker/files/docker-compose.yml
 
 - **Media**: Plex, Jellyfin, Radarr (movies), Sonarr (TV), Transmission (torrents), Prowlarr (indexer), Flaresolverr
 - **Network**: PiHole (DNS/ad-blocking), Caddy (reverse proxy)
-- **Automation**: Home Assistant, Glance dashboard
+- **Automation**: Glance dashboard (Home Assistant OS runs as a libvirt VM, provisioned by `vms/haos/` scripts)
 - **Support**: Autoplex (automated file organization)
 
 **Storage paths**: `/storage/media/*` mounted into containers

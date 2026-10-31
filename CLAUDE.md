@@ -21,6 +21,7 @@ For detailed reference, load on-demand:
    wraps these (`make help`). Full command reference in [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 
 `nas_bootstrap.sh` validates the repo, installs Homebrew (checksum-verified) and Ansible, then runs the NAS playbook.
+The Home Assistant OS VM is outside Ansible: [`vms/haos/`](vms/haos/README.md) holds its hand-run scripts and runbook.
 See [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flows and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation
 (stage flags / tags / extra-vars).
 

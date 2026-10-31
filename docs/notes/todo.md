@@ -18,3 +18,9 @@ Remaining manual steps (require NAS/GitHub access):
 3. Set up 5 GitHub secrets (Tailscale OAuth, SSH key, NAS host, user)
 4. Run Ansible bootstrap once on NAS
 5. End-to-end test: push a config change, verify auto-deploy
+
+## Home Assistant OS VM
+
+- Remote access for the HAOS VM (Caddy dedicated port with an `upstream` override, or the Tailscale app) — see
+  `vms/haos/README.md` "Remote access"
+- Fold `vms/haos/` scripts into the NAS bootstrap once the broader Ansible → scripts refactor is scoped

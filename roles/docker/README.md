@@ -140,20 +140,11 @@ The stack is designed to provide a fully automated media server experience with 
 
 ### Home Automation & Dashboards
 
-#### Home Assistant (Port 8123)
+#### Home Assistant
 
-**Purpose**: Home automation platform
-
-- **Image**: `homeassistant/home-assistant`
-- **Network Mode**: `host` (required for service discovery)
-- **Configuration**: `./homeassistant` (git repository)
-- **Secrets**: Generated from template `ha_secrets.yaml.j2`
-- **Special Features**:
-  - Lutron Caseta integration (certificates copied from inventory)
-  - Shared volume for inter-service communication
-- **Storage**:
-  - Config: `./homeassistant` (git-managed)
-  - Shared: `./shared`
+No longer part of the Docker stack: Home Assistant OS runs as a libvirt VM provisioned by
+[`vms/haos/`](../../vms/haos/README.md). The old container definition is kept disabled at
+`services/homeassistant/compose.yml.disabled`.
 
 #### Glance (Port 8080)
 
@@ -323,25 +314,23 @@ The stack is designed to provide a fully automated media server experience with 
 
 ### Port Mapping
 
-| Service        | Port  | Protocol | Purpose                        |
-| -------------- | ----- | -------- | ------------------------------ |
-| PiHole         | 53    | TCP/UDP  | DNS queries                    |
-| PiHole         | 67    | UDP      | DHCP server (optional)         |
-| PiHole         | 8053  | TCP      | Web UI                         |
-| Plex           | 32400 | TCP      | Media streaming (host network) |
-| Transmission   | 9091  | TCP      | Web UI                         |
-| Prowlarr       | 9696  | TCP      | Web UI                         |
-| Sonarr         | 8989  | TCP      | Web UI                         |
-| Radarr         | 7878  | TCP      | Web UI                         |
-| Home Assistant | 8123  | TCP      | Web UI (host network)          |
-| Glance         | 8080  | TCP      | Dashboard                      |
+| Service      | Port  | Protocol | Purpose                        |
+| ------------ | ----- | -------- | ------------------------------ |
+| PiHole       | 53    | TCP/UDP  | DNS queries                    |
+| PiHole       | 67    | UDP      | DHCP server (optional)         |
+| PiHole       | 8053  | TCP      | Web UI                         |
+| Plex         | 32400 | TCP      | Media streaming (host network) |
+| Transmission | 9091  | TCP      | Web UI                         |
+| Prowlarr     | 9696  | TCP      | Web UI                         |
+| Sonarr       | 8989  | TCP      | Web UI                         |
+| Radarr       | 7878  | TCP      | Web UI                         |
+| Glance       | 8080  | TCP      | Dashboard                      |
 
 ### Network Modes
 
 **Host Mode:**
 
 - **Plex**: Uses host networking to avoid Docker networking complexities with media streaming
-- **Home Assistant**: Uses host networking for service discovery (mDNS, UPnP)
 
 **Bridge Mode (default):**
 
