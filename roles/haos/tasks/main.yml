@@ -1,0 +1,56 @@
+---
+- name: Read the LAN bridge's IPv4 address
+  ansible.builtin.command:
+    argv: [ip, -4, -o, addr, show, dev, "{{ haos_bridge }}"]
+  register: haos_bridge_addr
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Require the LAN bridge
+  ansible.builtin.assert:
+    that:
+      - haos_bridge_addr.stdout | length > 0
+    fail_msg: >-
+      {{ haos_bridge }} has no IPv4 address. Create it from the NAS console or inside tmux, since the network blips for a
+      few seconds and would cut an SSH session: sudo {{ dotfiles_repo_dir }}/vms/haos/bridge.sh — then re-run with
+      --tags haos. See vms/haos/README.md.
+
+- name: Look for the provisioning script
+  ansible.builtin.stat:
+    path: "{{ haos_setup_script }}"
+  register: haos_setup
+
+- name: Require the provisioning script
+  ansible.builtin.assert:
+    that:
+      - haos_setup.stat.exists
+    fail_msg: "{{ haos_setup_script }} is missing; the dotfiles role clones the repository (run --tags dotfiles first)"
+  when: not ansible_check_mode
+
+- name: Report the skipped setup preview
+  ansible.builtin.debug:
+    msg: "{{ haos_setup_script }} is not cloned yet, so there is nothing to preview"
+  when:
+    - ansible_check_mode
+    - not haos_setup.stat.exists
+
+# setup.sh is idempotent and, with --dry-run, read-only, so check mode runs it too. SUDO_USER (set by become) is the
+# user it adds to the libvirt group. Changed status comes from its `haos: changes=N` line (exactly one); a run without
+# it is a failure. A fresh host downloads a ~500 MB HAOS image, so it runs async: a dropped SSH session would otherwise
+# SIGHUP the script mid-download.
+- name: Provision the Home Assistant OS VM
+  become: true
+  ansible.builtin.command:
+    argv: "{{ [haos_setup_script] + (['--dry-run'] if ansible_check_mode else []) }}"
+  environment:
+    BRIDGE: "{{ haos_bridge }}"
+  async: 3600
+  poll: 15
+  register: haos_setup_run
+  check_mode: false
+  changed_when: "'haos: changes=0' not in haos_setup_run.stdout_lines"
+  failed_when: >-
+    haos_setup_run.rc != 0 or
+    (haos_setup_run.stdout_lines | select('match', '^haos: changes=[0-9]+$') | list | length) != 1
+  when: haos_setup.stat.exists

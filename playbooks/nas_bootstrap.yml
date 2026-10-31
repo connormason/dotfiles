@@ -103,3 +103,13 @@
       tags:
         - dotfiles
         - configfile
+
+    # Home Assistant OS VM: preconditions, then vms/haos/setup.sh from the clone (never bridge.sh)
+    - name: Provision the Home Assistant OS VM
+      ansible.builtin.include_role:
+        name: roles/haos
+        apply:
+          tags: haos
+      tags:
+        - haos
+        - configfile

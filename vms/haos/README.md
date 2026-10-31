@@ -53,11 +53,8 @@ make).
    IPv4 address and reaches the gateway, in which case the script disarms it. If the address changes, the script leaves
    the rollback armed and exits non-zero.
 
-2. **Create and boot the VM:**
-
-   ```bash
-   sudo vms/haos/setup.sh
-   ```
+2. **Create and boot the VM** with `sudo vms/haos/setup.sh`, or let the NAS playbook do it: its `haos` role runs
+   `setup.sh` (and fails with these instructions while `br0` is missing).
 
    It installs packages, downloads the pinned HAOS image (sha256-verified), grows it to 64 GB, defines the VM and starts
    it, then prints the address once the guest reports one. Log out and back in afterwards so the `libvirt` group
@@ -75,8 +72,10 @@ make).
 
 ## Re-bootstrapping a wiped NAS<a name="re-bootstrapping-a-wiped-nas"></a>
 
-1. `./nas_bootstrap.sh` (Docker stack, Samba, ZFS import, Tailscale; see the [root README](../../README.md)).
-2. `sudo vms/haos/bridge.sh`, then `sudo vms/haos/setup.sh`.
+1. `./nas_bootstrap.sh` (system roles, the stow engine in `$HOME`, and the `haos` role, which stops at the missing `br0`
+   with instructions; see the [root README](../../README.md)).
+2. `sudo ~/dotfiles-personal/vms/haos/bridge.sh` from the console or `tmux`, then re-run the playbook with `--tags haos`
+   (or `sudo vms/haos/setup.sh` by hand).
 3. Re-create the router reservation if the router was also reset.
 4. During onboarding choose *Upload backup* and pick the newest backup from `/storage` (or add the network storage first
    and restore from there).

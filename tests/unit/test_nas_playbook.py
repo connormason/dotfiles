@@ -155,3 +155,47 @@ class TestDotfilesRole:
         assert engine['environment']['DOTFILES_OVERLAYS_FILE'] == '{{ dotfiles_overlays_file }}'
         assert engine['environment']['BOOTSTRAP_NONINTERACTIVE'] == '1'
         assert (engine['async'], engine['poll']) == (7200, 30)
+
+
+class TestHaosRole:
+    """
+    Tests for the haos role's wiring
+    """
+    def test_runs_the_repo_script(self) -> None:
+        """
+        Test that the role runs vms/haos/setup.sh from the clone and that the script exists
+        """
+        assert _role_defaults('haos')['haos_setup_script'] == '{{ dotfiles_repo_dir }}/vms/haos/setup.sh'
+        assert (REPO_ROOT / 'vms' / 'haos' / 'setup.sh').is_file()
+
+    def test_never_runs_bridge_sh(self) -> None:
+        """
+        Test that no role task executes bridge.sh (it blips the network and would cut the Ansible session)
+        """
+        tasks = yaml.safe_load((ROLES / 'haos' / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+        for task in tasks:
+            for module in ('ansible.builtin.command', 'ansible.builtin.shell', 'ansible.builtin.script'):
+                assert 'bridge.sh' not in str(task.get(module, ''))
+
+    def test_summary_line_contract(self) -> None:
+        """
+        Test that the role matches the exact line setup.sh prints
+        """
+        setup = (REPO_ROOT / 'vms' / 'haos' / 'setup.sh').read_text(encoding='utf-8')
+        tasks = (ROLES / 'haos' / 'tasks' / 'main.yml').read_text(encoding='utf-8')
+        assert "printf 'haos: changes=%d\\n'" in setup
+        assert "'haos: changes=0'" in tasks
+        assert "'^haos: changes=[0-9]+$'" in tasks
+
+    def test_setup_runs_async_and_dry_run_only_under_check(self) -> None:
+        """
+        Test that the setup task survives a dropped session and adds --dry-run solely under check mode
+        """
+        setup = _role_task('haos', 'Provision the Home Assistant OS VM')
+        argv = setup['ansible.builtin.command']['argv']
+        assert argv.count('--dry-run') == 1
+        assert 'if ansible_check_mode else []' in argv
+        assert setup['environment']['BRIDGE'] == '{{ haos_bridge }}'
+        assert setup['become'] is True
+        assert setup['check_mode'] is False
+        assert (setup['async'], setup['poll']) == (3600, 15)
