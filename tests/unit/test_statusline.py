@@ -1143,34 +1143,35 @@ class TestEntryPoint:
 render_module = _load_module('render', REPO_ROOT / 'scripts' / 'dotfiles' / 'render.py')
 
 
+@pytest.fixture(scope='module')
+def rendered_settings() -> dict[str, Any]:
+    """
+    Compose the real repository's base and personal-mac claude fragments
+    """
+    managed, _unmanaged = render_module.compose([
+        REPO_ROOT / 'render' / 'claude.json',
+        REPO_ROOT / 'profiles' / 'personal-mac' / 'render' / 'claude.json',
+    ])
+    return managed
+
+
 class TestRenderedSettings:
     """
     Guardrails tying the rendered Claude Code settings (base plus personal-mac overlay) to the statusline script
     """
-    @pytest.fixture(scope='class')
-    def settings(self) -> dict[str, Any]:
-        """
-        Compose the real repository's base and personal-mac claude fragments
-        """
-        managed, _unmanaged = render_module.compose([
-            REPO_ROOT / 'render' / 'claude.json',
-            REPO_ROOT / 'profiles' / 'personal-mac' / 'render' / 'claude.json',
-        ])
-        return managed
-
-    def test_status_line_runs_the_stowed_script(self, settings: dict[str, Any]) -> None:
+    def test_status_line_runs_the_stowed_script(self, rendered_settings: dict[str, Any]) -> None:
         """
         Point statusLine at the stowed script through uv
         """
-        status_line = settings['statusLine']
+        status_line = rendered_settings['statusLine']
         assert status_line['type']    == 'command'
         assert status_line['command'] == 'uv run --quiet --script "$HOME/.claude/statusline/statusline.py"'
         assert SCRIPT_PATH.is_file()
         assert os.access(SCRIPT_PATH, os.X_OK)
 
-    def test_configured_components_exist(self, settings: dict[str, Any]) -> None:
+    def test_configured_components_exist(self, rendered_settings: dict[str, Any]) -> None:
         """
         List only components the renderer implements
         """
-        components = settings['statusLineConfig']['components']
+        components = rendered_settings['statusLineConfig']['components']
         assert set(components) <= set(statusline.COMPONENTS)
