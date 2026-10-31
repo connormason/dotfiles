@@ -2953,15 +2953,21 @@ TAGS=(--tags debian,zfs,dotfiles,haos)
 - [ ] **Stage 1 — check.** `"${PLAY[@]}" "${TAGS[@]}" --check --diff 2>&1 | tee "$TMPDIR/nas-1-check.txt"`. Review: no
   failures; `debian`/`zfs` report no changes, or only expected ones; the clone and the overlays registry show as
   changes; the engine preview and the `setup.sh` preview are skipped with their "not cloned yet" messages; the `br0`
-  check passes.
+  check passes. The `command` tasks without a read-only probe (sleep-target mask/unmask, the contrib component add) show
+  as skipped in check mode: a skip there is not evidence that the host is converged.
 - [ ] **Stage 2 — clone and preview.** `"${PLAY[@]}" --tags dotfiles -e dotfiles_bootstrap_preview=true 2>&1 | tee
   "$TMPDIR/nas-2-preview.txt"`. Review the engine's dry run: the stow preview lists `.zshrc`, `.zprofile`, `.gitconfig`
   (and any other blocking file) under "would back up"; the Brewfile status; no `docker`/`docker-compose`/`mermaid-cli`;
   a `bootstrap: changes=N` line. Then `"${PLAY[@]}" --tags haos --check 2>&1 | tee "$TMPDIR/nas-2-haos-check.txt"`:
-  `setup.sh --dry-run` from the new clone, expected `haos: changes=1` (the libvirt group).
+  `setup.sh --dry-run` from the new clone, expected `haos: changes=1` (the libvirt group). Expected changes include the
+  libvirt group; any other `[dry-run]` line is a prediction to review, not a failure. Before Stage 3, confirm on the NAS
+  that `sudo virsh domiflist haos` shows `br0` and `sudo virsh domblklist haos` shows
+  `/var/lib/libvirt/images/haos.qcow2`, and that the Stage 2 haos dry run printed no `virsh net-destroy default` (which
+  would cut a VM attached to libvirt's NAT network).
 - [ ] **Stage 3 — real run.** `"${PLAY[@]}" "${TAGS[@]}" 2>&1 | tee "$TMPDIR/nas-3-real.txt"` (slow: the first
   `brew bundle`). Review: no failures; changed tasks limited to the engine run, `haos` (one change: libvirt group), and
-  anything Stage 1 predicted.
+  anything Stage 1 predicted. The dry run does not count a missing live iptables rule, so Stage 3 may report one more
+  `haos` change than Stage 2 predicted.
 - [ ] **Stage 4 — idempotence.** `"${PLAY[@]}" "${TAGS[@]}" 2>&1 | tee "$TMPDIR/nas-4-rerun.txt"`. Required:
   `changed=0` in the recap. If a task still reports changed, fix it on the branch (`ansible-idempotency-reviewer`
   first), push, and repeat Stages 3–4. Run it immediately after Stage 3: a lone change from `brew bundle changed
