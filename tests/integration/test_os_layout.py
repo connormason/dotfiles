@@ -81,6 +81,7 @@ DARWIN_ONLY: tuple[str, ...] = (
 # Paths the base layer links on linux only
 LINUX_ONLY: tuple[str, ...] = (
     '.config/hatch/config.toml',
+    '.zshenv',
 )
 
 
@@ -111,6 +112,22 @@ class TestLinuxLayout:
         assert config.is_symlink()
         assert config.read_text(encoding='utf-8') == darwin.read_text(encoding='utf-8')
         assert not (home / 'Library').exists()
+
+    @pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh not installed')
+    def test_zshenv_skips_the_debian_global_compinit(self, tmp_path: Path) -> None:
+        """
+        Test that the linux layout links a ~/.zshenv that sets skip_global_compinit for every zsh
+        """
+        linked_paths(tmp_path, 'linux')
+        home = tmp_path / 'home-linux'
+
+        env: dict[str, str] = {'HOME': str(home), 'PATH': os.environ['PATH']}
+        result = subprocess.run(
+            ['zsh', '-c', 'print -r -- ${skip_global_compinit-unset}'],
+            capture_output=True, text=True, check=False, env=env,
+        )
+        assert (home / '.zshenv').is_symlink()
+        assert result.stdout.strip() == '1', result.stderr
 
     @pytest.mark.skipif(shutil.which('zsh') is None, reason='zsh not installed')
     def test_interactive_zsh_is_clean_with_the_linux_layout(self, tmp_path: Path) -> None:

@@ -187,16 +187,19 @@ def home(tmp_path_factory: pytest.TempPathFactory) -> Home:
     registry.write_text(f'{FIXTURE}\n', encoding='utf-8')
 
     env: dict[str, str] = {
-        'HOME':                str(path),
-        'PATH':                os.environ['PATH'],
-        'TERM':                'dumb',
-        'DOTFILES_NO_BANNER':  '1',     # the banner slows and pollutes terminal runs; banner tests opt back in
-        'GIT_CONFIG_NOSYSTEM': '1',     # keep the machine's system gitconfig out of git assertions
-        'XDG_CONFIG_HOME':     str(path / '.config'),
-        'XDG_STATE_HOME':      str(path / '.local' / 'state'),
-        'XDG_DATA_HOME':       str(path / '.local' / 'share'),
+        'HOME':                 str(path),
+        'PATH':                 os.environ['PATH'],
+        'TERM':                 'dumb',
+        'DOTFILES_NO_BANNER':   '1',     # the banner slows and pollutes terminal runs; banner tests opt back in
+        'GIT_CONFIG_NOSYSTEM':  '1',     # keep the machine's system gitconfig out of git assertions
+        'XDG_CONFIG_HOME':      str(path / '.config'),
+        'XDG_STATE_HOME':       str(path / '.local' / 'state'),
+        'XDG_DATA_HOME':        str(path / '.local' / 'share'),
         # the module asserts the macOS layout (hammerspoon, iterm2, vscode); test_os_layout.py covers Linux
-        'DOTFILES_OS':         'darwin',
+        'DOTFILES_OS':          'darwin',
+        # the darwin layout has no shell-linux package, so mirror its ~/.zshenv: on a Linux host Debian's
+        # /etc/zsh/zshrc would otherwise run its own unguarded compinit
+        'skip_global_compinit': '1',
     }
     result = Home(path, env)
 
