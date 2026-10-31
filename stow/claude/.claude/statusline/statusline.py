@@ -26,11 +26,16 @@ Set ``NO_COLOR`` to disable color. The width comes from ``COLUMNS``, which Claud
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
+import subprocess
+import tempfile
 import unicodedata
+from dataclasses import asdict
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import Any
 
@@ -381,3 +386,254 @@ def layout(parts: list[str], gap: str, columns: int, truncation: str) -> list[st
         rows[-1].append(part)
 
     return [gap.join(row) for row in rows]
+
+# ==============================================================================
+# Git
+# ==============================================================================
+
+GIT_TIMEOUT_S = 1.0
+
+
+@dataclass(frozen=True)
+class GitStatus:
+    """
+    Branch and working-tree state of a repository
+    """
+    branch: str
+    dirty:  bool = False
+    ahead:  int  = 0
+    behind: int  = 0
+
+
+def parse_porcelain_v2(output: str) -> GitStatus | None:
+    """
+    Parse ``git status --porcelain=v2 --branch`` output
+
+    :param output: the command's stdout
+    :return: the parsed status, or None when there is no branch header
+    """
+    head:   str | None = None
+    oid:    str | None = None
+    ahead:  int        = 0
+    behind: int        = 0
+    dirty:  bool       = False
+
+    for line in output.splitlines():
+        if line.startswith('# branch.head '):
+            head = line[len('# branch.head '):]
+        elif line.startswith('# branch.oid '):
+            oid = line[len('# branch.oid '):]
+        elif line.startswith('# branch.ab '):
+            parts = line.split()
+            with contextlib.suppress(IndexError, ValueError):
+                ahead, behind = int(parts[2]), -int(parts[3])
+        elif line and not line.startswith('#'):
+            dirty = True
+
+    if head is None:
+        return None
+    if head == '(detached)':
+        head = oid[:7] if (oid and (oid != '(initial)')) else 'HEAD'
+    return GitStatus(head, dirty, ahead, behind)
+
+
+def git_status(cwd: str) -> GitStatus | None:
+    """
+    Query the repository containing ``cwd``
+
+    ``GIT_OPTIONAL_LOCKS=0`` keeps this read-only probe from taking the index lock that a concurrent git command needs.
+
+    :param cwd: directory to inspect
+    :return: the status, or None outside a repository or when git is unavailable or slow
+    """
+    try:
+        result = subprocess.run(
+            ['git', '-C', cwd, 'status', '--porcelain=v2', '--branch', '--untracked-files=normal'],
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_S,
+            check=False,
+            env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    return parse_porcelain_v2(result.stdout)
+
+# ==============================================================================
+# Transcript
+# ==============================================================================
+
+CACHE_DIR_NAME = 'claude-statusline'
+MAX_PENDING    = 64
+
+# User records whose string content starts with one of these are slash-command plumbing, not prompts
+COMMAND_PREFIXES = ('<command-', '<local-command-')
+
+
+@dataclass
+class TranscriptStats:
+    """
+    Running counts parsed from a session transcript, resumable from a byte offset
+    """
+    path:      str            = ''
+    offset:    int            = 0
+    prompts:   int            = 0
+    tool_uses: int            = 0
+    pending:   dict[str, str] = field(default_factory=dict)
+
+    @property
+    def active_tool(self) -> str | None:
+        """
+        Name of the most recently started tool call that has no result yet
+        """
+        return next(reversed(self.pending.values()), None)
+
+
+def _record_entry(stats: TranscriptStats, entry: Any) -> None:
+    """
+    Fold one transcript record into ``stats``
+
+    :param stats: stats to update in place
+    :param entry: one parsed JSONL record (any shape; unknown shapes are ignored)
+    """
+    if (not isinstance(entry, dict)) or entry.get('isSidechain') or entry.get('isMeta'):
+        return
+
+    message = entry.get('message')
+    content = message.get('content') if isinstance(message, dict) else None
+    blocks  = [block for block in content if isinstance(block, dict)] if isinstance(content, list) else []
+
+    if entry.get('type') == 'assistant':
+        for block in blocks:
+            if block.get('type') == 'tool_use':
+                stats.tool_uses += 1
+                stats.pending[str(block.get('id', ''))] = str(block.get('name', '?'))
+    elif entry.get('type') == 'user':
+        if isinstance(content, str):
+            if not content.startswith(COMMAND_PREFIXES):
+                stats.prompts += 1
+        else:
+            results = [block for block in blocks if block.get('type') == 'tool_result']
+            for block in results:
+                stats.pending.pop(str(block.get('tool_use_id', '')), None)
+            if (not results) and any(block.get('type') == 'text' for block in blocks):
+                stats.prompts += 1
+
+    while len(stats.pending) > MAX_PENDING:
+        stats.pending.pop(next(iter(stats.pending)))
+
+
+def update_stats(stats: TranscriptStats, path: Path) -> TranscriptStats:
+    """
+    Fold any transcript lines appended since ``stats.offset`` into ``stats``
+
+    Only newline-terminated lines are consumed, so a line Claude Code is still writing is picked up on the next refresh.
+    A transcript that shrank, or stats that belong to another transcript, are re-read from the start.
+
+    :param stats: stats from the previous refresh (mutated and returned)
+    :param path: the session transcript
+    :return: the updated stats (a fresh object when re-reading from the start)
+    """
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return stats
+
+    if (stats.path != str(path)) or (size < stats.offset):
+        stats = TranscriptStats(path=str(path))
+    if size == stats.offset:
+        return stats
+
+    try:
+        with path.open('rb') as handle:
+            handle.seek(stats.offset)
+            chunk = handle.read(size - stats.offset)
+    except OSError:
+        return stats
+
+    end = chunk.rfind(b'\n')
+    if end < 0:
+        return stats
+
+    for line in chunk[:end].split(b'\n'):
+        # Cheap pre-filter: every record that can change the counts mentions one of these
+        if (b'user' not in line) and (b'tool_use' not in line):
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        _record_entry(stats, entry)
+
+    stats.offset += end + 1
+    return stats
+
+
+def cache_path(session_id: str) -> Path:
+    """
+    Locate the per-session stats cache
+
+    :param session_id: Claude Code session id (sanitized for use as a file name)
+    :return: ``$TMPDIR/claude-statusline/<session>.json``
+    """
+    safe = re.sub(r'[^A-Za-z0-9_-]', '_', session_id) or 'unknown'
+    return Path(os.environ.get('TMPDIR') or tempfile.gettempdir()) / CACHE_DIR_NAME / f'{safe}.json'
+
+
+def _read_cache(cache: Path) -> TranscriptStats:
+    """
+    Load cached stats, or fresh stats when the cache is missing or invalid
+
+    :param cache: cache file
+    :return: the cached stats
+    """
+    try:
+        raw = json.loads(cache.read_text(encoding='utf-8'))
+        return TranscriptStats(
+            path=str(raw['path']),
+            offset=int(raw['offset']),
+            prompts=int(raw['prompts']),
+            tool_uses=int(raw['tool_uses']),
+            pending={str(key): str(value) for key, value in raw['pending'].items()},
+        )
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return TranscriptStats()
+
+
+def _write_cache(cache: Path, stats: TranscriptStats) -> None:
+    """
+    Atomically save stats to the cache; failures are ignored (the next refresh re-reads)
+
+    :param cache: cache file
+    :param stats: stats to save
+    """
+    with contextlib.suppress(OSError):
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        temporary = cache.with_suffix(f'.{os.getpid()}.tmp')
+        temporary.write_text(json.dumps(asdict(stats)), encoding='utf-8')
+        temporary.replace(cache)
+
+
+def load_stats(session_id: str, transcript: str) -> TranscriptStats | None:
+    """
+    Return up-to-date transcript stats for a session, resuming from and refreshing its cache
+
+    :param session_id: Claude Code session id
+    :param transcript: transcript path from the session JSON
+    :return: the stats, or None when there is no transcript
+    """
+    if not transcript:
+        return None
+    path = Path(transcript)
+    if not path.is_file():
+        return None
+
+    cache  = cache_path(session_id)
+    stats  = _read_cache(cache)
+    before = (stats.path, stats.offset)
+    stats  = update_stats(stats, path)
+    if (stats.path, stats.offset) != before:
+        _write_cache(cache, stats)
+    return stats

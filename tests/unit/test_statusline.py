@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -377,3 +379,306 @@ class TestLayout:
         color = statusline.fg((255, 0, 0))
         parts = [f'{color}aaaa{statusline.RESET}', f'{color}bbbb{statusline.RESET}']
         assert len(statusline.layout(parts, ' | ', 11, 'wrap')) == 1
+
+
+# ==============================================================================
+# Git
+# ==============================================================================
+
+class TestParsePorcelainV2:
+    """
+    Tests for parse_porcelain_v2
+    """
+    def test_clean_branch(self) -> None:
+        """
+        Report the branch of a clean, in-sync checkout
+        """
+        output = '# branch.oid abc1234def\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +0 -0\n'
+        assert statusline.parse_porcelain_v2(output) == statusline.GitStatus('main')
+
+    def test_dirty_with_ahead_behind(self) -> None:
+        """
+        Report dirtiness and ahead/behind counts
+        """
+        output = (
+            '# branch.oid abc\n# branch.head feat\n# branch.ab +2 -1\n'
+            '1 .M N... 100644 100644 100644 aaa bbb file.py\n'
+            '? new.txt\n'
+        )
+        assert statusline.parse_porcelain_v2(output) == statusline.GitStatus('feat', dirty=True, ahead=2, behind=1)
+
+    def test_detached_uses_short_oid(self) -> None:
+        """
+        Name a detached HEAD by its abbreviated commit id
+        """
+        output = '# branch.oid 0123456789abcdef\n# branch.head (detached)\n'
+        assert statusline.parse_porcelain_v2(output) == statusline.GitStatus('0123456')
+
+    def test_detached_without_commits(self) -> None:
+        """
+        Name a detached HEAD with no commits HEAD
+        """
+        output = '# branch.oid (initial)\n# branch.head (detached)\n'
+        assert statusline.parse_porcelain_v2(output) == statusline.GitStatus('HEAD')
+
+    def test_malformed_ahead_behind_is_ignored(self) -> None:
+        """
+        Ignore an unparsable ahead/behind header
+        """
+        output = '# branch.head main\n# branch.ab garbage\n'
+        assert statusline.parse_porcelain_v2(output) == statusline.GitStatus('main')
+
+    def test_no_branch_header(self) -> None:
+        """
+        Return None when the output has no branch header
+        """
+        assert statusline.parse_porcelain_v2('') is None
+
+
+class TestGitStatus:
+    """
+    Tests for git_status
+    """
+    @pytest.mark.skipif(not shutil.which('git'), reason='Git not available')
+    def test_real_repository(self, tmp_path: Path) -> None:
+        """
+        Read the branch and dirtiness of a real repository
+        """
+        subprocess.run(['git', 'init', '-q', '-b', 'trunk', str(tmp_path)], check=True)
+        (tmp_path / 'file.txt').write_text('x', encoding='utf-8')
+        assert statusline.git_status(str(tmp_path)) == statusline.GitStatus('trunk', dirty=True)
+
+    @pytest.mark.skipif(not shutil.which('git'), reason='Git not available')
+    def test_non_repository(self, tmp_path: Path) -> None:
+        """
+        Return None outside a repository
+        """
+        assert statusline.git_status(str(tmp_path)) is None
+
+    def test_missing_git_binary(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Return None when git cannot be executed
+        """
+        monkeypatch.setenv('PATH', str(tmp_path))
+        assert statusline.git_status(str(tmp_path)) is None
+
+
+# ==============================================================================
+# Transcript
+# ==============================================================================
+
+def _prompt(text: str, **extra: object) -> dict[str, object]:
+    """
+    A user prompt record
+    """
+    return {'type': 'user', 'message': {'role': 'user', 'content': text}, **extra}
+
+
+def _tool_use(tool_id: str, name: str, **extra: object) -> dict[str, object]:
+    """
+    An assistant record that starts one tool call
+    """
+    content = [{'type': 'text', 'text': 'ok'}, {'type': 'tool_use', 'id': tool_id, 'name': name, 'input': {}}]
+    return {'type': 'assistant', 'message': {'role': 'assistant', 'content': content}, **extra}
+
+
+def _tool_result(tool_id: str) -> dict[str, object]:
+    """
+    A user record carrying one tool result
+    """
+    content = [{'type': 'tool_result', 'tool_use_id': tool_id, 'content': 'done'}]
+    return {'type': 'user', 'message': {'role': 'user', 'content': content}}
+
+
+def _append(path: Path, *entries: object, partial: str = '') -> None:
+    """
+    Append compact JSONL records (and an optional unterminated fragment) to a transcript
+    """
+    with path.open('a', encoding='utf-8') as handle:
+        for entry in entries:
+            handle.write(json.dumps(entry, separators=(',', ':')) + '\n')
+        handle.write(partial)
+
+
+class TestUpdateStats:
+    """
+    Tests for update_stats and TranscriptStats
+    """
+    def test_counts_prompts_and_tool_uses(self, tmp_path: Path) -> None:
+        """
+        Count prompts and tool calls, and track the unresolved call as active
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _prompt('hi'), _tool_use('t1', 'Bash'), _tool_result('t1'), _tool_use('t2', 'Read'))
+
+        stats = statusline.update_stats(statusline.TranscriptStats(), path)
+        assert (stats.prompts, stats.tool_uses) == (1, 2)
+        assert stats.pending     == {'t2': 'Read'}
+        assert stats.active_tool == 'Read'
+        assert stats.offset      == path.stat().st_size
+
+    def test_no_active_tool_when_all_resolved(self, tmp_path: Path) -> None:
+        """
+        Report no active tool once every call has a result
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _tool_use('t1', 'Bash'), _tool_result('t1'))
+        assert statusline.update_stats(statusline.TranscriptStats(), path).active_tool is None
+
+    def test_text_block_prompts_count_and_command_plumbing_does_not(self, tmp_path: Path) -> None:
+        """
+        Count text-block prompts but not slash-command plumbing records
+        """
+        path = tmp_path / 't.jsonl'
+        _append(
+            path,
+            _prompt('<command-name>/model</command-name>'),
+            _prompt('<local-command-stdout>done</local-command-stdout>'),
+            {'type': 'user', 'message': {'content': [{'type': 'text', 'text': 'hi'}]}},
+        )
+        assert statusline.update_stats(statusline.TranscriptStats(), path).prompts == 1
+
+    def test_meta_and_sidechain_records_are_ignored(self, tmp_path: Path) -> None:
+        """
+        Skip meta records and subagent sidechain records
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _prompt('x', isMeta=True), _tool_use('t9', 'Bash', isSidechain=True))
+
+        stats = statusline.update_stats(statusline.TranscriptStats(), path)
+        assert (stats.prompts, stats.tool_uses) == (0, 0)
+
+    def test_malformed_and_foreign_lines_are_ignored(self, tmp_path: Path) -> None:
+        """
+        Skip unparsable lines, non-object lines, and records without a message
+        """
+        path = tmp_path / 't.jsonl'
+        path.write_text('not json user\n[1]\n{"type":"attachment"}\n{"type":"user"}\n', encoding='utf-8')
+
+        stats = statusline.update_stats(statusline.TranscriptStats(), path)
+        assert (stats.prompts, stats.tool_uses) == (0, 0)
+        assert stats.offset == path.stat().st_size
+
+    def test_resumes_without_double_counting(self, tmp_path: Path) -> None:
+        """
+        Fold in only the lines appended since the last update
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _prompt('a'))
+        stats = statusline.update_stats(statusline.TranscriptStats(), path)
+
+        _append(path, _tool_use('t1', 'Bash'))
+        stats = statusline.update_stats(stats, path)
+        assert (stats.prompts, stats.tool_uses) == (1, 1)
+        assert stats.offset == path.stat().st_size
+
+    def test_unterminated_line_waits_for_newline(self, tmp_path: Path) -> None:
+        """
+        Leave a partially written line for the next update
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _prompt('a'), partial='{"type":"user","mess')
+        stats = statusline.update_stats(statusline.TranscriptStats(), path)
+        assert stats.prompts == 1
+        assert stats.offset  == path.stat().st_size - len('{"type":"user","mess')
+
+        _append(path, partial='age":{"content":"b"}}\n')
+        assert statusline.update_stats(stats, path).prompts == 2
+
+    def test_shrunk_file_is_reread(self, tmp_path: Path) -> None:
+        """
+        Start over when the transcript is smaller than the saved offset
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _prompt('a'), _prompt('b'))
+        stats = statusline.update_stats(statusline.TranscriptStats(), path)
+
+        path.write_text(json.dumps(_prompt('c')) + '\n', encoding='utf-8')
+        assert statusline.update_stats(stats, path).prompts == 1
+
+    def test_other_path_is_read_from_start(self, tmp_path: Path) -> None:
+        """
+        Start over when the stats belong to a different transcript
+        """
+        first, second = tmp_path / 'a.jsonl', tmp_path / 'b.jsonl'
+        _append(first, _prompt('a'), _prompt('b'))
+        _append(second, _prompt('c'))
+
+        stats = statusline.update_stats(statusline.TranscriptStats(), first)
+        assert statusline.update_stats(stats, second).prompts == 1
+
+    def test_missing_file_leaves_stats_unchanged(self, tmp_path: Path) -> None:
+        """
+        Return the stats untouched when the transcript does not exist
+        """
+        stats = statusline.TranscriptStats()
+        assert statusline.update_stats(stats, tmp_path / 'absent.jsonl') == statusline.TranscriptStats()
+
+    def test_pending_calls_are_capped(self, tmp_path: Path) -> None:
+        """
+        Evict the oldest unresolved calls beyond MAX_PENDING
+        """
+        path  = tmp_path / 't.jsonl'
+        total = statusline.MAX_PENDING + 5
+        _append(path, *(_tool_use(f't{index}', f'Tool{index}') for index in range(total)))
+
+        stats = statusline.update_stats(statusline.TranscriptStats(), path)
+        assert len(stats.pending) == statusline.MAX_PENDING
+        assert 't0' not in stats.pending
+        assert stats.active_tool  == f'Tool{total - 1}'
+
+
+class TestLoadStats:
+    """
+    Tests for load_stats and cache_path
+    """
+    @pytest.fixture(autouse=True)
+    def _isolated_tmpdir(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Point TMPDIR at a throwaway directory so no real cache is touched
+        """
+        monkeypatch.setenv('TMPDIR', str(tmp_path / 'tmp'))
+
+    def test_no_transcript(self, tmp_path: Path) -> None:
+        """
+        Return None for an empty or missing transcript path
+        """
+        assert statusline.load_stats('s', '') is None
+        assert statusline.load_stats('s', str(tmp_path / 'absent.jsonl')) is None
+
+    def test_resumes_from_cache(self, tmp_path: Path) -> None:
+        """
+        Resume from the cached offset and counts instead of re-reading the transcript
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _prompt('a'))
+        assert statusline.load_stats('sess-1', str(path)).prompts == 1
+
+        cache = statusline.cache_path('sess-1')
+        saved = json.loads(cache.read_text(encoding='utf-8'))
+        saved['prompts'] = 10
+        cache.write_text(json.dumps(saved), encoding='utf-8')
+
+        _append(path, _prompt('b'))
+        assert statusline.load_stats('sess-1', str(path)).prompts == 11
+
+    def test_corrupt_cache_is_ignored(self, tmp_path: Path) -> None:
+        """
+        Re-read the transcript when the cache is unreadable
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _prompt('a'), _prompt('b'))
+
+        cache = statusline.cache_path('sess-2')
+        cache.parent.mkdir(parents=True)
+        cache.write_text('garbage', encoding='utf-8')
+        assert statusline.load_stats('sess-2', str(path)).prompts == 2
+
+    def test_cache_path_is_sanitized(self, tmp_path: Path) -> None:
+        """
+        Keep session ids from escaping the cache directory
+        """
+        path = statusline.cache_path('../../etc')
+        assert path.parent == tmp_path / 'tmp' / 'claude-statusline'
+        assert path.name   == '______etc.json'
+        assert statusline.cache_path('').name == 'unknown.json'
