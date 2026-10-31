@@ -81,48 +81,6 @@
         - configfile
 
 # ============================================================
-# Home Assistant secrets and certificates
-# ============================================================
-- name: Setup homeassistant secrets
-  tags:
-    - homeassistant
-  block:
-    - name: Ensure homeassistant config directory exists
-      ansible.builtin.file:
-        path: "{{ homeassistant_config_dir }}"
-        state: directory
-
-    - name: Render homeassistant secrets file
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../services/homeassistant/config/secrets.yaml.j2"
-        dest: "{{ homeassistant_config_dir }}/secrets.yaml"
-      tags:
-        - configfile
-
-    - name: Copy Lutron Caseta certifications/keys
-      block:
-        - name: Get path to group "all" inventory dir
-          ansible.builtin.set_fact:
-            ansible_group_all_inventory_dir: "{{ inventory_dir }}/group_vars/all"
-          tags:
-            - always
-
-        - name: Copy caseta.crt
-          ansible.builtin.copy:
-            src: "{{ ansible_group_all_inventory_dir }}/caseta.crt"
-            dest: "{{ homeassistant_config_dir }}"
-
-        - name: Copy caseta.key
-          ansible.builtin.copy:
-            src: "{{ ansible_group_all_inventory_dir }}/caseta.key"
-            dest: "{{ homeassistant_config_dir }}"
-
-        - name: Copy caseta-bridge.crt
-          ansible.builtin.copy:
-            src: "{{ ansible_group_all_inventory_dir }}/caseta-bridge.crt"
-            dest: "{{ homeassistant_config_dir }}"
-
-# ============================================================
 # Custom docker image builds
 # ============================================================
 - name: Setup autoplex

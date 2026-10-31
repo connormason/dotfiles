@@ -50,11 +50,13 @@ jobs:
           # Detect which service directories changed.
           # Match only paths under a service subdirectory (services/<name>/...) so
           # top-level files like services/README.md or services/compose.base.yml
-          # do not get picked up as service names.
+          # do not get picked up as service names. Directories without a compose.yml
+          # (removed or disabled services) are dropped.
           CHANGED_SERVICES=$(git diff --name-only "$BEFORE".."${{ github.sha }}" \
             | grep -E "^services/[^/]+/" \
             | cut -d'/' -f2 \
             | sort -u \
+            | while read -r svc; do [[ -f "services/${svc}/compose.yml" ]] && echo "$svc"; done \
             | jq -R . | jq -s .)
 
           if [[ "$CHANGED_SERVICES" == "[]" ]]; then
