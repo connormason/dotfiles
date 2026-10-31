@@ -12,13 +12,17 @@ target's path; a drift guard refuses to overwrite edits made in the app since th
 
 ### Targets
 
-| Target   | Rendered file                                           |
-| -------- | ------------------------------------------------------- |
-| `claude` | `~/.claude/settings.json`                               |
-| `vscode` | `~/Library/Application Support/Code/User/settings.json` |
+| Target   | OS         | Rendered file                                           |
+| -------- | ---------- | ------------------------------------------------------- |
+| `claude` | all        | `~/.claude/settings.json`                               |
+| `vscode` | macOS only | `~/Library/Application Support/Code/User/settings.json` |
 
 A target for which no layer provides a fragment is skipped. `stow.sh` refuses any package that provides a target path
 (or a path above one), reading the list from `render.py --list-targets` so the table above has one source of truth.
+
+On an OS a target does not apply to, a default run skips it and naming it explicitly exits 2; `--list-targets` still
+prints every target, so stow ownership is OS-independent. `DOTFILES_OS` (`darwin` or `linux`) overrides OS detection,
+like `dotfiles_os` in `bootstrap/lib.sh`.
 
 ### Merge semantics
 
