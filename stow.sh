@@ -19,6 +19,7 @@
 #              re-verified and only a clean result is linked. -n previews exactly this, writing nothing.
 #
 # Env: STOW_VERBOSE=N raises stow's verbosity and prints its raw log.
+# Changes are also recorded in the bootstrap change ledger (lib.sh note_change) when run under bootstrap.sh.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -283,8 +284,10 @@ fi
 # ---------------------------------------------------------------------------------------------------------------------
 # Layer runs: one stow invocation per layer that has selected packages
 # ---------------------------------------------------------------------------------------------------------------------
+# The summary and the bootstrap change ledger both read stow's verbose log, so it is always captured at level 1 or more
+# (the captured log is only shown with -v / STOW_VERBOSE)
 EFF_LEVEL="$LEVEL"
-if [ "$SHOW_SUMMARY" = 1 ] && [ "$EFF_LEVEL" -lt 1 ]; then
+if [ "$EFF_LEVEL" -lt 1 ]; then
     EFF_LEVEL=1
 fi
 VERBOSE=()
@@ -392,10 +395,16 @@ report_unresolved() {
     done
 }
 
-summarize() { # $1=log, $2=dry (1|0)
+summarize() { # $1=log, $2=dry (1|0): print the net change (unless --no-summary) and record it in the change ledger
+    local out
+    out="$(printf '%s' "$1" | awk -v dry="$2" -f "$SUMMARIZER")"
     if [ "$SHOW_SUMMARY" = 1 ]; then
-        printf '%s' "$1" | awk -v dry="$2" -f "$SUMMARIZER"
+        printf '%s\n' "$out"
     fi
+    case "$out" in
+    'stow: no changes'*) ;;
+    *) note_change "$(printf '%s\n' "$out" | tail -n 1)" ;;
+    esac
 }
 
 show_raw() { # $1=log
@@ -431,6 +440,7 @@ if [ "$DRY_RUN" = 1 ]; then
         # Stow reports no link plan while conflicts exist, so no summary is printed for this case
         for target in "${BACKUP_TARGETS[@]}"; do
             echo "stow: would back up existing $target -> $BACKUP_DIR/$target"
+            note_change "stow: would back up ~/$target"
         done
         echo "stow: simulated ${SEL_NAMES[*]} (dry-run; ${#BACKUP_TARGETS[@]} conflicting file(s) would be backed up" \
             "first, then linked)"
@@ -454,6 +464,7 @@ if [ ${#BACKUP_TARGETS[@]} -gt 0 ]; then
         mv "$HOME/$target" "$BACKUP_DIR/$target" ||
             die "could not back up ~/$target (moved files so far are in $BACKUP_DIR)"
         echo "stow: backed up existing $target -> $BACKUP_DIR/$target"
+        note_change "stow: backed up ~/$target"
     done
     preflight
     if [ ${#UNRESOLVED[@]} -gt 0 ] || [ ${#BACKUP_TARGETS[@]} -gt 0 ]; then
