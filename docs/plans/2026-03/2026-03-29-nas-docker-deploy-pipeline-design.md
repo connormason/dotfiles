@@ -3,6 +3,12 @@
 **Date:** 2026-03-29
 **Status:** Approved
 
+> **Update (2026-10-31):** The "Tailscale SSH" part of this design never worked. Tailscale SSH only lets a tagged
+> device (the CI runner joins as `tag:ci`) connect to *other tagged* devices, and the NAS is user-owned. With Tailscale
+> SSH on, it also intercepts every SSH connection to the tailnet address and ignores `NAS_SSH_PRIVATE_KEY`. The working
+> setup turns Tailscale SSH off on the NAS (`tailscale_ssh_enabled: false`) and authorizes a dedicated deploy key with
+> the regular `sshd`. See `services/README.md` ("CI deploys").
+
 ## Problem
 
 Deploying Docker service config changes to a home NAS requires a manual workflow: edit locally, push to GitHub, SSH

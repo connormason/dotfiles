@@ -6,7 +6,8 @@ Sets up [Tailscale VPN](https://tailscale.com/) on Debian systems.
 
 - Installs Tailscale from official apt repository
 - Configures Tailscale with idempotent `tailscale set` + `tailscale login`
-- Enables Tailscale SSH on Linux hosts
+- Enables Tailscale SSH on Linux hosts (`tailscale_ssh_enabled`; the NAS sets it to `false` so the CI deploy can use
+  regular SSH, see [`services/README.md`](../../services/README.md#ci-deploys))
 - Provisions HTTPS certificates via `tailscale cert` (NAS only)
 - Deploys Caddy reverse proxy for Docker services (NAS only)
 - Automatic weekly cert renewal via systemd timer
