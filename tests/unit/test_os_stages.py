@@ -52,6 +52,7 @@ def linux_bin(tmp_path: Path) -> Path:
     """
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
+
     for tool in ('dirname', 'uname'):
         real = shutil.which(tool)
         assert real is not None
@@ -61,6 +62,7 @@ def linux_bin(tmp_path: Path) -> Path:
         stub = bin_dir / tool
         stub.write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
         stub.chmod(0o755)
+
     return bin_dir
 
 
@@ -92,6 +94,7 @@ def _preflight(
     """
     path = tmp_path / 'os-release'
     path.write_text(release, encoding='utf-8')
+
     return _stage(
         shell,
         '00-preflight.sh',
@@ -117,7 +120,7 @@ class TestDarwinOnlyStages:
         result = _stage(shell, stage, {**env, 'DOTFILES_OS': 'linux'})
         assert result.returncode == 0, result.stderr
         assert 'skipped (darwin only; this is linux)' in result.stdout
-        assert '[dry-run]' not in result.stdout
+        assert '[dry-run]'                        not in result.stdout
 
     @pytest.mark.skipif(sys.platform != 'darwin', reason='runs macOS commands outside run()')
     @pytest.mark.parametrize('stage', ['60-macos.sh', '96-iterm2.sh'])
@@ -155,7 +158,7 @@ class TestLinuxPreflight:
         """
         result = _preflight(shell, env, tmp_path, linux_bin, release, dry_run=False)
         assert result.returncode == 0, result.stderr
-        assert pretty in result.stdout
+        assert pretty         in result.stdout
         assert 'preflight OK' in result.stdout
 
     def test_other_distribution_fails(self, shell: str, env: dict[str, str], tmp_path: Path, linux_bin: Path) -> None:
@@ -176,9 +179,11 @@ class TestLinuxPreflight:
         """
         Test that a missing system command is fatal and points at the debian Ansible role
         """
+
         # cc, because lib.sh appends a Homebrew prefix to PATH and the Brewfile installs zsh, git, and curl there
         (linux_bin / 'cc').unlink()
         result = _preflight(shell, env, tmp_path, linux_bin, DEBIAN_RELEASE, dry_run=False)
+
         assert result.returncode != 0
         assert 'missing system commands: cc' in result.stderr
         assert "'debian' Ansible role"       in result.stderr

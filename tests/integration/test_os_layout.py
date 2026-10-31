@@ -46,6 +46,7 @@ def linked_paths(tmp_path: Path, os_name: str) -> list[str]:
         check=False,
         env=env,
     )
+
     assert result.returncode == 0, result.stdout + result.stderr
     return sorted(str(path.relative_to(home)) for path in home.rglob('*') if path.is_symlink())
 
@@ -105,10 +106,11 @@ class TestLinuxLayout:
         Test that the linux hatch config resolves to the same content as the macOS one, and nothing lands in ~/Library
         """
         linked_paths(tmp_path, 'linux')
-        home = tmp_path / 'home-linux'
 
+        home   = tmp_path / 'home-linux'
         config = home / '.config' / 'hatch' / 'config.toml'
         darwin = REPO_ROOT / 'stow' / 'hatch-darwin' / 'Library' / 'Application Support' / 'hatch' / 'config.toml'
+
         assert config.is_symlink()
         assert config.read_text(encoding='utf-8') == darwin.read_text(encoding='utf-8')
         assert not (home / 'Library').exists()
@@ -124,8 +126,12 @@ class TestLinuxLayout:
         env: dict[str, str] = {'HOME': str(home), 'PATH': os.environ['PATH']}
         result = subprocess.run(
             ['zsh', '-c', 'print -r -- ${skip_global_compinit-unset}'],
-            capture_output=True, text=True, check=False, env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
         )
+
         assert (home / '.zshenv').is_symlink()
         assert result.stdout.strip() == '1', result.stderr
 
@@ -147,5 +153,6 @@ class TestLinuxLayout:
             'XDG_DATA_HOME':      str(home / '.local' / 'share'),
         }
         result = subprocess.run(['zsh', '-i', '-c', 'true'], capture_output=True, text=True, check=False, env=env)
+
         assert result.returncode == 0
-        assert result.stderr == ''
+        assert result.stderr     == ''

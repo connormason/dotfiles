@@ -644,9 +644,9 @@ class TestOsMarkers:
         """
         Test that a darwin-only package is skipped on linux while unmarked packages are linked
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
-        _pkg(world['repo'], 'mac',   {'.macrc': 'x'})
-        _marker(world['repo'], 'mac', 'darwin\n')
+        _pkg(world['repo'],    'shell', {'.zshrc': 'x'})
+        _pkg(world['repo'],    'mac',   {'.macrc': 'x'})
+        _marker(world['repo'], 'mac',   'darwin\n')
 
         result = _stow(world, extra_env={'DOTFILES_OS': 'linux'})
         assert result.returncode == 0, result.stderr
@@ -657,7 +657,7 @@ class TestOsMarkers:
         """
         Test that a darwin-only package is linked on darwin and the marker file itself is not
         """
-        _pkg(world['repo'], 'mac', {'.macrc': 'x'})
+        _pkg(world['repo'],    'mac', {'.macrc': 'x'})
         _marker(world['repo'], 'mac', 'darwin\n')
 
         result = _stow(world, extra_env={'DOTFILES_OS': 'darwin'})
@@ -669,9 +669,9 @@ class TestOsMarkers:
         """
         Test that --list shows only the packages that apply to this OS
         """
-        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
-        _pkg(world['repo'], 'mac',   {'.macrc': 'x'})
-        _marker(world['repo'], 'mac', 'darwin\n')
+        _pkg(world['repo'],    'shell', {'.zshrc': 'x'})
+        _pkg(world['repo'],    'mac',   {'.macrc': 'x'})
+        _marker(world['repo'], 'mac',   'darwin\n')
 
         result = _stow(world, '--list', extra_env={'DOTFILES_OS': 'linux'})
         assert result.returncode == 0, result.stderr
@@ -681,7 +681,7 @@ class TestOsMarkers:
         """
         Test that naming an excluded package explains why instead of calling it unknown
         """
-        _pkg(world['repo'], 'mac', {'.macrc': 'x'})
+        _pkg(world['repo'],    'mac', {'.macrc': 'x'})
         _marker(world['repo'], 'mac', 'darwin\n')
 
         result = _stow(world, 'mac', extra_env={'DOTFILES_OS': 'linux'})
@@ -712,7 +712,7 @@ class TestOsMarkers:
         """
         Test that a marker with comments, padding, and CRLF line endings parses
         """
-        _pkg(world['repo'], 'both', {'.bothrc': 'x'})
+        _pkg(world['repo'],    'both', {'.bothrc': 'x'})
         _marker(world['repo'], 'both', '# both platforms\r\n  darwin  # mac\r\nlinux\r\n')
 
         result = _stow(world, extra_env={'DOTFILES_OS': 'linux'})
@@ -723,8 +723,8 @@ class TestOsMarkers:
         """
         Test that a darwin package and a linux package may own the same path, and the matching one is linked
         """
-        _pkg(world['repo'], 'tool-darwin', {'.config/tool/config': 'mac'})
-        _pkg(world['repo'], 'tool-linux',  {'.config/tool/config': 'linux'})
+        _pkg(world['repo'],    'tool-darwin', {'.config/tool/config': 'mac'})
+        _pkg(world['repo'],    'tool-linux',  {'.config/tool/config': 'linux'})
         _marker(world['repo'], 'tool-darwin', 'darwin\n')
         _marker(world['repo'], 'tool-linux',  'linux\n')
 
@@ -753,11 +753,13 @@ class TestOsMarkers:
 
         moved = world['repo'] / 'stow' / 'new' / '.config' / 'app' / 'config'
         moved.parent.mkdir(parents=True)
+
         (world['repo'] / 'stow' / 'old' / '.config' / 'app' / 'config').rename(moved)
         shutil.rmtree(world['repo'] / 'stow' / 'old' / '.config')
 
         result = _stow(world)
         assert result.returncode == 0, result.stderr
+
         link = world['home'] / '.config' / 'app' / 'config'
         assert link.is_symlink()
         assert link.resolve() == moved.resolve()
