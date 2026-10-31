@@ -37,6 +37,9 @@ export DOTFILES_REPO
 source "$HERE/lib.sh"
 REPO="$DOTFILES_REPO"
 DRIVER_OS="$(dotfiles_os)" || exit 1
+# Export the resolved id so stages, stow.sh and render.py all see it; an inherited override is preserved because
+# dotfiles_os honours it.
+export DOTFILES_OS="$DRIVER_OS"
 
 # Discover NN-*.sh stages in every layer (base first, then overlays). Two-digit numbers must be unique across all
 # layers so the merged order is unambiguous.

@@ -25,7 +25,7 @@ bootstrap/bootstrap.sh [--dry-run] [--list] [--only STAGE] [--from STAGE] [--res
 
 Run state lives in `${BOOTSTRAP_LOG_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-bootstrap}`: one timestamped
 logfile per run and a `last-completed-stage` file that `--resume` reads. Dry runs write nothing and never prompt for
-sudo. Outside dry-run, sudo is primed once by the driver and kept alive for the whole run.
+sudo. Outside dry-run, sudo is primed once by the driver (macOS only) and kept alive for the whole run.
 
 ## Overlay contract
 
@@ -44,12 +44,12 @@ the repo root cannot also be registered as an overlay). An overlay contributes t
 Each stage runs as a separate `"$BASH" <path>` process (the same bash that runs the driver, so `/bin/bash bootstrap.sh`
 exercises every stage under bash 3.2) with these exported:
 
-| Variable            | Value                                                                                                                 |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `BOOTSTRAP_DRY_RUN` | `1` under `--dry-run`, otherwise `0`                                                                                  |
-| `DOTFILES_REPO`     | Root of the base layer (this repository)                                                                              |
-| `DOTFILES_LAYER`    | Root of the layer the stage itself comes from                                                                         |
-| `DOTFILES_OS`       | `darwin` or `linux` from `uname -s`; set it to preview another OS's selection (stages, stow packages, render targets) |
+| Variable            | Value                                                                                                                                                                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BOOTSTRAP_DRY_RUN` | `1` under `--dry-run`, otherwise `0`                                                                                                                                                                                                                                                      |
+| `DOTFILES_REPO`     | Root of the base layer (this repository)                                                                                                                                                                                                                                                  |
+| `DOTFILES_LAYER`    | Root of the layer the stage itself comes from                                                                                                                                                                                                                                             |
+| `DOTFILES_OS`       | `darwin` or `linux`, exported by the driver: resolved from `uname -s` unless overridden. Overriding previews another OS's stow packages (`stow.sh -n`) and render targets (`render.py --check`); a full bootstrap preview of another OS fails at `00-preflight` (use `--from 20-ssh-key`) |
 
 Base stages source the helpers with `source "$HERE/lib.sh"`. An overlay stage lives outside this repository, so it must
 source them through the exported base root: `source "$DOTFILES_REPO/bootstrap/lib.sh"`.
@@ -68,18 +68,18 @@ command is missing. Stow packages opt into an OS with a `.dotfiles-os` marker (s
 Base stages, in run order. Overlays interleave their own stages by number. Every mutation goes through `run`/`try`, so
 `--dry-run` prints it instead; the exceptions are read-only previews noted below.
 
-| Stage        | Purpose                                                                                                                                           | Layer |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| 00-preflight | macOS: Command Line Tools present. Linux: Debian family and the system commands `curl file git cc make ps zsh` (fatal; warning under `--dry-run`) | base  |
-| 20-ssh-key   | `~/.ssh` (mode 700) and an ed25519 key; if `ssh -T git@github.com` fails, print the key to register                                               | base  |
-| 50-brew      | Install Homebrew if absent (checksum-verified installer), then `brew bundle` each layer's `Brewfile`                                              | base  |
-| 60-macos     | macOS preferences (`defaults write`, `chflags`), then restart Dock/Finder/SystemUIServer (macOS only)                                             | base  |
-| 72-vscode    | Install missing VS Code extensions from the union of every layer's `vscode-extensions.txt` (macOS only)                                           | base  |
-| 80-repos     | Clone each `name url` line of every layer's `repos.txt` into `$HOME/<name>` unless that path exists                                               | base  |
-| 90-python    | Install missing uv tools from every layer's `uv-tools.txt` (a later layer's line replaces the earlier one)                                        | base  |
-| 95-dotfiles  | `stow.sh --backup-conflicts` (dry run: `stow.sh -n` preview), oh-my-zsh, and its custom plugins                                                   | base  |
-| 96-iterm2    | Point iTerm2 at the stowed prefs folder `~/.config/iterm2` (after 95-dotfiles creates it) (macOS only)                                            | base  |
-| 97-render    | `render.py`: 0 ok, 1 drift refused (warn), 2 config/I/O error (fail); dry run: `render.py --check`, warn only                                     | base  |
+| Stage        | Purpose                                                                                                                                                   | Layer |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| 00-preflight | macOS: Command Line Tools present. Linux: Debian family and the system commands `curl file git cc make ps zsh python3` (fatal; warning under `--dry-run`) | base  |
+| 20-ssh-key   | `~/.ssh` (mode 700) and an ed25519 key; if `ssh -T git@github.com` fails, print the key to register                                                       | base  |
+| 50-brew      | Install Homebrew if absent (checksum-verified installer), then `brew bundle` each layer's `Brewfile`                                                      | base  |
+| 60-macos     | macOS preferences (`defaults write`, `chflags`), then restart Dock/Finder/SystemUIServer (macOS only)                                                     | base  |
+| 72-vscode    | Install missing VS Code extensions from the union of every layer's `vscode-extensions.txt` (macOS only)                                                   | base  |
+| 80-repos     | Clone each `name url` line of every layer's `repos.txt` into `$HOME/<name>` unless that path exists                                                       | base  |
+| 90-python    | Install missing uv tools from every layer's `uv-tools.txt` (a later layer's line replaces the earlier one)                                                | base  |
+| 95-dotfiles  | `stow.sh --backup-conflicts` (dry run: `stow.sh -n` preview), oh-my-zsh, and its custom plugins                                                           | base  |
+| 96-iterm2    | Point iTerm2 at the stowed prefs folder `~/.config/iterm2`, which 95-dotfiles creates (macOS only)                                                        | base  |
+| 97-render    | `render.py`: 0 ok, 1 drift refused (warn), 2 config/I/O error (fail); dry run: `render.py --check`, warn only                                             | base  |
 
 ## Manifests
 
