@@ -27,17 +27,26 @@ Set ``NO_COLOR`` to disable color. The width comes from ``COLUMNS``, which Claud
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import unicodedata
+from collections.abc import Callable
 from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Any
+from typing import BinaryIO
+from typing import Optional
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # ==============================================================================
 # Glyphs, themes, and icons
@@ -639,3 +648,342 @@ def load_stats(session_id: str, transcript: str) -> TranscriptStats | None:
     if (stats.path, stats.offset) != before:
         _write_cache(cache, stats)
     return stats
+
+# ==============================================================================
+# Components
+# ==============================================================================
+
+def dig(data: Any, *keys: str) -> Any:
+    """
+    Walk nested dicts without raising
+
+    :param data: parsed JSON (any shape)
+    :param keys: keys to follow in order
+    :return: the value found, or None when any step is missing or not a dict
+    """
+    for key in keys:
+        if not isinstance(data, dict):
+            return None
+        data = data.get(key)
+    return data
+
+
+def _is_number(value: object) -> bool:
+    """
+    Check for an int or float that is not a bool
+
+    :param value: value to check
+    :return: True for real numbers
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+@dataclass
+class Context:
+    """
+    Everything a component may read: the session JSON, the config, the environment, and lazily computed git and
+    transcript state (each computed at most once, and only when a component asks)
+    """
+    data:     dict[str, Any]
+    config:   Config
+    env:      Mapping[str, str]
+    git_fn:   Callable[[str], GitStatus | None]
+    stats_fn: Callable[[str, str], TranscriptStats | None]
+
+    @property
+    def cwd(self) -> str:
+        """
+        Working directory of the session, falling back to ``$PWD``
+        """
+        current = dig(self.data, 'workspace', 'current_dir') or self.data.get('cwd') or self.env.get('PWD') or '.'
+        return str(current)
+
+    @functools.cached_property
+    def git(self) -> GitStatus | None:
+        """
+        Git status of the working directory
+        """
+        return self.git_fn(self.cwd)
+
+    @functools.cached_property
+    def stats(self) -> TranscriptStats | None:
+        """
+        Transcript stats of the session
+        """
+        return self.stats_fn(str(self.data.get('session_id') or ''), str(self.data.get('transcript_path') or ''))
+
+
+ComponentFn = Callable[[Context], Optional[Segment]]
+
+COMPONENTS: dict[str, ComponentFn] = {}
+
+
+def component(name: str) -> Callable[[ComponentFn], ComponentFn]:
+    """
+    Register the decorated function as the renderer of component ``name``
+
+    :param name: component name used in ``statusLineConfig.components``
+    :return: the registering decorator
+    """
+    def register(fn: ComponentFn) -> ComponentFn:
+        COMPONENTS[name] = fn
+        return fn
+
+    return register
+
+
+@component('directory')
+def _directory(ctx: Context) -> Segment | None:
+    """
+    Working directory: basename (``short``) or ``~``-folded path (``full``)
+    """
+    path = ctx.cwd
+    if ctx.config.directory_style == 'short':
+        return Segment(Path(path).name or path)
+
+    home = ctx.env.get('HOME', '')
+    if home and ((path == home) or path.startswith(home + os.sep)):
+        path = '~' + path[len(home):]
+    return Segment(path)
+
+
+@component('git')
+def _git(ctx: Context) -> Segment | None:
+    """
+    Branch, ``*`` when dirty, ahead/behind arrows, and the open PR number
+    """
+    status = ctx.git
+    if status is None:
+        return None
+
+    text = status.branch + ('*' if status.dirty else '')
+    if status.ahead:
+        text += f' {ARROW_UP}{status.ahead}'
+    if status.behind:
+        text += f' {ARROW_DOWN}{status.behind}'
+
+    number = dig(ctx.data, 'pr', 'number')
+    if (ctx.config.pr_url_format == 'number') and _is_number(number):
+        text += f' #{number}'
+    return Segment(text)
+
+
+@component('active-tool')
+def _active_tool(ctx: Context) -> Segment | None:
+    """
+    Name of the tool call in progress
+    """
+    stats = ctx.stats
+    return Segment(stats.active_tool) if (stats and stats.active_tool) else None
+
+
+@component('model')
+def _model(ctx: Context) -> Segment | None:
+    """
+    Model display name (``full``) or its first word (``short``)
+    """
+    name = dig(ctx.data, 'model', 'display_name') or dig(ctx.data, 'model', 'id')
+    if (not isinstance(name, str)) or (not name):
+        return None
+    return Segment(name.split()[0] if ctx.config.model_style == 'short' else name)
+
+
+@component('effort')
+def _effort(ctx: Context) -> Segment | None:
+    """
+    Reasoning effort level
+    """
+    level = dig(ctx.data, 'effort', 'level')
+    return Segment(level) if (isinstance(level, str) and level) else None
+
+
+@component('context')
+def _context(ctx: Context) -> Segment | None:
+    """
+    Context-window usage: a bar plus percentage (``line``) or the percentage alone
+    """
+    percent = dig(ctx.data, 'context_window', 'used_percentage')
+    if not _is_number(percent):
+        return None
+
+    label = f'{round(percent)}%'
+    text  = f'{context_bar(percent)} {label}' if ctx.config.context_style == 'line' else label
+    return Segment(text, severity(percent))
+
+
+@component('duration')
+def _duration(ctx: Context) -> Segment | None:
+    """
+    Session wall-clock duration
+    """
+    ms = dig(ctx.data, 'cost', 'total_duration_ms')
+    return Segment(format_duration(ms)) if _is_number(ms) else None
+
+
+@component('messages')
+def _messages(ctx: Context) -> Segment | None:
+    """
+    Number of user prompts in the session
+    """
+    stats = ctx.stats
+    return Segment(str(stats.prompts)) if stats else None
+
+
+@component('tools')
+def _tools(ctx: Context) -> Segment | None:
+    """
+    Number of tool calls in the session
+    """
+    stats = ctx.stats
+    return Segment(str(stats.tool_uses)) if stats else None
+
+
+@component('quota')
+def _quota(ctx: Context) -> Segment | None:
+    """
+    Rate-limit window usage when reported, otherwise the session cost
+    """
+    windows  = (('5h', 'five_hour'), ('7d', 'seven_day'))
+    readings = [(label, dig(ctx.data, 'rate_limits', key, 'used_percentage')) for label, key in windows]
+    present  = [(label, percent) for label, percent in readings if _is_number(percent)]
+    if present:
+        text = f' {DOT} '.join(f'{label} {round(percent)}%' for label, percent in present)
+        return Segment(text, severity(max(percent for _, percent in present)))
+
+    cost = dig(ctx.data, 'cost', 'total_cost_usd')
+    if _is_number(cost) and (cost > 0):
+        return Segment(f'${cost:.2f}')
+    return None
+
+
+@component('agent')
+def _agent(ctx: Context) -> Segment | None:
+    """
+    Agent name when the session runs as an agent
+    """
+    name = dig(ctx.data, 'agent', 'name')
+    return Segment(name) if (isinstance(name, str) and name) else None
+
+
+@component('api-base')
+def _api_base(ctx: Context) -> Segment | None:
+    """
+    Custom API endpoint (``ANTHROPIC_BASE_URL``), only when one is set
+    """
+    url = ctx.env.get('ANTHROPIC_BASE_URL', '')
+    return Segment(url) if url else None
+
+# ==============================================================================
+# Render
+# ==============================================================================
+
+def render(
+    data:     dict[str, Any],
+    config:   Config,
+    *,
+    columns:  int                                          = 0,
+    color:    bool                                         = True,
+    env:      Mapping[str, str] | None                     = None,
+    git_fn:   Callable[[str], GitStatus | None]            = git_status,
+    stats_fn: Callable[[str, str], TranscriptStats | None] = load_stats,
+) -> str:
+    """
+    Render the statusline for one session snapshot
+
+    A component that raises is skipped, so one bad field never blanks the whole line.
+
+    :param data: session JSON from stdin
+    :param config: resolved configuration
+    :param columns: terminal width (0 for unlimited)
+    :param color: whether to emit color escapes
+    :param env: environment to read (default: ``os.environ``)
+    :param git_fn: git status provider
+    :param stats_fn: transcript stats provider
+    :return: the statusline rows joined by newlines
+    """
+    ctx = Context(data, config, os.environ if env is None else env, git_fn, stats_fn)
+
+    parts: list[str] = []
+    for name in config.components:
+        renderer = COMPONENTS.get(name)
+        if renderer is None:
+            continue
+        try:
+            segment = renderer(ctx)
+        except Exception:  # noqa: S112 - a faulty component is dropped, not fatal
+            continue
+        if (segment is not None) and segment.text:
+            parts.append(render_segment(name, segment, config, color))
+
+    return '\n'.join(layout(parts, joiner(config, color), columns, config.truncation))
+
+# ==============================================================================
+# Entry point
+# ==============================================================================
+
+def read_session(stream: BinaryIO) -> dict[str, Any]:
+    """
+    Parse the session JSON
+
+    :param stream: binary stdin
+    :return: the session object, or an empty dict for anything unparsable
+    """
+    try:
+        data = json.loads(stream.read())
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def terminal_columns(env: Mapping[str, str]) -> int:
+    """
+    Read the terminal width Claude Code provides
+
+    :param env: environment to read
+    :return: ``COLUMNS`` as an int, or 0 (unlimited) when missing or invalid
+    """
+    try:
+        return int(env.get('COLUMNS', ''))
+    except ValueError:
+        return 0
+
+
+def fallback_line(data: dict[str, Any]) -> str:
+    """
+    Build the minimal line printed when rendering fails
+
+    :param data: session JSON (possibly empty)
+    :return: ``<directory> <separator> <model>``
+    """
+    cwd   = dig(data, 'workspace', 'current_dir') or data.get('cwd') or os.environ.get('PWD') or '.'
+    model = dig(data, 'model', 'display_name') or 'Claude'
+    return f'{Path(str(cwd)).name} {SEPARATOR} {model}'
+
+
+def main() -> int:
+    """
+    Read the session JSON from stdin and print the statusline
+
+    Always exits 0: Claude Code blanks the statusline on a non-zero exit, so any failure prints the fallback line.
+
+    :return: the exit code
+    """
+    data = read_session(sys.stdin.buffer)
+    try:
+        output = render(
+            data,
+            load_config(settings_path()),
+            columns=terminal_columns(os.environ),
+            color=not os.environ.get('NO_COLOR'),
+        )
+    except Exception:
+        output = fallback_line(data)
+
+    # Write UTF-8 bytes directly so a non-UTF-8 locale cannot turn a glyph into an encoding error
+    sys.stdout.buffer.write(f'{output}\n'.encode())
+    sys.stdout.buffer.flush()
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

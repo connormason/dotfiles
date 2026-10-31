@@ -4,12 +4,15 @@ Unit tests for stow/claude/.claude/statusline/statusline.py
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import Any
 
 import pytest
 
@@ -703,3 +706,415 @@ class TestLoadStats:
         assert path.parent == tmp_path / 'tmp' / 'claude-statusline'
         assert path.name   == '______etc.json'
         assert statusline.cache_path('').name == 'unknown.json'
+
+
+# ==============================================================================
+# Components
+# ==============================================================================
+
+SAMPLE: dict[str, Any] = {
+    'session_id':      'sess-0001',
+    'transcript_path': '',
+    'cwd':             '/work/proj',
+    'model':           {'id': 'claude-sonnet-5-5', 'display_name': 'Sonnet 5.5'},
+    'workspace':       {'current_dir': '/work/proj', 'project_dir': '/work/proj'},
+    'cost':            {'total_cost_usd': 1.23, 'total_duration_ms': 754_000},
+    'context_window':  {'used_percentage': 42, 'context_window_size': 200_000},
+    'effort':          {'level': 'high'},
+}
+
+
+def _ctx(
+    data:   dict[str, Any] | None = None,
+    *,
+    config: Any                   = None,
+    env:    dict[str, str] | None = None,
+    git:    Any                   = None,
+    stats:  Any                   = None,
+) -> Any:
+    """
+    Build a Context with stubbed git and transcript sources and an empty environment by default
+    """
+    return statusline.Context(
+        data or {},
+        config or statusline.Config(),
+        env or {},
+        lambda _cwd: git,
+        lambda _session, _transcript: stats,
+    )
+
+
+def _component(name: str, data: dict[str, Any] | None = None, **kwargs: Any) -> Any:
+    """
+    Run one registered component against a stubbed Context
+    """
+    return statusline.COMPONENTS[name](_ctx(data, **kwargs))
+
+
+def _stats(prompts: int = 0, tool_uses: int = 0, pending: dict[str, str] | None = None) -> Any:
+    """
+    Build TranscriptStats with the given counts
+    """
+    return statusline.TranscriptStats(prompts=prompts, tool_uses=tool_uses, pending=pending or {})
+
+
+class TestComponents:
+    """
+    Tests for the registered components
+    """
+    def test_registry_matches_defaults(self) -> None:
+        """
+        Register exactly the default component names
+        """
+        assert set(statusline.COMPONENTS) == set(statusline.DEFAULT_COMPONENTS)
+
+    def test_directory_short(self) -> None:
+        """
+        Show the basename of the working directory
+        """
+        assert _component('directory', SAMPLE) == statusline.Segment('proj')
+
+    def test_directory_falls_back_to_cwd(self) -> None:
+        """
+        Use the top-level cwd when workspace is absent
+        """
+        assert _component('directory', {'cwd': '/a/b'}) == statusline.Segment('b')
+
+    @pytest.mark.parametrize(
+        ('path', 'expected'),
+        [
+            ('/Users/me/code/proj', '~/code/proj'),
+            ('/Users/me',           '~'),
+            ('/Users/meow/x',       '/Users/meow/x'),
+            ('/opt/x',              '/opt/x'),
+        ],
+    )
+    def test_directory_full_folds_home(self, path: str, expected: str) -> None:
+        """
+        Replace HOME with ~ only for HOME itself and its descendants
+        """
+        config  = statusline.Config(directory_style='full')
+        segment = _component('directory', {'cwd': path}, config=config, env={'HOME': '/Users/me'})
+        assert segment == statusline.Segment(expected)
+
+    def test_git_clean(self) -> None:
+        """
+        Show the bare branch for a clean checkout
+        """
+        assert _component('git', SAMPLE, git=statusline.GitStatus('main')) == statusline.Segment('main')
+
+    def test_git_dirty_ahead_behind_with_pr(self) -> None:
+        """
+        Mark dirtiness, ahead/behind counts, and the PR number
+        """
+        status   = statusline.GitStatus('feat', dirty=True, ahead=2, behind=1)
+        expected = f'feat* {statusline.ARROW_UP}2 {statusline.ARROW_DOWN}1 #12'
+        assert _component('git', {**SAMPLE, 'pr': {'number': 12}}, git=status) == statusline.Segment(expected)
+
+    def test_git_pr_number_can_be_disabled(self) -> None:
+        """
+        Omit the PR number when prUrlFormat is none
+        """
+        config  = statusline.Config(pr_url_format='none')
+        segment = _component('git', {'pr': {'number': 12}}, config=config, git=statusline.GitStatus('main'))
+        assert segment == statusline.Segment('main')
+
+    def test_git_outside_repository(self) -> None:
+        """
+        Render nothing outside a repository
+        """
+        assert _component('git', SAMPLE, git=None) is None
+
+    def test_active_tool(self) -> None:
+        """
+        Show the unresolved tool call, and nothing when there is none
+        """
+        assert _component('active-tool', stats=_stats(pending={'t1': 'Bash'})) == statusline.Segment('Bash')
+        assert _component('active-tool', stats=_stats()) is None
+        assert _component('active-tool', stats=None)     is None
+
+    @pytest.mark.parametrize(
+        ('model', 'style', 'expected'),
+        [
+            ({'display_name': 'Sonnet 5.5', 'id': 'x'}, 'full',  'Sonnet 5.5'),
+            ({'display_name': 'Sonnet 5.5', 'id': 'x'}, 'short', 'Sonnet'),
+            ({'id': 'claude-x'},                        'full',  'claude-x'),
+        ],
+    )
+    def test_model(self, model: dict[str, str], style: str, expected: str) -> None:
+        """
+        Show the display name (or id), optionally shortened to its first word
+        """
+        segment = _component('model', {'model': model}, config=statusline.Config(model_style=style))
+        assert segment == statusline.Segment(expected)
+
+    def test_model_absent(self) -> None:
+        """
+        Render nothing without model data
+        """
+        assert _component('model', {}) is None
+
+    def test_effort(self) -> None:
+        """
+        Show the effort level when present
+        """
+        assert _component('effort', SAMPLE) == statusline.Segment('high')
+        assert _component('effort', {})     is None
+
+    @pytest.mark.parametrize(
+        ('percent', 'expected_severity'),
+        [
+            (42, None),
+            (75, 'warning'),
+            (95, 'critical'),
+        ],
+    )
+    def test_context_line(self, percent: int, expected_severity: str | None) -> None:
+        """
+        Show a usage bar and percentage, escalating severity with usage
+        """
+        segment  = _component('context', {'context_window': {'used_percentage': percent}})
+        expected = f'{statusline.context_bar(percent)} {percent}%'
+        assert segment == statusline.Segment(expected, expected_severity)
+
+    def test_context_percent_style(self) -> None:
+        """
+        Show only the percentage in the percent style
+        """
+        config = statusline.Config(context_style='percent')
+        assert _component('context', SAMPLE, config=config) == statusline.Segment('42%')
+
+    @pytest.mark.parametrize('value', [None, True, 'high'])
+    def test_context_unusable(self, value: object) -> None:
+        """
+        Render nothing for a null, boolean, or non-numeric percentage
+        """
+        assert _component('context', {'context_window': {'used_percentage': value}}) is None
+
+    def test_duration(self) -> None:
+        """
+        Show the formatted session duration
+        """
+        assert _component('duration', SAMPLE) == statusline.Segment('12m')
+        assert _component('duration', {})     is None
+
+    def test_messages_and_tools(self) -> None:
+        """
+        Show the prompt and tool-call counts from the transcript
+        """
+        stats = _stats(prompts=3, tool_uses=7)
+        assert _component('messages', stats=stats) == statusline.Segment('3')
+        assert _component('tools',    stats=stats) == statusline.Segment('7')
+        assert _component('messages', stats=None)  is None
+        assert _component('tools',    stats=None)  is None
+
+    def test_quota_rate_limits(self) -> None:
+        """
+        Show both rate-limit windows with the worst one's severity
+        """
+        data     = {'rate_limits': {'five_hour': {'used_percentage': 92.4}, 'seven_day': {'used_percentage': 41.2}}}
+        expected = statusline.Segment(f'5h 92% {statusline.DOT} 7d 41%', 'critical')
+        assert _component('quota', data) == expected
+
+    def test_quota_single_window(self) -> None:
+        """
+        Show only the windows that are present
+        """
+        data = {'rate_limits': {'seven_day': {'used_percentage': 41.2}}}
+        assert _component('quota', data) == statusline.Segment('7d 41%')
+
+    def test_quota_falls_back_to_cost(self) -> None:
+        """
+        Show the session cost without rate limits, and nothing when it is zero
+        """
+        assert _component('quota', {'cost': {'total_cost_usd': 1.234}}) == statusline.Segment('$1.23')
+        assert _component('quota', {'cost': {'total_cost_usd': 0}})     is None
+
+    def test_agent(self) -> None:
+        """
+        Show the agent name when the session runs as an agent
+        """
+        assert _component('agent', {'agent': {'name': 'reviewer'}}) == statusline.Segment('reviewer')
+        assert _component('agent', {})                               is None
+
+    def test_api_base(self) -> None:
+        """
+        Show ANTHROPIC_BASE_URL only when it is set
+        """
+        env = {'ANTHROPIC_BASE_URL': 'http://localhost:8080'}
+        assert _component('api-base', env=env) == statusline.Segment('http://localhost:8080')
+        assert _component('api-base')          is None
+
+
+# ==============================================================================
+# Render
+# ==============================================================================
+
+def _render(data: dict[str, Any], config: Any, **kwargs: Any) -> str:
+    """
+    Render with stubbed sources and an empty environment unless overridden
+    """
+    kwargs.setdefault('env', {})
+    kwargs.setdefault('git_fn', lambda _cwd: None)
+    kwargs.setdefault('stats_fn', lambda _session, _transcript: None)
+    return statusline.render(data, config, **kwargs)
+
+
+class TestRender:
+    """
+    Tests for render
+    """
+    def test_plain_row(self) -> None:
+        """
+        Join plain segments with the separator
+        """
+        config = statusline.Config(icon_set='text', components=('directory', 'model', 'effort'))
+        sep    = statusline.SEPARATOR
+        assert _render(SAMPLE, config, color=False) == f'proj {sep} Sonnet 5.5 {sep} high'
+
+    def test_unknown_and_empty_components_are_skipped(self) -> None:
+        """
+        Skip unknown names and components with nothing to show
+        """
+        config = statusline.Config(icon_set='text', components=('mystery', 'directory', 'agent'))
+        assert _render(SAMPLE, config, color=False) == 'proj'
+
+    def test_faulty_component_is_isolated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Keep rendering the other segments when one component raises
+        """
+        def boom(_ctx: Any) -> None:
+            raise RuntimeError('boom')
+
+        monkeypatch.setitem(statusline.COMPONENTS, 'model', boom)
+        config = statusline.Config(icon_set='text', components=('directory', 'model'))
+        assert _render(SAMPLE, config, color=False) == 'proj'
+
+    def test_wraps_to_columns(self) -> None:
+        """
+        Wrap onto a new row when the terminal is too narrow
+        """
+        config = statusline.Config(icon_set='text', components=('directory', 'model'))
+        assert _render(SAMPLE, config, color=False, columns=6) == 'proj\nSonnet 5.5'
+
+    def test_colored_pills(self) -> None:
+        """
+        Draw each segment as a pill and join pills with a two-space gap
+        """
+        icons       = statusline.ICON_SETS['nerd-font']
+        left, right = statusline.PILL_LEFT, statusline.PILL_RIGHT
+        out         = _render(SAMPLE, statusline.Config(components=('directory', 'model')), color=True)
+        assert statusline.strip_ansi(out) == (
+            f'{left} {icons["directory"]} {right} proj{statusline.PILL_GAP}{left} {icons["model"]} {right} Sonnet 5.5'
+        )
+
+    def test_git_is_queried_only_when_needed(self) -> None:
+        """
+        Skip the git subprocess when no component needs it
+        """
+        calls: list[str] = []
+
+        def git_fn(cwd: str) -> None:
+            calls.append(cwd)
+
+        _render(SAMPLE, statusline.Config(components=('directory', 'model')), git_fn=git_fn)
+        assert calls == []
+
+
+# ==============================================================================
+# Entry point
+# ==============================================================================
+
+class TestEntryPoint:
+    """
+    Tests for main and its helpers
+    """
+    @pytest.mark.parametrize(
+        ('env', 'expected'),
+        [
+            ({'COLUMNS': '120'},  120),
+            ({},                  0),
+            ({'COLUMNS': 'wide'}, 0),
+        ],
+    )
+    def test_terminal_columns(self, env: dict[str, str], expected: int) -> None:
+        """
+        Read COLUMNS, treating missing or invalid values as unlimited
+        """
+        assert statusline.terminal_columns(env) == expected
+
+    @pytest.mark.parametrize(
+        ('raw', 'expected'),
+        [
+            (b'{"a": 1}', {'a': 1}),
+            (b'[1]',      {}),
+            (b'\xff',     {}),
+            (b'',         {}),
+        ],
+    )
+    def test_read_session(self, raw: bytes, expected: dict[str, Any]) -> None:
+        """
+        Parse a JSON object and treat anything else as empty
+        """
+        assert statusline.read_session(io.BytesIO(raw)) == expected
+
+    def test_fallback_line(self) -> None:
+        """
+        Show the directory and model in the fallback line
+        """
+        assert statusline.fallback_line(SAMPLE) == f'proj {statusline.SEPARATOR} Sonnet 5.5'
+
+    def test_main_falls_back_when_render_fails(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys:      pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Print the fallback line and exit 0 when rendering raises
+        """
+        def boom(*_args: Any, **_kwargs: Any) -> str:
+            raise RuntimeError('boom')
+
+        monkeypatch.setattr(sys, 'stdin', io.TextIOWrapper(io.BytesIO(json.dumps(SAMPLE).encode())))
+        monkeypatch.setattr(statusline, 'render', boom)
+        assert statusline.main() == 0
+        assert capsys.readouterr().out == f'proj {statusline.SEPARATOR} Sonnet 5.5\n'
+
+    def _run(self, tmp_path: Path, stdin: str, **env: str) -> subprocess.CompletedProcess[str]:
+        """
+        Run the script as Claude Code would, with an isolated settings directory and TMPDIR
+        """
+        config = {'iconSet': 'text', 'components': ['directory', 'model', 'context', 'effort']}
+        (tmp_path / 'settings.json').write_text(json.dumps({'statusLineConfig': config}), encoding='utf-8')
+        return subprocess.run(
+            [sys.executable, str(SCRIPT_PATH)],
+            input=stdin,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={
+                **os.environ,
+                'CLAUDE_CONFIG_DIR': str(tmp_path),
+                'TMPDIR':            str(tmp_path),
+                'NO_COLOR':          '1',
+                'COLUMNS':           '200',
+                **env,
+            },
+        )
+
+    def test_end_to_end(self, tmp_path: Path) -> None:
+        """
+        Render the configured components from stdin JSON
+        """
+        result = self._run(tmp_path, json.dumps(SAMPLE))
+        sep    = statusline.SEPARATOR
+        assert result.returncode == 0
+        assert result.stdout     == f'proj {sep} Sonnet 5.5 {sep} {statusline.context_bar(42)} 42% {sep} high\n'
+
+    def test_garbage_stdin(self, tmp_path: Path) -> None:
+        """
+        Exit 0 and fall back to $PWD for the directory on unparsable input
+        """
+        result = self._run(tmp_path, 'not json', PWD='/x/y')
+        assert result.returncode == 0
+        assert result.stdout     == 'y\n'
