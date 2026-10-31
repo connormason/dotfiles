@@ -2470,7 +2470,8 @@ and append, after the `zsh` include (Task 14 removes the retired roles and settl
 
 ```yaml
     # $HOME: clone the repo, register profiles/nas, login shell, run the stow engine as the user
-    - include_role:
+    - name: Hand the home directory to the stow engine
+      ansible.builtin.include_role:
         name: roles/dotfiles
         apply:
           tags: dotfiles
@@ -2479,6 +2480,9 @@ and append, after the `zsh` include (Task 14 removes the retired roles and settl
         - configfile
 ```
 
+(Named, FQCN form: ansible-lint flags bare `include_role` with `name[missing]` and `fqcn[action-core]`. The existing
+includes keep their old form until Task 14 converts them; those findings remain until then.)
+
 - [ ] **Step 6: Run the tests, lint**
 
 ```bash
@@ -2486,7 +2490,8 @@ scripts/hooks/uv-public.sh run pytest -q -p no:cacheprovider tests/unit/test_nas
 scripts/hooks/ansible-lint.sh
 ```
 
-Expected: PASS; no findings under `roles/dotfiles/` or `playbooks/`.
+Expected: PASS; no findings under `roles/dotfiles/` and none on the new playbook entry (the older bare `include_role`
+entries keep their `name[missing]`/`fqcn[action-core]` findings until Task 14).
 
 - [ ] **Step 7: Idempotency review** — dispatch `ansible-idempotency-reviewer` on `git diff -- roles/dotfiles
   playbooks/nas_bootstrap.yml` with this context: "Runs over SSH as the NAS user; `bootstrap.sh` is idempotent and
@@ -2653,7 +2658,8 @@ only checks preconditions and maps Ansible's modes onto it.
 
 ```yaml
     # Home Assistant OS VM: preconditions, then vms/haos/setup.sh from the clone (never bridge.sh)
-    - include_role:
+    - name: Provision the Home Assistant OS VM
+      ansible.builtin.include_role:
         name: roles/haos
         apply:
           tags: haos
@@ -2724,7 +2730,8 @@ class TestPlaybookOrder:
         Test that the playbook includes exactly the expected roles in order
         """
         play     = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
-        included = [task['include_role']['name'] for task in play['tasks'] if 'include_role' in task]
+        key      = 'ansible.builtin.include_role'
+        included = [task[key]['name'] for task in play['tasks'] if key in task]
         assert [name.removeprefix('roles/') for name in included] == EXPECTED_ORDER
 
     @pytest.mark.parametrize('role', ['git', 'ssh', 'zsh'])
@@ -2783,8 +2790,11 @@ git rm -r -q roles/git roles/ssh roles/zsh
 
 `roles/requirements.yml` → collections: `community.docker` only. In `playbooks/nas_bootstrap.yml`, delete the `git`,
 `ssh` and `zsh` include blocks (with their comments); the remaining order is then debian, zfs, samba, docker, tailscale,
-dotfiles, haos. `nas_bootstrap.sh:81` → `ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv`
-(the play sets `ansible_become_pass` from the vault).
+dotfiles, haos. Convert the five remaining bare `- include_role:` entries (debian, zfs, samba, docker, tailscale) to the
+named FQCN form Tasks 12–13 used — `- name: <what the role does>` then `ansible.builtin.include_role:` with the same
+`name`/`apply`/`tags` — keeping each entry's existing comment and tags, so ansible-lint reports no `name[missing]` or
+`fqcn[action-core]` on the playbook. `nas_bootstrap.sh:81` → `ansible-playbook playbooks/nas_bootstrap.yml -i
+inventory/inventory.yml -vv` (the play sets `ansible_become_pass` from the vault).
 
 - [ ] **Step 3: Docs**
 
