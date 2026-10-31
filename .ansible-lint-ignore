@@ -4,6 +4,8 @@ roles/docker/tasks/main.yml risky-file-permissions  # docker role: reworked by N
 roles/docker/tasks/main.yml no-changed-when  # docker role: reworked by NAS sub-project 3
 roles/docker/tasks/main.yml no-handler  # docker role: reworked by NAS sub-project 3
 roles/docker/tasks/main.yml loop-var-prefix[missing]  # docker role: reworked by NAS sub-project 3
+roles/docker/tasks/main.yml command-instead-of-shell  # docker role: reworked by NAS sub-project 3
+roles/docker/tasks/main.yml fqcn[action-core]  # docker role: reworked by NAS sub-project 3
 roles/samba/handlers/main.yml loop-var-prefix[missing]  # samba role: untouched here; fix with a NAS-verified change
 roles/samba/tasks/main.yml loop-var-prefix[missing]  # samba role: untouched here; fix with a NAS-verified change
-roles/debian/defaults/main.yml var-naming[no-role-prefix]  # systemd_allow_* are set in inventory host_vars
+roles/debian/defaults/main.yml var-naming[no-role-prefix]  # systemd_allow_* are set in inventory host_vars; apt_packages is renamed by Task 10
