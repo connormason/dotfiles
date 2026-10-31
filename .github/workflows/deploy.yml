@@ -32,7 +32,7 @@ jobs:
           # Fallback for force pushes or new branches (null SHA)
           if [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
             echo "Null SHA detected (force push or new branch) — deploying all services"
-            SERVICES=$(ls -d services/*/compose.yml 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} | jq -R . | jq -s .)
+            SERVICES=$(ls -d services/*/compose.yml 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} | jq -R . | jq -cs .)
             echo "services=${SERVICES}" >> "$GITHUB_OUTPUT"
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -41,7 +41,7 @@ jobs:
           # Check if compose.base.yml changed — if so, deploy everything
           if git diff --name-only "$BEFORE".."${{ github.sha }}" | grep -q "^services/compose.base.yml$"; then
             echo "compose.base.yml changed — deploying all services"
-            SERVICES=$(ls -d services/*/compose.yml 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} | jq -R . | jq -s .)
+            SERVICES=$(ls -d services/*/compose.yml 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} | jq -R . | jq -cs .)
             echo "services=${SERVICES}" >> "$GITHUB_OUTPUT"
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -57,7 +57,7 @@ jobs:
             | cut -d'/' -f2 \
             | sort -u \
             | while read -r svc; do [[ -f "services/${svc}/compose.yml" ]] && echo "$svc"; done \
-            | jq -R . | jq -s .)
+            | jq -R . | jq -cs .)
 
           if [[ "$CHANGED_SERVICES" == "[]" ]]; then
             echo "No service changes detected"
