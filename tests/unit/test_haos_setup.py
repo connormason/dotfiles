@@ -38,7 +38,11 @@ STUBS: dict[str, str] = {
     ),
     'dpkg-query':  '[ -f "$HAOS_TEST_STATE/pkgs" ] && printf "install ok installed"\nexit 0\n',
     'id':          'if [ -f "$HAOS_TEST_STATE/group" ]; then echo "tester sudo libvirt"; else echo "tester sudo"; fi\n',
-    'df':          'printf "Avail\\n100G\\n"\n',
+    'df': (
+        'for last; do :; done\n'
+        '[ -e "$last" ] || exit 1\n'
+        'printf "Avail\\n100G\\n"\n'
+    ),
     'systemctl': (
         'case "$1" in\n'
         'is-enabled) [ -f "$HAOS_TEST_STATE/enabled-$3" ]; exit $? ;;\n'
@@ -188,6 +192,21 @@ class TestHaosChangeCount:
         assert len(counts) == 1
         assert int(counts[0].split('=', 1)[1]) > 0
         assert not any(Path(host['HAOS_ETC_DIR']).iterdir())
+
+    def test_missing_images_dir_does_not_abort_dry_run(self, host: dict[str, str]) -> None:
+        """
+        Test that a dry run before libvirt is installed (no images dir yet) still reports a single change count
+        """
+        (Path(host['HAOS_TEST_STATE']) / 'bridge').touch()
+        Path(host['HAOS_IMAGES_DIR']).rmdir()
+
+        result = _dry_run(host)
+        assert result.returncode == 0, result.stderr
+
+        counts = [line for line in result.stdout.splitlines() if line.startswith('haos: changes=')]
+        assert len(counts) == 1
+        assert int(counts[0].split('=', 1)[1]) > 0
+        assert not Path(host['HAOS_IMAGES_DIR']).exists()
 
     def test_missing_bridge_fails_with_instructions(self, host: dict[str, str]) -> None:
         """

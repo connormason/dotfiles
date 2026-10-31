@@ -193,7 +193,12 @@ fi
 if [[ -f "$DISK" ]]; then
     ok "Disk ${DISK} exists; leaving it untouched"
 else
-    avail_gb="$(df --output=avail -BG "$IMAGES_DIR" | tail -1 | tr -dc '0-9')"
+    # The images dir does not exist before libvirt is installed (a --dry-run on a fresh host): probe its nearest parent
+    probe_dir="$IMAGES_DIR"
+    while [[ ! -d "$probe_dir" ]]; do
+        probe_dir="$(dirname "$probe_dir")"
+    done
+    avail_gb="$(df --output=avail -BG "$probe_dir" | tail -1 | tr -dc '0-9')"
     ((avail_gb >= 40)) || warn "Only ${avail_gb}G free under ${IMAGES_DIR}; the disk grows towards ${HAOS_DISK_SIZE}"
 
     xz_path="${IMAGES_DIR}/haos_ova-${HAOS_VERSION}.qcow2.xz"

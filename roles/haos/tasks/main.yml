@@ -1,4 +1,11 @@
 ---
+- name: Require the clone path
+  ansible.builtin.assert:
+    that:
+      - dotfiles_repo_dir is defined
+      - dotfiles_repo_dir | length > 0
+    fail_msg: dotfiles_repo_dir (the NAS clone path) must be set; playbooks/nas_bootstrap.yml defines it for the play
+
 - name: Read the LAN bridge's IPv4 address
   ansible.builtin.command:
     argv: [ip, -4, -o, addr, show, dev, "{{ haos_bridge }}"]
@@ -10,11 +17,13 @@
 - name: Require the LAN bridge
   ansible.builtin.assert:
     that:
-      - haos_bridge_addr.stdout | length > 0
+      - (haos_bridge_addr.stdout | default('')) | length > 0
     fail_msg: >-
       {{ haos_bridge }} has no IPv4 address. Create it from the NAS console or inside tmux, since the network blips for a
-      few seconds and would cut an SSH session: sudo {{ dotfiles_repo_dir }}/vms/haos/bridge.sh — then re-run with
-      --tags haos. See vms/haos/README.md.
+      few seconds and would cut an SSH session: sudo BRIDGE={{ haos_bridge }} {{ dotfiles_repo_dir }}/vms/haos/bridge.sh
+      (clone the repository first with --tags dotfiles if {{ dotfiles_repo_dir }} does not exist yet) — then re-run with
+      --tags haos. See vms/haos/README.md. Probe result: rc={{ haos_bridge_addr.rc | default('none') }},
+      stderr={{ haos_bridge_addr.stderr | default('') | trim }}
 
 - name: Look for the provisioning script
   ansible.builtin.stat:
@@ -37,8 +46,8 @@
 
 # setup.sh is idempotent and, with --dry-run, read-only, so check mode runs it too. SUDO_USER (set by become) is the
 # user it adds to the libvirt group. Changed status comes from its `haos: changes=N` line (exactly one); a run without
-# it is a failure. A fresh host downloads a ~500 MB HAOS image, so it runs async: a dropped SSH session would otherwise
-# SIGHUP the script mid-download.
+# it is a failure, as is an async timeout (no rc or stdout in that result). A fresh host downloads a ~500 MB HAOS image,
+# so it runs async: a dropped SSH session would otherwise SIGHUP the script mid-download.
 - name: Provision the Home Assistant OS VM
   become: true
   ansible.builtin.command:
@@ -49,8 +58,8 @@
   poll: 15
   register: haos_setup_run
   check_mode: false
-  changed_when: "'haos: changes=0' not in haos_setup_run.stdout_lines"
+  changed_when: "'haos: changes=0' not in (haos_setup_run.stdout_lines | default([]))"
   failed_when: >-
-    haos_setup_run.rc != 0 or
-    (haos_setup_run.stdout_lines | select('match', '^haos: changes=[0-9]+$') | list | length) != 1
+    haos_setup_run.rc | default(1) != 0 or
+    (haos_setup_run.stdout_lines | default([]) | select('match', '^haos: changes=[0-9]+$') | list | length) != 1
   when: haos_setup.stat.exists

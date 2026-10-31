@@ -199,3 +199,16 @@ class TestHaosRole:
         assert setup['become'] is True
         assert setup['check_mode'] is False
         assert (setup['async'], setup['poll']) == (3600, 15)
+
+    def test_hardened_against_missing_results(self) -> None:
+        """
+        Test that the clone path is asserted first and the summary conditions tolerate an async timeout result
+        """
+        tasks = yaml.safe_load((ROLES / 'haos' / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+        assert tasks[0]['name'] == 'Require the clone path'
+        assert 'dotfiles_repo_dir is defined' in tasks[0]['ansible.builtin.assert']['that']
+
+        setup = _role_task('haos', 'Provision the Home Assistant OS VM')
+        assert 'rc | default(1)' in setup['failed_when']
+        assert setup['failed_when'].count('stdout_lines | default([])') == 1
+        assert 'stdout_lines | default([])' in setup['changed_when']
