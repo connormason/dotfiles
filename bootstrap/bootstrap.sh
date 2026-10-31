@@ -201,6 +201,13 @@ if [ "$LOG" = "1" ]; then
     fi
 fi
 
+# Per-run change ledger: stages record each mutation (under --dry-run, each one a real run would make) with lib.sh
+# note_change; the summary lists them and ends with a machine-readable `bootstrap: changes=N` line that unattended
+# callers (the NAS `dotfiles` Ansible role) key their changed status off. Always a fresh file: an inherited path from
+# an enclosing run must not be appended to. Lives in TMPDIR and is deleted on exit, so dry runs still leave no state.
+BOOTSTRAP_CHANGES_FILE="$(mktemp "${TMPDIR:-/tmp}/bootstrap-changes.XXXXXX")" || die "cannot create the change ledger"
+export BOOTSTRAP_CHANGES_FILE
+
 # Per-stage timing + end-of-run summary state (parallel arrays, indexed together). Distinct from
 # STAGE_NAMES/STAGE_PATHS above, which hold every discovered stage rather than the ones that ran.
 RESULT_NAMES=() RESULT_STATUS=() RESULT_SECS=()
@@ -210,7 +217,7 @@ VERIFY_STATUS="" # "", "ok", "fail", or "skipped" (dry-run)
 
 # shellcheck disable=SC2329  # invoked indirectly by cleanup() via the EXIT trap
 print_summary() {
-    local i emoji
+    local i emoji line changes=0
     printf '\n'
     log "run summary:"
     for i in ${RESULT_NAMES[@]+"${!RESULT_NAMES[@]}"}; do
@@ -226,6 +233,17 @@ print_summary() {
     fail) printf '  %s %-16s\n' '🔴' 'verify (doctor)' ;;
     skipped) printf '  %s %-16s\n' '•' 'verify (dry-run)' ;;
     esac
+    if [ -s "$BOOTSTRAP_CHANGES_FILE" ]; then
+        changes="$(wc -l <"$BOOTSTRAP_CHANGES_FILE" | tr -d ' ')"
+        if [ "${BOOTSTRAP_DRY_RUN:-0}" = "1" ]; then
+            printf '  would change:\n'
+        else
+            printf '  changes:\n'
+        fi
+        while IFS= read -r line; do
+            printf '    %s\n' "$line"
+        done <"$BOOTSTRAP_CHANGES_FILE"
+    fi
     printf '  total: %s\n' "$(fmt_duration "$((SECONDS - RUN_START))")"
     if [ -n "$LOGFILE" ]; then
         printf '  log:   %s\n' "$LOGFILE"
@@ -233,6 +251,7 @@ print_summary() {
     if [ -n "$FAILED_STAGE" ]; then
         warn "failed at stage: $FAILED_STAGE — resume with: bootstrap.sh --resume (or: --from $FAILED_STAGE)"
     fi
+    printf 'bootstrap: changes=%d\n' "$changes"
     return 0 # keep a clean status so `set -e` doesn't abort the EXIT trap before it re-exits `rc`
 }
 
@@ -254,6 +273,7 @@ cleanup() {
         kill "${SUDO_KEEPALIVE_PID}" 2>/dev/null || true
     fi
     print_summary
+    rm -f "$BOOTSTRAP_CHANGES_FILE"
     exit "$rc"
 }
 trap cleanup EXIT

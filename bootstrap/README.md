@@ -25,7 +25,10 @@ bootstrap/bootstrap.sh [--dry-run] [--list] [--only STAGE] [--from STAGE] [--res
 
 Run state lives in `${BOOTSTRAP_LOG_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-bootstrap}`: one timestamped
 logfile per run and a `last-completed-stage` file that `--resume` reads. Dry runs write nothing and never prompt for
-sudo. Outside dry-run, sudo is primed once by the driver (macOS only) and kept alive for the whole run.
+sudo. Outside dry-run, sudo is primed once by the driver (macOS only) and kept alive for the whole run. Every run ends
+with a summary whose last line is `bootstrap: changes=N`: the number of mutations the stages recorded (under
+`--dry-run`, the number a real run would make), listed above it. Dry runs create only a temporary change ledger, deleted
+on exit.
 
 Prompts (`lib.sh` `confirm`) need a human: when `BOOTSTRAP_NONINTERACTIVE=1` is set or stdin is not a terminal, every
 prompt is answered "no" with a warning instead of blocking. The NAS `dotfiles` Ansible role sets the variable.
@@ -47,12 +50,13 @@ the repo root cannot also be registered as an overlay). An overlay contributes t
 Each stage runs as a separate `"$BASH" <path>` process (the same bash that runs the driver, so `/bin/bash bootstrap.sh`
 exercises every stage under bash 3.2) with these exported:
 
-| Variable            | Value                                                                                                                                                                                                                                                                                     |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BOOTSTRAP_DRY_RUN` | `1` under `--dry-run`, otherwise `0`                                                                                                                                                                                                                                                      |
-| `DOTFILES_REPO`     | Root of the base layer (this repository)                                                                                                                                                                                                                                                  |
-| `DOTFILES_LAYER`    | Root of the layer the stage itself comes from                                                                                                                                                                                                                                             |
-| `DOTFILES_OS`       | `darwin` or `linux`, exported by the driver: resolved from `uname -s` unless overridden. Overriding previews another OS's stow packages (`stow.sh -n`) and render targets (`render.py --check`); a full bootstrap preview of another OS fails at `00-preflight` (use `--from 20-ssh-key`) |
+| Variable                 | Value                                                                                                                                                                                                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BOOTSTRAP_DRY_RUN`      | `1` under `--dry-run`, otherwise `0`                                                                                                                                                                                                                                                      |
+| `DOTFILES_REPO`          | Root of the base layer (this repository)                                                                                                                                                                                                                                                  |
+| `DOTFILES_LAYER`         | Root of the layer the stage itself comes from                                                                                                                                                                                                                                             |
+| `DOTFILES_OS`            | `darwin` or `linux`, exported by the driver: resolved from `uname -s` unless overridden. Overriding previews another OS's stow packages (`stow.sh -n`) and render targets (`render.py --check`); a full bootstrap preview of another OS fails at `00-preflight` (use `--from 20-ssh-key`) |
+| `BOOTSTRAP_CHANGES_FILE` | Per-run change ledger; stages append to it through lib.sh `note_change`, never directly                                                                                                                                                                                                   |
 
 Base stages source the helpers with `source "$HERE/lib.sh"`. An overlay stage lives outside this repository, so it must
 source them through the exported base root: `source "$DOTFILES_REPO/bootstrap/lib.sh"`.
@@ -69,7 +73,9 @@ command is missing. Stow packages opt into an OS with a `.dotfiles-os` marker (s
 ## Stages
 
 Base stages, in run order. Overlays interleave their own stages by number. Every mutation goes through `run`/`try`, so
-`--dry-run` prints it instead; the exceptions are read-only previews noted below.
+`--dry-run` prints it instead; each one that actually changes something (or would) is also recorded with `note_change`.
+The macOS-only stages (`60-macos`, `72-vscode`, `96-iterm2`) do not record; the count is a signal for unattended NAS
+runs. The exceptions are read-only previews noted below.
 
 | Stage        | Purpose                                                                                                                                                   | Layer |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
