@@ -75,8 +75,9 @@ and `host_vars/`). Common ones: `dotfiles_repo_dir` (the NAS clone, a play varia
 
 ## Validation
 
-`prek run --all-files` runs yamllint over role files; `ansible-lint` (configured in
-[`.ansible-lint.yaml`](../.ansible-lint.yaml)) is available but not enabled as a hook.
+`prek run --all-files` runs yamllint over role files and ansible-lint over `playbooks/` and `roles/` through
+[`scripts/hooks/ansible-lint.sh`](../scripts/hooks/ansible-lint.sh) (check only; accepted findings are listed with
+reasons in [`.ansible-lint-ignore`](../.ansible-lint-ignore)). CI runs the same wrapper.
 
 ## Related documentation
 

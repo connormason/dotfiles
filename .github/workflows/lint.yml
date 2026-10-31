@@ -50,6 +50,19 @@ jobs:
       - name: Run yamllint
         run: uvx yamllint .
 
+  ansible-lint:
+    name: ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync
+      - name: Install Ansible collections
+        run: uv run ansible-galaxy collection install -r roles/requirements.yml
+      - name: ansible-lint
+        run: scripts/hooks/ansible-lint.sh
+
   codespell:
     name: codespell
     runs-on: ubuntu-latest
