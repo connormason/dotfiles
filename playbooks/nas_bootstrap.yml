@@ -1,6 +1,9 @@
 ---
 - name: Home NAS bootstrap
   hosts: nas
+  vars:
+    # The NAS clone of this repository: the dotfiles role clones it, the haos role runs vms/haos/setup.sh from it
+    dotfiles_repo_dir: "{{ ansible_facts['user_dir'] }}/dotfiles-personal"
   tasks:
 
     # Set become password so it can be used in any role
@@ -89,4 +92,14 @@
           tags: zsh
       tags:
         - zsh
+        - configfile
+
+    # $HOME: clone the repo, register profiles/nas, login shell, run the stow engine as the user
+    - name: Hand the home directory to the stow engine
+      ansible.builtin.include_role:
+        name: roles/dotfiles
+        apply:
+          tags: dotfiles
+      tags:
+        - dotfiles
         - configfile
