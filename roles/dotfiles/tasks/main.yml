@@ -168,8 +168,9 @@
 
 # As the connecting user: the engine owns $HOME and never uses sudo on Linux. Check mode (and the preview variable) map
 # to the engine's --dry-run, which is read-only and so runs even under --check. Changed status comes from the driver's
-# `bootstrap: changes=N` line (exactly one); a run without it is a failure. The first run can build Homebrew packages
-# for a long time without output, so it runs async: a dropped SSH session would otherwise SIGHUP the engine.
+# `bootstrap: changes=N` line (exactly one); a run without it is a failure, as is an async timeout (no rc or stdout in
+# that result). The first run can build Homebrew packages for a long time without output, so it runs async: a dropped
+# SSH session would otherwise SIGHUP the engine.
 - name: Run the bootstrap engine
   ansible.builtin.command:
     argv: >-
@@ -182,8 +183,8 @@
   poll: 30
   register: dotfiles_bootstrap
   check_mode: false
-  changed_when: "'bootstrap: changes=0' not in dotfiles_bootstrap.stdout_lines"
+  changed_when: "'bootstrap: changes=0' not in (dotfiles_bootstrap.stdout_lines | default([]))"
   failed_when: >-
-    dotfiles_bootstrap.rc != 0 or
-    (dotfiles_bootstrap.stdout_lines | select('match', '^bootstrap: changes=[0-9]+$') | list | length) != 1
+    dotfiles_bootstrap.rc | default(1) != 0 or
+    (dotfiles_bootstrap.stdout_lines | default([]) | select('match', '^bootstrap: changes=[0-9]+$') | list | length) != 1
   when: dotfiles_engine.stat.exists

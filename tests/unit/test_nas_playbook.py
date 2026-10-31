@@ -156,6 +156,15 @@ class TestDotfilesRole:
         assert engine['environment']['BOOTSTRAP_NONINTERACTIVE'] == '1'
         assert (engine['async'], engine['poll']) == (7200, 30)
 
+    def test_engine_hardened_against_missing_results(self) -> None:
+        """
+        Test that the engine's summary conditions tolerate an async timeout result (no rc or stdout)
+        """
+        engine = _role_task('dotfiles', 'Run the bootstrap engine')
+        assert 'rc | default(1)' in engine['failed_when']
+        assert engine['failed_when'].count('stdout_lines | default([])') == 1
+        assert 'stdout_lines | default([])' in engine['changed_when']
+
 
 class TestHaosRole:
     """
