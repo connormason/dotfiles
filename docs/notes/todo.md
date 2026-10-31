@@ -9,6 +9,14 @@
 - Update docker-compose.yml schema version?
 - remove requirements.txt?
 
+## Personal MacBook bootstrap
+
+- Scripted `defaults export` backup (and restore path) for the preference domains `60-macos` and `96-iterm2` write;
+  today they have no restore point (Phase B findings, Q8)
+- Root-cause the intermittent 109-byte interactive-shell startup output seen once on the first real run
+- Phase B step B5: public plugin set in `profiles/personal-mac/render/claude.json`, multi-day VS Code drift check,
+  `--settings` layering probe
+
 ## Docker Services Modularization
 
 Remaining manual steps (require NAS/GitHub access):

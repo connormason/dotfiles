@@ -55,10 +55,12 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import errno
 import inspect
 import os
 import pty
 import re
+import select
 import shlex
 import shutil
 import subprocess
@@ -672,9 +674,23 @@ def shell_command(
 
         buffer:     str = ''
         all_output: str = ''
+        timed_out = False
+        deadline = None if timeout is None else time.monotonic() + timeout
         try:
             while True:
-                output = os.read(master_fd, 1024).decode()
+                # Poll with the remaining budget: a bare blocking read would never notice a hung, silent child
+                remaining = None if deadline is None else max(deadline - time.monotonic(), 0)
+                if not select.select([master_fd], [], [], remaining)[0]:
+                    timed_out = True
+                    break
+
+                try:
+                    output = os.read(master_fd, 1024).decode()
+                except OSError as e:
+                    # Linux raises EIO (macOS returns b'') once the child closes its end of the pty
+                    if e.errno == errno.EIO:
+                        break
+                    raise
                 if not output:
                     break
 
@@ -686,20 +702,24 @@ def shell_command(
 
             if buffer:
                 print(f'{indent_str}{buffer}', end='')
-        except Exception:
-            raise
         finally:
             os.close(master_fd)
-            try:
-                returncode = process.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
+            # No `return`/`raise` here: either would replace an exception already propagating from the read loop
+            if not timed_out:
+                try:
+                    returncode = process.wait(timeout=None if deadline is None else max(deadline - time.monotonic(), 0))
+                except subprocess.TimeoutExpired:
+                    timed_out = True
+            if timed_out:
                 process.kill()
                 process.wait()
-                printf(f'❌ Command timed out after {timeout}s', fg='red', bold=True, indent=indent or 0)
-                printf(f'  └─ Command: {shlex.join(cmd)}',        fg='red',           indent=(indent or 0) + 1)
-                if check:
-                    raise
-                return subprocess.CompletedProcess(cmd, -1, stdout=all_output)
+
+        if timed_out:
+            printf(f'❌ Command timed out after {timeout}s', fg='red', bold=True, indent=indent or 0)
+            printf(f'  └─ Command: {shlex.join(cmd)}',        fg='red',           indent=(indent or 0) + 1)
+            if check:
+                raise subprocess.TimeoutExpired(cmd, cast('float', timeout), output=all_output)
+            return subprocess.CompletedProcess(cmd, -1, stdout=all_output)
 
         if check and (returncode != 0):
             raise ShellCommandError(returncode, shlex.join(cmd), stderr=all_output)

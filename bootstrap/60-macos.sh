@@ -234,8 +234,10 @@ run defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
 # ------------------------------------------------------------------------------------------------
 # Mail
 #
-# com.apple.mail is a sandboxed app container.
-# The preference write fails until Mail has created its container.
+# com.apple.mail is a sandboxed app container (~/Library/Containers/com.apple.mail).
+# The write fails with "Could not write domain" when the container does not exist yet (Mail never opened), or when the
+# terminal lacks Full Disk Access (macOS TCC answers `Permission denied` for the container directory; observed on the
+# first real run). Grant the terminal Full Disk Access, or open Mail once, then re-run `bootstrap.sh --from 60-macos`.
 # Treat as best-effort, rather than aborting the stage.
 # ------------------------------------------------------------------------------------------------
 
