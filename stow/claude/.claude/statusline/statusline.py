@@ -522,15 +522,18 @@ def _record_entry(stats: TranscriptStats, entry: Any) -> None:
                 stats.tool_uses += 1
                 stats.pending[str(block.get('id', ''))] = str(block.get('name', '?'))
     elif entry.get('type') == 'user':
+        # A genuine prompt means the previous turn ended, so a call still unresolved (killed mid-tool) is stale
         if isinstance(content, str):
             if not content.startswith(COMMAND_PREFIXES):
                 stats.prompts += 1
+                stats.pending.clear()
         else:
             results = [block for block in blocks if block.get('type') == 'tool_result']
             for block in results:
                 stats.pending.pop(str(block.get('tool_use_id', '')), None)
             if (not results) and any(block.get('type') == 'text' for block in blocks):
                 stats.prompts += 1
+                stats.pending.clear()
 
     while len(stats.pending) > MAX_PENDING:
         stats.pending.pop(next(iter(stats.pending)))
@@ -597,20 +600,26 @@ def _read_cache(cache: Path) -> TranscriptStats:
     """
     Load cached stats, or fresh stats when the cache is missing or invalid
 
+    Counts and the offset must be non-negative; anything else is treated as a corrupt cache, since a negative offset
+    would otherwise fail every later read and never be rewritten.
+
     :param cache: cache file
     :return: the cached stats
     """
     try:
-        raw = json.loads(cache.read_text(encoding='utf-8'))
-        return TranscriptStats(
+        raw   = json.loads(cache.read_text(encoding='utf-8'))
+        stats = TranscriptStats(
             path=str(raw['path']),
             offset=int(raw['offset']),
             prompts=int(raw['prompts']),
             tool_uses=int(raw['tool_uses']),
             pending={str(key): str(value) for key, value in raw['pending'].items()},
         )
-    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError):
         return TranscriptStats()
+    if min(stats.offset, stats.prompts, stats.tool_uses) < 0:
+        return TranscriptStats()
+    return stats
 
 
 def _write_cache(cache: Path, stats: TranscriptStats) -> None:
@@ -783,7 +792,7 @@ def _model(ctx: Context) -> Segment | None:
     Model display name (``full``) or its first word (``short``)
     """
     name = dig(ctx.data, 'model', 'display_name') or dig(ctx.data, 'model', 'id')
-    if (not isinstance(name, str)) or (not name):
+    if (not isinstance(name, str)) or (not name.strip()):
         return None
     return Segment(name.split()[0] if ctx.config.model_style == 'short' else name)
 

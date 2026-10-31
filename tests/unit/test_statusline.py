@@ -541,6 +541,17 @@ class TestUpdateStats:
         assert stats.active_tool == 'Read'
         assert stats.offset      == path.stat().st_size
 
+    def test_new_prompt_clears_stale_pending_call(self, tmp_path: Path) -> None:
+        """
+        Drop an unresolved tool call once a later prompt shows its turn ended
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _tool_use('t1', 'Bash'), _prompt('next'))
+
+        stats = statusline.update_stats(statusline.TranscriptStats(), path)
+        assert stats.active_tool is None
+        assert stats.tool_uses   == 1
+
     def test_no_active_tool_when_all_resolved(self, tmp_path: Path) -> None:
         """
         Report no active tool once every call has a result
@@ -698,6 +709,21 @@ class TestLoadStats:
         cache.write_text('garbage', encoding='utf-8')
         assert statusline.load_stats('sess-2', str(path)).prompts == 2
 
+    def test_negative_cached_offset_is_ignored(self, tmp_path: Path) -> None:
+        """
+        Re-read the transcript when the cache holds a negative offset
+        """
+        path = tmp_path / 't.jsonl'
+        _append(path, _prompt('a'), _prompt('b'))
+
+        cache = statusline.cache_path('sess-neg')
+        cache.parent.mkdir(parents=True)
+        cache.write_text(
+            json.dumps({'path': str(path), 'offset': -5, 'prompts': 0, 'tool_uses': 0, 'pending': {}}),
+            encoding='utf-8',
+        )
+        assert statusline.load_stats('sess-neg', str(path)).prompts == 2
+
     def test_cache_path_is_sanitized(self, tmp_path: Path) -> None:
         """
         Keep session ids from escaping the cache directory
@@ -853,6 +879,13 @@ class TestComponents:
         Render nothing without model data
         """
         assert _component('model', {}) is None
+
+    def test_model_blank_name_is_absent(self) -> None:
+        """
+        Render nothing for a whitespace-only display name instead of raising
+        """
+        config = statusline.Config(model_style='short')
+        assert _component('model', {'model': {'display_name': '   '}}, config=config) is None
 
     def test_effort(self) -> None:
         """
