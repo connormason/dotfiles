@@ -263,8 +263,10 @@ fi
 vm_ip=''
 for _ in $(seq 1 "$attempts"); do
     for source in agent arp; do
+        # `|| true`: virsh exits non-zero while the guest agent is not answering yet, and pipefail would carry that
+        # through the substitution and abort the script instead of falling back to arp / the warning below
         vm_ip="$(virsh_ro domifaddr "$HAOS_NAME" --source "$source" 2>/dev/null |
-            awk '$3 == "ipv4" && $4 !~ /^127\./ {split($4, a, "/"); print a[1]; exit}')"
+            awk '$3 == "ipv4" && $4 !~ /^127\./ {split($4, a, "/"); print a[1]; exit}' || true)"
         [[ -n "$vm_ip" ]] && break 2
     done
     sleep 3
