@@ -89,6 +89,22 @@ try() {
     run "$@" || warn "non-fatal: command failed: $*"
 }
 
+# note_change WHAT... -> record one mutation in the driver's per-run change ledger (under --dry-run: one mutation a real
+# run would make). The run summary lists and counts them on its final `bootstrap: changes=N` line. A no-op outside a
+# driver run (BOOTSTRAP_CHANGES_FILE unset), so stages and stow.sh can call it unconditionally.
+note_change() {
+    if [ -n "${BOOTSTRAP_CHANGES_FILE:-}" ]; then
+        printf '%s\n' "$*" >>"$BOOTSTRAP_CHANGES_FILE"
+    fi
+    return 0
+}
+
+# is_interactive -> success when a human can answer prompts: BOOTSTRAP_NONINTERACTIVE is not 1 (the NAS `dotfiles`
+# Ansible role sets it) and stdin is a terminal
+is_interactive() {
+    [ "${BOOTSTRAP_NONINTERACTIVE:-0}" != "1" ] && [ -t 0 ]
+}
+
 # prime_sudo -> prime sudo once and keep the credential alive for the rest of the run.
 #
 # Call this ONCE from the driver, never per-stage. The keep-alive loop ties its lifetime to the
@@ -117,9 +133,14 @@ prime_sudo() {
     SUDO_KEEPALIVE_PID=$!
 }
 
-# confirm PROMPT -> interactive yes/no, default no
+# confirm PROMPT -> interactive yes/no, default no. Non-interactive runs answer no without reading stdin, so an
+# unattended run can never block on (or silently consume) a prompt.
 confirm() {
     local reply
+    if ! is_interactive; then
+        warn "non-interactive run: answering no to: $1"
+        return 1
+    fi
     read -r -p "$1 [y/N] " reply
     [[ "$reply" =~ ^[Yy]$ ]]
 }
