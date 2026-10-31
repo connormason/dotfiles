@@ -442,20 +442,22 @@ def git_status(cwd: str) -> GitStatus | None:
     Query the repository containing ``cwd``
 
     ``GIT_OPTIONAL_LOCKS=0`` keeps this read-only probe from taking the index lock that a concurrent git command needs.
+    Undecodable bytes in git's output (for example a non-UTF-8 file name) are replaced rather than raised.
 
     :param cwd: directory to inspect
-    :return: the status, or None outside a repository or when git is unavailable or slow
+    :return: the status, or None outside a repository or when git cannot run (missing, slow, or an unusable ``cwd``)
     """
     try:
         result = subprocess.run(
             ['git', '-C', cwd, 'status', '--porcelain=v2', '--branch', '--untracked-files=normal'],
             capture_output=True,
             text=True,
+            errors='replace',
             timeout=GIT_TIMEOUT_S,
             check=False,
             env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'},
         )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, ValueError, subprocess.SubprocessError):
         return None
     if result.returncode != 0:
         return None

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -461,6 +462,25 @@ class TestGitStatus:
         """
         monkeypatch.setenv('PATH', str(tmp_path))
         assert statusline.git_status(str(tmp_path)) is None
+
+    def test_nul_in_cwd_returns_none(self) -> None:
+        """
+        Return None when the directory name cannot be passed to git
+        """
+        assert statusline.git_status('bad\x00dir') is None
+
+    @pytest.mark.skipif(not shutil.which('git'), reason='Git not available')
+    def test_undecodable_output_is_replaced(self, tmp_path: Path) -> None:
+        """
+        Replace undecodable bytes in git's output instead of raising
+        """
+        subprocess.run(['git', 'init', '-q', '-b', 'trunk', str(tmp_path)], check=True)
+        try:
+            (tmp_path / os.fsdecode(b'caf\xe9.txt')).write_text('x', encoding='utf-8')
+        except OSError:
+            pytest.skip('filesystem rejects non-UTF-8 names')
+        subprocess.run(['git', '-C', str(tmp_path), 'config', 'core.quotepath', 'false'], check=True)
+        assert statusline.git_status(str(tmp_path)) == statusline.GitStatus('trunk', dirty=True)
 
 
 # ==============================================================================
