@@ -19,6 +19,7 @@ _SCRUBBED_VARS: tuple[str, ...] = (
     'DOTFILES_REPO',
     'DOTFILES_LAYER',
     'DOTFILES_BREW_PREFIXES',
+    'DOTFILES_OS',
     'DOTFILES_OVERLAYS_FILE',
     'XDG_STATE_HOME',
 )
@@ -403,12 +404,49 @@ class TestDryRun:
         stub.write_text(f'#!/bin/sh\ntouch "{sentinel}"\nexit 1\n', encoding='utf-8')
         stub.chmod(0o755)
 
-        stubbed = {**env, 'PATH': f'{bin_dir}:{env["PATH"]}'}
+        stubbed = {**env, 'PATH': f'{bin_dir}:{env["PATH"]}', 'DOTFILES_OS': 'darwin'}
         result  = _drive(base, shell, stubbed, '--dry-run', '--no-log', '--only', '98-selftest-ok')
 
         assert result.returncode == 0, result.stderr
         assert 'would prime sudo' in result.stdout
         assert not sentinel.exists()
+
+    def test_linux_never_primes_sudo(self, base: Path, shell: str, env: dict[str, str], tmp_path: Path) -> None:
+        """
+        Test that a real run on linux never invokes sudo (no Linux stage needs root; Ansible owns root)
+        """
+        bin_dir = tmp_path / 'bin'
+        bin_dir.mkdir()
+
+        sentinel = tmp_path / 'sudo-called'
+        stub = bin_dir / 'sudo'
+        stub.write_text(f'#!/bin/sh\ntouch "{sentinel}"\nexit 1\n', encoding='utf-8')
+        stub.chmod(0o755)
+
+        stubbed = {**env, 'PATH': f'{bin_dir}:{env["PATH"]}', 'DOTFILES_OS': 'linux'}
+        result  = _drive(base, shell, stubbed, '--no-log', '--only', '98-selftest-ok')
+
+        assert result.returncode == 0, result.stderr
+        assert not sentinel.exists()
+
+    def test_darwin_still_primes_sudo(self, base: Path, shell: str, env: dict[str, str], tmp_path: Path) -> None:
+        """
+        Test that a real run on darwin primes sudo exactly as before
+        """
+        bin_dir = tmp_path / 'bin'
+        bin_dir.mkdir()
+
+        # `sudo -v` succeeds and records the call; `sudo -n true` fails so the keep-alive loop exits at once
+        sentinel = tmp_path / 'sudo-called'
+        stub = bin_dir / 'sudo'
+        stub.write_text(f'#!/bin/sh\n[ "$1" = "-v" ] || exit 1\ntouch "{sentinel}"\n', encoding='utf-8')
+        stub.chmod(0o755)
+
+        stubbed = {**env, 'PATH': f'{bin_dir}:{env["PATH"]}', 'DOTFILES_OS': 'darwin'}
+        result  = _drive(base, shell, stubbed, '--no-log', '--only', '98-selftest-ok')
+
+        assert result.returncode == 0, result.stderr
+        assert sentinel.exists()
 
     def test_dry_run_writes_no_state(self, base: Path, shell: str, env: dict[str, str]) -> None:
         """

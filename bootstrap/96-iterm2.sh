@@ -5,6 +5,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh disable=SC1091
 source "$HERE/lib.sh"
+require_os darwin
 
 PREFS_DIR="$HOME/.config/iterm2"
 if [ ! -d "$PREFS_DIR" ]; then

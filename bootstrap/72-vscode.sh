@@ -5,6 +5,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh disable=SC1091
 source "$HERE/lib.sh"
+require_os darwin
 
 # VS Code provides the `code` CLI via the visual-studio-code cask (stage 50-brew). Skip cleanly if it
 # is absent — not every machine profile installs VS Code, and a missing editor must not fail bootstrap.

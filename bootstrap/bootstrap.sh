@@ -36,6 +36,7 @@ export DOTFILES_REPO
 # shellcheck source=/dev/null  # lib.sh is sourced at runtime from the repo root; shellcheck runs without -x
 source "$HERE/lib.sh"
 REPO="$DOTFILES_REPO"
+DRIVER_OS="$(dotfiles_os)" || exit 1
 
 # Discover NN-*.sh stages in every layer (base first, then overlays). Two-digit numbers must be unique across all
 # layers so the merged order is unambiguous.
@@ -234,8 +235,11 @@ print_summary() {
 
 # Prime sudo once, here in the driver, and keep it alive for the whole run. The keep-alive loop
 # is tied to this process, so it outlives the individual stage subshells (which all share this
-# tty's cached credential). No-op under dry-run.
-prime_sudo
+# tty's cached credential). No-op under dry-run. macOS only: no Linux stage needs root (root-level
+# setup belongs to Ansible), and a password prompt would block an unattended run.
+if [ "$DRIVER_OS" = "darwin" ]; then
+    prime_sudo
+fi
 
 # Single EXIT handler: reap the sudo keep-alive loop and print the run summary (so the summary
 # appears on failure/interrupt too, not just clean completion). Capture the pending exit status
