@@ -242,6 +242,9 @@ and the git version. The Phase D snapshot diff is the cutover acceptance test.
 
 ## Clarifications Needed (resolve by experiment in Phases A/B)
 
+Status after the first real run (2026-10-31, `docs/plans/2026-10/2026-10-31-phase-b-findings.md`): all three remain
+open and wait on Phase B step B5.
+
 1. How Claude Code merges `enabledPlugins` when the same plugin is reachable through two marketplaces.
 2. Whether VS Code rewrites its `settings.json` often enough to make the drift guard noisy. If it does, VS Code falls back
    to base-only settings, with machine-specific values applied through a VS Code profile.

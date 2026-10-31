@@ -775,7 +775,8 @@ Constraints above governed Phase A only. Every `run.py` command below runs from 
 > and applies the Brewfiles in one step (`bootstrap/50-brew.sh:55-85`); how to proceed then is an open question.
 
 - [ ] **B1. Prepare:** macOS updated; `xcode-select --install`; `git clone git@github.com:connormason/dotfiles.git
-  ~/dotfiles-personal`; register the profile from the checkout root with the snippet in
+  ~/dotfiles-personal` (the directory name is a convention: the first real run used `~/dotfiles`, and every command
+  works from whichever checkout root is current); register the profile from the checkout root with the snippet in
   `profiles/personal-mac/README.md` ("Registering the overlay"; idempotent, and it resolves the registry path the same
   way as `bootstrap/lib.sh`), then run that section's layer-order check.
 - [ ] **B2. Inventory and clear the old setup:** list Ansible-era links and files:
@@ -856,21 +857,26 @@ Constraints above governed Phase A only. Every `run.py` command below runs from 
      "overlay", "LAYER_PROJ": "overlay"}, "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "echo
      overlay-hook >> out.txt; env | grep ^LAYER_ >> out.txt"}]}]}}`; run `claude -p "Reply OK" --settings overlay.json`;
      inspect `out.txt` (do both hooks run? which `LAYER_PROJ` wins?) and record the results.
-- [ ] **B6. Record findings** in `docs/plans/2026-11/<date>-phase-b-findings.md`, update the spec's Clarifications
-  section, and open a small PR with the `render/claude.json` plugin set and any fixes.
+- [ ] **B6. Record findings** in `docs/plans/2026-10/2026-10-31-phase-b-findings.md` (first-run results, written;
+  B5 results still to be appended), update the spec's Clarifications section, and open a small PR with the
+  `render/claude.json` plugin set and any fixes.
 
-**Open owner questions referenced above** (undecided; only the questions this runbook depends on are listed, hence the
+**Open owner questions referenced above.** All five were answered on 2026-10-31 after the first real run (details in
+`docs/plans/2026-10/2026-10-31-phase-b-findings.md`; only the questions this runbook depends on are listed, hence the
 gaps in numbering):
 
 - **Q1:** Where is the Ansible-era checkout on this Mac, and does it have uncommitted changes? Clone fresh, or update
-  that checkout in place after the dereferenced backup?
+  that checkout in place after the dereferenced backup? *Answered: none existed; bootstrap ran fresh.*
 - **Q3:** Should the paid remote-desktop `mas` entry stay in the base `bootstrap/Brewfile` (Task 9 said to move it to
-  staging), and has the personal Apple ID acquired it and iStat Menus?
-- **Q4:** For apps already installed by hand: adopt them into Homebrew, or remove them from the Brewfiles?
+  staging), and has the personal Apple ID acquired it and iStat Menus? *Answered: it stays in base; it installed after
+  one transient `mas` failure.*
+- **Q4:** For apps already installed by hand: adopt them into Homebrew, or remove them from the Brewfiles? *Answered:
+  adopted; only the PR #28 entries needed changes.*
 - **Q8:** Take a `defaults export` safety copy of the preference domains `60-macos` writes (and script a rollback)
-  before the first real run?
+  before the first real run? *Answered: none was taken; add a scripted export with a restore path (follow-up, see
+  `docs/notes/todo.md`).*
 - **Q9:** How is Claude Code installed on this Mac today (native, npm, or cask), and should the `claude-code` cask in
-  `personal-mac` stay?
+  `personal-mac` stay? *Answered: npm plus a stale native install existed; the cask stays and is the only install.*
 
 After Phase B, Phases C and D are planned in the work repository. The Phase C input is the backed-up overlay staging
 directory (Task 12 Step 1): private, kept on the work Mac only, never committed.
