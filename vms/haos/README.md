@@ -68,17 +68,38 @@ without sudo).
    Core, so the page takes a few minutes to appear. Pick *Create my smart home* to start fresh, or *Upload backup* to
    restore one.
 
-5. **Point backups off the VM.** In *Settings → System → Storage → Add network storage*, add the NAS's `media` Samba
-   share (`/storage`) for backups, then set it as the default location under *Settings → System → Backups*. Backups on
-   the ZFS pool survive a lost or rebuilt VM disk, and are what a re-bootstrap restores from.
+5. **Set up backups.** Backups go to three places: the VM itself, the NAS, and Google Drive.
+
+   - On the NAS, create the target folder once. It lives on its own dataset, so it can be snapshotted or capped
+     separately:
+
+     ```bash
+     sudo zfs create storage/backups
+     sudo mkdir -p /storage/backups/homeassistant && sudo chown -R "$USER:$USER" /storage/backups
+     ```
+
+   - In *Settings → System → Storage → Add network storage*, add `nas_backups` with usage **Backup**, server = the NAS's
+     LAN IP, protocol Samba/Windows (CIFS), remote share `media/backups/homeassistant`, and user `connormason`. The
+     password is the Samba password, set from the vault's `admin_password`.
+
+   - Add the Google Drive integration. It shows up as a backup location.
+
+   - In *Settings → System → Backups → Configure automatic backups*, schedule daily backups. Select *This system*,
+     `nas_backups` and Google Drive as locations.
+
+   - **Save the encryption key** (*Download emergency kit*) in the password manager. Backups cannot be restored without
+     it.
+
+   Keep the off-site copy: the `storage` pool stripes across two disks with no redundancy, so a single disk failure
+   loses the NAS copy too.
 
 ## Re-bootstrapping a wiped NAS<a name="re-bootstrapping-a-wiped-nas"></a>
 
 1. `./nas_bootstrap.sh` (Docker stack, Samba, ZFS import, Tailscale; see the [root README](../../README.md)).
 2. `sudo vms/haos/bridge.sh`, then `sudo vms/haos/setup.sh`.
 3. Re-create the router reservation if the router was also reset.
-4. During onboarding choose *Upload backup* and pick the newest backup from `/storage` (or add the network storage first
-   and restore from there).
+4. During onboarding choose *Upload backup*. Pick the newest `.tar` from `/storage/backups/homeassistant`, or from
+   Google Drive if the pool was lost, and enter the encryption key from the emergency kit.
 
 ## Day-to-day operations<a name="day-to-day-operations"></a>
 
