@@ -59,6 +59,7 @@ def sandbox(tmp_path: Path) -> dict[str, object]:
     """
     stubs = tmp_path / 'stubs'
     stubs.mkdir()
+
     for name, body in (('defaults', FAKE_DEFAULTS), ('sudo', FAKE_SUDO), ('killall', FAKE_KILLALL)):
         stub = stubs / name
         stub.write_text(body, encoding='utf-8')
@@ -69,12 +70,12 @@ def sandbox(tmp_path: Path) -> dict[str, object]:
 
     env = {
         **{key: value for key, value in os.environ.items() if key not in _SCRUBBED_VARS},
-        'HOME':                 str(tmp_path / 'home'),
-        'PATH':                 f'{stubs}{os.pathsep}{os.environ["PATH"]}',
-        'DOTFILES_OS':          'darwin',
-        'DEFAULTS_BACKUP_DIR':  str(tmp_path / 'backups'),
-        'FAKE_LOG':             str(log),
-        'FAKE_ABSENT':          '',
+        'HOME':                str(tmp_path / 'home'),
+        'PATH':                f'{stubs}{os.pathsep}{os.environ["PATH"]}',
+        'DOTFILES_OS':         'darwin',
+        'DEFAULTS_BACKUP_DIR': str(tmp_path / 'backups'),
+        'FAKE_LOG':            str(log),
+        'FAKE_ABSENT':         '',
     }
     return {'env': env, 'log': log, 'backups': tmp_path / 'backups'}
 
@@ -148,8 +149,9 @@ class TestDefaultsBackupStage:
         """
         Test that the stage exits 0 on linux without touching defaults
         """
-        env = {**sandbox['env'], 'DOTFILES_OS': 'linux'}  # type: ignore[dict-item]
+        env   = {**sandbox['env'], 'DOTFILES_OS': 'linux'}  # type: ignore[dict-item]
         result = _run(shell, '58-defaults-backup.sh', env)
+
         assert result.returncode == 0, result.stderr
         assert 'skipped (darwin only; this is linux)' in result.stdout
         assert _calls(sandbox) == []
@@ -158,14 +160,15 @@ class TestDefaultsBackupStage:
         """
         Test that present domains are exported and absent ones are only recorded in the manifest
         """
-        env = {**sandbox['env'], 'FAKE_ABSENT': 'com.apple.mail'}  # type: ignore[dict-item]
+        env   = {**sandbox['env'], 'FAKE_ABSENT': 'com.apple.mail'}  # type: ignore[dict-item]
         result = _run(shell, '58-defaults-backup.sh', env)
         assert result.returncode == 0, result.stderr
 
         (snapshot,) = _snapshots(sandbox)
-        manifest = (snapshot / 'MANIFEST.tsv').read_text().splitlines()
-        rows = {domain: (file, state) for domain, file, state in (line.split('\t') for line in manifest)}
+        manifest    = (snapshot / 'MANIFEST.tsv').read_text().splitlines()
+        rows        = {domain: (file, state) for domain, file, state in (line.split('\t') for line in manifest)}
         loginwindow = '/Library/Preferences/com.apple.loginwindow'
+
         assert set(rows) == _manifest_domains()
         assert rows['com.apple.mail'] == ('com.apple.mail.plist', 'absent')
         assert rows['com.apple.dock'] == ('com.apple.dock.plist', 'present')
@@ -178,8 +181,9 @@ class TestDefaultsBackupStage:
         """
         Test that --dry-run previews the exports without recording or exporting anything
         """
-        env = {**sandbox['env'], 'BOOTSTRAP_DRY_RUN': '1'}  # type: ignore[dict-item]
+        env    = {**sandbox['env'], 'BOOTSTRAP_DRY_RUN': '1'}  # type: ignore[dict-item]
         result = _run(shell, '58-defaults-backup.sh', env)
+
         assert result.returncode == 0, result.stderr
         assert '[dry-run] defaults export com.apple.dock' in _plain(result.stdout)
         assert not any(call.startswith('defaults export') for call in _calls(sandbox))
@@ -196,12 +200,15 @@ class TestDefaultsRestore:
         """
         env = {**sandbox['env'], 'FAKE_ABSENT': absent}  # type: ignore[dict-item]
         assert _run(shell, '58-defaults-backup.sh', env).returncode == 0
+
         log = sandbox['log']
         assert isinstance(log, Path)
         log.write_text('', encoding='utf-8')
 
     def test_imports_present_deletes_absent_and_uses_sudo_for_file_domains(
-        self, shell: str, sandbox: dict[str, object]
+        self,
+        shell: str,
+        sandbox: dict[str, object],
     ) -> None:
         """
         Test the three restore actions: import, delete for absent domains, and sudo for /Library domains
@@ -211,8 +218,9 @@ class TestDefaultsRestore:
         result = _run(shell, 'defaults-restore.sh', sandbox['env'])
         assert result.returncode == 0, result.stderr
 
-        calls = _calls(sandbox)
+        calls       = _calls(sandbox)
         (snapshot,) = _snapshots(sandbox)
+
         assert f'defaults import com.apple.dock {snapshot}/com.apple.dock.plist' in calls
         assert 'defaults delete com.apple.mail'                                  in calls
         assert any(c.startswith('sudo defaults import /Library/Preferences/com.apple.loginwindow ') for c in calls)
@@ -224,12 +232,14 @@ class TestDefaultsRestore:
         """
         backups = sandbox['backups']
         assert isinstance(backups, Path)
+
         for name in ('defaults-20260101-000000', 'defaults-20260202-000000'):
             (backups / name).mkdir(parents=True)
             (backups / name / 'MANIFEST.tsv').write_text('com.apple.dock\tcom.apple.dock.plist\tpresent\n')
 
         result = _run(shell, 'defaults-restore.sh', sandbox['env'])
         assert result.returncode == 0, result.stderr
+
         oldest = backups / 'defaults-20260101-000000'
         assert f'defaults import com.apple.dock {oldest}/com.apple.dock.plist' in _calls(sandbox)
 
