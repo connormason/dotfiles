@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -27,6 +28,15 @@ def _role_defaults(role: str) -> dict[str, object]:
     assert isinstance(data, dict)
     return data
 
+
+def _role_task(role: str, name: str) -> dict[str, Any]:  # Any: heterogeneous, yaml-loaded task structure
+    """
+    Load the task with the given name from a role's tasks/main.yml
+    """
+    tasks = yaml.safe_load((ROLES / role / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+    matches = [task for task in tasks if task.get('name') == name]
+    assert len(matches) == 1, f'expected exactly one task named {name!r}'
+    return matches[0]
 
 class TestPlaybookSyntax:
     """
@@ -97,3 +107,51 @@ class TestDotfilesRole:
         """
         play = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
         assert play['vars']['dotfiles_repo_dir'] == "{{ ansible_facts['user_dir'] }}/dotfiles-personal"
+
+    def test_safety_assert_covers_every_probe(self) -> None:
+        """
+        Test that the refuse-to-update assert checks the status, remote-branch and local-branch ancestry probes
+        """
+        refuse = _role_task('dotfiles', 'Refuse to update a clone with local work')
+        conditions = '\n'.join(refuse['ansible.builtin.assert']['that'])
+        assert 'dotfiles_clone_status.stdout | length == 0' in conditions
+        assert 'dotfiles_clone_remote.rc == 0' in conditions
+        assert 'dotfiles_clone_remote.stdout | length > 0' in conditions
+        assert 'dotfiles_clone_pushed.rc' in conditions
+
+        pushed = _role_task('dotfiles', 'Check that the local version branch is pushed')
+        argv = pushed['ansible.builtin.command']['argv']
+        assert argv[-3:] == [
+            '--is-ancestor',
+            'refs/heads/{{ dotfiles_repo_version }}',
+            'refs/remotes/origin/{{ dotfiles_repo_version }}',
+        ]
+        assert pushed['check_mode'] is False
+        assert pushed['changed_when'] is False
+        assert pushed['failed_when'] is False
+
+    def test_login_shell_is_verified_before_it_is_set(self) -> None:
+        """
+        Test that the login shell is checked for existence, executability and /etc/shells ahead of the user task
+        """
+        tasks = yaml.safe_load((ROLES / 'dotfiles' / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+        names = [task['name'] for task in tasks]
+        assert names.index('Require a usable login shell') < names.index('Set the login shell')
+
+        require = _role_task('dotfiles', 'Require a usable login shell')
+        conditions = '\n'.join(require['ansible.builtin.assert']['that'])
+        assert 'dotfiles_shell.stat.exists' in conditions
+        assert 'dotfiles_shell.stat.executable' in conditions
+        assert 'dotfiles_shell_listed.rc == 0' in conditions
+
+    def test_engine_dry_run_only_under_check_or_preview(self) -> None:
+        """
+        Test that the engine argv adds --dry-run solely under check mode or the preview variable
+        """
+        engine = _role_task('dotfiles', 'Run the bootstrap engine')
+        argv = engine['ansible.builtin.command']['argv']
+        assert argv.count('--dry-run') == 1
+        assert 'if (ansible_check_mode or dotfiles_bootstrap_preview | bool) else []' in argv
+        assert engine['environment']['DOTFILES_OVERLAYS_FILE'] == '{{ dotfiles_overlays_file }}'
+        assert engine['environment']['BOOTSTRAP_NONINTERACTIVE'] == '1'
+        assert (engine['async'], engine['poll']) == (7200, 30)

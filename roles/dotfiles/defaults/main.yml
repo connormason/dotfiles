@@ -10,6 +10,9 @@ dotfiles_repo_version: main
 dotfiles_overlays:
   - "{{ dotfiles_repo_dir }}/profiles/nas"
 
+# The overlays registry the engine reads; the role writes it and points the engine at it (DOTFILES_OVERLAYS_FILE)
+dotfiles_overlays_file: "{{ ansible_facts['user_dir'] }}/.config/dotfiles/overlays"
+
 # Login shell for ansible_user
 dotfiles_login_shell: /bin/zsh
 
