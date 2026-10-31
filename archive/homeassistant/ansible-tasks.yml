@@ -1,0 +1,42 @@
+---
+# Removed from roles/docker/tasks/main.yml when Home Assistant moved to UI-managed config.
+# Rendered secrets.yaml and copied the Lutron Caseta certs from the inventory into the HA config dir.
+# Relied on the role default: homeassistant_config_dir: "{{ docker_dir }}/homeassistant/config"
+- name: Setup homeassistant secrets
+  tags:
+    - homeassistant
+  block:
+    - name: Ensure homeassistant config directory exists
+      ansible.builtin.file:
+        path: "{{ homeassistant_config_dir }}"
+        state: directory
+
+    - name: Render homeassistant secrets file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../services/homeassistant/config/secrets.yaml.j2"
+        dest: "{{ homeassistant_config_dir }}/secrets.yaml"
+      tags:
+        - configfile
+
+    - name: Copy Lutron Caseta certifications/keys
+      block:
+        - name: Get path to group "all" inventory dir
+          ansible.builtin.set_fact:
+            ansible_group_all_inventory_dir: "{{ inventory_dir }}/group_vars/all"
+          tags:
+            - always
+
+        - name: Copy caseta.crt
+          ansible.builtin.copy:
+            src: "{{ ansible_group_all_inventory_dir }}/caseta.crt"
+            dest: "{{ homeassistant_config_dir }}"
+
+        - name: Copy caseta.key
+          ansible.builtin.copy:
+            src: "{{ ansible_group_all_inventory_dir }}/caseta.key"
+            dest: "{{ homeassistant_config_dir }}"
+
+        - name: Copy caseta-bridge.crt
+          ansible.builtin.copy:
+            src: "{{ ansible_group_all_inventory_dir }}/caseta-bridge.crt"
+            dest: "{{ homeassistant_config_dir }}"

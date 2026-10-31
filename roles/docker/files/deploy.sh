@@ -12,6 +12,9 @@ set -euo pipefail
 DOCKER_DIR="${HOME}/docker"
 BASE_COMPOSE="${DOCKER_DIR}/compose.base.yml"
 
+# Each service lives in its own compose file under one project, so every other service looks like an "orphan"
+export COMPOSE_IGNORE_ORPHANS=true
+
 # Discover all services: subdirectories of ~/docker/ containing a compose.yml
 discover_services() {
     local services=()
@@ -34,11 +37,12 @@ deploy_service() {
     fi
 
     echo "Deploying ${service}..."
+    # `set -e` is suppressed inside functions called from an `if` condition, so propagate failure explicitly
     docker compose \
         --project-directory "${DOCKER_DIR}" \
         -f "${BASE_COMPOSE}" \
         -f "${service_compose}" \
-        up -d "${service}"
+        up -d "${service}" || return 1
     echo "Done: ${service}"
 }
 

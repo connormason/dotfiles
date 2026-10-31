@@ -8,6 +8,9 @@ These files are deployed to the NAS at `~/docker/` by the `roles/docker` Ansible
 `roles/docker/files/deploy.sh`, which discovers every subdirectory containing a `compose.yml` and runs
 `docker compose -f compose.base.yml -f <service>/compose.yml up -d <service>`.
 
+A service is **disabled** by renaming its `compose.yml` to `compose.yml.disabled`: both `deploy.sh` and the CI deploy
+workflow only pick up directories containing a `compose.yml`. `pihole` is currently disabled.
+
 ## Quick Reference
 
 All host ports below are bound on the NAS itself. Services without a host port are reachable only from inside the
@@ -18,7 +21,7 @@ All host ports below are bound on the NAS itself. Services without a host port a
 | `caddy`          | `caddy:2-alpine`                    | `443/tcp`, `32443/tcp`                        | Tailscale HTTPS reverse proxy (see below)   |
 | `glance`         | `glanceapp/glance`                  | `8080/tcp`                                    | Dashboard / homepage                        |
 | `home-assistant` | `homeassistant/home-assistant`      | host networking (default `8123/tcp`)          | Home automation hub                         |
-| `pihole`         | `pihole/pihole`                     | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80 | DNS, ad-blocking, DHCP                      |
+| `pihole`         | `pihole/pihole`                     | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80 | DNS, ad-blocking, DHCP (**disabled**)       |
 | `plex`           | `linuxserver/plex`                  | `32400/tcp`                                   | Media streaming server                      |
 | `jellyfin`       | `linuxserver/jellyfin`              | `8096/tcp`, `7359/udp`                        | Media streaming server (Plex alternative)   |
 | `prowlarr`       | `linuxserver/prowlarr`              | `9696/tcp`                                    | Indexer aggregator for Sonarr/Radarr        |
@@ -62,10 +65,14 @@ container status. Loads environment from a sibling `.env` file rendered by Ansib
 ### `home-assistant`
 
 Runs on the host network (`network_mode: host`) so it can discover devices via mDNS/SSDP and reach the Lutron Caseta
-bridge directly. Secrets, certificates, and YAML config live under `homeassistant/config/`, populated during the
-`docker` role's `homeassistant` task.
+bridge directly. `homeassistant/config/` starts empty and is populated by Home Assistant itself on first boot;
+integrations are configured through the UI rather than YAML checked into this repo.
 
 ### `pihole`
+
+**Disabled** (`compose.yml.disabled`). When re-enabling: libvirt's default network runs `dnsmasq` on `192.168.122.1:53`,
+which blocks Docker from binding `0.0.0.0:53` — either disable that libvirt network or bind the DNS ports to the NAS's
+LAN address.
 
 DNS server and DHCP-capable ad-blocker. Binds privileged DNS/DHCP ports on the host; the admin UI is remapped to host
 port `8053` to avoid colliding with other web services. `FTLCONF_webserver_api_password` is sourced from the environment

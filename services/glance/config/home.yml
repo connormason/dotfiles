@@ -1,5 +1,3 @@
----
-
 - name: Home
   # Optionally, if you only have a single page you can hide the desktop navigation for a cleaner look
   # hide-desktop-navigation: true

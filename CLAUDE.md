@@ -40,6 +40,8 @@ decrypted secrets.
 
 [`archive/ansible-macos/`](archive/ansible-macos/README.md) is the frozen pre-stow Ansible macOS setup, kept for
 reference. It is not maintained and is skipped by the lint tooling; do not edit it or treat it as active configuration.
+[`archive/homeassistant/`](archive/homeassistant/README.md) likewise holds the retired YAML Home Assistant config; the
+live instance is configured through the HA UI.
 
 ## Plans & Docs
 
