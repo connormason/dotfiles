@@ -68,6 +68,7 @@ for i in ${TOOL_NAMES[@]+"${!TOOL_NAMES[@]}"}; do
         log "installing uv tool: ${TOOL_ARGS[$i]}"
         # shellcheck disable=SC2086
         run uv tool install ${TOOL_ARGS[$i]}
+        note_change "installed uv tool $tool"
     fi
 done
 log "python OK"

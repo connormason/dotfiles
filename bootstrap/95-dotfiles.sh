@@ -48,6 +48,7 @@ else
             sh -c "$omz_installer" "" --unattended --keep-zshrc
         [ -f "$OMZ_DIR/oh-my-zsh.sh" ] || die "oh-my-zsh install did not produce $OMZ_DIR/oh-my-zsh.sh"
     fi
+    note_change "installed oh-my-zsh"
 fi
 
 # oh-my-zsh custom plugins the shell package uses that do NOT ship with oh-my-zsh: alias-tips (in the 10-omz.zsh
@@ -66,6 +67,7 @@ for entry in "${OMZ_CUSTOM_PLUGINS[@]}"; do
     else
         log "cloning omz plugin $name into $dest"
         run git clone --depth 1 "$url" "$dest"
+        note_change "cloned omz plugin $name"
     fi
 done
 log "dotfiles OK"

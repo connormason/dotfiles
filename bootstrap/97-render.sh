@@ -21,7 +21,10 @@ if [ "${BOOTSTRAP_DRY_RUN}" = "1" ]; then
     python3 "$RENDER" --check || rc=$?
     case "$rc" in
     0) log "rendered settings already in sync" ;;
-    1) warn "rendered settings out of sync; a real run renders them (preview with: run.py render --diff)" ;;
+    1)
+        warn "rendered settings out of sync; a real run renders them (preview with: run.py render --diff)"
+        note_change "render: settings out of sync"
+        ;;
     *) warn "render --check failed (exit $rc): a real run would fail this stage" ;;
     esac
     log "render OK"
@@ -29,8 +32,15 @@ if [ "${BOOTSTRAP_DRY_RUN}" = "1" ]; then
 fi
 
 # render.py exit codes: 0 ok, 1 drift refused (an in-app edit since the last render), 2 bad fragment/registry or I/O.
+# render.py prints "<target>: rendered <path>" for every file it actually writes; that is the change signal
 rc=0
-run python3 "$RENDER" || rc=$?
+out="$(run python3 "$RENDER")" || rc=$?
+if [ -n "$out" ]; then
+    printf '%s\n' "$out"
+fi
+case "$out" in
+*': rendered '*) note_change "render: wrote settings" ;;
+esac
 case "$rc" in
 0) log "render OK" ;;
 1)
