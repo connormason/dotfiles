@@ -68,3 +68,31 @@ class TestDarwinLayout:
         if os.environ.get('DOTFILES_UPDATE_GOLDEN') == '1':
             pytest.skip('golden files are being rewritten')
         check_golden('darwin-links.txt', linked_paths(tmp_path, 'darwin'))
+
+
+# Paths the base layer links on darwin only (prefix match against the darwin golden file)
+DARWIN_ONLY: tuple[str, ...] = (
+    '.hammerspoon/',
+    '.config/iterm2/',
+    '.config/zsh/conf.d/30-iterm2.zsh',
+    'Library/Application Support/Code/',
+)
+
+# Paths the base layer links on linux only
+LINUX_ONLY: tuple[str, ...] = ()
+
+
+class TestLinuxLayout:
+    """
+    Tests deriving the linux link set from the darwin golden file
+    """
+    def test_linux_links_are_darwin_minus_macos_packages(self, tmp_path: Path) -> None:
+        """
+        Test that linux links the darwin set minus macOS-only paths, plus linux-only paths
+        """
+        if os.environ.get('DOTFILES_UPDATE_GOLDEN') == '1':
+            pytest.skip('golden files are being rewritten')
+
+        darwin   = (REPO_ROOT / 'tests' / 'fixtures' / 'os_layout' / 'darwin-links.txt').read_text('utf-8').splitlines()
+        expected = sorted([path for path in darwin if not path.startswith(DARWIN_ONLY)] + list(LINUX_ONLY))
+        assert linked_paths(tmp_path, 'linux') == expected

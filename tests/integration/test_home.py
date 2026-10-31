@@ -194,6 +194,8 @@ def home(tmp_path_factory: pytest.TempPathFactory) -> Home:
         'XDG_CONFIG_HOME':     str(path / '.config'),
         'XDG_STATE_HOME':      str(path / '.local' / 'state'),
         'XDG_DATA_HOME':       str(path / '.local' / 'share'),
+        # the module asserts the macOS layout (hammerspoon, iterm2, vscode); test_os_layout.py covers Linux
+        'DOTFILES_OS':         'darwin',
     }
     result = Home(path, env)
 

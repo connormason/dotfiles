@@ -20,9 +20,9 @@ enforces both directions, and also that the conf.d column matches the `.config/z
 | `claude`      | `~/.claude`: `CLAUDE.md`, rules, hooks, scripts, agents, commands, skills, and plugin config                                   | `32-claude.zsh`                                                                                                             |
 | `fzf`         | fzf shell integration (snippet only)                                                                                           | `36-fzf.zsh`                                                                                                                |
 | `git`         | `~/.gitconfig`, global ignore, personal identity, `gh` config, worktrunk config, git-template pre-commit hook                  | `40-git.zsh`                                                                                                                |
-| `hammerspoon` | `~/.hammerspoon/init.lua` and the ReloadConfiguration, SpoonInstall, and WifiNotifier Spoons                                   | —                                                                                                                           |
+| `hammerspoon` | `~/.hammerspoon/init.lua` and the ReloadConfiguration, SpoonInstall, and WifiNotifier Spoons (macOS only)                      | —                                                                                                                           |
 | `homebrew`    | Homebrew environment in zsh (snippet only)                                                                                     | `05-homebrew.zsh`                                                                                                           |
-| `iterm2`      | iTerm2 preferences plist in `~/.config/iterm2`                                                                                 | `30-iterm2.zsh`                                                                                                             |
+| `iterm2`      | iTerm2 preferences plist in `~/.config/iterm2` (macOS only)                                                                    | `30-iterm2.zsh`                                                                                                             |
 | `node`        | bun install location and `PATH` entry (snippet only)                                                                           | `44-node.zsh`                                                                                                               |
 | `os_tools`    | btop, eza, fastfetch, htop, ranger, and sshm configuration                                                                     | `49-os_tools.zsh`, `90-banner.zsh`                                                                                          |
 | `python`      | IPython startup script, hatch config, and Python shell aliases                                                                 | `42-python.zsh`                                                                                                             |
@@ -30,13 +30,21 @@ enforces both directions, and also that the conf.d column matches the `.config/z
 | `ssh`         | `~/.ssh/config` and `~/.ssh/config.d/personal`                                                                                 | `60-ssh-aliases.zsh`                                                                                                        |
 | `starship`    | `~/.config/starship.toml`                                                                                                      | `80-starship.zsh`                                                                                                           |
 | `tmux`        | `~/.config/tmux/tmux.conf` and `tmux.conf.local`                                                                               | `46-tmux.zsh`                                                                                                               |
-| `vscode`      | VS Code `keybindings.json` and the snippets directory                                                                          | —                                                                                                                           |
+| `vscode`      | VS Code `keybindings.json` and the snippets directory (macOS only)                                                             | —                                                                                                                           |
 | `zed`         | `~/.config/zed/settings.json`                                                                                                  | —                                                                                                                           |
 | `zoxide`      | zoxide shell integration (snippet only)                                                                                        | `38-zoxide.zsh`                                                                                                             |
 
 Settings files that apps rewrite at runtime (`~/.claude/settings.json`, VS Code `settings.json`) are not stowed; they
 are rendered from [`render/`](../render/) fragments by [`scripts/dotfiles/render.py`](../scripts/dotfiles/README.md),
 and `stow.sh` refuses any package that provides a render target.
+
+## OS-specific packages
+
+A package that applies only to some operating systems carries a `.dotfiles-os` file at its root listing the OS ids it
+applies to (`darwin`, `linux`), one per line; `#` starts a comment. `stow.sh` skips packages whose marker excludes the
+current OS (`bootstrap/lib.sh` `dotfiles_os`, overridable with `DOTFILES_OS`): they are not linked, not listed by
+`--list`, and not part of the ownership check, so a `<tool>-darwin` and a `<tool>-linux` package may provide the same
+path. Package names stay unique across every layer regardless of markers. Packages without a marker apply everywhere.
 
 ## Git identity
 
