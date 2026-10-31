@@ -40,7 +40,8 @@ QEMU guest-agent channel, autostart on. Override via the environment variables d
 ## Fresh install<a name="fresh-install"></a>
 
 Both scripts are idempotent and accept `--dry-run`, which prints every mutating command without running it (and works
-without sudo).
+without sudo). `setup.sh` ends with `haos: changes=N`, the number of changes it made (or, under `--dry-run`, would
+make).
 
 1. **Bridge the uplink.** Run from the local console or inside `tmux`, since the network blips for a few seconds:
 
