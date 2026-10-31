@@ -89,7 +89,7 @@ package_os_ok() {
         fi
         case "$line" in
         darwin | linux) ;;
-        *) die "unknown OS '$line' in $marker (expected darwin or linux)" ;;
+        *) die "unknown OS '$line' in $marker (expected darwin or linux, one per line)" ;;
         esac
         any=1
         if [ "$line" = "$CURRENT_OS" ]; then

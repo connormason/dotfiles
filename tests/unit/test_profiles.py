@@ -16,7 +16,13 @@ PROFILE       = REPO_ROOT / 'profiles' / 'personal-mac'
 BASE_BREWFILE = REPO_ROOT / 'bootstrap' / 'Brewfile'
 
 # Inherited variables that would leak the developer's own configuration into the tests
-_SCRUBBED_VARS = ('DOTFILES_REPO', 'DOTFILES_BREW_PREFIXES', 'DOTFILES_LEAK_PATTERNS', 'DOTFILES_OVERLAYS_FILE')
+_SCRUBBED_VARS = (
+    'DOTFILES_REPO',
+    'DOTFILES_BREW_PREFIXES',
+    'DOTFILES_LEAK_PATTERNS',
+    'DOTFILES_OS',
+    'DOTFILES_OVERLAYS_FILE',
+)
 
 # `<kind> "<name>"` as written in a Brewfile (taps, formulae, casks, mas apps)
 _ENTRY = re.compile(r'^\s*(tap|brew|cask|mas)\s+"([^"]+)"')

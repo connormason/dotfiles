@@ -31,7 +31,8 @@ PINNED_SHA = re.compile(r'^BREW_INSTALLER_SHA256="([0-9a-f]{64})"', re.MULTILINE
 # The pinned installer URL assignment in the stage; group 1 is the URL
 PINNED_URL = re.compile(r'^BREW_INSTALLER_URL="([^"]+)"$', re.MULTILINE)
 
-# Replaces ensure_brew_on_path so the stage never discovers a real Homebrew in /opt/homebrew or /usr/local
+# Replaces ensure_brew_on_path so the stage never discovers a real Homebrew in /opt/homebrew, /usr/local or
+# /home/linuxbrew/.linuxbrew
 ENV_OVERRIDE = (
     'ensure_brew_on_path() {\n'
     '    PATH="$PATH:$SANDBOX_PREFIX/bin"\n'

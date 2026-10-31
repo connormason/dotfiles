@@ -12,8 +12,8 @@ source "$HERE/lib.sh"
 OS_RELEASE="${DOTFILES_OS_RELEASE:-/etc/os-release}"
 
 # Commands the Linux engine needs from the system: Homebrew's build prerequisites (build-essential, procps, curl, file,
-# git) plus zsh for the stowed shell
-LINUX_PREREQS=(curl file git cc make ps zsh)
+# git) plus zsh for the stowed shell and python3 for 97-render
+LINUX_PREREQS=(curl file git cc make ps zsh python3)
 
 preflight_darwin() {
     log "macOS $(sw_vers -productVersion) on $(uname -m)"
@@ -50,7 +50,7 @@ preflight_linux() {
     done
     if [ -n "$missing" ]; then
         msg="missing system commands:$missing (install them with the NAS 'debian' Ansible role, or: sudo apt-get"
-        msg="$msg install build-essential procps curl file git zsh)"
+        msg="$msg install build-essential procps curl file git zsh python3)"
         if [ "${BOOTSTRAP_DRY_RUN}" = "1" ]; then
             warn "$msg"
         else

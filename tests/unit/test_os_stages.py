@@ -29,7 +29,7 @@ DEBIAN_RELEASE = 'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\nID=debian\n'
 UBUNTU_RELEASE = 'PRETTY_NAME="Ubuntu 24.04 LTS"\nID=ubuntu\nID_LIKE=debian\n'
 FEDORA_RELEASE = 'PRETTY_NAME="Fedora Linux 41"\nID=fedora\n'
 
-LINUX_PREREQS: tuple[str, ...] = ('curl', 'file', 'git', 'cc', 'make', 'ps', 'zsh')
+LINUX_PREREQS: tuple[str, ...] = ('curl', 'file', 'git', 'cc', 'make', 'ps', 'zsh', 'python3')
 
 
 @pytest.fixture

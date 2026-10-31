@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import os
 import platform
+import re
 import shutil
 import subprocess
 from collections.abc import Callable
@@ -505,6 +506,26 @@ class TestEnsureBrewOnPath:
         result = bash('printf "%s" "$PATH"', environ)
         assert result.returncode == 0
         assert result.stdout == f'/usr/bin:/bin:{prefix}/bin:{prefix}/sbin'
+
+
+class TestBrewPrefixSync:
+    """
+    Tests that the Homebrew default prefix lists in bootstrap/lib.sh and the stowed zsh config stay identical
+    """
+    # The default prefixes follow `${DOTFILES_BREW_PREFIXES...}` on the `for` line; group 1 captures them
+    LIB_LOOP = re.compile(r'^\s*for prefix in \$\{DOTFILES_BREW_PREFIXES:-\}((?: /\S+)+); do$', re.MULTILINE)
+    ZSH_LOOP = re.compile(r'^\s*for _prefix in \$\{=DOTFILES_BREW_PREFIXES:-\}((?: /\S+)+); do$', re.MULTILINE)
+    ZSH_FILE = REPO_ROOT / 'stow' / 'homebrew' / '.config' / 'zsh' / 'conf.d' / '05-homebrew.zsh'
+
+    def test_default_prefixes_are_identical(self) -> None:
+        """
+        Test that lib.sh and 05-homebrew.zsh probe the same default prefixes in the same order
+        """
+        lib_match = self.LIB_LOOP.search(LIB.read_text(encoding='utf-8'))
+        zsh_match = self.ZSH_LOOP.search(self.ZSH_FILE.read_text(encoding='utf-8'))
+        assert lib_match is not None, 'ensure_brew_on_path prefix loop not found in lib.sh'
+        assert zsh_match is not None, 'prefix loop not found in 05-homebrew.zsh'
+        assert lib_match.group(1).split() == zsh_match.group(1).split()
 
 
 class TestRun:
