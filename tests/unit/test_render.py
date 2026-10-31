@@ -27,6 +27,7 @@ _SCRUBBED_VARS: tuple[str, ...] = (
     'DOTFILES_BREW_PREFIXES',
     'DOTFILES_LEAK_PATTERNS',
     'DOTFILES_OVERLAYS_FILE',
+    'DOTFILES_OS',
 )
 
 
@@ -54,6 +55,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     """
     for var in _SCRUBBED_VARS:
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv('DOTFILES_OS', 'darwin')
 
     repo = tmp_path / 'repo'
     (repo / 'bootstrap').mkdir(parents=True)
@@ -703,3 +705,76 @@ class TestUnexpectedErrors:
         err = capsys.readouterr().err
         assert 'render: ERROR: unexpected RuntimeError: kaboom' in err
         assert 'Traceback'                                  not in err
+
+
+class TestOsTargets:
+    """
+    Tests for OS-scoped render targets
+    """
+    @staticmethod
+    def _vscode(world: dict[str, Path]) -> Path:
+        """
+        Path of the rendered VS Code settings in the fixture HOME
+        """
+        return world['home'] / 'Library' / 'Application Support' / 'Code' / 'User' / 'settings.json'
+
+    def test_vscode_is_skipped_on_linux(self, world: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that a default render on linux writes claude settings but not the macOS-only vscode target
+        """
+        monkeypatch.setenv('DOTFILES_OS', 'linux')
+        _fragment(world['repo'], 'claude', {'a': 1})
+        _fragment(world['repo'], 'vscode', {'b': 2})
+
+        assert _run(world) == 0
+        assert _claude(world).exists()
+        assert not (world['home'] / 'Library').exists()
+
+    def test_vscode_renders_on_darwin(self, world: dict[str, Path]) -> None:
+        """
+        Test that the vscode target still renders on darwin
+        """
+        _fragment(world['repo'], 'vscode', {'b': 2})
+        assert _run(world) == 0
+        assert json.loads(self._vscode(world).read_text(encoding='utf-8')) == {'b': 2}
+
+    def test_explicit_foreign_target_is_config_error(
+        self,
+        world: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that naming a target that does not apply to this OS exits 2 with an explanation
+        """
+        monkeypatch.setenv('DOTFILES_OS', 'linux')
+        assert _run(world, 'vscode') == 2
+        assert 'target(s) not available on linux: vscode' in capsys.readouterr().err
+
+    def test_list_targets_ignores_the_os(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that --list-targets prints every target on linux, so stow ownership does not depend on the OS
+        """
+        monkeypatch.setenv('DOTFILES_OS', 'linux')
+        assert render.main(['--list-targets']) == 0
+        assert capsys.readouterr().out.splitlines() == [
+            '.claude/settings.json',
+            'Library/Application Support/Code/User/settings.json',
+        ]
+
+    def test_invalid_os_override_is_config_error(
+        self,
+        world: dict[str, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that an invalid DOTFILES_OS exits 2 naming the allowed values
+        """
+        monkeypatch.setenv('DOTFILES_OS', 'plan9')
+        assert _run(world) == 2
+        assert 'DOTFILES_OS must be darwin or linux' in capsys.readouterr().err

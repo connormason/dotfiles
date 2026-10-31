@@ -49,6 +49,11 @@ TARGETS: dict[str, str] = {
     'vscode': '~/Library/Application Support/Code/User/settings.json',
 }
 
+# Operating systems each target exists on (absent: every OS). VS Code keeps user settings under ~/Library only on macOS.
+TARGET_OS: dict[str, frozenset[str]] = {
+    'vscode': frozenset({'darwin'}),
+}
+
 
 # ===============
 # Types/protocols
@@ -106,6 +111,30 @@ def error(message: str) -> None:
 # =================
 # Core script logic
 # =================
+
+
+def current_os() -> str:
+    """
+    Get the engine's OS id, honoring DOTFILES_OS like bootstrap/lib.sh's dotfiles_os.
+
+    :raises RenderError: if the platform is unsupported or DOTFILES_OS is invalid
+    :return: ``darwin`` or ``linux``
+    """
+    value = os.environ.get('DOTFILES_OS') or {'darwin': 'darwin', 'linux': 'linux'}.get(sys.platform, '')
+    if value not in ('darwin', 'linux'):
+        raise RenderError(f'unsupported OS {value or sys.platform!r}: DOTFILES_OS must be darwin or linux')
+    return value
+
+
+def applies(target: str, os_name: str) -> bool:
+    """
+    Check whether a target exists on an operating system.
+
+    :param target: target id from :data:`TARGETS`
+    :param os_name: ``darwin`` or ``linux``
+    :return: True if the target is rendered on that OS
+    """
+    return os_name in TARGET_OS.get(target, frozenset({os_name}))
 
 
 def canonical(value: object) -> str:
@@ -576,6 +605,20 @@ def _main(argv: Sequence[str] | None) -> int:
         for target in targets:
             print(TARGETS[target].removeprefix('~/'))
         return 0
+
+    try:
+        os_name = current_os()
+    except RenderError as exc:
+        error(str(exc))
+        return 2
+
+    if args.targets:
+        foreign = [t for t in targets if not applies(t, os_name)]
+        if foreign:
+            error(f'target(s) not available on {os_name}: {", ".join(foreign)}')
+            return 2
+    else:
+        targets = [t for t in targets if applies(t, os_name)]
 
     try:
         roots    = layers(Path(args.repo))
