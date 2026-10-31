@@ -68,7 +68,8 @@ The engine runs on macOS and on Debian-family Linux with Homebrew (Linuxbrew) in
 `require_os <os>...` right after sourcing `lib.sh`; elsewhere it logs the skip and exits 0. On Linux the engine never
 runs `apt` or `sudo`: the driver does not prime sudo, and `00-preflight` fails (warns under `--dry-run`) when a system
 command is missing. Stow packages opt into an OS with a `.dotfiles-os` marker (see
-[`stow/README.md`](../stow/README.md)); Brewfile entries that exist only on macOS sit inside `if OS.mac?`.
+[`stow/README.md`](../stow/README.md)); Brewfile entries that exist only on macOS, or that must not shadow the NAS's
+system packages, sit inside `if OS.mac?`.
 
 ## Stages
 

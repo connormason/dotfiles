@@ -59,8 +59,9 @@ class TestDarwinBrewfile:
         check_golden('brewfile-darwin-formulae.txt', bundle_list('--formula'))
 
 
-# Formulae that exist only on macOS; they live inside the Brewfile's `if OS.mac?` block
-DARWIN_ONLY_FORMULAE = frozenset({'mas'})
+# Formulae that exist only on macOS, or that must not shadow the NAS's apt packages / need a desktop; they live inside
+# the Brewfile's `if OS.mac?` block
+DARWIN_ONLY_FORMULAE = frozenset({'docker', 'docker-compose', 'mas', 'mermaid-cli'})
 
 
 @pytest.mark.skipif(sys.platform != 'linux', reason='linux resolution')
