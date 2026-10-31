@@ -46,7 +46,8 @@ terminal lacks Full Disk Access. The earlier comment attributed the failure to a
   PR #28 (rows 1, 3).
 - **Q8 (`defaults export` safety copy):** none was taken. Preference changes from `60-macos` and `96-iterm2` still have
   no automatic restore point. Decision: add a scripted `defaults export` of the domains `60-macos` writes, with a
-  matching restore path. Tracked as a follow-up; not part of this change.
+  matching restore path. Built afterwards as stage `58-defaults-backup` plus `bootstrap/defaults-restore.sh`; it covers
+  the domains of both `60-macos` and `96-iterm2` (see `bootstrap/README.md`, "Undoing preference changes").
 - **Q9 (how Claude Code is installed):** an npm global install plus a stale native install (2.0.67) both existed. The
   `claude-code` cask stays in `personal-mac` and is the only install.
 
@@ -70,8 +71,27 @@ including right after a reboot, and record what prints.
    (spec Clarification 1).
 2. Use VS Code for a few days with `python3 run.py render --check vscode` daily; record whether VS Code rewrites its
    settings (Clarification 2).
-3. Probe `--settings` layering as written in B5.3 (Clarification 3).
+3. ~~Probe `--settings` layering as written in B5.3 (Clarification 3).~~ Done; see "B5.3 results" below.
 4. Reproduce and root-cause the intermittent 109-byte startup output.
-5. Scripted `defaults export` backup for `60-macos` (Q8).
+5. ~~Scripted `defaults export` backup for `60-macos` (Q8).~~ Done: stage `58-defaults-backup`.
+
+## B5.3 results: `--settings` layering
+
+Run on 2026-10-31 in a terminal outside Claude Code (Claude Code 2.1.309): a project `.claude/settings.json` with
+`env.LAYER_PROJ=project` and a `SessionStart` hook, plus `overlay.json` with `env.LAYER_OVERLAY=overlay`,
+`env.LAYER_PROJ=overlay` and its own `SessionStart` hook, via `claude -p "Reply OK" --settings overlay.json`.
+`out.txt` afterwards:
+
+```text
+project-hook
+overlay-hook
+LAYER_OVERLAY=overlay
+LAYER_PROJ=overlay
+```
+
+- **Hooks:** both the project hook and the `--settings` hook ran, so hooks from the two sources add.
+- **`env`:** the `--settings` value won for the shared key (`LAYER_PROJ=overlay`), and the key set only by the overlay
+  was present. This is what the hook process saw; the probe did not check the environment of the session's tools.
+- **Design impact:** none; the spec's Clarification 3 is closed.
 
 Phases C and D are planned in the work repository.

@@ -68,27 +68,45 @@ command is missing. Stow packages opt into an OS with a `.dotfiles-os` marker (s
 Base stages, in run order. Overlays interleave their own stages by number. Every mutation goes through `run`/`try`, so
 `--dry-run` prints it instead; the exceptions are read-only previews noted below.
 
-| Stage        | Purpose                                                                                                                                                   | Layer |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| 00-preflight | macOS: Command Line Tools present. Linux: Debian family and the system commands `curl file git cc make ps zsh python3` (fatal; warning under `--dry-run`) | base  |
-| 20-ssh-key   | `~/.ssh` (mode 700) and an ed25519 key; if `ssh -T git@github.com` fails, print the key to register                                                       | base  |
-| 50-brew      | Install Homebrew if absent (checksum-verified installer), then `brew bundle` each layer's `Brewfile`                                                      | base  |
-| 60-macos     | macOS preferences (`defaults write`, `chflags`), then restart Dock/Finder/SystemUIServer (macOS only)                                                     | base  |
-| 72-vscode    | Install missing VS Code extensions from the union of every layer's `vscode-extensions.txt` (macOS only)                                                   | base  |
-| 80-repos     | Clone each `name url` line of every layer's `repos.txt` into `$HOME/<name>` unless that path exists                                                       | base  |
-| 90-python    | Install missing uv tools from every layer's `uv-tools.txt` (a later layer's line replaces the earlier one)                                                | base  |
-| 95-dotfiles  | `stow.sh --backup-conflicts` (dry run: `stow.sh -n` preview), oh-my-zsh, and its custom plugins                                                           | base  |
-| 96-iterm2    | Point iTerm2 at the stowed prefs folder `~/.config/iterm2`, which 95-dotfiles creates (macOS only)                                                        | base  |
-| 97-render    | `render.py`: 0 ok, 1 drift refused (warn), 2 config/I/O error (fail); dry run: `render.py --check`, warn only                                             | base  |
+| Stage              | Purpose                                                                                                                                                       | Layer |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| 00-preflight       | macOS: Command Line Tools present. Linux: Debian family and the system commands `curl file git cc make ps zsh python3` (fatal; warning under `--dry-run`)     | base  |
+| 20-ssh-key         | `~/.ssh` (mode 700) and an ed25519 key; if `ssh -T git@github.com` fails, print the key to register                                                           | base  |
+| 50-brew            | Install Homebrew if absent (checksum-verified installer), then `brew bundle` each layer's `Brewfile`                                                          | base  |
+| 58-defaults-backup | Snapshot the preference domains in `defaults-domains.txt` to `~/.dotfiles-backup/defaults-<timestamp>/` before 60-macos and 96-iterm2 write them (macOS only) | base  |
+| 60-macos           | macOS preferences (`defaults write`, `chflags`), then restart Dock/Finder/SystemUIServer (macOS only)                                                         | base  |
+| 72-vscode          | Install missing VS Code extensions from the union of every layer's `vscode-extensions.txt` (macOS only)                                                       | base  |
+| 80-repos           | Clone each `name url` line of every layer's `repos.txt` into `$HOME/<name>` unless that path exists                                                           | base  |
+| 90-python          | Install missing uv tools from every layer's `uv-tools.txt` (a later layer's line replaces the earlier one)                                                    | base  |
+| 95-dotfiles        | `stow.sh --backup-conflicts` (dry run: `stow.sh -n` preview), oh-my-zsh, and its custom plugins                                                               | base  |
+| 96-iterm2          | Point iTerm2 at the stowed prefs folder `~/.config/iterm2`, which 95-dotfiles creates (macOS only)                                                            | base  |
+| 97-render          | `render.py`: 0 ok, 1 drift refused (warn), 2 config/I/O error (fail); dry run: `render.py --check`, warn only                                                 | base  |
+
+### Undoing preference changes
+
+`58-defaults-backup` runs before both stages that write preferences and saves one plist per domain plus a
+`MANIFEST.tsv`. Domains that did not exist (or that macOS privacy protection hides, such as `com.apple.mail` without
+Full Disk Access) are recorded as `absent`. Restore with [`defaults-restore.sh`](defaults-restore.sh):
+
+```sh
+bootstrap/defaults-restore.sh --list              # snapshots, oldest first
+bootstrap/defaults-restore.sh --dry-run           # preview restoring the oldest snapshot
+bootstrap/defaults-restore.sh [SNAPSHOT_DIR]      # default: the oldest, i.e. the state before the first bootstrap
+```
+
+`defaults import` replaces a whole domain, so anything changed in these domains after the snapshot is lost as well, and
+`absent` domains are deleted. Quit iTerm2 first, since it rewrites its preferences on exit. `DEFAULTS_BACKUP_DIR`
+relocates the backup root. The stage does not cover `chflags` changes or the Dock/Finder restarts.
 
 ## Manifests
 
-| File                                             | Format                                                       | Read by     |
-| ------------------------------------------------ | ------------------------------------------------------------ | ----------- |
-| [`Brewfile`](Brewfile)                           | `brew bundle` syntax; macOS-only entries inside `if OS.mac?` | `50-brew`   |
-| [`vscode-extensions.txt`](vscode-extensions.txt) | One `publisher.name` extension ID per line                   | `72-vscode` |
-| [`repos.txt`](repos.txt)                         | `name url`, separated by spaces or tabs                      | `80-repos`  |
-| [`uv-tools.txt`](uv-tools.txt)                   | Package name, optionally followed by `uv tool install` flags | `90-python` |
+| File                                             | Format                                                       | Read by                     |
+| ------------------------------------------------ | ------------------------------------------------------------ | --------------------------- |
+| [`Brewfile`](Brewfile)                           | `brew bundle` syntax; macOS-only entries inside `if OS.mac?` | `50-brew`                   |
+| [`vscode-extensions.txt`](vscode-extensions.txt) | One `publisher.name` extension ID per line                   | `72-vscode`                 |
+| [`repos.txt`](repos.txt)                         | `name url`, separated by spaces or tabs                      | `80-repos`                  |
+| [`uv-tools.txt`](uv-tools.txt)                   | Package name, optionally followed by `uv tool install` flags | `90-python`                 |
+| [`defaults-domains.txt`](defaults-domains.txt)   | One preference domain per line (absolute path = file domain) | `58-defaults-backup`, tests |
 
-`#` starts a comment in the three text manifests. Each stage reads the base copy first, then every overlay's copy in
-layer order.
+`#` starts a comment in the text manifests. Except for `defaults-domains.txt`, which is base-only, each stage reads the
+base copy first, then every overlay's copy in layer order.
