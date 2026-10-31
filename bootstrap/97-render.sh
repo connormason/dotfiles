@@ -8,7 +8,12 @@ REPO="$(cd "$HERE/.." && pwd)"
 source "$HERE/lib.sh"
 
 RENDER="$REPO/scripts/dotfiles/render.py"
-have python3 || die "python3 required to render settings (install the Xcode Command Line Tools)"
+if ! have python3; then
+    case "$(dotfiles_os)" in
+    darwin) die "python3 required to render settings (install the Xcode Command Line Tools)" ;;
+    *) die "python3 required to render settings (install it via the system packages or the NAS 'debian' Ansible role)" ;;
+    esac
+fi
 
 # Dry run: `render.py --check` writes nothing; report drift (exit 1) or errors (exit 2) without failing the stage.
 if [ "${BOOTSTRAP_DRY_RUN}" = "1" ]; then

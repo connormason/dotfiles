@@ -14,6 +14,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh disable=SC1091
 source "$HERE/lib.sh"
+require_os darwin
 
 # Close System Settings so it does not override changes.
 run osascript -e 'tell application "System Settings" to quit' || true

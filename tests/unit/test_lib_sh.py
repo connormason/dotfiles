@@ -3,7 +3,11 @@ Unit tests for bootstrap/lib.sh
 """
 from __future__ import annotations
 
+import hashlib
 import os
+import platform
+import re
+import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -14,7 +18,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LIB       = REPO_ROOT / 'bootstrap' / 'lib.sh'
 
 # Inherited variables that would leak the developer's own configuration into the tests
-_SCRUBBED_VARS = ('DOTFILES_REPO', 'DOTFILES_BREW_PREFIXES', 'DOTFILES_LEAK_PATTERNS', 'DOTFILES_OVERLAYS_FILE')
+_SCRUBBED_VARS = (
+    'DOTFILES_REPO',
+    'DOTFILES_BREW_PREFIXES',
+    'DOTFILES_LEAK_PATTERNS',
+    'DOTFILES_OS',
+    'DOTFILES_OVERLAYS_FILE',
+)
 
 BashRunner = Callable[..., 'subprocess.CompletedProcess[str]']
 
@@ -342,6 +352,89 @@ class TestLayerEnv:
         assert counter.read_text(encoding='utf-8') == 'x'
 
 
+class TestDotfilesOs:
+    """
+    Tests for dotfiles_os
+    """
+    @pytest.mark.parametrize('value', ['darwin', 'linux'])
+    def test_override_is_honored(self, bash: BashRunner, env: dict[str, str], value: str) -> None:
+        """
+        Test that DOTFILES_OS overrides detection
+        """
+        result = bash('dotfiles_os', {**env, 'DOTFILES_OS': value})
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == f'{value}\n'
+
+    def test_invalid_override_fails(self, bash: BashRunner, env: dict[str, str]) -> None:
+        """
+        Test that an unknown DOTFILES_OS value is fatal and named in the error
+        """
+        result = bash('dotfiles_os', {**env, 'DOTFILES_OS': 'macos'})
+        assert result.returncode != 0
+        assert "DOTFILES_OS must be darwin or linux (got 'macos')" in result.stderr
+
+    def test_detects_the_host(self, bash: BashRunner) -> None:
+        """
+        Test that detection without an override maps uname -s to the engine's OS id
+        """
+        expected = {'Darwin': 'darwin', 'Linux': 'linux'}[platform.system()]
+        assert bash('dotfiles_os').stdout == f'{expected}\n'
+
+
+class TestRequireOs:
+    """
+    Tests for require_os
+    """
+    def test_listed_os_continues(self, bash: BashRunner, env: dict[str, str]) -> None:
+        """
+        Test that a listed OS returns and the script carries on
+        """
+        result = bash('require_os darwin linux; echo after', {**env, 'DOTFILES_OS': 'linux'})
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines()[-1] == 'after'
+
+    def test_unlisted_os_exits_cleanly(self, bash: BashRunner, env: dict[str, str]) -> None:
+        """
+        Test that an unlisted OS logs the skip and exits 0 before the rest of the script
+        """
+        result = bash('require_os darwin; echo after', {**env, 'DOTFILES_OS': 'linux'})
+        assert result.returncode == 0, result.stderr
+        assert 'skipped (darwin only; this is linux)' in result.stdout
+        assert 'after' not in result.stdout
+
+
+class TestSha256Of:
+    """
+    Tests for sha256_of
+    """
+    def test_digest_matches(self, bash: BashRunner, tmp_path: Path) -> None:
+        """
+        Test that the digest is correct with the host's tools (shasum on macOS)
+        """
+        payload = tmp_path / 'payload'
+        payload.write_bytes(b'hello\n')
+
+        result = bash(f'sha256_of "{payload}"')
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == hashlib.sha256(b'hello\n').hexdigest()
+
+    def test_falls_back_to_sha256sum(self, bash: BashRunner, tmp_path: Path) -> None:
+        """
+        Test that the digest is correct when shasum is absent (Debian without perl) and only sha256sum remains
+        """
+        if shutil.which('sha256sum') is None:
+            pytest.skip('sha256sum not installed')
+
+        payload = tmp_path / 'payload'
+        payload.write_bytes(b'hello\n')
+
+        # Hide shasum from `have` rather than from PATH: lib.sh appends a Homebrew prefix, and Homebrew's perl ships one
+        script = f'have() {{ [ "$1" != shasum ] && command -v "$1" >/dev/null 2>&1; }}\nsha256_of "{payload}"'
+        result = bash(script)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == hashlib.sha256(b'hello\n').hexdigest()
+
+
 class TestEnsureBrewOnPath:
     """
     Tests for ensure_brew_on_path
@@ -393,7 +486,8 @@ class TestEnsureBrewOnPath:
         """
         Test that DOTFILES_BREW_PREFIXES adds to the default prefixes instead of replacing them
         """
-        default = next((p for p in ('/opt/homebrew', '/usr/local') if (Path(p) / 'bin' / 'brew').exists()), None)
+        defaults = ('/opt/homebrew', '/usr/local', '/home/linuxbrew/.linuxbrew')
+        default  = next((p for p in defaults if (Path(p) / 'bin' / 'brew').exists()), None)
         if default is None:
             pytest.skip('no default Homebrew prefix on this machine')
 
@@ -412,6 +506,27 @@ class TestEnsureBrewOnPath:
         result = bash('printf "%s" "$PATH"', environ)
         assert result.returncode == 0
         assert result.stdout == f'/usr/bin:/bin:{prefix}/bin:{prefix}/sbin'
+
+
+class TestBrewPrefixSync:
+    """
+    Tests that the Homebrew default prefix lists in bootstrap/lib.sh and the stowed zsh config stay identical
+    """
+    # The default prefixes follow `${DOTFILES_BREW_PREFIXES...}` on the `for` line; group 1 captures them
+    LIB_LOOP = re.compile(r'^\s*for prefix in \$\{DOTFILES_BREW_PREFIXES:-\}((?: /\S+)+); do$',   re.MULTILINE)
+    ZSH_LOOP = re.compile(r'^\s*for _prefix in \$\{=DOTFILES_BREW_PREFIXES:-\}((?: /\S+)+); do$', re.MULTILINE)
+    ZSH_FILE = REPO_ROOT / 'stow' / 'homebrew' / '.config' / 'zsh' / 'conf.d' / '05-homebrew.zsh'
+
+    def test_default_prefixes_are_identical(self) -> None:
+        """
+        Test that lib.sh and 05-homebrew.zsh probe the same default prefixes in the same order
+        """
+        lib_match = self.LIB_LOOP.search(LIB.read_text(encoding='utf-8'))
+        zsh_match = self.ZSH_LOOP.search(self.ZSH_FILE.read_text(encoding='utf-8'))
+
+        assert lib_match is not None, 'ensure_brew_on_path prefix loop not found in lib.sh'
+        assert zsh_match is not None, 'prefix loop not found in 05-homebrew.zsh'
+        assert lib_match.group(1).split() == zsh_match.group(1).split()
 
 
 class TestRun:
@@ -439,5 +554,5 @@ class TestRun:
         """
         Test that have reports PATH presence
         """
-        assert bash('have bash').returncode == 0
+        assert bash('have bash').returncode                         == 0
         assert bash('have definitely-not-a-command-xyz').returncode != 0

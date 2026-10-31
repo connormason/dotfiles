@@ -2,6 +2,7 @@
 #
 # 50-brew runs `brew bundle --file` on this file, then on every overlay's bootstrap/Brewfile in layer order.
 # Apply by hand with: brew bundle --file bootstrap/Brewfile
+# Wrap anything that does not exist on Linux in the `if OS.mac?` block at the end.
 
 # Taps providing formulae/casks used below
 # keep-sorted start
@@ -48,7 +49,6 @@ brew "lazygit"
 brew "libmagic"
 brew "libssh2"
 brew "markdownlint-cli2"
-brew "mas"
 brew "mermaid-cli"
 brew "micro"
 brew "mise"
@@ -73,26 +73,32 @@ brew "zsh-completions"
 brew "zsh-syntax-highlighting"
 # keep-sorted end
 
-# Casks
-# keep-sorted start
-cask "claude-devtools"
-cask "google-chrome"
-cask "hammerspoon"
-cask "iterm2"
-cask "pycharm"
-cask "signal"
-cask "slack"
-cask "sublime-text"
-cask "todoist-app"
-cask "visual-studio-code"
-cask "zed"
-# keep-sorted end
+# macOS-only entries: the `mas` CLI, casks, fonts, and Mac App Store apps. Homebrew on Linux skips this block, so the
+# NAS (Linuxbrew) installs the same formulae as the Macs and nothing else.
+if OS.mac?
+  brew "mas"
 
-# Fonts (Nerd Fonts live in the main homebrew/cask repo; the homebrew/cask-fonts tap is deprecated)
-cask "font-fira-code-nerd-font"
+  # Casks
+  # keep-sorted start
+  cask "claude-devtools"
+  cask "google-chrome"
+  cask "hammerspoon"
+  cask "iterm2"
+  cask "pycharm"
+  cask "signal"
+  cask "slack"
+  cask "sublime-text"
+  cask "todoist-app"
+  cask "visual-studio-code"
+  cask "zed"
+  # keep-sorted end
 
-# Mac App Store (requires `mas` and an authenticated App Store session)
-# keep-sorted start
-mas "Amphetamine", id: 937984704
-mas "Apple Remote Desktop", id: 409907375
-# keep-sorted end
+  # Fonts (Nerd Fonts live in the main homebrew/cask repo; the homebrew/cask-fonts tap is deprecated)
+  cask "font-fira-code-nerd-font"
+
+  # Mac App Store (requires `mas` and an authenticated App Store session)
+  # keep-sorted start
+  mas "Amphetamine", id: 937984704
+  mas "Apple Remote Desktop", id: 409907375
+  # keep-sorted end
+end

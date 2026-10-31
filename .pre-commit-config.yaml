@@ -248,6 +248,7 @@ repos:
         stages: [pre-commit, manual]
         priority: 10
         args: [--pytest-test-first]
+        exclude: ^tests/golden\.py$
 
   - repo: local
     hooks:

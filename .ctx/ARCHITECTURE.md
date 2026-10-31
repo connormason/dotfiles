@@ -18,7 +18,7 @@ skipped by the lint tooling).
 3. Installs Ansible via Homebrew
 4. Executes the NAS playbook
 
-## macOS: Stow Engine and Bootstrap Stages
+## Stow Engine and Bootstrap Stages (macOS + Linux)
 
 Layered: the repo root is the base layer; machine-specific overlays (see `profiles/`) are directories listed in the
 overlays registry (`~/.config/dotfiles/overlays`, or `$DOTFILES_OVERLAYS_FILE`). Layers are ordered base first, then
@@ -38,6 +38,10 @@ overlays in file order. Full contract in [`bootstrap/README.md`](../bootstrap/RE
   fragments merged across layers, with a drift guard).
 - **`run.py doctor`**: verifies tools, overlay registry, links, and rendered settings.
 - **`profiles/`**: per-machine overlays; see [`profiles/README.md`](../profiles/README.md).
+- **OS support**: `lib.sh` `dotfiles_os` (`darwin`/`linux`, `DOTFILES_OS` override) and `require_os` gate stages;
+  `.dotfiles-os` markers scope stow packages; `render.py` `TARGET_OS` scopes render targets; the Brewfile's
+  `if OS.mac?` block holds macOS-only entries. Linux means Debian-family with Linuxbrew; the engine never runs `apt` or
+  `sudo` there (root-level setup is the NAS Ansible's job). Contract in [`bootstrap/README.md`](../bootstrap/README.md).
 
 ## Inventory Management
 

@@ -6,6 +6,13 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh disable=SC1091
 source "$HERE/lib.sh"
 
+OS="$(dotfiles_os)"
+
+# Homebrew's Linux prefix. The engine never uses sudo on Linux, so the prefix must already exist and be writable by the
+# user (the NAS `debian` Ansible role creates it); the installer then needs no root. DOTFILES_LINUXBREW_PREFIX moves
+# this check for tests only: the installer itself always targets the default prefix.
+LINUXBREW_PREFIX="${DOTFILES_LINUXBREW_PREFIX:-/home/linuxbrew/.linuxbrew}"
+
 # Pinned to an upstream commit so the content cannot drift when Homebrew edits install.sh on HEAD.
 BREW_INSTALLER_URL="https://raw.githubusercontent.com/Homebrew/install/09c62fc577ec170172b0a184060f141a2c622dc1/install.sh"
 
@@ -26,11 +33,25 @@ cleanup_installer() {
 
 # install_homebrew -> download the official installer, verify its checksum, then run it.
 install_homebrew() {
-    local actual
+    local actual msg installer_env=()
+    if [ "$OS" = "linux" ]; then
+        if [ ! -d "$LINUXBREW_PREFIX" ] || [ ! -w "$LINUXBREW_PREFIX" ]; then
+            msg="$LINUXBREW_PREFIX must exist and be writable by $(id -un) so Homebrew installs without sudo"
+            msg="$msg (the NAS 'debian' Ansible role creates it)"
+            if [ "${BOOTSTRAP_DRY_RUN}" = "1" ]; then
+                warn "$msg"
+            else
+                die "$msg"
+            fi
+        fi
+        # The installer's confirmation prompt would block an unattended run (Ansible)
+        installer_env=(env NONINTERACTIVE=1)
+    fi
+
     if [ "${BOOTSTRAP_DRY_RUN}" = "1" ]; then
         run curl -fsSL "$BREW_INSTALLER_URL" -o '<temp file>'
         log "would verify the installer's SHA-256 is $BREW_INSTALLER_SHA256"
-        run /bin/bash '<temp file>'
+        run ${installer_env[@]+"${installer_env[@]}"} /bin/bash '<temp file>'
         return 0
     fi
 
@@ -38,7 +59,7 @@ install_homebrew() {
     trap cleanup_installer EXIT
     run curl -fsSL "$BREW_INSTALLER_URL" -o "$BREW_INSTALLER"
 
-    actual="$(shasum -a 256 "$BREW_INSTALLER" | awk '{print $1}')"
+    actual="$(sha256_of "$BREW_INSTALLER")"
     if [ "$actual" != "$BREW_INSTALLER_SHA256" ]; then
         warn "Homebrew installer checksum mismatch"
         warn "  expected: $BREW_INSTALLER_SHA256"
@@ -49,7 +70,7 @@ install_homebrew() {
     fi
     log "installer checksum verified"
 
-    run /bin/bash "$BREW_INSTALLER"
+    run ${installer_env[@]+"${installer_env[@]}"} /bin/bash "$BREW_INSTALLER"
 }
 
 if have brew; then
@@ -84,10 +105,10 @@ done 3<<EOF
 $brewfiles
 EOF
 
-# Resolve the starship PATH collision: prefer the Homebrew copy over a legacy root install. The legacy copy is a regular
-# file; on Intel Macs Homebrew's own copy is a symlink at the same path.
+# macOS only: resolve the starship PATH collision: prefer the Homebrew copy over a legacy root install. The legacy copy
+# is a regular file; on Intel Macs Homebrew's own copy is a symlink at the same path.
 LEGACY_STARSHIP=/usr/local/bin/starship
-if have brew && brew list starship >/dev/null 2>&1 && [ -f "$LEGACY_STARSHIP" ] && [ ! -L "$LEGACY_STARSHIP" ]; then
+if [ "$OS" = "darwin" ] && have brew && brew list starship >/dev/null 2>&1 && [ -f "$LEGACY_STARSHIP" ] && [ ! -L "$LEGACY_STARSHIP" ]; then
     warn "legacy root starship at $LEGACY_STARSHIP shadows the Homebrew copy"
     if [ "${BOOTSTRAP_DRY_RUN}" = "1" ]; then
         run sudo rm -f "$LEGACY_STARSHIP"

@@ -15,10 +15,11 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGE     = REPO_ROOT / 'bootstrap' / '50-brew.sh'
 
-# Stands in for the downloaded Homebrew installer: records that it ran and installs a stub brew into the sandbox prefix
+# Stands in for the downloaded Homebrew installer: records that it ran (and whether NONINTERACTIVE was set) and installs
+# a stub brew into the sandbox prefix
 INSTALLER_PAYLOAD = (
     '#!/bin/bash\n'
-    'touch "$INSTALLER_MARKER"\n'
+    'printf "%s" "${NONINTERACTIVE-unset}" > "$INSTALLER_MARKER"\n'
     'mkdir -p "$SANDBOX_PREFIX/bin"\n'
     'printf "#!/bin/sh\\nexit 1\\n" > "$SANDBOX_PREFIX/bin/brew"\n'
     'chmod 755 "$SANDBOX_PREFIX/bin/brew"\n'
@@ -30,7 +31,8 @@ PINNED_SHA = re.compile(r'^BREW_INSTALLER_SHA256="([0-9a-f]{64})"', re.MULTILINE
 # The pinned installer URL assignment in the stage; group 1 is the URL
 PINNED_URL = re.compile(r'^BREW_INSTALLER_URL="([^"]+)"$', re.MULTILINE)
 
-# Replaces ensure_brew_on_path so the stage never discovers a real Homebrew in /opt/homebrew or /usr/local
+# Replaces ensure_brew_on_path so the stage never discovers a real Homebrew in /opt/homebrew, /usr/local or
+# /home/linuxbrew/.linuxbrew
 ENV_OVERRIDE = (
     'ensure_brew_on_path() {\n'
     '    PATH="$PATH:$SANDBOX_PREFIX/bin"\n'
@@ -104,6 +106,8 @@ def sandbox(tmp_path: Path) -> Sandbox:
         'DOTFILES_REPO',
         'DOTFILES_LAYER',
         'DOTFILES_BREW_PREFIXES',
+        'DOTFILES_OS',
+        'DOTFILES_LINUXBREW_PREFIX',
         'XDG_CONFIG_HOME',
     )
     env: dict[str, str] = {
@@ -114,6 +118,7 @@ def sandbox(tmp_path: Path) -> Sandbox:
         'DOTFILES_OVERLAYS_FILE': str(registry),
         'SANDBOX_PREFIX':         str(tmp_path / 'prefix'),
         'INSTALLER_MARKER':       str(marker),
+        'DOTFILES_OS':            'darwin',
     }
     return Sandbox(
         env=env,
@@ -166,6 +171,7 @@ class TestBrewInstallerChecksum:
         assert 'installer checksum verified' in result.stdout
         assert pinned_url.group(1) in sandbox.curl_args.read_text('utf-8')
         assert sandbox.marker.exists()
+        assert sandbox.marker.read_text(encoding='utf-8') == 'unset'  # macOS runs the installer interactively as before
 
         # Guards against a future sudo call being added; neither the stage nor the stub installer calls sudo today
         assert not sandbox.sudo_marker.exists()
@@ -191,3 +197,62 @@ class TestBrewInstallerChecksum:
         # Guards against a future sudo call being added; neither the stage nor the stub installer calls sudo today
         assert not sandbox.sudo_marker.exists()
         assert list(sandbox.tmpdir.iterdir()) == []
+
+
+def _pin_payload(box: Sandbox) -> None:
+    """
+    Pin the sandbox stage to the stub payload's real digest (the real pin cannot be satisfied by chosen bytes)
+    """
+    text   = box.stage.read_text(encoding='utf-8')
+    digest = hashlib.sha256(box.payload).hexdigest()
+    box.stage.write_text(PINNED_SHA.sub(f'BREW_INSTALLER_SHA256="{digest}"', text), encoding='utf-8')
+
+
+class TestLinuxbrewInstall:
+    """
+    Tests for the Linux (Linuxbrew) install path
+    """
+    def test_installs_noninteractively_into_a_writable_prefix(
+        self,
+        shell: str,
+        sandbox: Sandbox,
+        tmp_path: Path,
+    ) -> None:
+        """
+        Test that linux runs the verified installer with NONINTERACTIVE=1 and without sudo
+        """
+        prefix = tmp_path / 'linuxbrew'
+        prefix.mkdir()
+        _pin_payload(sandbox)
+        sandbox.env.update({'DOTFILES_OS': 'linux', 'DOTFILES_LINUXBREW_PREFIX': str(prefix)})
+
+        result = _run(shell, sandbox)
+        assert result.returncode == 0, result.stderr
+        assert 'installer checksum verified' in result.stdout
+        assert sandbox.marker.read_text(encoding='utf-8') == '1'
+        assert not sandbox.sudo_marker.exists()
+
+    def test_missing_prefix_fails_before_downloading(self, shell: str, sandbox: Sandbox, tmp_path: Path) -> None:
+        """
+        Test that linux refuses to install when the prefix does not exist, before any download
+        """
+        sandbox.env.update({'DOTFILES_OS': 'linux', 'DOTFILES_LINUXBREW_PREFIX': str(tmp_path / 'absent')})
+
+        result = _run(shell, sandbox)
+        assert result.returncode != 0
+        assert 'must exist and be writable' in result.stderr
+        assert not sandbox.curl_args.exists()
+        assert not sandbox.marker.exists()
+
+    def test_missing_prefix_only_warns_in_dry_run(self, shell: str, sandbox: Sandbox, tmp_path: Path) -> None:
+        """
+        Test that a dry run reports the missing prefix and still previews the install
+        """
+        sandbox.env.update(
+            {'DOTFILES_OS': 'linux', 'DOTFILES_LINUXBREW_PREFIX': str(tmp_path / 'absent'), 'BOOTSTRAP_DRY_RUN': '1'},
+        )
+
+        result = _run(shell, sandbox)
+        assert result.returncode == 0, result.stderr
+        assert 'must exist and be writable' in result.stderr
+        assert 'env NONINTERACTIVE=1 /bin/bash <temp file>' in result.stdout

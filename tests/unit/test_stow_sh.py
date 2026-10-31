@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Inherited variables that would leak the developer's own configuration into the tests
 _SCRUBBED_VARS: tuple[str, ...] = (
+    'DOTFILES_OS',
     'DOTFILES_REPO',
     'DOTFILES_BREW_PREFIXES',
     'DOTFILES_LEAK_PATTERNS',
@@ -623,3 +624,142 @@ class TestConflicts:
         backups = list((world['home'] / '.dotfiles-backup').glob('*/.zshrc'))
         assert len(backups) == 1
         assert backups[0].read_text(encoding='utf-8') == 'old'
+
+
+def _marker(layer: Path, pkg: str, text: str) -> None:
+    """
+    Write a package's .dotfiles-os marker verbatim
+    """
+    path = layer / 'stow' / pkg / '.dotfiles-os'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('w', encoding='utf-8', newline='') as handle:
+        handle.write(text)
+
+
+class TestOsMarkers:
+    """
+    Tests for per-package .dotfiles-os markers
+    """
+    def test_excluded_package_is_not_linked(self, world: dict[str, Path]) -> None:
+        """
+        Test that a darwin-only package is skipped on linux while unmarked packages are linked
+        """
+        _pkg(world['repo'],    'shell', {'.zshrc': 'x'})
+        _pkg(world['repo'],    'mac',   {'.macrc': 'x'})
+        _marker(world['repo'], 'mac',   'darwin\n')
+
+        result = _stow(world, extra_env={'DOTFILES_OS': 'linux'})
+        assert result.returncode == 0, result.stderr
+        assert (world['home'] / '.zshrc').is_symlink()
+        assert not (world['home'] / '.macrc').exists()
+
+    def test_included_package_is_linked_without_its_marker(self, world: dict[str, Path]) -> None:
+        """
+        Test that a darwin-only package is linked on darwin and the marker file itself is not
+        """
+        _pkg(world['repo'],    'mac', {'.macrc': 'x'})
+        _marker(world['repo'], 'mac', 'darwin\n')
+
+        result = _stow(world, extra_env={'DOTFILES_OS': 'darwin'})
+        assert result.returncode == 0, result.stderr
+        assert (world['home'] / '.macrc').is_symlink()
+        assert not (world['home'] / '.dotfiles-os').exists()
+
+    def test_list_omits_excluded_packages(self, world: dict[str, Path]) -> None:
+        """
+        Test that --list shows only the packages that apply to this OS
+        """
+        _pkg(world['repo'],    'shell', {'.zshrc': 'x'})
+        _pkg(world['repo'],    'mac',   {'.macrc': 'x'})
+        _marker(world['repo'], 'mac',   'darwin\n')
+
+        result = _stow(world, '--list', extra_env={'DOTFILES_OS': 'linux'})
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == [f'shell\t{world["repo"].resolve()}']
+
+    def test_requesting_an_excluded_package_fails(self, world: dict[str, Path]) -> None:
+        """
+        Test that naming an excluded package explains why instead of calling it unknown
+        """
+        _pkg(world['repo'],    'mac', {'.macrc': 'x'})
+        _marker(world['repo'], 'mac', 'darwin\n')
+
+        result = _stow(world, 'mac', extra_env={'DOTFILES_OS': 'linux'})
+        assert result.returncode != 0
+        assert "package 'mac' does not apply to linux (see its .dotfiles-os)" in result.stderr
+
+    @pytest.mark.parametrize(
+        ('text', 'message'),
+        [
+            ('macos\n',          "unknown OS 'macos'"),
+            ('# nothing here\n', 'lists no OS'),
+        ],
+    )
+    def test_invalid_marker_fails(self, world: dict[str, Path], text: str, message: str) -> None:
+        """
+        Test that an unknown OS id or an empty marker is fatal before anything is linked
+        """
+        _pkg(world['repo'], 'shell', {'.zshrc': 'x'})
+        _pkg(world['repo'], 'odd',   {'.oddrc': 'x'})
+        _marker(world['repo'], 'odd', text)
+
+        result = _stow(world, extra_env={'DOTFILES_OS': 'linux'})
+        assert result.returncode != 0
+        assert message in result.stderr
+        assert not (world['home'] / '.zshrc').exists()
+
+    def test_comments_whitespace_and_crlf_are_tolerated(self, world: dict[str, Path]) -> None:
+        """
+        Test that a marker with comments, padding, and CRLF line endings parses
+        """
+        _pkg(world['repo'],    'both', {'.bothrc': 'x'})
+        _marker(world['repo'], 'both', '# both platforms\r\n  darwin  # mac\r\nlinux\r\n')
+
+        result = _stow(world, extra_env={'DOTFILES_OS': 'linux'})
+        assert result.returncode == 0, result.stderr
+        assert (world['home'] / '.bothrc').is_symlink()
+
+    def test_os_variants_may_provide_the_same_path(self, world: dict[str, Path]) -> None:
+        """
+        Test that a darwin package and a linux package may own the same path, and the matching one is linked
+        """
+        _pkg(world['repo'],    'tool-darwin', {'.config/tool/config': 'mac'})
+        _pkg(world['repo'],    'tool-linux',  {'.config/tool/config': 'linux'})
+        _marker(world['repo'], 'tool-darwin', 'darwin\n')
+        _marker(world['repo'], 'tool-linux',  'linux\n')
+
+        result = _stow(world, extra_env={'DOTFILES_OS': 'linux'})
+        assert result.returncode == 0, result.stderr
+        assert (world['home'] / '.config' / 'tool' / 'config').read_text(encoding='utf-8') == 'linux'
+
+    def test_duplicate_name_fails_even_when_one_copy_is_excluded(self, world: dict[str, Path]) -> None:
+        """
+        Test that the one-layer-per-package-name rule also covers excluded packages
+        """
+        _pkg(world['repo'],    'mac', {'.macrc': 'x'})
+        _pkg(world['overlay'], 'mac', {'.macrc2': 'x'})
+        _marker(world['repo'], 'mac', 'darwin\n')
+
+        result = _stow(world, extra_env={'DOTFILES_OS': 'linux'})
+        assert result.returncode != 0
+        assert "package 'mac' is defined in two layers" in result.stderr
+
+    def test_moving_a_file_between_packages_relinks_it(self, world: dict[str, Path]) -> None:
+        """
+        Test that a file moved from one package to another is relinked on the next run (the stale link is cleaned up)
+        """
+        _pkg(world['repo'], 'old', {'.config/app/config': 'x', '.oldrc': 'x'})
+        assert _stow(world).returncode == 0
+
+        moved = world['repo'] / 'stow' / 'new' / '.config' / 'app' / 'config'
+        moved.parent.mkdir(parents=True)
+
+        (world['repo'] / 'stow' / 'old' / '.config' / 'app' / 'config').rename(moved)
+        shutil.rmtree(world['repo'] / 'stow' / 'old' / '.config')
+
+        result = _stow(world)
+        assert result.returncode == 0, result.stderr
+
+        link = world['home'] / '.config' / 'app' / 'config'
+        assert link.is_symlink()
+        assert link.resolve() == moved.resolve()

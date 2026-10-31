@@ -73,3 +73,31 @@ jobs:
         run: uv run pytest
       - name: Bootstrap dry run (throwaway HOME)
         run: mkdir -p "$RUNNER_TEMP/home" && HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log
+
+  pytest-linux:
+    name: pytest (Linux)
+    runs-on: ubuntu-latest
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # The runner image ships Linuxbrew in the same prefix the NAS uses; fail loudly if that ever changes
+      - name: Put Linuxbrew on PATH
+        run: |
+          test -x /home/linuxbrew/.linuxbrew/bin/brew || { echo "::error::no Linuxbrew on this runner image"; exit 1; }
+          echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
+      # stow.sh parses Stow 2.4.x conflict messages; apt ships 2.3.x, and the NAS gets Stow from the Brewfile too
+      - name: Install GNU Stow (Linuxbrew) and zsh (apt)
+        run: |
+          brew install stow
+          sudo apt-get update && sudo apt-get install -y zsh
+      - name: Tap the Brewfile's taps
+        run: brew bundle list --tap --file bootstrap/Brewfile | xargs -n1 brew tap
+      - name: Install dependencies
+        run: uv sync --group test
+      - name: Pytest
+        run: uv run pytest
+      - name: Bootstrap dry run (throwaway HOME)
+        run: mkdir -p "$RUNNER_TEMP/home" && HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log
