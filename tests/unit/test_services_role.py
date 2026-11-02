@@ -142,3 +142,60 @@ class TestServicesRole:
         Test that both roles agree where ~/docker lives
         """
         assert _defaults('services')['services_target_dir'] == _defaults('docker')['docker_dir']
+
+
+class TestDockerRole:
+    """
+    Tests for the docker role after the fresh-install and lint fixes
+    """
+    def test_does_not_deploy_services(self) -> None:
+        """
+        Test that deploying services belongs to the services role, so the docker role no longer runs deploy.sh all
+        """
+        text = (ROLES / 'docker' / 'tasks' / 'main.yml').read_text(encoding='utf-8')
+
+        assert 'deploy.sh all' not in text
+        assert any(task.get('name') == 'Copy deploy script' for task in _tasks('docker'))
+
+    def test_gpg_key_is_fetched_as_root_with_an_explicit_mode(self) -> None:
+        """
+        Test that the Docker apt key download can write /usr/share/keyrings on a fresh host
+        """
+        task = _task('docker', 'Add Docker GPG signing key')
+
+        assert task['become'] is True
+        assert task['ansible.builtin.get_url']['mode'] == '0644'
+
+    def test_architecture_probe_is_read_only(self) -> None:
+        """
+        Test that the dpkg architecture lookup never reports changed and also runs in check mode
+        """
+        task = _task('docker', 'Print debian architecture')
+
+        assert 'ansible.builtin.command' in task
+        assert task['changed_when'] is False
+        assert task['check_mode'] is False
+
+    def test_ssh_user_joins_the_docker_group(self) -> None:
+        """
+        Test that the SSH user can run docker without sudo after a fresh install
+        """
+        args = _task('docker', 'Allow the SSH user to run docker without sudo')['ansible.builtin.user']
+
+        assert args['name']   == "{{ ansible_facts['user_id'] }}"
+        assert args['groups'] == 'docker'
+        assert args['append'] is True
+
+    def test_autoplex_variables_carry_the_role_prefix(self) -> None:
+        """
+        Test that every default in the docker role starts with docker_
+        """
+        assert all(name.startswith('docker_') for name in _defaults('docker'))
+
+    def test_no_docker_lint_exceptions_remain(self) -> None:
+        """
+        Test that .ansible-lint-ignore holds no entry for the docker role
+        """
+        ignore = (REPO_ROOT / '.ansible-lint-ignore').read_text(encoding='utf-8')
+
+        assert 'roles/docker/' not in ignore

@@ -1046,17 +1046,17 @@ Note: Does not automatically restart services. Use `docker-compose up -d` after 
 
 Defined in `roles/docker/defaults/main.yml`:
 
-| Variable                     | Default                                         | Description                      |
-| ---------------------------- | ----------------------------------------------- | -------------------------------- |
-| `docker_dir`                 | `{{ ansible_facts['user_dir'] }}/docker`        | Docker Compose project directory |
-| `autoplex_repo_url`          | `https://github.com/danielmmetz/autoplex.git`   | Autoplex source repository       |
-| `autoplex_repo_branch`       | `master`                                        | Autoplex git branch              |
-| `pyautoplex_repo_url`        | `git@github.com:connormason/pyautoplex.git`     | PyAutoplex source repository     |
-| `pyautoplex_repo_branch`     | `main`                                          | PyAutoplex git branch            |
-| `caddy_dnsimple_repo_url`    | `https://github.com/danielmmetz/caddy-dnsimple` | Caddy DNSimple source            |
-| `caddy_dnsimple_repo_branch` | `master`                                        | Caddy DNSimple git branch        |
-| `homeassistant_repo_url`     | `git@github.com:connormason/homeassistant.git`  | Home Assistant config repo       |
-| `homeassistant_repo_branch`  | `nas_bringup`                                   | Home Assistant git branch        |
+| Variable                      | Default                                         | Description                      |
+| ----------------------------- | ----------------------------------------------- | -------------------------------- |
+| `docker_dir`                  | `{{ ansible_facts['user_dir'] }}/docker`        | Docker Compose project directory |
+| `docker_autoplex_repo_url`    | `https://github.com/danielmmetz/autoplex.git`   | Autoplex source repository       |
+| `docker_autoplex_repo_branch` | `master`                                        | Autoplex git branch              |
+| `pyautoplex_repo_url`         | `git@github.com:connormason/pyautoplex.git`     | PyAutoplex source repository     |
+| `pyautoplex_repo_branch`      | `main`                                          | PyAutoplex git branch            |
+| `caddy_dnsimple_repo_url`     | `https://github.com/danielmmetz/caddy-dnsimple` | Caddy DNSimple source            |
+| `caddy_dnsimple_repo_branch`  | `master`                                        | Caddy DNSimple git branch        |
+| `homeassistant_repo_url`      | `git@github.com:connormason/homeassistant.git`  | Home Assistant config repo       |
+| `homeassistant_repo_branch`   | `nas_bringup`                                   | Home Assistant git branch        |
 
 ### Required Variables from Inventory
 
