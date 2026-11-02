@@ -1567,6 +1567,95 @@ def cmd_nas_deploy(args: argparse.Namespace) -> None:
     )
 
 
+def add_nas_provision_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register nas-provision options
+    """
+    parser.add_argument(
+        '--tags',
+        metavar='TAGS',
+        help='Only run tasks with these comma-separated tags (e.g. debian,dotfiles,haos,services,secrets)',
+    )
+    parser.add_argument(
+        '--limit',
+        metavar='HOSTS',
+        help='Limit the run to these inventory hosts',
+    )
+    parser.add_argument(
+        '--check',
+        action='store_true',
+        help='Predict changes without making them',
+    )
+    parser.add_argument(
+        '--diff',
+        action='store_true',
+        help='Show file and template differences',
+    )
+    parser.add_argument(
+        '-e',
+        '--extra-vars',
+        action='append',
+        metavar='KEY=VALUE',
+        help='Extra playbook variable (repeatable), e.g. -e dotfiles_repo_version=my-branch',
+    )
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='count',
+        default=0,
+        help='Increase Ansible verbosity (-v, -vv, ...)',
+    )
+
+
+def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
+    """
+    Build the ``ansible-playbook`` command line for nas-provision
+
+    :param args: parsed nas-provision arguments
+    :return: command and arguments
+    """
+    cmd: list[str] = [
+        str(UV_PUBLIC), 'run', 'ansible-playbook', str(NAS_PLAYBOOK),
+        '-i', str(INVENTORY_FILE),
+        '--vault-password-file', str(VAULT_PASSWORD),
+    ]
+    if args.tags:
+        cmd.extend(['--tags', args.tags])
+    if args.limit:
+        cmd.extend(['--limit', args.limit])
+    if args.check:
+        cmd.append('--check')
+    if args.diff:
+        cmd.append('--diff')
+    for key, value in parse_extra_vars(args.extra_vars).items():
+        cmd.extend(['-e', f'{key}={value}'])
+    if args.verbose:
+        cmd.append('-' + 'v' * args.verbose)
+    return cmd
+
+
+@command(group='NAS', add_arguments=add_nas_provision_arguments)
+def cmd_nas_provision(args: argparse.Namespace) -> None:
+    """
+    Provision the NAS with the Ansible playbook: system config, the stow engine, then services
+    """
+    playbook_cmd = build_nas_provision_command(args)
+    resolve_reachable_nas()
+
+    printf('📦 Installing Ansible collections', fg='bright_cyan')
+    galaxy = shell_command(
+        [str(UV_PUBLIC), 'run', 'ansible-galaxy', 'collection', 'install', '-r', str(NAS_REQUIREMENTS)],
+        check=False,
+        cwd=DOTFILES_DIR,
+    )
+    if galaxy.returncode != 0:
+        printf('🟡 Collection install failed; continuing with the collections already installed', fg='bright_yellow')
+
+    sys.exit(
+        shell_command(playbook_cmd, check=False, cwd=DOTFILES_DIR).returncode
+    )
+
+
 # ====================================================================================================
 # Dotfiles commands
 #

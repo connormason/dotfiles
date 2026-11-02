@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+from typing import ClassVar
 
 import pytest
 
@@ -257,3 +258,140 @@ class TestNasDeploy:
             run.cmd_nas_deploy(argparse.Namespace(service='glance', dry_run=False))
 
         assert 'uncommitted' not in _output(capsys)
+
+
+def _provision_args(**overrides: Any) -> argparse.Namespace:  # Any: free-form Namespace field overrides
+    """
+    Build the Namespace nas-provision receives, with every option at its default unless overridden
+    """
+    fields: dict[str, Any] = {  # Any: heterogeneous Namespace fields
+        'tags': None, 'limit': None, 'check': False, 'diff': False, 'extra_vars': None, 'verbose': 0,
+    }
+    fields.update(overrides)
+    return argparse.Namespace(**fields)
+
+
+class TestBuildNasProvisionCommand:
+    """
+    Tests for build_nas_provision_command
+    """
+    BASE: ClassVar[list[str]] = [
+        str(run.UV_PUBLIC), 'run', 'ansible-playbook', str(run.NAS_PLAYBOOK),
+        '-i', str(run.INVENTORY_FILE),
+        '--vault-password-file', str(run.VAULT_PASSWORD),
+    ]
+
+    def test_defaults_run_the_whole_playbook(self) -> None:
+        """
+        Test that no options yield only the playbook, inventory, and vault password file
+        """
+        assert run.build_nas_provision_command(_provision_args()) == self.BASE
+
+    def test_every_option_is_forwarded(self) -> None:
+        """
+        Test that tags, limit, check, diff, extra vars, and verbosity map to ansible-playbook flags
+        """
+        args = _provision_args(
+            tags='dotfiles,haos', limit='nas', check=True, diff=True, extra_vars=['a=1', 'b=two'], verbose=2,
+        )
+
+        assert run.build_nas_provision_command(args) == [
+            *self.BASE,
+            '--tags', 'dotfiles,haos',
+            '--limit', 'nas',
+            '--check',
+            '--diff',
+            '-e', 'a=1',
+            '-e', 'b=two',
+            '-vv',
+        ]
+
+    def test_malformed_extra_var_exits(self) -> None:
+        """
+        Test that an extra var without '=' is rejected before anything runs
+        """
+        with pytest.raises(SystemExit):
+            run.build_nas_provision_command(_provision_args(extra_vars=['oops']))
+
+
+class TestNasProvision:
+    """
+    Tests for the nas-provision command
+    """
+    @pytest.fixture(autouse=True)
+    def _target(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Skip inventory resolution and the SSH probe
+        """
+        monkeypatch.setattr(run, 'resolve_reachable_nas', lambda: ('h', 'u'))
+
+    def test_registered_in_the_nas_group_and_makefile(self) -> None:
+        """
+        Test that nas-provision is a NAS command that also gets a Makefile target
+        """
+        info = run.REGISTERED_COMMANDS['nas-provision']
+        assert info.group == 'NAS'
+        assert info.script_only is False
+
+    def test_installs_collections_then_runs_the_playbook_from_the_repo_root(self, fake_shell: FakeShell) -> None:
+        """
+        Test that galaxy runs before the playbook, both from the repo root, and the playbook status is the exit code
+        """
+        fake_shell.results['ansible-playbook'] = _done(4)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run.cmd_nas_provision(_provision_args(tags='services'))
+
+        assert exc_info.value.code == 4
+        assert [call[0][2] for call in fake_shell.calls] == ['ansible-galaxy', 'ansible-playbook']
+        galaxy, galaxy_kwargs = fake_shell.find('ansible-galaxy')
+        assert galaxy[-2:] == ['-r', str(run.NAS_REQUIREMENTS)]
+        _playbook, playbook_kwargs = fake_shell.find('ansible-playbook')
+        assert galaxy_kwargs['cwd'] == playbook_kwargs['cwd'] == run.DOTFILES_DIR
+
+    def test_collection_install_failure_warns_and_continues(
+        self, fake_shell: FakeShell, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that an offline collection install does not block a run with collections already installed
+        """
+        fake_shell.results['ansible-galaxy'] = _done(1)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run.cmd_nas_provision(_provision_args())
+
+        assert exc_info.value.code == 0
+        assert 'Collection install failed' in _output(capsys)
+        fake_shell.find('ansible-playbook')
+
+    def test_unreachable_nas_stops_before_ansible(self, fake_shell: FakeShell, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that a failed preflight exits without installing collections or running the playbook
+        """
+        def unreachable() -> tuple[str, str]:
+            raise SystemExit(1)
+
+        monkeypatch.setattr(run, 'resolve_reachable_nas', unreachable)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run.cmd_nas_provision(_provision_args())
+
+        assert exc_info.value.code == 1
+        assert fake_shell.calls == []
+
+    def test_bad_extra_var_exits_before_the_preflight(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that command construction (and its validation) happens before any network probe
+        """
+        probed: list[bool] = []
+
+        def probe() -> tuple[str, str]:
+            probed.append(True)
+            return 'h', 'u'
+
+        monkeypatch.setattr(run, 'resolve_reachable_nas', probe)
+
+        with pytest.raises(SystemExit):
+            run.cmd_nas_provision(_provision_args(extra_vars=['oops']))
+
+        assert probed == []
