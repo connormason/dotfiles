@@ -56,7 +56,9 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import errno
+import getpass
 import inspect
+import json
 import os
 import pty
 import re
@@ -107,6 +109,12 @@ STOW_SCRIPT:      Path = DOTFILES_DIR / 'stow.sh'
 BOOTSTRAP_SCRIPT: Path = DOTFILES_DIR / 'bootstrap' / 'bootstrap.sh'
 RENDER_SCRIPT:    Path = DOTFILES_DIR / 'scripts' / 'dotfiles' / 'render.py'
 UV_PUBLIC:        Path = DOTFILES_DIR / 'scripts' / 'hooks' / 'uv-public.sh'
+
+# NAS provisioning (Ansible playbook, collections) and service deploys (script shared with CI)
+NAS_PLAYBOOK:       Path = PLAYBOOKS_DIR / 'nas_bootstrap.yml'
+NAS_REQUIREMENTS:   Path = DOTFILES_DIR  / 'roles' / 'requirements.yml'
+NAS_DEPLOY_SCRIPT:  Path = DOTFILES_DIR  / 'scripts' / 'nas' / 'deploy-services.sh'
+NAS_INVENTORY_HOST: str  = 'nas'
 
 # Doctor requirements
 REQUIRED_TOOLS:  tuple[str, ...] = ('brew', 'git', 'stow', 'uv', 'zsh')
@@ -1424,6 +1432,139 @@ def cmd_makefile(args: argparse.Namespace) -> None:
     with MAKEFILE_PATH.open('w') as f:
         f.write('\n'.join(lines))
     printf('✅ Makefile updated', fg='bright_green')
+
+
+# ====================================================================================================
+# NAS commands
+#
+# Provision the home NAS and deploy its Compose services from this machine, over SSH (tailnet or LAN):
+#   - nas-provision: Run the Ansible playbook (playbooks/nas_bootstrap.yml) against the inventory's ``nas`` host
+#   - nas-deploy:    Sync services/ to the NAS and run deploy.sh there (scripts/nas/deploy-services.sh, as CI does)
+# ====================================================================================================
+
+
+def resolve_nas_target(host: str = NAS_INVENTORY_HOST) -> tuple[str, str]:
+    """
+    Resolve the SSH host and user of an inventory host through ``ansible-inventory``
+
+    :param host: inventory host name
+    :return: tuple of (``ansible_host``, ``ansible_user``); missing values fall back to the inventory name and the
+             local login, as ssh would
+    """
+    result = shell_command(
+        [
+            str(UV_PUBLIC), 'run', 'ansible-inventory',
+            '-i', str(INVENTORY_FILE),
+            '--vault-password-file', str(VAULT_PASSWORD),
+            '--host', host,
+        ],
+        capture_output=True,
+        check=False,
+        cwd=DOTFILES_DIR,
+    )
+    if result.returncode != 0:
+        printf(f'❌ Could not read host "{host}" from the inventory', fg='red', bold=True)
+        printf(result.stderr.strip(), indent=3)
+        sys.exit(1)
+
+    try:
+        variables = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        variables = None
+    if not isinstance(variables, dict):
+        printf(f'❌ Unexpected ansible-inventory output for host "{host}"', fg='red', bold=True)
+        sys.exit(1)
+
+    ssh_host = str(variables.get('ansible_host') or host)
+    ssh_user = str(variables.get('ansible_user') or getpass.getuser())
+    if '{{' in (ssh_host + ssh_user):
+        printf(f'❌ ansible_host/ansible_user for "{host}" are templated: {ssh_user}@{ssh_host}', fg='red', bold=True)
+        printf('The NAS commands need literal values in the inventory', indent=3)
+        sys.exit(1)
+
+    return ssh_host, ssh_user
+
+
+def require_nas_reachable(host: str, user: str) -> None:
+    """
+    Exit with a remedy unless the NAS answers a non-interactive SSH probe
+
+    :param host: SSH host
+    :param user: SSH user
+    :raises SystemExit: if the probe fails
+    """
+    result = shell_command(
+        ['ssh', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes', f'{user}@{host}', 'true'],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        printf(f'❌ Cannot reach the NAS at {user}@{host} over SSH', fg='red', bold=True)
+        printf('Is Tailscale up? Does the host resolve? Is your SSH key loaded (ssh-add)?', indent=3)
+        printf(f'The host comes from ansible_host of "{NAS_INVENTORY_HOST}" in {folduser(INVENTORY_FILE)}', indent=3)
+        printf(f'ssh said: {result.stderr.strip()}', indent=3, dim=True)
+        sys.exit(1)
+
+
+def resolve_reachable_nas() -> tuple[str, str]:
+    """
+    Check the inventory and vault password, resolve the NAS target, and probe it over SSH
+
+    :return: tuple of (SSH host, SSH user)
+    """
+    require_inventory()
+    require_vault_password()
+    host, user = resolve_nas_target()
+    require_nas_reachable(host, user)
+    return host, user
+
+
+def warn_on_dirty_services() -> None:
+    """
+    Warn when services/ has uncommitted changes, since a deploy ships the working tree
+    """
+    result = shell_command(
+        ['git', 'status', '--porcelain', '--', 'services'],
+        capture_output=True,
+        check=False,
+        cwd=DOTFILES_DIR,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        printf('🟡 services/ has uncommitted changes; deploying the working tree', fg='bright_yellow')
+        printf('CI redeploys main whenever it changes a service, which supersedes a branch deploy', indent=3, dim=True)
+
+
+def add_nas_deploy_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register nas-deploy options
+    """
+    parser.add_argument(
+        'service',
+        help="Directory under services/ to deploy, or 'all'",
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Preview the rsync and print the remote command without running it',
+    )
+
+
+@command(group='NAS', add_arguments=add_nas_deploy_arguments, script_only=True)
+def cmd_nas_deploy(args: argparse.Namespace) -> None:
+    """
+    Sync services/ to the NAS and run deploy.sh there (the same script CI uses)
+    """
+    host, user = resolve_reachable_nas()
+    warn_on_dirty_services()
+
+    cmd: list[str] = ['bash', str(NAS_DEPLOY_SCRIPT)]
+    if args.dry_run:
+        cmd.append('--dry-run')
+    cmd.append(args.service)
+
+    sys.exit(
+        shell_command(cmd, env={'NAS_HOST': host, 'NAS_USER': user}, check=False).returncode
+    )
 
 
 # ====================================================================================================
