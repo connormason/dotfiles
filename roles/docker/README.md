@@ -366,7 +366,8 @@ To enable:
 **Secrets (from `.env` file):**
 
 - `DNSIMPLE_OAUTH_TOKEN`: DNSimple API token for Caddy ACME DNS-01
-- `FTLCONF_webserver_api_password`: PiHole admin password
+
+The PiHole admin password is no longer in this file; it lives in the service's own `pihole/.env` (see `services/`).
 
 **Service-Specific:**
 
@@ -1061,10 +1062,10 @@ Defined in `roles/docker/defaults/main.yml`:
 
 Must be defined in inventory vault files:
 
-| Variable               | Source | Used By           |
-| ---------------------- | ------ | ----------------- |
-| `dnsimple_oauth_token` | Vault  | Caddy ACME DNS-01 |
-| `pihole_web_password`  | Vault  | PiHole web UI     |
+| Variable               | Source | Used By                                  |
+| ---------------------- | ------ | ---------------------------------------- |
+| `dnsimple_oauth_token` | Vault  | Caddy ACME DNS-01                        |
+| `pihole_web_password`  | Vault  | PiHole `.env` (`services/pihole/env.j2`) |
 
 Home Assistant secrets (defined in `templates/ha_secrets.yaml.j2`) - refer to Home Assistant repository for details.
 

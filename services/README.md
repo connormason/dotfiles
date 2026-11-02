@@ -77,8 +77,8 @@ runs `dnsmasq` on `192.168.122.1:53`, which blocks Docker from binding `0.0.0.0:
 disables that network; otherwise bind the DNS ports to the NAS's LAN address.
 
 DNS server and DHCP-capable ad-blocker. Binds privileged DNS/DHCP ports on the host; the admin UI is remapped to host
-port `8053` to avoid colliding with other web services. `FTLCONF_webserver_api_password` is sourced from the environment
-(the deploy `.env` file).
+port `8053` to avoid colliding with other web services. `FTLCONF_webserver_api_password` comes from `pihole/.env`,
+rendered from [`pihole/env.j2`](pihole/env.j2) and loaded through `env_file`.
 
 ### `plex`
 
