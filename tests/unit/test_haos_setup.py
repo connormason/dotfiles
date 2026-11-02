@@ -29,6 +29,13 @@ DOCKER_DROP_IN = (
     "ExecStartPost=-/bin/sh -c 'iptables -w -C DOCKER-USER -i br0 -o br0 -j ACCEPT 2>/dev/null || "
     "iptables -w -I DOCKER-USER -i br0 -o br0 -j ACCEPT'\n"
 )
+# The udev rule for the default HAOS_USB (ConBee II, 1cf1:0030)
+USB_RULES = (
+    '# Managed by dotfiles vms/haos/setup.sh: hand USB radios to the HAOS VM\n'
+    'SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1cf1", ATTR{idProduct}=="0030", '
+    'GROUP="libvirt-qemu", MODE="0660", ENV{ID_MM_DEVICE_IGNORE}="1"\n'
+    'SUBSYSTEM=="tty", ATTRS{idVendor}=="1cf1", ATTRS{idProduct}=="0030", ENV{ID_MM_DEVICE_IGNORE}="1"\n'
+)
 
 # Stubs read flag files in $HAOS_TEST_STATE: each flag's presence makes the matching host fact true
 STUBS: dict[str, str] = {
@@ -36,6 +43,7 @@ STUBS: dict[str, str] = {
         '[ -f "$HAOS_TEST_STATE/bridge" ] && echo "5: br0    inet 192.168.68.79/22 brd 192.168.71.255"\n'
         'exit 0\n'
     ),
+    'lsusb':       '[ -f "$HAOS_TEST_STATE/usb-plugged" ]; exit $?\n',
     'dpkg-query':  '[ -f "$HAOS_TEST_STATE/pkgs" ] && printf "install ok installed"\nexit 0\n',
     'id':          'if [ -f "$HAOS_TEST_STATE/group" ]; then echo "tester sudo libvirt"; else echo "tester sudo"; fi\n',
     'df': (
@@ -70,6 +78,11 @@ STUBS: dict[str, str] = {
         'domblklist)\n'
         '    printf "Type   Device   Target   Source\\nfile   disk     sda      %s\\n" '
         '"$HAOS_IMAGES_DIR/haos.qcow2" ;;\n'
+        'dumpxml)\n'
+        '    [ -f "$HAOS_TEST_STATE/vm" ] || exit 1\n'
+        '    if [ -f "$HAOS_TEST_STATE/usb" ]; then\n'
+        '        echo "<hostdev><source><vendor id=\'0x1cf1\'/><product id=\'0x0030\'/></source></hostdev>"\n'
+        '    fi ;;\n'
         'domstate) if [ -f "$HAOS_TEST_STATE/vm-running" ]; then echo running; else echo "shut off"; fi ;;\n'
         'esac\n'
         'exit 0\n'
@@ -88,6 +101,7 @@ CONVERGED = (
     'vm',
     'vm-autostart',
     'vm-running',
+    'usb',
 )
 
 
@@ -134,6 +148,9 @@ def _converge(host: dict[str, str], *, skip: tuple[str, ...] = ()) -> None:
     drop_in.mkdir(parents=True)
     (drop_in / '10-bridge-forward.conf').write_text(DOCKER_DROP_IN, encoding='utf-8')
     (Path(host['HAOS_IMAGES_DIR']) / 'haos.qcow2').touch()
+    udev_dir = etc / 'udev' / 'rules.d'
+    udev_dir.mkdir(parents=True)
+    (udev_dir / '90-haos-usb.rules').write_text(USB_RULES, encoding='utf-8')
 
 
 def _dry_run(host: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -166,6 +183,7 @@ class TestHaosChangeCount:
             'enabled-libvirtd.service',
             'vm-running',
             'vm-autostart',
+            'usb',
         ],
     )
     def test_single_drift_reports_one(self, host: dict[str, str], missing: str) -> None:
@@ -177,6 +195,43 @@ class TestHaosChangeCount:
         result = _dry_run(host)
         assert result.returncode == 0, result.stderr
         assert 'haos: changes=1' in result.stdout.splitlines()
+
+    def test_stale_usb_rules_are_counted_and_not_written(self, host: dict[str, str]) -> None:
+        """
+        Test that drifted udev rules count as changes (write, reload, trigger, settle) and the dry run leaves them alone
+        """
+        _converge(host)
+        rules = Path(host['HAOS_ETC_DIR']) / 'udev' / 'rules.d' / '90-haos-usb.rules'
+        rules.write_text('# stale\n', encoding='utf-8')
+
+        result = _dry_run(host)
+        assert result.returncode == 0, result.stderr
+        assert 'haos: changes=4' in result.stdout.splitlines()
+        assert rules.read_text(encoding='utf-8') == '# stale\n'
+
+    def test_plugged_usb_is_reattached_after_a_rules_change(self, host: dict[str, str]) -> None:
+        """
+        Test that a rules change on a running VM with the stick plugged in counts the detach and attach as well
+        """
+        _converge(host)
+        (Path(host['HAOS_TEST_STATE']) / 'usb-plugged').touch()
+        rules = Path(host['HAOS_ETC_DIR']) / 'udev' / 'rules.d' / '90-haos-usb.rules'
+        rules.unlink()
+
+        result = _dry_run(host)
+        assert result.returncode == 0, result.stderr
+        assert 'haos: changes=6' in result.stdout.splitlines()
+
+    def test_empty_haos_usb_skips_passthrough(self, host: dict[str, str]) -> None:
+        """
+        Test that HAOS_USB='' makes the USB step a no-op even when the rules and hostdev are absent
+        """
+        _converge(host, skip=('usb',))
+        (Path(host['HAOS_ETC_DIR']) / 'udev' / 'rules.d' / '90-haos-usb.rules').unlink()
+
+        result = _dry_run({**host, 'HAOS_USB': ''})
+        assert result.returncode == 0, result.stderr
+        assert 'haos: changes=0' in result.stdout.splitlines()
 
     def test_fresh_host_counts_without_writing(self, host: dict[str, str]) -> None:
         """

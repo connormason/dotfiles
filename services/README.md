@@ -119,3 +119,27 @@ and the GitHub Actions CI workflow on push to `main`.
 # Deploy specific services
 ~/docker/deploy.sh sonarr radarr
 ```
+
+### CI deploys
+
+`.github/workflows/deploy.yml` joins the tailnet as `tag:ci`, rsyncs the changed service directories to `~/docker/`, and
+runs `deploy.sh` for them over SSH. A push to `main` touching `services/<name>/` deploys just that service; a manual
+`workflow_dispatch` run syncs all of `services/` and deploys the named service (default `all`):
+
+```bash
+gh workflow run deploy.yml -f service=glance
+```
+
+The runner authenticates to the NAS's regular `sshd` with a dedicated deploy key: the `NAS_SSH_PRIVATE_KEY` repository
+secret, whose public half sits in `~/.ssh/authorized_keys` with the `restrict` option. To rotate it:
+
+```bash
+ssh-keygen -t ed25519 -N '' -C github-actions-deploy -f ~/.ssh/gha_deploy
+echo "restrict $(cat ~/.ssh/gha_deploy.pub)" >> ~/.ssh/authorized_keys   # then drop the old github-actions-deploy line
+gh secret set NAS_SSH_PRIVATE_KEY --repo connormason/dotfiles < ~/.ssh/gha_deploy && rm ~/.ssh/gha_deploy
+```
+
+**Tailscale SSH must stay off on the NAS** (`tailscale_ssh_enabled: false` in the NAS host vars). When enabled it
+intercepts every SSH connection to the tailnet address and ignores the key. Tailscale SSH also never lets a tagged
+device such as `tag:ci` into a user-owned node, so the deploy fails with
+`tailnet policy does not permit you to SSH to this node`.

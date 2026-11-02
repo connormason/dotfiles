@@ -27,6 +27,7 @@ Supervisor, which provides apps (add-ons), managed backups, and in-place OS/Core
 | VM disk          | `/var/lib/libvirt/images/haos.qcow2` (64 GB)        | [`setup.sh`](setup.sh) (created once, never overwritten) |
 | Host shutdown    | `/etc/default/libvirt-guests`                       | [`setup.sh`](setup.sh)                                   |
 | Docker exemption | `docker.service.d/10-bridge-forward.conf`           | [`setup.sh`](setup.sh)                                   |
+| USB passthrough  | `/etc/udev/rules.d/90-haos-usb.rules` + `<hostdev>` | [`setup.sh`](setup.sh)                                   |
 | Home Assistant   | inside the VM                                       | Home Assistant UI + its own backups                      |
 
 The VM's NIC is bridged onto the LAN, so it gets its own DHCP address from the router and sees mDNS/SSDP broadcasts
@@ -66,9 +67,30 @@ make).
    Core, so the page takes a few minutes to appear. Pick *Create my smart home* to start fresh, or *Upload backup* to
    restore one.
 
-5. **Point backups off the VM.** In *Settings → System → Storage → Add network storage*, add the NAS's `media` Samba
-   share (`/storage`) for backups, then set it as the default location under *Settings → System → Backups*. Backups on
-   the ZFS pool survive a lost or rebuilt VM disk, and are what a re-bootstrap restores from.
+5. **Set up backups.** Backups go to three places: the VM itself, the NAS, and Google Drive.
+
+   - On the NAS, create the target folder once. It lives on its own dataset, so it can be snapshotted or capped
+     separately:
+
+     ```bash
+     sudo zfs create storage/backups
+     sudo mkdir -p /storage/backups/homeassistant && sudo chown -R "$USER:$USER" /storage/backups
+     ```
+
+   - In *Settings → System → Storage → Add network storage*, add `nas_backups` with usage **Backup**, server = the NAS's
+     LAN IP, protocol Samba/Windows (CIFS), remote share `media/backups/homeassistant`, and user `connormason`. The
+     password is the Samba password, set from the vault's `admin_password`.
+
+   - Add the Google Drive integration. It shows up as a backup location.
+
+   - In *Settings → System → Backups → Configure automatic backups*, schedule daily backups. Select *This system*,
+     `nas_backups` and Google Drive as locations.
+
+   - **Save the encryption key** (*Download emergency kit*) in the password manager. Backups cannot be restored without
+     it.
+
+   Keep the off-site copy: the `storage` pool stripes across two disks with no redundancy, so a single disk failure
+   loses the NAS copy too.
 
 ## Re-bootstrapping a wiped NAS<a name="re-bootstrapping-a-wiped-nas"></a>
 
@@ -77,8 +99,8 @@ make).
 2. `sudo ~/dotfiles-personal/vms/haos/bridge.sh` from the console or `tmux`, then re-run the playbook with `--tags haos`
    (or `sudo vms/haos/setup.sh` by hand).
 3. Re-create the router reservation if the router was also reset.
-4. During onboarding choose *Upload backup* and pick the newest backup from `/storage` (or add the network storage first
-   and restore from there).
+4. During onboarding choose *Upload backup*. Pick the newest `.tar` from `/storage/backups/homeassistant`, or from
+   Google Drive if the pool was lost, and enter the encryption key from the emergency kit.
 
 ## Day-to-day operations<a name="day-to-day-operations"></a>
 
@@ -99,9 +121,13 @@ HAOS and Home Assistant Core update themselves from *Settings → System → Upd
 [`setup.sh`](setup.sh) only decides which image a **fresh** install starts from. Bump it (with the release asset's
 sha256 digest) when a rebuild would otherwise start several major versions behind.
 
-USB radios (Zigbee, Z-Wave, Thread) need USB passthrough. Find the device with `lsusb`, then add it with
-`virsh -c qemu:///system attach-device haos --persistent` and a `<hostdev mode='subsystem' type='usb'>` XML snippet
-naming its vendor/product IDs.
+USB radios (Zigbee, Z-Wave, Thread) need USB passthrough. [`setup.sh`](setup.sh) passes through every `vendor:product`
+ID in `HAOS_USB` (find IDs with `lsusb`). The default is the ConBee II Zigbee stick (`1cf1:0030`). Devices are matched
+by ID, not port, and marked optional, so the VM still boots without them. Re-run `sudo vms/haos/setup.sh` after adding
+an ID. Inside Home Assistant the ConBee then appears as `/dev/serial/by-id/usb-dresden_elektronik_..._ConBee_II_...`. A
+udev rule gives QEMU (user `libvirt-qemu`) write access to the device and tells ModemManager to ignore it. Without that
+rule QEMU opens the device read-only: the guest sees it but cannot use it, and the host keeps `/dev/ttyACM0`. Once
+passthrough works, that host node disappears.
 
 ## Migrating from the Home Assistant container<a name="migrating-from-the-home-assistant-container"></a>
 

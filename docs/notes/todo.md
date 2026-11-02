@@ -9,6 +9,12 @@
 - Update docker-compose.yml schema version?
 - remove requirements.txt?
 
+## Personal MacBook bootstrap
+
+- Root-cause the intermittent 109-byte interactive-shell startup output seen once on the first real run
+- Phase B step B5: public plugin set in `profiles/personal-mac/render/claude.json`, multi-day VS Code drift check (day
+  1, 2026-10-31, was clean; the `--settings` layering probe is done)
+
 ## Docker Services Modularization
 
 Remaining manual steps (require NAS/GitHub access):

@@ -112,7 +112,7 @@ class TestDarwinOnlyStages:
     """
     Tests for stages gated with require_os darwin
     """
-    @pytest.mark.parametrize('stage', ['60-macos.sh', '72-vscode.sh', '96-iterm2.sh'])
+    @pytest.mark.parametrize('stage', ['58-defaults-backup.sh', '60-macos.sh', '72-vscode.sh', '96-iterm2.sh'])
     def test_skips_on_linux_without_running_anything(self, shell: str, env: dict[str, str], stage: str) -> None:
         """
         Test that the stage exits 0 on linux before any mutating command

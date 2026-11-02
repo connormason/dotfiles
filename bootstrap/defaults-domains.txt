@@ -1,0 +1,19 @@
+# Preference domains written by 60-macos and 96-iterm2, snapshotted by 58-defaults-backup.
+# One domain per line; an absolute path names a file domain (written with sudo). `#` starts a comment.
+# tests/unit/test_defaults_backup.py fails when a `defaults write` in either stage targets a domain missing here.
+NSGlobalDomain
+com.apple.ActivityMonitor
+com.apple.SoftwareUpdate
+com.apple.commerce
+com.apple.dock
+com.apple.finder
+com.apple.frameworks.diskimages
+com.apple.mail
+com.apple.messageshelper.MessageController
+com.apple.menuextra.battery
+com.apple.menuextra.clock
+com.apple.systemuiserver
+com.apple.screencapture
+com.apple.iTunesHelper
+/Library/Preferences/com.apple.loginwindow
+com.googlecode.iterm2
