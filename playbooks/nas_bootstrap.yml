@@ -94,3 +94,14 @@
       tags:
         - haos
         - configfile
+
+    # Compose services: sync services/ to ~/docker, render per-service secrets, deploy everything
+    - name: Deploy the container services
+      ansible.builtin.include_role:
+        name: roles/services
+        apply:
+          tags: services
+      tags:
+        - services
+        - secrets
+        - configfile

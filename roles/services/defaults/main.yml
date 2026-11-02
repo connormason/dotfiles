@@ -1,0 +1,6 @@
+---
+# Where the compose files land on the NAS; must match docker_dir in the docker role (a test pins the two together)
+services_target_dir: "{{ ansible_facts['user_dir'] }}/docker"
+
+# The repository's services/ directory on the machine running Ansible
+services_source_dir: "{{ playbook_dir }}/../services"

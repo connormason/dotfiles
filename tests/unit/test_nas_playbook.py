@@ -223,7 +223,7 @@ class TestHaosRole:
         assert 'stdout_lines | default([])' in setup['changed_when']
 
 
-EXPECTED_ORDER = ['debian', 'zfs', 'samba', 'docker', 'tailscale', 'dotfiles', 'haos']
+EXPECTED_ORDER = ['debian', 'zfs', 'samba', 'docker', 'tailscale', 'dotfiles', 'haos', 'services']
 
 
 class TestPlaybookOrder:

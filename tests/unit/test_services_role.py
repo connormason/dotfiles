@@ -1,0 +1,144 @@
+"""
+Structural tests for the services role and its place in the NAS playbook (no NAS needed)
+"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PLAYBOOK  = REPO_ROOT / 'playbooks' / 'nas_bootstrap.yml'
+ROLES     = REPO_ROOT / 'roles'
+
+TaskDict = dict[str, Any]  # Any: heterogeneous, yaml-loaded task structure
+
+
+def _flatten(tasks: list[TaskDict]) -> list[TaskDict]:
+    """
+    Flatten block/rescue nesting into one task list (blocks included)
+    """
+    flat: list[TaskDict] = []
+    for task in tasks:
+        flat.append(task)
+        for key in ('block', 'rescue', 'always'):
+            flat.extend(_flatten(task.get(key, [])))
+    return flat
+
+
+def _tasks(role: str) -> list[TaskDict]:
+    """
+    Load every task in a role's tasks/main.yml
+    """
+    return _flatten(yaml.safe_load((ROLES / role / 'tasks' / 'main.yml').read_text(encoding='utf-8')))
+
+
+def _task(role: str, name: str) -> TaskDict:
+    """
+    Load the task with the given name from a role
+    """
+    matches = [task for task in _tasks(role) if task.get('name') == name]
+    assert len(matches) == 1, f'expected exactly one task named {name!r} in role {role}'
+    return matches[0]
+
+
+def _defaults(role: str) -> dict[str, Any]:  # Any: heterogeneous, yaml-loaded variables
+    """
+    Load a role's defaults/main.yml
+    """
+    data = yaml.safe_load((ROLES / role / 'defaults' / 'main.yml').read_text(encoding='utf-8'))
+    assert isinstance(data, dict)
+    return data
+
+
+class TestPlaybookWiring:
+    """
+    Tests for how the playbook includes the services role
+    """
+    @pytest.fixture
+    def include(self) -> TaskDict:
+        """
+        The last task of the NAS play
+        """
+        return yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]['tasks'][-1]
+
+    def test_services_role_runs_last(self, include: TaskDict) -> None:
+        """
+        Test that the services role is the final include, after haos
+        """
+        assert include['ansible.builtin.include_role']['name'] == 'roles/services'
+
+    def test_include_is_reachable_by_services_secrets_and_configfile_tags(self, include: TaskDict) -> None:
+        """
+        Test that the include carries the services, secrets, and configfile tags
+        """
+        assert include['tags'] == ['services', 'secrets', 'configfile']
+
+    def test_only_the_services_tag_is_applied_inside_the_role(self, include: TaskDict) -> None:
+        """
+        Test that apply tags the role's tasks 'services' only, so '--tags secrets' selects just the secret tasks
+        """
+        assert include['ansible.builtin.include_role']['apply']['tags'] == 'services'
+
+
+class TestServicesRole:
+    """
+    Tests for roles/services
+    """
+    def test_sync_pushes_the_tree_without_templates_env_files_or_deletes(self) -> None:
+        """
+        Test that the sync uses ansible.posix.synchronize with the same exclusions as deploy-services.sh
+        """
+        args = _task('services', 'Sync compose files to the NAS')['ansible.posix.synchronize']
+
+        assert '--exclude=*.j2' in args['rsync_opts']
+        assert '--exclude=.env'  in args['rsync_opts']
+        assert not args.get('delete')
+        assert args['dest'].startswith('{{ services_target_dir }}')
+
+    def test_only_the_secret_tasks_carry_the_secrets_tag(self) -> None:
+        """
+        Test that the secrets tag reaches exactly the directory and render tasks
+        """
+        tagged = {task['name'] for task in _tasks('services') if 'secrets' in task.get('tags', [])}
+
+        assert tagged == {'Create per-service secret directories', 'Render per-service secret files'}
+
+    def test_secrets_render_to_private_env_files_from_the_controller_checkout(self) -> None:
+        """
+        Test that each services/*/env.j2 renders to a 0600 file, without echoing a diff
+        """
+        task = _task('services', 'Render per-service secret files')
+
+        assert task['ansible.builtin.template']['mode'] == '0600'
+        assert task['ansible.builtin.template']['dest'].endswith('/.env')
+        assert task['diff'] is False
+        assert '/*/env.j2' in task['loop']
+
+    def test_deploy_reports_changes_only_when_containers_change(self) -> None:
+        """
+        Test that deploy.sh all is skipped in check mode and counts compose changes, not 'Running'
+        """
+        task = _task('services', 'Deploy all services')
+
+        assert task['when'] == 'not ansible_check_mode'
+        for verb in ('Started', 'Recreated', 'Created', 'Pulled'):
+            assert verb in task['changed_when']
+        assert 'Running' not in task['changed_when']
+
+    def test_deploy_runs_with_a_fresh_group_list(self) -> None:
+        """
+        Test that deploy.sh runs through become as the same user, so a docker group added this run applies
+        """
+        task = _task('services', 'Deploy all services')
+
+        assert task['become'] is True
+        assert task['become_user'] == "{{ ansible_facts['user_id'] }}"
+
+    def test_target_dir_matches_the_docker_role(self) -> None:
+        """
+        Test that both roles agree where ~/docker lives
+        """
+        assert _defaults('services')['services_target_dir'] == _defaults('docker')['docker_dir']
