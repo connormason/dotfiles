@@ -30,8 +30,8 @@ Findings from reading the repository at `5401a8a`:
   `ADVERTISE_IP`. PiHole's compose file is `compose.yml.disabled`; `ADVERTISE_IP` is not secret (consumed by Plex via
   interpolation); Glance reads the file through `env_file: .env`. The design's per-service mechanism therefore has no
   live secret consumer until PiHole returns.
-- **Inventory** lives in a separate private repo (`dotfiles-inventory`), cloned to the gitignored `inventory/`. The `nas`
-  host's `ansible_host` is `192.168.68.79`. Any inventory change is made there, not in this repository.
+- **Inventory** lives in a separate private repo (`dotfiles-inventory`), cloned to the gitignored `inventory/`. The
+  `nas` host's `ansible_host` is `192.168.68.79`. Any inventory change is made there, not in this repository.
 - **`run.py`** already provides `@command` registration, `shell_command()`, `parse_extra_vars()`, and
   `require_inventory()` / `require_vault_password()` helpers (`run.py:871`, `1179`, `1192`), and generates the Makefile
   from registered commands.
@@ -90,8 +90,8 @@ GitHub push (services/**) ─▶ deploy.yml ─▶ scripts/nas/deploy-services.s
 1. **Preflight**, each failure printing its remedy:
    - inventory present → `run.py update-inventory`;
    - `vault_password.txt` present → create it (see `CLAUDE.md`);
-   - the NAS's `ansible_host` resolved and answering `ssh -o ConnectTimeout=5 -o BatchMode=yes … true` → "is Tailscale
-     up? does the inventory host resolve?".
+   - the NAS's `ansible_host` resolved and answering `ssh -o ConnectTimeout=5 -o BatchMode=yes … true` → "is
+     Tailscale up? does the inventory host resolve?".
 2. `ansible-galaxy collection install -r roles/requirements.yml` (idempotent).
 3. `ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml` with the vault password file, forwarding
    `--tags`, `--check`, `--diff`, `--limit`, and `-e` (reusing `parse_extra_vars`). `-e dotfiles_repo_version=<branch>`
@@ -126,8 +126,8 @@ The exit status is Ansible's.
 
 `deploy.yml` keeps `detect-changes` unchanged. In `deploy-push` and `deploy-manual`, the "Rsync …" and "Deploy" steps
 collapse into one step that exports `NAS_HOST`, `NAS_USER`, and `NAS_SSH_KEY` from the existing secrets and calls the
-script. The Tailscale and key setup steps are untouched. A new `tests/unit` check pins that the workflow calls the script
-and no longer contains inline `rsync` (the parent design requires CI and laptop paths not to diverge).
+script. The Tailscale and key setup steps are untouched. A new `tests/unit` check pins that the workflow calls the
+script and no longer contains inline `rsync` (the parent design requires CI and laptop paths not to diverge).
 
 ### `services` role
 
@@ -216,8 +216,8 @@ Live acceptance (run by the owner; the Claude sandbox cannot open LAN sockets):
 
 Not part of the PR:
 
-- Change `ansible_host` for `nas` in the inventory repo to the MagicDNS name once `ssh <name>` works from the laptop, and
-  push that repo.
+- Change `ansible_host` for `nas` in the inventory repo to the MagicDNS name once `ssh <name>` works from the laptop,
+  and push that repo.
 - Remove the stale Lutron certificate files from the inventory repo's `group_vars/all` (unused since the HAOS move).
 - Run the live acceptance steps above.
 
