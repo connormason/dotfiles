@@ -144,11 +144,13 @@ the requirements file). `--check` skips the deploy command and previews sync and
 
 ### Per-service secrets
 
-- A service needing secrets ships `services/<svc>/env.j2` and references `env_file: .env` in its `compose.yml`.
+- A service needing secrets ships `services/<svc>/env.j2` and references `env_file: <svc>/.env` in its `compose.yml`.
+  The prefix matters: `deploy.sh` passes `--project-directory ~/docker`, so a bare `env_file: .env` resolves to the
+  global `~/docker/.env` (this is how Glance reads it), not to the service's own file.
 - The `services` role's secrets step renders each template to `~/docker/<svc>/.env`. Rotation:
   `run.py nas-provision --tags secrets`, then `run.py nas-deploy <svc>`.
 - **PiHole migration:** `services/pihole/env.j2` carries `FTLCONF_webserver_api_password={{ pihole_web_password }}`;
-  `compose.yml.disabled` gains `env_file: .env` and loses its bare `FTLCONF_webserver_api_password` entry under
+  `compose.yml.disabled` gains `env_file: pihole/.env` and loses its bare `FTLCONF_webserver_api_password` entry under
   `environment:` (Compose lets `environment:` override `env_file:`, and a bare name resolved from an unset interpolation
   variable would shadow the value). The password line is removed from `roles/docker/templates/env.j2`, which keeps only
   the non-secret `ADVERTISE_IP`.
