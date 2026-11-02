@@ -4,6 +4,7 @@ Unit tests for vms/haos/setup.sh --dry-run: change counting and the `haos: chang
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -270,3 +271,18 @@ class TestHaosChangeCount:
         result = _dry_run(host)
         assert result.returncode != 0
         assert 'run vms/haos/bridge.sh first' in result.stderr
+
+
+class TestHaosPackages:
+    """
+    Tests for the package list setup.sh installs
+    """
+    def test_usbutils_is_installed_for_lsusb(self) -> None:
+        """
+        Test that PACKAGES includes usbutils, which provides the lsusb the USB passthrough step calls
+        """
+        text = SETUP.read_text(encoding='utf-8')
+        packages = re.search(r'^PACKAGES=\((.*?)\)$', text, re.MULTILINE)
+
+        assert packages, 'PACKAGES array not found in setup.sh'
+        assert 'usbutils' in packages.group(1).split()

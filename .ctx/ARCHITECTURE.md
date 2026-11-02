@@ -27,8 +27,8 @@ overlays in file order. Full contract in [`bootstrap/README.md`](../bootstrap/RE
 - **`bootstrap/bootstrap.sh`**: discovers numbered stage scripts (`NN-*.sh`) in every layer's `bootstrap/` directory,
   merges them by number, and runs each as a separate bash process. Flags: `--dry-run`, `--list`, `--only`, `--from`,
   `--resume`, `--verify`, `--no-log`. Shared helpers live in `bootstrap/lib.sh`.
-- **Stages** (base): `00-preflight`, `20-ssh-key`, `50-brew`, `60-macos`, `72-vscode`, `80-repos`, `90-python`,
-  `95-dotfiles`, `96-iterm2`, `97-render`.
+- **Stages** (base): `00-preflight`, `20-ssh-key`, `50-brew`, `58-defaults-backup`, `60-macos`, `72-vscode`,
+  `80-repos`, `90-python`, `95-dotfiles`, `96-iterm2`, `97-render`.
 - **Manifests**: `bootstrap/Brewfile`, `vscode-extensions.txt`, `repos.txt`, `uv-tools.txt`; each stage reads the base
   copy then every overlay's copy.
 - **`stow.sh`**: links every layer's `stow/<package>/` into `$HOME` with `--no-folding`. All-or-nothing: layers are
