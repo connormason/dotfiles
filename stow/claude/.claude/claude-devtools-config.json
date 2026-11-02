@@ -1,0 +1,78 @@
+{
+  "display": {
+    "compactMode": false,
+    "showTimestamps": true,
+    "syntaxHighlighting": true
+  },
+  "general": {
+    "autoExpandAIGroups": true,
+    "claudeRootPath": null,
+    "defaultTab": "dashboard",
+    "launchAtLogin": false,
+    "showDockIcon": true,
+    "theme": "dark",
+    "useNativeTitleBar": false
+  },
+  "httpServer": {
+    "enabled": false,
+    "port": 3456
+  },
+  "notifications": {
+    "enabled": true,
+    "ignoredRegex": [
+      "The user doesn't want to proceed with this tool use\\."
+    ],
+    "ignoredRepositories": [],
+    "includeSubagentErrors": true,
+    "snoozeMinutes": 30,
+    "snoozedUntil": null,
+    "soundEnabled": true,
+    "triggers": [
+      {
+        "id": "builtin-bash-command",
+        "name": ".env File Access Alert",
+        "mode": "content_match",
+        "color": "red",
+        "contentType": "tool_use",
+        "enabled": false,
+        "isBuiltin": true,
+        "matchPattern": "/.env"
+      },
+      {
+        "id": "builtin-tool-result-error",
+        "name": "Tool Result Error",
+        "mode": "error_status",
+        "color": "orange",
+        "contentType": "tool_result",
+        "enabled": false,
+        "ignorePatterns": [
+          "The user doesn't want to proceed with this tool use\\.",
+          "\\[Request interrupted by user for tool use\\]"
+        ],
+        "isBuiltin": true,
+        "requireError": true
+      },
+      {
+        "id": "builtin-high-token-usage",
+        "name": "High Token Usage",
+        "mode": "token_threshold",
+        "color": "yellow",
+        "contentType": "tool_result",
+        "enabled": false,
+        "isBuiltin": true,
+        "tokenThreshold": 8000,
+        "tokenType": "total"
+      }
+    ]
+  },
+  "sessions": {
+    "hiddenSessions": {},
+    "pinnedSessions": {}
+  },
+  "ssh": {
+    "autoReconnect": false,
+    "lastActiveContextId": "local",
+    "lastConnection": null,
+    "profiles": []
+  }
+}

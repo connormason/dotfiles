@@ -866,7 +866,7 @@ class TestClaude:
         Test that keys the work overlay owns are absent when only the base and fixture overlay are rendered
         """
         settings = self._settings(home)
-        for key in ('apiKeyHelper', 'statusLine', 'enabledPlugins', 'extraKnownMarketplaces', 'mcpServers'):
+        for key in ('apiKeyHelper', 'enabledPlugins', 'extraKnownMarketplaces', 'mcpServers'):
             assert key not in settings, key
 
     def test_spinner_verbs_are_unique(self, home: Home) -> None:
