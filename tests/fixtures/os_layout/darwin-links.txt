@@ -6,6 +6,7 @@
 .claude/agents/file-explorer.md
 .claude/agents/file-searcher.md
 .claude/agents/python-cli-architect.md
+.claude/claude-devtools-config.json
 .claude/commands/docs-bootstrap.md
 .claude/commands/dotclaude-cleanup.md
 .claude/hooks/block-ruff-format.sh
@@ -24,11 +25,17 @@
 .claude/rules/script-style.md
 .claude/rules/testing.md
 .claude/scripts/dotclaude-cleanup.sh
+.claude/skills/claude-session-logs/README.md
+.claude/skills/claude-session-logs/SKILL.md
+.claude/skills/claude-session-logs/scripts/extract.py
 .claude/skills/context-audit/SKILL.md
 .claude/skills/context-cleanup/SKILL.md
 .claude/skills/docs-bootstrap/SKILL.md
 .claude/skills/docs-bootstrap/references/api-extraction.md
 .claude/skills/docs-bootstrap/references/templates.md
+.claude/skills/gh-pr-comments/README.md
+.claude/skills/gh-pr-comments/SKILL.md
+.claude/skills/gh-pr-comments/scripts/gh_comments.sh
 .claude/skills/pre-commit-analysis/SKILL.md
 .claude/skills/pre-commit-analysis/references/hook-catalog.md
 .claude/skills/pre-commit-migration/SKILL.md
@@ -39,6 +46,8 @@
 .claude/skills/pre-commit-setup/references/pre-commit-quick-reference.md
 .claude/skills/pre-commit-setup/references/prek-comprehensive.md
 .claude/skills/pre-commit-setup/references/prek-quick-reference.md
+.claude/skills/shell-scripting/SKILL.md
+.claude/statusline/statusline.py
 .config/btop/btop.conf
 .config/eza/theme.yml
 .config/fastfetch/config.jsonc

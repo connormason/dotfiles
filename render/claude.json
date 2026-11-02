@@ -226,13 +226,17 @@
       "Twerkin' on that tech debt"
     ]
   },
+  "statusLine": {
+    "command": "uv run --quiet --script \"$HOME/.claude/statusline/statusline.py\"",
+    "padding": 0,
+    "type": "command"
+  },
   "statusLineConfig": {
     "colorTheme": "neon",
     "components": [
       "directory",
       "git",
       "active-tool",
-      "todos",
       "model",
       "effort",
       "context",
