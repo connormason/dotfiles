@@ -98,18 +98,18 @@ FALLBACK_PALETTE = Palette(accent=(255, 255, 255), text=(255, 255, 255))
 
 ICON_SETS: dict[str, dict[str, str]] = {
     'nerd-font': {
-        'directory':   '\uf07b',  # nf-fa-folder
-        'git':         '\ue0a0',  # nf-pl-branch
-        'active-tool': '\uf013',  # nf-fa-cog
-        'model':       '\uf2db',  # nf-fa-microchip
-        'effort':      '\uf0e7',  # nf-fa-bolt
-        'context':     '\uf1c0',  # nf-fa-database
-        'duration':    '\uf017',  # nf-fa-clock_o
-        'messages':    '\uf075',  # nf-fa-comment
-        'tools':       '\uf0ad',  # nf-fa-wrench
-        'quota':       '\uf201',  # nf-fa-line_chart
-        'agent':       '\U000f06a9',  # nf-md-robot (Nerd Fonts v3 code point)
-        'api-base':    '\uf0ac',  # nf-fa-globe
+        'directory':   '\uf07b',        # nf-fa-folder
+        'git':         '\ue0a0',        # nf-pl-branch
+        'active-tool': '\uf013',        # nf-fa-cog
+        'model':       '\uf2db',        # nf-fa-microchip
+        'effort':      '\uf0e7',        # nf-fa-bolt
+        'context':     '\uf1c0',        # nf-fa-database
+        'duration':    '\uf017',        # nf-fa-clock_o
+        'messages':    '\uf075',        # nf-fa-comment
+        'tools':       '\uf0ad',        # nf-fa-wrench
+        'quota':       '\uf201',        # nf-fa-line_chart
+        'agent':       '\U000f06a9',    # nf-md-robot (Nerd Fonts v3 code point)
+        'api-base':    '\uf0ac',        # nf-fa-globe
     },
     'text': {},
 }
@@ -165,6 +165,7 @@ def visible_width(text: str) -> int:
             continue
         width += 2 if unicodedata.east_asian_width(char) in ('W', 'F') else 1
     return width
+
 
 # ==============================================================================
 # Configuration
@@ -257,6 +258,7 @@ def load_config(path: Path) -> Config:
 
     return Config(**values)
 
+
 # ==============================================================================
 # Formatting helpers
 # ==============================================================================
@@ -309,6 +311,7 @@ def severity(percent: float) -> str | None:
     if percent >= WARNING_PERCENT:
         return 'warning'
     return None
+
 
 # ==============================================================================
 # Segment rendering and layout
@@ -395,6 +398,7 @@ def layout(parts: list[str], gap: str, columns: int, truncation: str) -> list[st
         rows[-1].append(part)
 
     return [gap.join(row) for row in rows]
+
 
 # ==============================================================================
 # Git
@@ -521,7 +525,9 @@ def _record_entry(stats: TranscriptStats, entry: Any) -> None:
             if block.get('type') == 'tool_use':
                 stats.tool_uses += 1
                 stats.pending[str(block.get('id', ''))] = str(block.get('name', '?'))
+
     elif entry.get('type') == 'user':
+
         # A genuine prompt means the previous turn ended, so a call still unresolved (killed mid-tool) is stale
         if isinstance(content, str):
             if not content.startswith(COMMAND_PREFIXES):
@@ -646,6 +652,7 @@ def load_stats(session_id: str, transcript: str) -> TranscriptStats | None:
     """
     if not transcript:
         return None
+
     path = Path(transcript)
     if not path.is_file():
         return None
@@ -654,9 +661,11 @@ def load_stats(session_id: str, transcript: str) -> TranscriptStats | None:
     stats  = _read_cache(cache)
     before = (stats.path, stats.offset)
     stats  = update_stats(stats, path)
+
     if (stats.path, stats.offset) != before:
         _write_cache(cache, stats)
     return stats
+
 
 # ==============================================================================
 # Components
@@ -696,7 +705,7 @@ class Context:
     data:     dict[str, Any]
     config:   Config
     env:      Mapping[str, str]
-    git_fn:   Callable[[str], GitStatus | None]
+    git_fn:   Callable[[str],      GitStatus | None]
     stats_fn: Callable[[str, str], TranscriptStats | None]
 
     @property
@@ -882,6 +891,7 @@ def _api_base(ctx: Context) -> Segment | None:
     url = ctx.env.get('ANTHROPIC_BASE_URL', '')
     return Segment(url) if url else None
 
+
 # ==============================================================================
 # Render
 # ==============================================================================
@@ -919,12 +929,13 @@ def render(
             continue
         try:
             segment = renderer(ctx)
-        except Exception:  # noqa: S112 - a faulty component is dropped, not fatal
+        except Exception:  # noqa: S112
             continue
         if (segment is not None) and segment.text:
             parts.append(render_segment(name, segment, config, color))
 
     return '\n'.join(layout(parts, joiner(config, color), columns, config.truncation))
+
 
 # ==============================================================================
 # Entry point

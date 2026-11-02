@@ -42,7 +42,7 @@ def get_subagents_dir(session_path: Path) -> Path:
     :param session_path: Path to the session JSONL file.
     :return: Path to the subagents directory for the given session.
     """
-    session_id = session_path.stem  # e.g., "abc123" from "abc123.jsonl"
+    session_id = session_path.stem
     return session_path.parent / session_id / 'subagents'
 
 
@@ -58,7 +58,6 @@ def list_subagent_files(session_path: Path) -> dict[str, Path]:
     result: dict[str, Path] = {}
     if subagents_dir.exists() and subagents_dir.is_dir():
         for f in subagents_dir.glob('agent-*.jsonl'):
-            # Extract agent ID from filename like "agent-af1f466.jsonl"
             agent_id = f.stem.replace('agent-', '')
             result[agent_id] = f
 
@@ -105,6 +104,7 @@ def list_projects() -> list[str]:
     if not projects_dir.exists():
         print('No projects directory found', file=sys.stderr)
         return []
+
     return sorted([d.name for d in projects_dir.iterdir() if d.is_dir()])
 
 
@@ -338,7 +338,6 @@ def extract_session(
                     if isinstance(content, list):
                         for item in content:
                             if isinstance(item, dict):
-                                # Filter for errors only if requested
                                 if errors_only:
                                     if (item.get('type') == 'tool_result') and item.get('is_error'):
                                         output.extend(parse_content_item(item, line_num, verbose))
@@ -415,13 +414,13 @@ def find_errors(session_path: Path, pattern: str | None = None) -> list[ErrorInf
                                 error_content = str(item.get('content', ''))
                                 if pattern and (pattern.lower() not in error_content.lower()):
                                     continue
+
                                 errors.append({
                                     'line':     line_num,
                                     'agent_id': agent_id,
                                     'content':  error_content[:500],
                                     'tool_id':  item.get('tool_use_id', '')
                                 })
-
     return errors
 
 
@@ -586,6 +585,7 @@ def build_agent_hierarchy(session_path: Path) -> dict[str, HierarchyNode]:
                     if isinstance(content, list):
                         for item in content:
                             if isinstance(item, dict):
+
                                 # Track Task spawns from agents
                                 if (item.get('type') == 'tool_use') and (item.get('name') == 'Task'):
                                     tool_id = item.get('id', '')
@@ -625,7 +625,8 @@ def build_agent_hierarchy(session_path: Path) -> dict[str, HierarchyNode]:
         parent_tool_id = info['parent_tool_use_id']
         if parent_tool_id in task_spawns:
             spawn_info = task_spawns[parent_tool_id]
-            result = agent_results.get(agent_id)
+            result     = agent_results.get(agent_id)
+
             hierarchy_entry: HierarchyChild = {
                 'agent_id':      agent_id,
                 'subagent_type': spawn_info['subagent_type'],
@@ -758,7 +759,6 @@ def get_subagent_summary(session_path: Path) -> list[SubagentSummary]:
 
             if agent_id:
                 if agent_id not in agents:
-                    # Find spawn info
                     spawn_info: SummaryTaskSpawn = task_spawns.get(parent_tool_use_id, {})  # type: ignore[typeddict-item]
                     agents[agent_id] = {
                         'agent_id':      agent_id,
@@ -946,7 +946,6 @@ def compare_sessions(
         results[session_key]['agents'] = get_subagent_summary(session_path)
         results[session_key]['errors'] = find_errors(session_path)
 
-        # Count tool usage
         tool_counts: dict[str, int] = {}
         with session_path.open() as f:
             for line in f:
@@ -1119,7 +1118,6 @@ def export_transcript(session_path: Path, *, agent_id: str | None = None, output
 
                     if item_type == 'text':
                         if text := item.get('text', '').strip():
-                            # Indent if this is a subagent
                             prefix = '  ' if msg_agent_id else ''
                             lines.append(f'\n{prefix}* {text}\n')
 
@@ -1185,6 +1183,7 @@ def export_transcript(session_path: Path, *, agent_id: str | None = None, output
         with output_path.open('w') as f:
             f.write(output)
         return str(output_path)
+
     return output
 
 

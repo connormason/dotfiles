@@ -104,6 +104,7 @@ class TestLoadConfig:
             'prUrlFormat':    'none',
             'truncation':     'truncate',
         })
+
         assert statusline.load_config(path) == statusline.Config(
             color_theme='neon',
             style='none',
@@ -129,6 +130,7 @@ class TestLoadConfig:
             'modelStyle': 'short',
             'lines':      1,
         })
+
         config = statusline.load_config(path)
         assert config.color_theme == 'neon'
         assert config.style       == 'icon-pill'
@@ -478,11 +480,13 @@ class TestGitStatus:
         bin_dir  = tmp_path / 'bin'
         fake_git = bin_dir / 'git'
         bin_dir.mkdir()
+
         fake_git.write_text(
             "#!/bin/sh\nprintf '# branch.oid abc\\n# branch.head trunk\\n? file\\351.txt\\n'\n",
             encoding='utf-8',
         )
         fake_git.chmod(0o755)
+
         monkeypatch.setenv('PATH', str(bin_dir))
         assert statusline.git_status(str(tmp_path)) == statusline.GitStatus('trunk', dirty=True)
 
@@ -537,9 +541,9 @@ class TestUpdateStats:
 
         stats = statusline.update_stats(statusline.TranscriptStats(), path)
         assert (stats.prompts, stats.tool_uses) == (1, 2)
-        assert stats.pending     == {'t2': 'Read'}
-        assert stats.active_tool == 'Read'
-        assert stats.offset      == path.stat().st_size
+        assert stats.pending                    == {'t2': 'Read'}
+        assert stats.active_tool                == 'Read'
+        assert stats.offset                     == path.stat().st_size
 
     def test_new_prompt_clears_stale_pending_call(self, tmp_path: Path) -> None:
         """
@@ -678,7 +682,7 @@ class TestLoadStats:
         """
         Return None for an empty or missing transcript path
         """
-        assert statusline.load_stats('s', '') is None
+        assert statusline.load_stats('s', '')                             is None
         assert statusline.load_stats('s', str(tmp_path / 'absent.jsonl')) is None
 
     def test_resumes_from_cache(self, tmp_path: Path) -> None:
@@ -987,8 +991,8 @@ def _render(data: dict[str, Any], config: Any, **kwargs: Any) -> str:
     """
     Render with stubbed sources and an empty environment unless overridden
     """
-    kwargs.setdefault('env', {})
-    kwargs.setdefault('git_fn', lambda _cwd: None)
+    kwargs.setdefault('env',      {})
+    kwargs.setdefault('git_fn',   lambda _cwd: None)
     kwargs.setdefault('stats_fn', lambda _session, _transcript: None)
     return statusline.render(data, config, **kwargs)
 
@@ -1100,7 +1104,7 @@ class TestEntryPoint:
     def test_main_falls_back_when_render_fails(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        capsys:      pytest.CaptureFixture[str],
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Print the fallback line and exit 0 when rendering raises
@@ -1108,8 +1112,9 @@ class TestEntryPoint:
         def boom(*_args: Any, **_kwargs: Any) -> str:
             raise RuntimeError('boom')
 
-        monkeypatch.setattr(sys, 'stdin', io.TextIOWrapper(io.BytesIO(json.dumps(SAMPLE).encode())))
+        monkeypatch.setattr(sys,        'stdin',  io.TextIOWrapper(io.BytesIO(json.dumps(SAMPLE).encode())))
         monkeypatch.setattr(statusline, 'render', boom)
+
         assert statusline.main() == 0
         assert capsys.readouterr().out == f'proj {statusline.SEPARATOR} Sonnet 5.5\n'
 
@@ -1119,6 +1124,7 @@ class TestEntryPoint:
         """
         config = {'iconSet': 'text', 'components': ['directory', 'model', 'context', 'effort']}
         (tmp_path / 'settings.json').write_text(json.dumps({'statusLineConfig': config}), encoding='utf-8')
+
         return subprocess.run(
             [sys.executable, str(SCRIPT_PATH)],
             input=stdin,
