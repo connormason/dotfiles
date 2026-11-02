@@ -11,6 +11,8 @@
 #   4. keep bridged traffic flowing if Docker's FORWARD-drop policy ever applies to it (br_netfilter)
 #   5. download the pinned HAOS image (sha256-verified), decompress and grow it to HAOS_DISK_SIZE
 #   6. define the VM with virt-install, mark it autostart, and start it
+#   7. pass USB radios (Zigbee etc.) through to the VM: a udev rule giving QEMU write access, then attach the device
+#      live (if running) and persistently
 #
 # Environment overrides:
 #   HAOS_NAME       libvirt domain name (default: haos)
@@ -19,6 +21,7 @@
 #   HAOS_DISK_SIZE  virtual disk size for a fresh image (default: 64G)
 #   HAOS_MAC        NIC MAC address; pin it so the router's DHCP reservation survives a rebuild
 #   BRIDGE          host bridge to attach to (default: br0)
+#   HAOS_USB        space-separated vendor:product IDs (from lsusb) to pass through (default: 1cf1:0030, ConBee II)
 set -euo pipefail
 
 # Initial install image only: HAOS updates itself in place afterwards (Settings -> System -> Updates). To bump, take
@@ -33,6 +36,7 @@ HAOS_VCPUS="${HAOS_VCPUS:-2}"
 HAOS_DISK_SIZE="${HAOS_DISK_SIZE:-64G}"
 HAOS_MAC="${HAOS_MAC:-52:54:00:4b:e0:e5}"
 BRIDGE="${BRIDGE:-br0}"
+HAOS_USB="${HAOS_USB-1cf1:0030}"
 
 LIBVIRT_URI='qemu:///system'
 IMAGES_DIR='/var/lib/libvirt/images'
@@ -223,6 +227,84 @@ else
         --graphics none --console pty,target.type=serial \
         --import --autostart --noautoconsole
 fi
+
+# ---------------------------------------------------------------------------
+# 7. USB passthrough
+# ---------------------------------------------------------------------------
+# Matched by vendor:product, so the stick can move between ports. startupPolicy='optional' lets the VM still boot
+# when the stick is unplugged. QEMU (user libvirt-qemu) opens the host's /dev/bus/usb node by path, and libvirt does
+# not chown it, so a udev rule grants write access. Without that QEMU gets a read-only handle: the guest sees the
+# device but cannot drive it, and the host's cdc_acm driver keeps it. The rule also stops ModemManager probing it.
+usb_rules='# Managed by dotfiles vms/haos/setup.sh: hand USB radios to the HAOS VM'
+for usb_id in $HAOS_USB; do
+    [[ "$usb_id" =~ ^[0-9a-f]{4}:[0-9a-f]{4}$ ]] ||
+        die "Bad HAOS_USB entry '${usb_id}'; expected vendor:product, e.g. 1cf1:0030"
+    vendor="${usb_id%%:*}" product="${usb_id##*:}"
+    usb_rules+="
+SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", ATTR{idVendor}==\"${vendor}\", ATTR{idProduct}==\"${product}\", GROUP=\"libvirt-qemu\", MODE=\"0660\", ENV{ID_MM_DEVICE_IGNORE}=\"1\"
+SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"${vendor}\", ATTRS{idProduct}==\"${product}\", ENV{ID_MM_DEVICE_IGNORE}=\"1\""
+done
+
+rules_changed=0
+if [[ -n "${HAOS_USB// /}" ]]; then
+    if write_if_changed /etc/udev/rules.d/90-haos-usb.rules "$usb_rules"; then
+        run udevadm control --reload
+        for usb_id in $HAOS_USB; do
+            run udevadm trigger --action=change --subsystem-match=usb \
+                --attr-match="idVendor=${usb_id%%:*}" --attr-match="idProduct=${usb_id##*:}"
+        done
+        run udevadm settle
+        rules_changed=1
+        log 'Installed /etc/udev/rules.d/90-haos-usb.rules'
+    else
+        ok '/etc/udev/rules.d/90-haos-usb.rules up to date'
+    fi
+fi
+
+# virsh_hostdev ACTION XML FLAGS... -> attach-device / detach-device with an inline XML snippet
+virsh_hostdev() {
+    local action="$1" snippet="$2" xml
+    shift 2
+    if [[ "$DRY_RUN" == 1 ]]; then
+        printf '\033[2m[dry-run]\033[0m virsh %s %s %s:\n%s\n' "$action" "$HAOS_NAME" "$*" "$snippet"
+        return 0
+    fi
+    xml="$(mktemp)"
+    printf '%s\n' "$snippet" >"$xml"
+    virsh -c "$LIBVIRT_URI" "$action" "$HAOS_NAME" "$xml" "$@"
+    rm -f "$xml"
+}
+
+running=0
+[[ "$(virsh_ro domstate "$HAOS_NAME" 2>/dev/null)" == running ]] && running=1
+for usb_id in $HAOS_USB; do
+    vendor="${usb_id%%:*}" product="${usb_id##*:}"
+    plugged=0
+    lsusb -d "$usb_id" >/dev/null 2>&1 && plugged=1
+    hostdev="<hostdev mode='subsystem' type='usb' managed='yes'>
+  <source startupPolicy='optional'><vendor id='0x${vendor}'/><product id='0x${product}'/></source>
+</hostdev>"
+    if [[ "$(virsh_ro dumpxml --inactive "$HAOS_NAME" 2>/dev/null | tr -d ' \n')" == \
+        *"<vendorid='0x${vendor}'/><productid='0x${product}'/>"* ]]; then
+        if ((rules_changed && running && plugged)); then
+            # QEMU only opens the device on attach, so re-attach to pick up the new permissions
+            log "Re-attaching USB ${usb_id} so QEMU reopens it with write access"
+            virsh_hostdev detach-device "$hostdev" --live
+            virsh_hostdev attach-device "$hostdev" --live
+        else
+            ok "USB ${usb_id} already passed through"
+        fi
+        continue
+    fi
+    flags=(--config)
+    if ((running && plugged)); then
+        flags+=(--live)
+    elif ((running)); then
+        warn "USB ${usb_id} is not plugged in; it attaches on the VM's next boot"
+    fi
+    log "Passing USB ${usb_id} through to '${HAOS_NAME}'"
+    virsh_hostdev attach-device "$hostdev" "${flags[@]}"
+done
 
 [[ "$DRY_RUN" == 0 ]] || exit 0
 

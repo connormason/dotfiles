@@ -27,6 +27,7 @@ Supervisor, which provides apps (add-ons), managed backups, and in-place OS/Core
 | VM disk          | `/var/lib/libvirt/images/haos.qcow2` (64 GB)        | [`setup.sh`](setup.sh) (created once, never overwritten) |
 | Host shutdown    | `/etc/default/libvirt-guests`                       | [`setup.sh`](setup.sh)                                   |
 | Docker exemption | `docker.service.d/10-bridge-forward.conf`           | [`setup.sh`](setup.sh)                                   |
+| USB passthrough  | `/etc/udev/rules.d/90-haos-usb.rules` + `<hostdev>` | [`setup.sh`](setup.sh)                                   |
 | Home Assistant   | inside the VM                                       | Home Assistant UI + its own backups                      |
 
 The VM's NIC is bridged onto the LAN, so it gets its own DHCP address from the router and sees mDNS/SSDP broadcasts
@@ -120,9 +121,13 @@ HAOS and Home Assistant Core update themselves from *Settings → System → Upd
 [`setup.sh`](setup.sh) only decides which image a **fresh** install starts from. Bump it (with the release asset's
 sha256 digest) when a rebuild would otherwise start several major versions behind.
 
-USB radios (Zigbee, Z-Wave, Thread) need USB passthrough. Find the device with `lsusb`, then add it with
-`virsh -c qemu:///system attach-device haos --persistent` and a `<hostdev mode='subsystem' type='usb'>` XML snippet
-naming its vendor/product IDs.
+USB radios (Zigbee, Z-Wave, Thread) need USB passthrough. [`setup.sh`](setup.sh) passes through every `vendor:product`
+ID in `HAOS_USB` (find IDs with `lsusb`). The default is the ConBee II Zigbee stick (`1cf1:0030`). Devices are matched
+by ID, not port, and marked optional, so the VM still boots without them. Re-run `sudo vms/haos/setup.sh` after adding
+an ID. Inside Home Assistant the ConBee then appears as `/dev/serial/by-id/usb-dresden_elektronik_..._ConBee_II_...`. A
+udev rule gives QEMU (user `libvirt-qemu`) write access to the device and tells ModemManager to ignore it. Without that
+rule QEMU opens the device read-only: the guest sees it but cannot use it, and the host keeps `/dev/ttyACM0`. Once
+passthrough works, that host node disappears.
 
 ## Migrating from the Home Assistant container<a name="migrating-from-the-home-assistant-container"></a>
 

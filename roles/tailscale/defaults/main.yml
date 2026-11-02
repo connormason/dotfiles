@@ -4,7 +4,7 @@ tailscale_auth_key: ""                          # Override in vault — role fai
 
 # Node configuration
 tailscale_hostname: "{{ inventory_hostname }}"
-tailscale_ssh_enabled: true
+tailscale_ssh_enabled: true                     # NAS overrides to false: Tailscale SSH blocks the tag:ci deploy
 tailscale_accept_dns: true
 
 # HTTPS (NAS only)
