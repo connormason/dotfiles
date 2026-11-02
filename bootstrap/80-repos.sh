@@ -36,6 +36,7 @@ while IFS= read -r manifest <&4; do
         else
             log "cloning $name"
             run git clone "$url" "$dest"
+            note_change "cloned $name"
         fi
     done 3<"$manifest"
 done 4<<EOF

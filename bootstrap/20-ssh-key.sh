@@ -30,6 +30,7 @@ fi
 if [ ! -f "$KEY" ] && [ ! -f "$SSH_DIR/id_rsa" ]; then
     log "generating ed25519 SSH key"
     run ssh-keygen -t ed25519 -f "$KEY" -N "" -C "$(whoami)@$(hostname)"
+    note_change "generated SSH key $KEY"
 fi
 
 pub="${KEY}.pub"
@@ -44,6 +45,12 @@ log "or, once gh is installed and authenticated (stage 50-brew): gh ssh-key add 
 warn "after registering, verify with: ssh -T $GITHUB"
 
 if [ "${BOOTSTRAP_DRY_RUN}" != "1" ]; then
-    confirm "Has the key been registered and verified?" || die "register the SSH key, then re-run --from 20-ssh-key"
+    if is_interactive; then
+        confirm "Has the key been registered and verified?" || die "register the SSH key, then re-run --from 20-ssh-key"
+    else
+        # An unattended run (the NAS `dotfiles` Ansible role) cannot wait for a human: the key printed above is the
+        # follow-up, and the rest of the run does not need GitHub SSH access
+        warn "non-interactive run: continuing without a GitHub-registered key (register it, then verify with: ssh -T $GITHUB)"
+    fi
 fi
 log "ssh-key OK"

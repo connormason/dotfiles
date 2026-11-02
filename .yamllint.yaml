@@ -19,10 +19,8 @@ rules:
   comments:
     level: warning
     min-spaces-from-content: 1
-  comments-indentation:
-    level: warning
-    ignore:
-      - .pre-commit-config.yaml
+  # ansible-lint refuses to run unless this rule is off
+  comments-indentation: false
   document-end: disable
   document-start:
     level: warning

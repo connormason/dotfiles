@@ -73,19 +73,15 @@ inventory/
 
 Ansible roles, all run by `playbooks/nas_bootstrap.yml`:
 
-**Linux system roles**:
+In playbook order:
 
-- `debian`: System packages and configuration
-- `docker`: Docker setup with compose stack (Plex, Sonarr, Radarr, PiHole, etc.)
-- `zfs`: ZFS filesystem configuration
-- `samba`: File sharing setup
-
-**User and network roles**:
-
-- `git`: Git configuration
-- `ssh`: SSH key generation
-- `zsh`: Shell configuration
-- `tailscale`: Tailscale VPN setup
+- `debian`: Setup tasks for Debian Linux
+- `zfs`: Dependencies for the ZFS filesystem
+- `samba`: Samba file sharing
+- `docker`: Docker-based media server and home-automation stack (Plex, Sonarr, Radarr, PiHole, etc.)
+- `tailscale`: Tailscale install and configuration, plus HTTPS certificates and Caddy for the NAS
+- `dotfiles`: `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh`
+- `haos`: Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)
 
 ## Python Management Script (`run.py`)
 

@@ -50,6 +50,19 @@ jobs:
       - name: Run yamllint
         run: uvx yamllint .
 
+  ansible-lint:
+    name: ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync
+      - name: Install Ansible collections
+        run: uv run ansible-galaxy collection install -r roles/requirements.yml
+      - name: ansible-lint
+        run: scripts/hooks/ansible-lint.sh
+
   codespell:
     name: codespell
     runs-on: ubuntu-latest
@@ -72,7 +85,11 @@ jobs:
       - name: Pytest
         run: uv run pytest
       - name: Bootstrap dry run (throwaway HOME)
-        run: mkdir -p "$RUNNER_TEMP/home" && HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/home"
+          HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log | tee "$RUNNER_TEMP/dry.log"
+          tail -n1 "$RUNNER_TEMP/dry.log" | grep -Eqx 'bootstrap: changes=[0-9]+'
 
   pytest-linux:
     name: pytest (Linux)
@@ -100,4 +117,8 @@ jobs:
       - name: Pytest
         run: uv run pytest
       - name: Bootstrap dry run (throwaway HOME)
-        run: mkdir -p "$RUNNER_TEMP/home" && HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/home"
+          HOME="$RUNNER_TEMP/home" bash bootstrap/bootstrap.sh --dry-run --no-log | tee "$RUNNER_TEMP/dry.log"
+          tail -n1 "$RUNNER_TEMP/dry.log" | grep -Eqx 'bootstrap: changes=[0-9]+'

@@ -20,8 +20,6 @@ brew "bat"
 brew "btop"
 brew "cmake"
 brew "direnv"
-brew "docker"
-brew "docker-compose"
 brew "eza"
 brew "fastfetch"
 brew "ffmpegthumbnailer"
@@ -51,7 +49,6 @@ brew "lazygit"
 brew "libmagic"
 brew "libssh2"
 brew "markdownlint-cli2"
-brew "mermaid-cli"
 brew "micro"
 brew "mise"
 brew "moor"
@@ -75,10 +72,18 @@ brew "zsh-completions"
 brew "zsh-syntax-highlighting"
 # keep-sorted end
 
-# macOS-only entries: the `mas` CLI, casks, fonts, and Mac App Store apps. Homebrew on Linux skips this block, so the
-# NAS (Linuxbrew) installs the same formulae as the Macs and nothing else.
+# macOS-only entries: the `mas` CLI, formulae that do not belong on the NAS, casks, fonts, and Mac App Store apps.
+# Homebrew on Linux skips this block, so the NAS (Linuxbrew) installs every formula above it and nothing else.
 if OS.mac?
   brew "mas"
+
+  # The NAS uses apt's Docker CLI and Compose plugin (Linuxbrew is first on PATH and would shadow them); mermaid-cli's
+  # Puppeteer/Chromium renderer needs desktop libraries a headless server lacks
+  # keep-sorted start
+  brew "docker"
+  brew "docker-compose"
+  brew "mermaid-cli"
+  # keep-sorted end
 
   # Casks
   # keep-sorted start

@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import os
 import platform
+import pty
 import re
 import shutil
 import subprocess
@@ -19,6 +20,8 @@ LIB       = REPO_ROOT / 'bootstrap' / 'lib.sh'
 
 # Inherited variables that would leak the developer's own configuration into the tests
 _SCRUBBED_VARS = (
+    'BOOTSTRAP_CHANGES_FILE',
+    'BOOTSTRAP_NONINTERACTIVE',
     'DOTFILES_REPO',
     'DOTFILES_BREW_PREFIXES',
     'DOTFILES_LEAK_PATTERNS',
@@ -556,3 +559,163 @@ class TestRun:
         """
         assert bash('have bash').returncode                         == 0
         assert bash('have definitely-not-a-command-xyz').returncode != 0
+
+
+class TestNoteChange:
+    """
+    Tests for note_change
+    """
+    def test_appends_one_line_per_call(self, bash: BashRunner, env: dict[str, str], tmp_path: Path) -> None:
+        """
+        Test that each call appends its message to the ledger as one line
+        """
+        ledger = tmp_path / 'ledger'
+        result = bash('note_change "made a thing"; note_change second', {**env, 'BOOTSTRAP_CHANGES_FILE': str(ledger)})
+
+        assert result.returncode == 0, result.stderr
+        assert ledger.read_text(encoding='utf-8').splitlines() == ['made a thing', 'second']
+
+    def test_without_a_ledger_is_a_no_op(self, bash: BashRunner) -> None:
+        """
+        Test that without BOOTSTRAP_CHANGES_FILE the call writes nothing and succeeds
+        """
+        result = bash('note_change anything && echo ok')
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == 'ok'
+
+
+# Sources lib.sh, asks once, then reads the next stdin line to prove whether confirm consumed it
+CONFIRM_SCRIPT = (
+    'if confirm "Proceed?"; then echo yes; else echo no; fi\n'
+    'IFS= read -r rest || rest=""\n'
+    'echo "left:$rest"\n'
+)
+
+
+class TestConfirm:
+    """
+    Tests for confirm and is_interactive
+    """
+    def test_noninteractive_flag_answers_no_without_reading(self, shell: str, env: dict[str, str]) -> None:
+        """
+        Test that BOOTSTRAP_NONINTERACTIVE=1 makes confirm warn and answer no, leaving stdin unread
+        """
+        result = subprocess.run(
+            [shell, '-c', f'source "{LIB}"\n{CONFIRM_SCRIPT}'],
+            input='y\n',
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**env, 'BOOTSTRAP_NONINTERACTIVE': '1'},
+            timeout=60,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == ['no', 'left:y']
+        assert 'non-interactive run: answering no to: Proceed?' in result.stderr
+
+    def test_non_terminal_stdin_answers_no(self, shell: str, env: dict[str, str]) -> None:
+        """
+        Test that a pipe on stdin counts as non-interactive even without BOOTSTRAP_NONINTERACTIVE
+        """
+        result = subprocess.run(
+            [shell, '-c', f'source "{LIB}"\n{CONFIRM_SCRIPT}'],
+            input='y\n',
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+            timeout=60,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == ['no', 'left:y']
+
+    @pytest.mark.parametrize(
+        ('answer', 'expected'),
+        [
+            ('y', 'yes'),
+            ('n', 'no'),
+        ],
+    )
+    def test_terminal_reads_the_reply(self, shell: str, env: dict[str, str], answer: str, expected: str) -> None:
+        """
+        Test that with a terminal on stdin confirm still reads and honours the reply
+        """
+        primary, secondary = pty.openpty()
+        try:
+            os.write(primary, f'{answer}\n'.encode())
+            result = subprocess.run(
+                [shell, '-c', f'source "{LIB}"\nif confirm "Proceed?"; then echo yes; else echo no; fi'],
+                stdin=secondary,
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+                timeout=60,
+            )
+        finally:
+            os.close(primary)
+            os.close(secondary)
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == [expected]
+
+    def test_is_interactive_honours_the_flag(self, bash: BashRunner, env: dict[str, str]) -> None:
+        """
+        Test that is_interactive is defined and fails when BOOTSTRAP_NONINTERACTIVE=1
+        """
+        result = bash(
+            'declare -F is_interactive >/dev/null || exit 1\nif is_interactive; then echo yes; else echo no; fi',
+            {**env, 'BOOTSTRAP_NONINTERACTIVE': '1'},
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == 'no'
+
+    def test_flag_overrides_a_terminal_on_stdin(self, shell: str, env: dict[str, str]) -> None:
+        """
+        Test that BOOTSTRAP_NONINTERACTIVE=1 makes confirm answer no and leave the terminal reply unread
+        """
+        primary, secondary = pty.openpty()
+        try:
+            os.write(primary, b'y\n')
+            result = subprocess.run(
+                [shell, '-c', f'source "{LIB}"\n{CONFIRM_SCRIPT}'],
+                stdin=secondary,
+                capture_output=True,
+                text=True,
+                check=False,
+                env={**env, 'BOOTSTRAP_NONINTERACTIVE': '1'},
+                timeout=60,
+            )
+        finally:
+            os.close(primary)
+            os.close(secondary)
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == ['no', 'left:y']
+        assert 'non-interactive run: answering no to: Proceed?' in result.stderr
+
+    def test_terminal_without_flag_is_interactive(self, shell: str, env: dict[str, str]) -> None:
+        """
+        Test that is_interactive succeeds on a terminal when BOOTSTRAP_NONINTERACTIVE is unset
+        """
+        primary, secondary = pty.openpty()
+        try:
+            result = subprocess.run(
+                [shell, '-c', f'source "{LIB}"\nif is_interactive; then echo yes; else echo no; fi'],
+                stdin=secondary,
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+                timeout=60,
+            )
+        finally:
+            os.close(primary)
+            os.close(secondary)
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == 'yes'

@@ -103,6 +103,8 @@ def sandbox(tmp_path: Path) -> Sandbox:
 
     scrubbed: tuple[str, ...] = (
         'BOOTSTRAP_DRY_RUN',
+        'BOOTSTRAP_CHANGES_FILE',
+        'BOOTSTRAP_NONINTERACTIVE',
         'DOTFILES_REPO',
         'DOTFILES_LAYER',
         'DOTFILES_BREW_PREFIXES',
@@ -118,6 +120,7 @@ def sandbox(tmp_path: Path) -> Sandbox:
         'DOTFILES_OVERLAYS_FILE': str(registry),
         'SANDBOX_PREFIX':         str(tmp_path / 'prefix'),
         'INSTALLER_MARKER':       str(marker),
+        'BOOTSTRAP_CHANGES_FILE': str(tmp_path / 'ledger'),
         'DOTFILES_OS':            'darwin',
     }
     return Sandbox(
@@ -176,6 +179,9 @@ class TestBrewInstallerChecksum:
         # Guards against a future sudo call being added; neither the stage nor the stub installer calls sudo today
         assert not sandbox.sudo_marker.exists()
         assert list(sandbox.tmpdir.iterdir()) == []
+        assert Path(sandbox.env['BOOTSTRAP_CHANGES_FILE']).read_text(encoding='utf-8').splitlines() == [
+            'installed Homebrew',
+        ]
 
     def test_mismatched_checksum_aborts_without_running_installer(self, shell: str, sandbox: Sandbox) -> None:
         """
@@ -256,3 +262,109 @@ class TestLinuxbrewInstall:
         assert result.returncode == 0, result.stderr
         assert 'must exist and be writable' in result.stderr
         assert 'env NONINTERACTIVE=1 /bin/bash <temp file>' in result.stdout
+
+
+# A brew that is already installed: `bundle check` passes iff $BREW_STATE/satisfied exists; `bundle --file` creates
+# $BREW_STATE/bundle-ran and appends a formula to the installed list iff $BREW_STATE/bundle-installs exists;
+# `list`/`tap` print the state. `list <formula>`
+# fails, so the darwin-only legacy-starship check never depends on the host's /usr/local/bin/starship.
+BREW_STUB = (
+    '#!/bin/sh\n'
+    'case "$1 $2" in\n'
+    '"bundle check") [ -f "$BREW_STATE/satisfied" ]; exit $? ;;\n'
+    '"bundle --file") touch "$BREW_STATE/bundle-ran"\n'
+    '                 [ -f "$BREW_STATE/bundle-installs" ] && echo "newpkg 1.0" >> "$BREW_STATE/formulae"; exit 0 ;;\n'
+    '"list --formula") cat "$BREW_STATE/formulae" 2>/dev/null; exit 0 ;;\n'
+    '"list --cask") exit 0 ;;\n'
+    '"list "*) exit 1 ;;\n'
+    'esac\n'
+    'exit 0\n'
+)
+
+
+def _installed_brew(box: Sandbox, tmp_path: Path) -> Path:
+    """
+    Put the stub brew into the sandbox prefix and give the overlay a Brewfile; return the stub's state directory
+    """
+    state = tmp_path / 'brew-state'
+    state.mkdir()
+    (state / 'formulae').write_text('stow 2.4.1\n', encoding='utf-8')
+
+    prefix_bin = Path(box.env['SANDBOX_PREFIX']) / 'bin'
+    prefix_bin.mkdir(parents=True)
+    (prefix_bin / 'brew').write_text(BREW_STUB, encoding='utf-8')
+    (prefix_bin / 'brew').chmod(0o755)
+
+    registry = Path(box.env['DOTFILES_OVERLAYS_FILE'])
+    overlay  = Path(registry.read_text(encoding='utf-8').strip())
+    (overlay / 'bootstrap' / 'Brewfile').write_text('brew "stow"\n', encoding='utf-8')
+
+    box.env['BREW_STATE'] = str(state)
+    return state
+
+
+def _ledger(box: Sandbox) -> list[str]:
+    """
+    Lines recorded in the sandbox's change ledger (empty when none were)
+    """
+    path = Path(box.env['BOOTSTRAP_CHANGES_FILE'])
+    return path.read_text(encoding='utf-8').splitlines() if path.exists() else []
+
+
+class TestBundleChanges:
+    """
+    Tests for recording what `brew bundle` changed
+    """
+    def test_bundle_that_installs_is_recorded(self, shell: str, sandbox: Sandbox, tmp_path: Path) -> None:
+        """
+        Test that a bundle run that changes the installed set is recorded
+        """
+        state = _installed_brew(sandbox, tmp_path)
+        (state / 'bundle-installs').touch()
+        (state / 'satisfied').touch()
+
+        result = _run(shell, sandbox)
+        assert result.returncode == 0, result.stderr
+        assert len(_ledger(sandbox)) == 1
+        assert _ledger(sandbox)[0].startswith('brew bundle changed installed packages (')
+        assert (state / 'bundle-ran').exists()
+
+    def test_no_op_bundle_is_not_recorded(self, shell: str, sandbox: Sandbox, tmp_path: Path) -> None:
+        """
+        Test that a bundle run that changes nothing is not recorded (and still ran)
+        """
+        state = _installed_brew(sandbox, tmp_path)
+        (state / 'satisfied').touch()
+
+        result = _run(shell, sandbox)
+        assert result.returncode == 0, result.stderr
+        assert _ledger(sandbox) == []
+        assert (state / 'bundle-ran').exists()
+
+    @pytest.mark.parametrize(
+        ('satisfied', 'recorded'),
+        [
+            (True,  False),
+            (False, True),
+        ],
+    )
+    def test_dry_run_predicts_from_bundle_check(
+        self,
+        shell: str,
+        sandbox: Sandbox,
+        tmp_path: Path,
+        satisfied: bool,
+        recorded: bool,
+    ) -> None:
+        """
+        Test that a dry run records a would-be change exactly when `brew bundle check` fails
+        """
+        state = _installed_brew(sandbox, tmp_path)
+        if satisfied:
+            (state / 'satisfied').touch()
+        sandbox.env['BOOTSTRAP_DRY_RUN'] = '1'
+
+        result = _run(shell, sandbox)
+        assert result.returncode == 0, result.stderr
+        assert bool(_ledger(sandbox)) is recorded
+        assert '[dry-run] brew bundle --file' in re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)

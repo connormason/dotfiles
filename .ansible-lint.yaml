@@ -76,12 +76,10 @@ skip_list:
 # - yaml[document-start]  # you can also use sub-rule matches
 
 # Some rules can transform files to fix (or make it easier to fix) identified
-# errors. `ansible-lint --fix` will reformat YAML files and run these transforms.
-# By default it will run all transforms (effectively `write_list: ["all"]`).
-# You can disable running transforms by setting `write_list: ["none"]`.
-# Or only enable a subset of rule transforms by listing rules/tags here.
+# errors. This repo never auto-fixes: `--fix` is not used, and findings are reviewed
+# by hand. `write_list: ["none"]` keeps ansible-lint from rewriting any file.
 write_list:
-  - all
+  - none
 
 # Offline mode disables installation of requirements.yml and schema refreshing
 #offline: true

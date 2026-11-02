@@ -563,7 +563,7 @@ repos:
         name: "[lint]   shell scripts"
         stages: [pre-commit, manual]
         priority: 40
-        # shellcheck does not support zsh: *.zsh files (e.g. roles/zsh/files/p10k.zsh) and stowed zsh dotfiles
+        # shellcheck does not support zsh: *.zsh files (e.g. stow/shell/.config/zsh/conf.d/*.zsh) and stowed zsh dotfiles
         exclude: |
           (?x)(
               \.zsh$|
@@ -617,13 +617,15 @@ repos:
         additional_dependencies:
           - tomli
 
-#  - repo: https://github.com/ansible/ansible-lint.git
-#    rev: v25.6.1
-#    hooks:
+  - repo: local
+    hooks:
 
-#     # Ansible linting
-#     - id: ansible-lint
-#       name: "[lint]   ansible"
-#       stages: [pre-commit, manual]
-#       priority: 40
-#       args: [--fix]
+      # Ansible linting of playbooks/ and roles/ (check only; the wrapper supplies a throwaway vault password)
+      - id: ansible-lint
+        name: "[lint]   ansible"
+        stages: [pre-commit, manual]
+        priority: 40
+        entry: scripts/hooks/ansible-lint.sh
+        language: script
+        files: ^(playbooks|roles)/|^\.ansible-lint|^\.yamllint
+        pass_filenames: false

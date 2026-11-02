@@ -1,0 +1,190 @@
+---
+- name: Require the clone path
+  ansible.builtin.assert:
+    that:
+      - dotfiles_repo_dir is defined
+      - dotfiles_repo_dir | length > 0
+    fail_msg: dotfiles_repo_dir (the NAS clone path) must be set; playbooks/nas_bootstrap.yml defines it for the play
+
+- name: Look for an existing clone
+  ansible.builtin.stat:
+    path: "{{ dotfiles_repo_dir }}/.git"
+  register: dotfiles_clone
+
+# The git module's update checks out dotfiles_repo_version and hard-resets it to origin/<version>. Refuse when that would
+# lose work: uncommitted changes to tracked files, a HEAD that exists on no remote-tracking branch (commits made only on
+# the NAS), or a local <version> branch holding commits origin/<version> lacks (even when HEAD sits on another branch).
+# A clean checkout of another pushed branch is safe to switch.
+- name: Read uncommitted changes in the clone
+  ansible.builtin.command:  # noqa: command-instead-of-module (read-only status the git module cannot report)
+    argv: [git, -C, "{{ dotfiles_repo_dir }}", status, --porcelain, --untracked-files=no]
+  register: dotfiles_clone_status
+  changed_when: false
+  check_mode: false
+  when: dotfiles_clone.stat.exists
+
+- name: Read the remote branches that contain HEAD
+  ansible.builtin.command:
+    argv: [git, -C, "{{ dotfiles_repo_dir }}", branch, -r, --contains, HEAD]
+  register: dotfiles_clone_remote
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: dotfiles_clone.stat.exists
+
+- name: Look for a local branch named like the target version
+  ansible.builtin.command:  # noqa: command-instead-of-module (read-only ref probe the git module cannot report)
+    argv: [git, -C, "{{ dotfiles_repo_dir }}", show-ref, --verify, --quiet, "refs/heads/{{ dotfiles_repo_version }}"]
+  register: dotfiles_clone_local
+  changed_when: false
+  failed_when: dotfiles_clone_local.rc not in [0, 1]
+  check_mode: false
+  when: dotfiles_clone.stat.exists
+
+- name: Check that the local version branch is pushed
+  ansible.builtin.command:  # noqa: command-instead-of-module (read-only ancestry probe the git module cannot report)
+    argv:
+      - git
+      - -C
+      - "{{ dotfiles_repo_dir }}"
+      - merge-base
+      - --is-ancestor
+      - "refs/heads/{{ dotfiles_repo_version }}"
+      - "refs/remotes/origin/{{ dotfiles_repo_version }}"
+  register: dotfiles_clone_pushed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - dotfiles_clone.stat.exists
+    - dotfiles_clone_local.rc == 0
+
+- name: Refuse to update a clone with local work
+  ansible.builtin.assert:
+    that:
+      - dotfiles_clone_status.stdout | length == 0
+      - dotfiles_clone_remote.rc == 0
+      - dotfiles_clone_remote.stdout | length > 0
+      - dotfiles_clone_pushed.rc | default(0) == 0
+    fail_msg: >-
+      {{ dotfiles_repo_dir }} has local work that updating would discard (uncommitted changes:
+      {{ dotfiles_clone_status.stdout_lines }}; remote branches containing HEAD: {{ dotfiles_clone_remote.stdout_lines }};
+      local {{ dotfiles_repo_version }} branch is an ancestor of origin/{{ dotfiles_repo_version }}, i.e. fully pushed:
+      {{ dotfiles_clone_pushed.rc | default(0) == 0 }}).
+      Commit and push it, or discard it, then re-run. The clone was not touched.
+  when: dotfiles_clone.stat.exists
+
+- name: Clone or update the dotfiles repository
+  ansible.builtin.git:
+    repo: "{{ dotfiles_repo_url }}"
+    dest: "{{ dotfiles_repo_dir }}"
+    version: "{{ dotfiles_repo_version }}"
+    update: true
+
+- name: Look for the engine
+  ansible.builtin.stat:
+    path: "{{ dotfiles_repo_dir }}/bootstrap/bootstrap.sh"
+  register: dotfiles_engine
+
+- name: Require the engine after cloning
+  ansible.builtin.assert:
+    that: dotfiles_engine.stat.exists
+    fail_msg: >-
+      {{ dotfiles_repo_dir }}/bootstrap/bootstrap.sh is missing after the clone; dotfiles_repo_version
+      ({{ dotfiles_repo_version }}) must name a ref that contains the stow engine
+  when: not ansible_check_mode
+
+- name: Read the push URLs
+  ansible.builtin.command:  # noqa: command-instead-of-module (git config has no builtin module)
+    argv: [git, -C, "{{ dotfiles_repo_dir }}", config, --get-all, remote.origin.pushurl]
+  register: dotfiles_push_url
+  changed_when: false
+  failed_when: dotfiles_push_url.rc not in [0, 1]
+  check_mode: false
+  when: dotfiles_engine.stat.exists
+
+- name: Push over SSH
+  ansible.builtin.command:  # noqa: command-instead-of-module (git config has no builtin module)
+    argv: [git, -C, "{{ dotfiles_repo_dir }}", config, --replace-all, remote.origin.pushurl, "{{ dotfiles_repo_push_url }}"]
+  changed_when: true
+  when:
+    - dotfiles_engine.stat.exists
+    - dotfiles_push_url.stdout_lines != [dotfiles_repo_push_url]
+
+- name: Create the engine config directory
+  ansible.builtin.file:
+    path: "{{ dotfiles_overlays_file | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Register the engine overlays
+  ansible.builtin.copy:
+    dest: "{{ dotfiles_overlays_file }}"
+    content: |
+      # Managed by Ansible (roles/dotfiles); edits are overwritten on the next provisioning run
+      {% for overlay in dotfiles_overlays %}
+      {{ overlay }}
+      {% endfor %}
+    mode: "0644"
+
+# usermod does not verify the shell: a missing or unlisted one would lock SSH logins out (e.g. `--tags dotfiles` on a
+# host where the debian role has not installed zsh)
+- name: Look for the login shell
+  ansible.builtin.stat:
+    path: "{{ dotfiles_login_shell }}"
+  register: dotfiles_shell
+
+- name: Read whether the login shell is listed in /etc/shells
+  ansible.builtin.command:
+    argv: [grep, -Fxq, "{{ dotfiles_login_shell }}", /etc/shells]
+  register: dotfiles_shell_listed
+  changed_when: false
+  failed_when: dotfiles_shell_listed.rc not in [0, 1]
+  check_mode: false
+
+- name: Require a usable login shell
+  ansible.builtin.assert:
+    that:
+      - dotfiles_shell.stat.exists
+      - dotfiles_shell.stat.executable
+      - dotfiles_shell_listed.rc == 0
+    fail_msg: >-
+      {{ dotfiles_login_shell }} must exist, be executable and be listed in /etc/shells before it becomes the login
+      shell (exists: {{ dotfiles_shell.stat.exists }}; listed: {{ dotfiles_shell_listed.rc == 0 }}); the debian role
+      installs zsh
+
+- name: Set the login shell
+  become: true
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    shell: "{{ dotfiles_login_shell }}"
+
+- name: Report the skipped engine preview
+  ansible.builtin.debug:
+    msg: "{{ dotfiles_repo_dir }} is not cloned yet, so there is no engine to preview; a real run clones it first"
+  when:
+    - ansible_check_mode
+    - not dotfiles_engine.stat.exists
+
+# As the connecting user: the engine owns $HOME and never uses sudo on Linux. Check mode (and the preview variable) map
+# to the engine's --dry-run, which is read-only and so runs even under --check. Changed status comes from the driver's
+# `bootstrap: changes=N` line (exactly one); a run without it is a failure, as is an async timeout (no rc or stdout in
+# that result). The first run can build Homebrew packages for a long time without output, so it runs async: a dropped
+# SSH session would otherwise SIGHUP the engine.
+- name: Run the bootstrap engine
+  ansible.builtin.command:
+    argv: >-
+      {{ [dotfiles_repo_dir ~ '/bootstrap/bootstrap.sh']
+         + (['--dry-run'] if (ansible_check_mode or dotfiles_bootstrap_preview | bool) else []) }}
+  environment:
+    BOOTSTRAP_NONINTERACTIVE: "1"
+    DOTFILES_OVERLAYS_FILE: "{{ dotfiles_overlays_file }}"
+  async: 7200
+  poll: 30
+  register: dotfiles_bootstrap
+  check_mode: false
+  changed_when: "'bootstrap: changes=0' not in (dotfiles_bootstrap.stdout_lines | default([]))"
+  failed_when: >-
+    dotfiles_bootstrap.rc | default(1) != 0 or
+    (dotfiles_bootstrap.stdout_lines | default([]) | select('match', '^bootstrap: changes=[0-9]+$') | list | length) != 1
+  when: dotfiles_engine.stat.exists

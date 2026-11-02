@@ -78,6 +78,6 @@ if [[ ! $(command -v ansible-playbook) ]]; then
 fi
 
 # Run ansible playbook
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv
 
 echo -e "${GREEN}Bootstrapping completed${NC}"

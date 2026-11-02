@@ -1,12 +1,34 @@
 ---
 
-# Sleep/hibernate configuration
+# Sleep/hibernate configuration. The inventory overrides these, so they keep their unprefixed names.
 systemd_allow_sleep: true
 systemd_allow_suspend: true
 systemd_allow_hibernate: true
 systemd_allow_hybrid_sleep: true
 
-# Packages
-apt_packages:
+# Each systemd sleep target and whether it may run (masked when not)
+debian_sleep_targets:
+  - {unit: sleep.target, allow: "{{ systemd_allow_sleep }}"}
+  - {unit: suspend.target, allow: "{{ systemd_allow_suspend }}"}
+  - {unit: hibernate.target, allow: "{{ systemd_allow_hibernate }}"}
+  - {unit: hybrid-sleep.target, allow: "{{ systemd_allow_hybrid_sleep }}"}
+
+# What the stow engine needs before it can run: Homebrew's Linux build requirements plus zsh, git and python3.
+# bootstrap/00-preflight.sh checks for these and names this role as the fix.
+debian_engine_packages:
+  - build-essential
+  - procps
+  - curl
+  - file
+  - git
+  - zsh
+  - python3
+
+# Other system packages
+debian_apt_packages:
   - fzf
   - exfat-fuse
+
+# Homebrew's Linux prefix: created here (that needs root) and owned by the user, so the engine installs Homebrew there
+# without sudo
+debian_linuxbrew_prefix: /home/linuxbrew/.linuxbrew

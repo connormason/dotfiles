@@ -493,7 +493,7 @@ Run the NAS bootstrap playbook:
 ./nas_bootstrap.sh
 
 # Or manually
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml
 ```
 
 This will:

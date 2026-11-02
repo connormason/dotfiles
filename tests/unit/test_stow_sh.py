@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Inherited variables that would leak the developer's own configuration into the tests
 _SCRUBBED_VARS: tuple[str, ...] = (
+    'BOOTSTRAP_CHANGES_FILE',
     'DOTFILES_OS',
     'DOTFILES_REPO',
     'DOTFILES_BREW_PREFIXES',
@@ -763,3 +764,67 @@ class TestOsMarkers:
         link = world['home'] / '.config' / 'app' / 'config'
         assert link.is_symlink()
         assert link.resolve() == moved.resolve()
+
+
+class TestChangeLedger:
+    """
+    Tests for stow.sh's entries in the bootstrap change ledger
+    """
+    @staticmethod
+    def _ledger(path: Path) -> list[str]:
+        """
+        Lines recorded in the ledger (empty when none were)
+        """
+        return path.read_text(encoding='utf-8').splitlines() if path.exists() else []
+
+    def test_first_apply_is_recorded_and_restow_is_not(self, world: dict[str, Path], tmp_path: Path) -> None:
+        """
+        Test that new links are recorded and an idempotent restow records nothing
+        """
+        _pkg(world['repo'], 'demo', {'.democonf': 'x\n'})
+        ledger = tmp_path / 'ledger'
+
+        first = _stow(world, extra_env={'BOOTSTRAP_CHANGES_FILE': str(ledger)})
+        assert first.returncode == 0, first.stderr
+        assert self._ledger(ledger) == ['stow: 1 added, 0 updated, 0 removed']
+
+        ledger.unlink()
+        second = _stow(world, extra_env={'BOOTSTRAP_CHANGES_FILE': str(ledger)})
+        assert second.returncode == 0, second.stderr
+        assert self._ledger(ledger) == []
+
+    def test_no_summary_still_records(self, world: dict[str, Path], tmp_path: Path) -> None:
+        """
+        Test that --no-summary hides the summary but the change is still recorded
+        """
+        _pkg(world['repo'], 'demo', {'.democonf': 'x\n'})
+        ledger = tmp_path / 'ledger'
+
+        result = _stow(world, '--no-summary', extra_env={'BOOTSTRAP_CHANGES_FILE': str(ledger)})
+        assert result.returncode == 0, result.stderr
+        assert 'added' not in result.stdout
+        assert self._ledger(ledger) == ['stow: 1 added, 0 updated, 0 removed']
+
+    def test_dry_run_records_would_be_links(self, world: dict[str, Path], tmp_path: Path) -> None:
+        """
+        Test that -n records the would-be change and links nothing
+        """
+        _pkg(world['repo'], 'demo', {'.democonf': 'x\n'})
+        ledger = tmp_path / 'ledger'
+
+        result = _stow(world, '-n', extra_env={'BOOTSTRAP_CHANGES_FILE': str(ledger)})
+        assert result.returncode == 0, result.stderr
+        assert self._ledger(ledger) == ['stow: 1 added, 0 updated, 0 removed']
+        assert not (world['home'] / '.democonf').exists()
+
+    def test_backups_are_recorded(self, world: dict[str, Path], tmp_path: Path) -> None:
+        """
+        Test that each backed-up file is recorded, followed by the links
+        """
+        _pkg(world['repo'], 'demo', {'.democonf': 'x\n'})
+        (world['home'] / '.democonf').write_text('old\n', encoding='utf-8')
+        ledger = tmp_path / 'ledger'
+
+        result = _stow(world, '--backup-conflicts', extra_env={'BOOTSTRAP_CHANGES_FILE': str(ledger)})
+        assert result.returncode == 0, result.stderr
+        assert self._ledger(ledger) == ['stow: backed up ~/.democonf', 'stow: 1 added, 0 updated, 0 removed']

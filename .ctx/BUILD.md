@@ -8,7 +8,7 @@ Full command reference for the dotfiles repository. Loaded on demand from [`CLAU
 # Bootstrap a Mac (stow engine + numbered stages; --dry-run previews, --list shows stages, --resume continues)
 bootstrap/bootstrap.sh
 
-# Bootstrap NAS server (Ansible; asks for the sudo password)
+# Bootstrap NAS server (Ansible; the become password comes from the vault)
 chmod u+x nas_bootstrap.sh && ./nas_bootstrap.sh
 ```
 
@@ -16,10 +16,10 @@ chmod u+x nas_bootstrap.sh && ./nas_bootstrap.sh
 
 ```bash
 # Run specific tags only
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags git,zsh
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags dotfiles,haos
 
 # Run with extra variables
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -e "some_var=value"
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -e "some_var=value"
 
 # Syntax check
 ansible-playbook --syntax-check -i localhost, playbooks/nas_bootstrap.yml
@@ -93,7 +93,7 @@ whitespace fixers (20s) → formatters (30) → linters (40).
 - **Checks**: filesystem safety, large files, merge conflicts, private keys, `detect-secrets`, submodule ban,
   shebang/executable, TOML/XML/YAML/JSON syntax, `validate-pyproject`, Python AST/debug/test-naming
 - **Formatters**: JSON (`.claude`), shell (`shfmt`), TOML (`taplo`), markdown (`mdformat`), Python (`ruff --fix-only`)
-- **Linters**: `ruff check`, `mypy`, `interrogate`, `shellcheck`, `yamllint`, `codespell`
+- **Linters**: `ruff check`, `mypy`, `interrogate`, `shellcheck`, `yamllint`, `ansible-lint`, `codespell`
 
 ```bash
 # All files
@@ -108,5 +108,6 @@ python3 run.py install-hooks
 
 ## Ansible Linting
 
-`ansible-lint` (with `.ansible-lint.yaml`) is available but commented out in `.pre-commit-config.yaml`; enable when
-ready. `shellcheck` is already enabled as a prek linter (priority 40).
+`ansible-lint` runs as a prek hook (`prek run ansible-lint --all-files`) and as a CI job, both through
+`scripts/hooks/ansible-lint.sh` (check only, offline; collections must be installed first with
+`ansible-galaxy collection install -r roles/requirements.yml`). `shellcheck` is also a prek linter (priority 40).

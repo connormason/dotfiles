@@ -1,2 +1,0 @@
-.ansible-lint.yaml yaml[comments]
-.pre-commit-config.yaml yaml

@@ -31,6 +31,14 @@ cleanup_installer() {
     fi
 }
 
+# brew_state -> the installed formulae and casks with their versions, plus the taps: compared before and after
+# `brew bundle` to tell whether it installed, upgraded, or tapped anything. Casks do not exist on Linux.
+brew_state() {
+    brew list --formula --versions 2>/dev/null || true
+    brew list --cask --versions 2>/dev/null || true
+    brew tap 2>/dev/null || true
+}
+
 # install_homebrew -> download the official installer, verify its checksum, then run it.
 install_homebrew() {
     local actual msg installer_env=()
@@ -78,6 +86,7 @@ if have brew; then
 else
     log "installing Homebrew"
     install_homebrew
+    note_change "installed Homebrew"
     ensure_brew_on_path
     if [ "${BOOTSTRAP_DRY_RUN}" != "1" ] && ! have brew; then
         die "Homebrew installed, but brew is not in any known prefix"
@@ -93,10 +102,23 @@ while IFS= read -r brewfile <&3; do
         continue
     fi
     log "applying $brewfile"
-    run brew bundle --file "$brewfile"
     if [ "${BOOTSTRAP_DRY_RUN}" = "1" ]; then
-        run brew bundle check --file "$brewfile"
-    elif brew bundle check --file "$brewfile"; then
+        run brew bundle --file "$brewfile"
+        # Predict instead of observe: a failing check (missing or outdated entries) means a real run changes something.
+        # On a fresh machine brew is not installed yet, so everything is a change.
+        if have brew && HOMEBREW_NO_AUTO_UPDATE=1 brew bundle check --file "$brewfile" >/dev/null 2>&1; then
+            log "Brewfile satisfied: $brewfile"
+        else
+            note_change "brew bundle would install or upgrade entries from $brewfile"
+        fi
+        continue
+    fi
+    before="$(brew_state)"
+    run brew bundle --file "$brewfile"
+    if [ "$(brew_state)" != "$before" ]; then
+        note_change "brew bundle changed installed packages ($brewfile)"
+    fi
+    if brew bundle check --file "$brewfile"; then
         log "Brewfile satisfied: $brewfile"
     else
         warn "Brewfile drift: $brewfile has dependencies missing or out of date (see 'brew bundle check' above)"
@@ -112,8 +134,10 @@ if [ "$OS" = "darwin" ] && have brew && brew list starship >/dev/null 2>&1 && [ 
     warn "legacy root starship at $LEGACY_STARSHIP shadows the Homebrew copy"
     if [ "${BOOTSTRAP_DRY_RUN}" = "1" ]; then
         run sudo rm -f "$LEGACY_STARSHIP"
+        note_change "removed legacy starship $LEGACY_STARSHIP"
     elif confirm "Remove $LEGACY_STARSHIP so Homebrew's copy is authoritative?"; then
         run sudo rm -f "$LEGACY_STARSHIP"
+        note_change "removed legacy starship $LEGACY_STARSHIP"
     fi
 fi
 log "brew OK"

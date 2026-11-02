@@ -22,6 +22,12 @@
 #   HAOS_MAC        NIC MAC address; pin it so the router's DHCP reservation survives a rebuild
 #   BRIDGE          host bridge to attach to (default: br0)
 #   HAOS_USB        space-separated vendor:product IDs (from lsusb) to pass through (default: 1cf1:0030, ConBee II)
+#
+# Test-only overrides (relocate the host paths this script checks; never set them on the NAS):
+#   HAOS_KVM_DEVICE, HAOS_ETC_DIR, HAOS_IMAGES_DIR
+#
+# Every run ends step 7 with a plain `haos: changes=N` line (under --dry-run: the changes a real run would make); the
+# NAS `haos` Ansible role keys its changed status off it.
 set -euo pipefail
 
 # Initial install image only: HAOS updates itself in place afterwards (Settings -> System -> Updates). To bump, take
@@ -39,12 +45,16 @@ BRIDGE="${BRIDGE:-br0}"
 HAOS_USB="${HAOS_USB-1cf1:0030}"
 
 LIBVIRT_URI='qemu:///system'
-IMAGES_DIR='/var/lib/libvirt/images'
+IMAGES_DIR="${HAOS_IMAGES_DIR:-/var/lib/libvirt/images}"
+ETC_DIR="${HAOS_ETC_DIR:-/etc}"
+KVM_DEVICE="${HAOS_KVM_DEVICE:-/dev/kvm}"
 DISK="${IMAGES_DIR}/${HAOS_NAME}.qcow2"
 OVMF_CODE='/usr/share/OVMF/OVMF_CODE_4M.fd' # non-Secure-Boot firmware; HAOS images are not MS-signed
 OVMF_VARS='/usr/share/OVMF/OVMF_VARS_4M.fd'
 PACKAGES=(qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients virtinst ovmf xz-utils curl)
 DRY_RUN=0
+CHANGES=0    # mutations made (or, under --dry-run, that would be made); printed as `haos: changes=N`
+VM_STARTED=0 # 1 when this run defined or started the VM, so the address wait below is worth doing
 
 log() { printf '\033[1;34m[haos]\033[0m %s\n' "$*"; }
 ok() { printf '\033[1;32m[haos]\033[0m %s\n' "$*"; }
@@ -56,6 +66,7 @@ die() {
 
 # run CMD... -> the single mutation chokepoint. Under --dry-run, print only.
 run() {
+    CHANGES=$((CHANGES + 1))
     if [[ "$DRY_RUN" == 1 ]]; then
         printf '\033[2m[dry-run]\033[0m %s\n' "$*"
         return 0
@@ -67,6 +78,7 @@ run() {
 write_if_changed() {
     local path="$1" content="$2"
     [[ -f "$path" && "$(cat "$path")" == "$content" ]] && return 1
+    CHANGES=$((CHANGES + 1))
     if [[ "$DRY_RUN" == 1 ]]; then
         printf '\033[2m[dry-run]\033[0m write %s:\n%s\n' "$path" "$content"
     else
@@ -90,7 +102,7 @@ for arg in "$@"; do
 done
 
 [[ "$DRY_RUN" == 1 || "$EUID" -eq 0 ]] || die 'Run as root (sudo), or pass --dry-run'
-[[ -e /dev/kvm ]] || die '/dev/kvm missing: enable SVM/VT-x in firmware and load kvm_amd/kvm_intel'
+[[ -e "$KVM_DEVICE" ]] || die "${KVM_DEVICE} missing: enable SVM/VT-x in firmware and load kvm_amd/kvm_intel"
 [[ -n "$(ip -4 -o addr show dev "$BRIDGE" 2>/dev/null)" ]] ||
     die "Bridge ${BRIDGE} has no IPv4 address; run vms/haos/bridge.sh first"
 
@@ -108,7 +120,14 @@ if ((${#missing[@]})); then
 else
     ok 'Virtualization packages already installed'
 fi
-run systemctl enable --now libvirtd.service libvirt-guests.service
+# Enabled is enough for libvirtd (socket activation starts it on demand); libvirt-guests must also be active, or its
+# shutdown hook will not run
+if systemctl is-enabled --quiet libvirtd.service && systemctl is-enabled --quiet libvirt-guests.service &&
+    systemctl is-active --quiet libvirt-guests.service; then
+    ok 'libvirtd and libvirt-guests enabled'
+else
+    run systemctl enable --now libvirtd.service libvirt-guests.service
+fi
 
 user="${SUDO_USER:-}"
 if [[ -n "$user" && "$user" != root ]]; then
@@ -124,10 +143,10 @@ fi
 # 2. libvirt 'default' NAT network
 # ---------------------------------------------------------------------------
 if net_info="$(virsh_ro net-info default 2>/dev/null)"; then
-    if grep -qE '^Active:\s+yes' <<<"$net_info"; then
+    if grep -qE '^Active:[[:space:]]+yes' <<<"$net_info"; then
         run virsh -c "$LIBVIRT_URI" net-destroy default
     fi
-    if grep -qE '^Autostart:\s+yes' <<<"$net_info"; then
+    if grep -qE '^Autostart:[[:space:]]+yes' <<<"$net_info"; then
         run virsh -c "$LIBVIRT_URI" net-autostart default --disable
     fi
     ok "libvirt 'default' network stopped and not autostarting"
@@ -137,13 +156,13 @@ fi
 # 3. Clean guest shutdown with the host
 # ---------------------------------------------------------------------------
 # ON_BOOT=ignore: the domain's own autostart flag starts it; libvirt-guests only handles shutdown.
-if write_if_changed /etc/default/libvirt-guests "# Managed by dotfiles vms/haos/setup.sh
+if write_if_changed "${ETC_DIR}/default/libvirt-guests" "# Managed by dotfiles vms/haos/setup.sh
 ON_BOOT=ignore
 ON_SHUTDOWN=shutdown
 SHUTDOWN_TIMEOUT=300"; then
-    log 'Wrote /etc/default/libvirt-guests'
+    log "Wrote ${ETC_DIR}/default/libvirt-guests"
 else
-    ok '/etc/default/libvirt-guests up to date'
+    ok "${ETC_DIR}/default/libvirt-guests up to date"
 fi
 
 # ---------------------------------------------------------------------------
@@ -154,7 +173,7 @@ fi
 # '-' keeps a failure here from failing docker.service.
 if systemctl list-unit-files docker.service >/dev/null 2>&1; then
     rule="DOCKER-USER -i ${BRIDGE} -o ${BRIDGE} -j ACCEPT"
-    if write_if_changed /etc/systemd/system/docker.service.d/10-bridge-forward.conf "# Managed by dotfiles vms/haos/setup.sh
+    if write_if_changed "${ETC_DIR}/systemd/system/docker.service.d/10-bridge-forward.conf" "# Managed by dotfiles vms/haos/setup.sh
 [Service]
 ExecStartPost=-/bin/sh -c 'iptables -w -C ${rule} 2>/dev/null || iptables -w -I ${rule}'"; then
         run systemctl daemon-reload
@@ -165,7 +184,10 @@ ExecStartPost=-/bin/sh -c 'iptables -w -C ${rule} 2>/dev/null || iptables -w -I 
     # Apply now too, without restarting Docker (and every container with it)
     if [[ "$DRY_RUN" == 0 ]] && iptables -w -nL DOCKER-USER >/dev/null 2>&1; then
         # shellcheck disable=SC2086
-        iptables -w -C $rule 2>/dev/null || iptables -w -I $rule
+        if ! iptables -w -C $rule 2>/dev/null; then
+            iptables -w -I $rule
+            CHANGES=$((CHANGES + 1))
+        fi
     fi
 fi
 
@@ -175,7 +197,12 @@ fi
 if [[ -f "$DISK" ]]; then
     ok "Disk ${DISK} exists; leaving it untouched"
 else
-    avail_gb="$(df --output=avail -BG "$IMAGES_DIR" | tail -1 | tr -dc '0-9')"
+    # The images dir does not exist before libvirt is installed (a --dry-run on a fresh host): probe its nearest parent
+    probe_dir="$IMAGES_DIR"
+    while [[ ! -d "$probe_dir" ]]; do
+        probe_dir="$(dirname "$probe_dir")"
+    done
+    avail_gb="$(df --output=avail -BG "$probe_dir" | tail -1 | tr -dc '0-9')"
     ((avail_gb >= 40)) || warn "Only ${avail_gb}G free under ${IMAGES_DIR}; the disk grows towards ${HAOS_DISK_SIZE}"
 
     xz_path="${IMAGES_DIR}/haos_ova-${HAOS_VERSION}.qcow2.xz"
@@ -207,11 +234,12 @@ if virsh_ro dominfo "$HAOS_NAME" >/dev/null 2>&1; then
     [[ "$current_disk" == "$DISK" ]] ||
         die "A '${HAOS_NAME}' VM already exists using ${current_disk}; remove it first (see vms/haos/README.md)"
     ok "VM '${HAOS_NAME}' already defined"
-    if ! grep -qE '^Autostart:\s+enable' <<<"$(virsh_ro dominfo "$HAOS_NAME")"; then
+    if ! grep -qE '^Autostart:[[:space:]]+enable' <<<"$(virsh_ro dominfo "$HAOS_NAME")"; then
         run virsh -c "$LIBVIRT_URI" autostart "$HAOS_NAME"
     fi
     if [[ "$(virsh_ro domstate "$HAOS_NAME")" != running ]]; then
         run virsh -c "$LIBVIRT_URI" start "$HAOS_NAME"
+        VM_STARTED=1
     fi
 else
     log "Defining VM '${HAOS_NAME}' (${HAOS_VCPUS} vCPU, ${HAOS_MEMORY} MiB, ${BRIDGE}, MAC ${HAOS_MAC})"
@@ -226,6 +254,7 @@ else
         --channel unix,target.type=virtio,target.name=org.qemu.guest_agent.0 \
         --graphics none --console pty,target.type=serial \
         --import --autostart --noautoconsole
+    VM_STARTED=1
 fi
 
 # ---------------------------------------------------------------------------
@@ -247,7 +276,7 @@ done
 
 rules_changed=0
 if [[ -n "${HAOS_USB// /}" ]]; then
-    if write_if_changed /etc/udev/rules.d/90-haos-usb.rules "$usb_rules"; then
+    if write_if_changed "${ETC_DIR}/udev/rules.d/90-haos-usb.rules" "$usb_rules"; then
         run udevadm control --reload
         for usb_id in $HAOS_USB; do
             run udevadm trigger --action=change --subsystem-match=usb \
@@ -255,23 +284,25 @@ if [[ -n "${HAOS_USB// /}" ]]; then
         done
         run udevadm settle
         rules_changed=1
-        log 'Installed /etc/udev/rules.d/90-haos-usb.rules'
+        log "Installed ${ETC_DIR}/udev/rules.d/90-haos-usb.rules"
     else
-        ok '/etc/udev/rules.d/90-haos-usb.rules up to date'
+        ok "${ETC_DIR}/udev/rules.d/90-haos-usb.rules up to date"
     fi
 fi
 
-# virsh_hostdev ACTION XML FLAGS... -> attach-device / detach-device with an inline XML snippet
+# virsh_hostdev ACTION XML FLAGS... -> attach-device / detach-device with an inline XML snippet; a mutation, so it goes
+# through run() (counted, and only printed under --dry-run)
 virsh_hostdev() {
     local action="$1" snippet="$2" xml
     shift 2
     if [[ "$DRY_RUN" == 1 ]]; then
-        printf '\033[2m[dry-run]\033[0m virsh %s %s %s:\n%s\n' "$action" "$HAOS_NAME" "$*" "$snippet"
+        run virsh -c "$LIBVIRT_URI" "$action" "$HAOS_NAME" '<hostdev.xml>' "$@"
+        printf '%s\n' "$snippet"
         return 0
     fi
     xml="$(mktemp)"
     printf '%s\n' "$snippet" >"$xml"
-    virsh -c "$LIBVIRT_URI" "$action" "$HAOS_NAME" "$xml" "$@"
+    run virsh -c "$LIBVIRT_URI" "$action" "$HAOS_NAME" "$xml" "$@"
     rm -f "$xml"
 }
 
@@ -284,8 +315,7 @@ for usb_id in $HAOS_USB; do
     hostdev="<hostdev mode='subsystem' type='usb' managed='yes'>
   <source startupPolicy='optional'><vendor id='0x${vendor}'/><product id='0x${product}'/></source>
 </hostdev>"
-    if [[ "$(virsh_ro dumpxml --inactive "$HAOS_NAME" 2>/dev/null | tr -d ' \n')" == \
-        *"<vendorid='0x${vendor}'/><productid='0x${product}'/>"* ]]; then
+    if [[ "$(virsh_ro dumpxml --inactive "$HAOS_NAME" 2>/dev/null | tr -d ' \n')" == *"<vendorid='0x${vendor}'/><productid='0x${product}'/>"* ]]; then
         if ((rules_changed && running && plugged)); then
             # QEMU only opens the device on attach, so re-attach to pick up the new permissions
             log "Re-attaching USB ${usb_id} so QEMU reopens it with write access"
@@ -306,17 +336,25 @@ for usb_id in $HAOS_USB; do
     virsh_hostdev attach-device "$hostdev" "${flags[@]}"
 done
 
+printf 'haos: changes=%d\n' "$CHANGES"
 [[ "$DRY_RUN" == 0 ]] || exit 0
 
 # ---------------------------------------------------------------------------
 # Report the VM's address (guest agent first, then the host's ARP table)
 # ---------------------------------------------------------------------------
-log 'Waiting for the VM to report an address (first boot takes a minute or two)...'
+# Wait (up to ~3 minutes) only when this run defined or started the VM; a running VM answers on the first attempt
+attempts=1
+if [[ "$VM_STARTED" == 1 ]]; then
+    attempts=60
+    log 'Waiting for the VM to report an address (first boot takes a minute or two)...'
+fi
 vm_ip=''
-for _ in $(seq 1 60); do
+for _ in $(seq 1 "$attempts"); do
     for source in agent arp; do
+        # `|| true`: virsh exits non-zero while the guest agent is not answering yet, and pipefail would carry that
+        # through the substitution and abort the script instead of falling back to arp / the warning below
         vm_ip="$(virsh_ro domifaddr "$HAOS_NAME" --source "$source" 2>/dev/null |
-            awk '$3 == "ipv4" && $4 !~ /^127\./ {split($4, a, "/"); print a[1]; exit}')"
+            awk '$3 == "ipv4" && $4 !~ /^127\./ {split($4, a, "/"); print a[1]; exit}' || true)"
         [[ -n "$vm_ip" ]] && break 2
     done
     sleep 3
@@ -327,4 +365,6 @@ if [[ -n "$vm_ip" ]]; then
 else
     warn 'No address yet; check the router for MAC '"${HAOS_MAC}"', or watch boot with: sudo virsh console '"${HAOS_NAME}"
 fi
-log 'First boot downloads the latest Home Assistant Core; the onboarding page appears when it finishes.'
+if [[ "$VM_STARTED" == 1 ]]; then
+    log 'First boot downloads the latest Home Assistant Core; the onboarding page appears when it finishes.'
+fi

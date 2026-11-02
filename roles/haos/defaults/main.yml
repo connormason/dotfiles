@@ -1,0 +1,6 @@
+---
+# LAN bridge the VM attaches to. vms/haos/bridge.sh creates it, never this role: it blips the network.
+haos_bridge: br0
+
+# The VM provisioning script, run from the NAS clone (dotfiles_repo_dir is a play variable)
+haos_setup_script: "{{ dotfiles_repo_dir }}/vms/haos/setup.sh"

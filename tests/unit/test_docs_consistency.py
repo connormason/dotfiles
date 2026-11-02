@@ -180,3 +180,35 @@ class TestStowPackageDocs:
                 )
 
         assert not mismatches, 'stow/README.md conf.d column is out of sync:\n  ' + '\n  '.join(mismatches)
+
+
+def _role_dirs(repo: Path) -> set[str]:
+    """
+    Return the names of the role directories under ``roles/``
+
+    :param repo: repository root
+    :return: one entry per role directory (hidden directories such as ansible-lint's ``.backups`` excluded)
+    """
+    return {path.name for path in (repo / 'roles').iterdir() if path.is_dir() and not path.name.startswith('.')}
+
+
+def _roles_readme_rows(repo: Path) -> set[str]:
+    """
+    Return the role names linked in the first cell of the ``roles/README.md`` table
+
+    :param repo: repository root
+    :return: role names such as ``{"debian", "dotfiles", ...}``
+    """
+    text = (repo / 'roles' / 'README.md').read_text(encoding='utf-8')
+    return set(re.findall(r'^\|\s*\[`([a-z0-9_-]+)`\]\(', text, re.MULTILINE))
+
+
+class TestRolesReadme:
+    """
+    Tests that roles/README.md lists exactly the roles on disk
+    """
+    def test_readme_table_matches_role_dirs(self) -> None:
+        """
+        Test that every role directory has a table row and every row has a directory
+        """
+        assert _roles_readme_rows(REPO_ROOT) == _role_dirs(REPO_ROOT)

@@ -1,0 +1,20 @@
+---
+# dotfiles_repo_dir (the clone path) is a play variable in playbooks/nas_bootstrap.yml, shared with the haos role
+
+# Fetch over HTTPS (public repo: works before any SSH key is registered with GitHub); push over SSH
+dotfiles_repo_url: https://github.com/connormason/dotfiles.git
+dotfiles_repo_push_url: git@github.com:connormason/dotfiles.git
+dotfiles_repo_version: main
+
+# Overlay roots the engine layers on top of the base; written to the overlays registry, which this role owns
+dotfiles_overlays:
+  - "{{ dotfiles_repo_dir }}/profiles/nas"
+
+# The overlays registry the engine reads; the role writes it and points the engine at it (DOTFILES_OVERLAYS_FILE)
+dotfiles_overlays_file: "{{ ansible_facts['user_dir'] }}/.config/dotfiles/overlays"
+
+# Login shell for ansible_user
+dotfiles_login_shell: /bin/zsh
+
+# true: run the engine with --dry-run even in a real play (first rollout: clone and register, then preview $HOME)
+dotfiles_bootstrap_preview: false

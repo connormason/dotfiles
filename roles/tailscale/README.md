@@ -76,7 +76,7 @@ After first playbook run:
 ./nas_bootstrap.sh
 
 # Tailscale only
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --ask-become-pass -vv --tags tailscale
+ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags tailscale
 ```
 
 ## Cert Renewal

@@ -16,7 +16,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Inherited variables that would leak the developer's own configuration into the tests
 _SCRUBBED_VARS: tuple[str, ...] = (
+    'BOOTSTRAP_CHANGES_FILE',
     'BOOTSTRAP_DRY_RUN',
+    'BOOTSTRAP_NONINTERACTIVE',
     'DOTFILES_REPO',
     'DOTFILES_LAYER',
     'DOTFILES_BREW_PREFIXES',
@@ -500,6 +502,102 @@ class TestDryRun:
         assert 'scripts/hooks/uv-public.sh run python run.py doctor' in result.stdout
         assert 'verify (dry-run)' in result.stdout
 
+
+# An overlay stage that records two changes and saves the ledger path it saw
+CHANGE_STAGE = (
+    '#!/usr/bin/env bash\n'
+    'source "$DOTFILES_REPO/bootstrap/lib.sh"\n'
+    'printf "%s" "$BOOTSTRAP_CHANGES_FILE" > "$PROBE_FILE"\n'
+    'note_change "made a thing"\n'
+    'note_change "made another"\n'
+)
+
+
+class TestChangeLedger:
+    """
+    Tests for the per-run change ledger and the machine-readable summary line
+    """
+    @pytest.fixture(autouse=True)
+    def _skip_darwin_sudo(self, env: dict[str, str]) -> None:
+        """
+        Pin the stages to linux so these real (non-dry) runs never reach the darwin sudo prime
+        """
+        env['DOTFILES_OS'] = 'linux'
+
+    def test_summary_lists_and_counts_changes(self, base: Path, shell: str, env: dict[str, str], overlay: Path) -> None:
+        """
+        Test that recorded changes are listed in the summary and counted on its last line
+        """
+        (overlay / 'bootstrap' / '97-selftest-change.sh').write_text(CHANGE_STAGE, encoding='utf-8')
+
+        result = _drive(base, shell, env, '--no-log', '--only', '97-selftest-change')
+        assert result.returncode == 0, result.stderr
+
+        lines = result.stdout.splitlines()
+        assert lines[-1] == 'bootstrap: changes=2'
+        assert lines.index('  changes:') < lines.index('    made a thing') < lines.index('    made another')
+
+    def test_no_changes_reports_zero(self, base: Path, shell: str, env: dict[str, str]) -> None:
+        """
+        Test that a run that records nothing ends with changes=0 and lists no changes
+        """
+        result = _drive(base, shell, env, '--no-log', '--only', '98-selftest-ok')
+        assert result.returncode == 0, result.stderr
+
+        lines = result.stdout.splitlines()
+        assert lines[-1] == 'bootstrap: changes=0'
+        assert '  changes:' not in lines
+
+    def test_dry_run_counts_would_be_changes(self, base: Path, shell: str, env: dict[str, str], overlay: Path) -> None:
+        """
+        Test that under --dry-run the list is labelled as would-be changes and still counted
+        """
+        (overlay / 'bootstrap' / '97-selftest-change.sh').write_text(CHANGE_STAGE, encoding='utf-8')
+
+        result = _drive(base, shell, env, '--dry-run', '--no-log', '--only', '97-selftest-change')
+        assert result.returncode == 0, result.stderr
+
+        lines = result.stdout.splitlines()
+        assert '  would change:' in lines
+        assert lines[-1] == 'bootstrap: changes=2'
+
+    def test_failed_stage_still_ends_with_the_line(self, base: Path, shell: str, env: dict[str, str]) -> None:
+        """
+        Test that the summary line is printed when a stage fails
+        """
+        result = _drive(base, shell, env, '--no-log', '--from', '99-selftest-fail')
+
+        assert result.returncode != 0
+        assert result.stdout.splitlines()[-1] == 'bootstrap: changes=0'
+
+    def test_ledger_is_fresh_and_removed(
+        self,
+        base: Path,
+        shell: str,
+        env: dict[str, str],
+        overlay: Path,
+        tmp_path: Path,
+    ) -> None:
+        """
+        Test that an inherited ledger path is ignored and the run's own ledger is deleted on exit
+        """
+        (overlay / 'bootstrap' / '97-selftest-change.sh').write_text(CHANGE_STAGE, encoding='utf-8')
+        inherited = tmp_path / 'inherited-ledger'
+
+        result = _drive(
+            base,
+            shell,
+            {**env, 'BOOTSTRAP_CHANGES_FILE': str(inherited)},
+            '--no-log',
+            '--only',
+            '97-selftest-change',
+        )
+        assert result.returncode == 0, result.stderr
+
+        seen = Path(Path(env['PROBE_FILE']).read_text(encoding='utf-8'))
+        assert seen != inherited
+        assert not inherited.exists()
+        assert not seen.exists()
 
 class TestHelp:
     """
