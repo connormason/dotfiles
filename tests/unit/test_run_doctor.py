@@ -353,7 +353,7 @@ class TestDoctorCommand:
         Test that every Dotfiles command is registered under the Dotfiles group
         """
         group = run.get_commands(by_group=True)['Dotfiles']
-        assert set(group) == {'bootstrap', 'stow', 'render', 'doctor', 'test'}
+        assert set(group) == {'bootstrap', 'stow', 'render', 'doctor', 'test', 'track-claude'}
 
 
 class TestForwarding:

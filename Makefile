@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks makefile nas-provision doctor bootstrap stow render test
+.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks makefile nas-provision doctor bootstrap stow render track-claude test
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -37,6 +37,7 @@ help: ## Show this help message
 	@echo "  $(YELLOW)bootstrap       $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh)"
 	@echo "  $(YELLOW)stow            $(NC) Link stow packages from every layer into the home directory (stow.sh)"
 	@echo "  $(YELLOW)render          $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
+	@echo "  $(YELLOW)track-claude    $(NC) Ingest new ~/.claude agents, commands, skills, hooks, and rules into the repo"
 	@echo "  $(YELLOW)test            $(NC) Run the test suite via uv (public-index wrapper)"
 	@echo ""
 
@@ -94,6 +95,9 @@ stow: ## Link stow packages from every layer into the home directory (stow.sh)
 
 render: ## Render settings files from per-layer fragments (scripts/dotfiles/render.py)
 	@python3 run.py render
+
+track-claude: ## Ingest new ~/.claude agents, commands, skills, hooks, and rules into the repo
+	@python3 run.py track-claude
 
 test: ## Run the test suite via uv (public-index wrapper)
 	@python3 run.py test

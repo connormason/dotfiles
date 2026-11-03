@@ -112,7 +112,7 @@ class TestCommandRegistration:
             'list-hosts', 'inventory-status', 'update-inventory', 'vault-decrypt', 'vault-encrypt',
             'clean', 'run-hooks', 'pre', 'prepare-hooks', 'install-hooks', 'uninstall-hooks', 'makefile',
             'nas-deploy', 'nas-provision',
-            'doctor', 'bootstrap', 'stow', 'render', 'test',
+            'doctor', 'bootstrap', 'stow', 'render', 'track-claude', 'test',
         ]
 
 

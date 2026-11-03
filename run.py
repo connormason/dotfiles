@@ -120,6 +120,8 @@ STOW_SCRIPT:      Path = DOTFILES_DIR / 'stow.sh'
 BOOTSTRAP_SCRIPT: Path = DOTFILES_DIR / 'bootstrap' / 'bootstrap.sh'
 RENDER_SCRIPT:    Path = DOTFILES_DIR / 'scripts' / 'dotfiles' / 'render.py'
 UV_PUBLIC:        Path = DOTFILES_DIR / 'scripts' / 'hooks' / 'uv-public.sh'
+STOW_DIR:         Path = DOTFILES_DIR / 'stow'
+CLAUDE_STOW_DIR:  Path = STOW_DIR / 'claude' / '.claude'
 
 # NAS provisioning (Ansible playbook, collections) and service deploys (script shared with CI)
 NAS_PLAYBOOK:       Path = PLAYBOOKS_DIR / 'nas_bootstrap.yml'
@@ -130,6 +132,12 @@ NAS_INVENTORY_HOST: str  = 'nas'
 # Doctor requirements
 REQUIRED_TOOLS:  tuple[str, ...] = ('brew', 'git', 'stow', 'uv', 'zsh')
 MIN_GIT_VERSION: tuple[int, int] = (2, 36)  # includeIf "hasconfig:remote.*.url:" support
+
+# Hand-authored Claude Code config that `track-claude` ingests into the `claude` stow package. Machine-managed state
+# (plugins/, projects/, caches) stays untracked; stowed files are symlinks, so a regular file here is local-only.
+CLAUDE_CONFIG_DIR:      Path      = Path.home() / '.claude'
+CLAUDE_TRACKED_SUBDIRS: list[str] = ['agents', 'commands', 'skills', 'hooks', 'rules']
+CLAUDE_IGNORE_NAMES:    set[str]  = {'.DS_Store'}
 
 # Git hook types `prek install` must have shimmed (mirrors `default_install_hook_types` in .pre-commit-config.yaml;
 # a test keeps the two in sync) and the marker prek writes into every shim it generates
@@ -2054,11 +2062,12 @@ class NasProvisionCommand(Command):
 #
 # Thin wrappers over the layered engine (stow.sh, bootstrap/bootstrap.sh, scripts/dotfiles/render.py)
 # plus a doctor that checks the overlay registry, link state, render drift, git version, and required tools:
-#   - bootstrap: Run the layered bootstrap stages
-#   - stow:      Link stow packages from every layer into $HOME
-#   - render:    Render settings files from per-layer fragments
-#   - doctor:    Verify the environment (``--fix`` runs each failing check's repair command, then re-checks)
-#   - test:      Run the test suite through the public-index uv wrapper
+#   - bootstrap:    Run the layered bootstrap stages
+#   - stow:         Link stow packages from every layer into $HOME
+#   - render:       Render settings files from per-layer fragments
+#   - track-claude: Ingest local ~/.claude agents/commands/skills/hooks/rules into the ``claude`` stow package
+#   - doctor:       Verify the environment (``--fix`` runs each failing check's repair command, then re-checks)
+#   - test:         Run the test suite through the public-index uv wrapper
 # ====================================================================================================
 
 
@@ -2511,6 +2520,118 @@ class RenderCommand(Command):
         sys.exit(
             shell_command(cmd, check=False).returncode,
         )
+
+
+def find_untracked_claude_files() -> list[Path]:
+    """
+    Find real (non-symlink) files under the tracked ``~/.claude`` subdirectories
+
+    Stowed agents/commands/skills/hooks/rules are symlinks into the repo, so any regular file is something Claude Code
+    or the user created locally that the ``claude`` stow package does not have yet. Symlinked directories are never
+    descended into, and a tracked subdirectory that is itself a symlink is skipped, so repo files reached through a
+    link are never mistaken for local ones.
+
+    :return: sorted absolute paths of untracked files
+    """
+    untracked: list[Path] = []
+    for subdir in CLAUDE_TRACKED_SUBDIRS:
+        base = CLAUDE_CONFIG_DIR / subdir
+        if base.is_symlink() or not base.is_dir():
+            continue
+
+        for dirpath, _dirnames, filenames in os.walk(base):
+            for filename in filenames:
+                if filename in CLAUDE_IGNORE_NAMES:
+                    continue
+
+                path = Path(dirpath) / filename
+                if not path.is_symlink():
+                    untracked.append(path)
+
+    return sorted(untracked)
+
+
+class TrackClaudeCommand(Command):
+    """
+    Ingest new ~/.claude agents, commands, skills, hooks, and rules into the repo
+    """
+    name:  ClassVar[str] = 'track-claude'
+    group: ClassVar[str] = 'Dotfiles'
+
+    class Args(argparse.Namespace):
+        dry_run: bool       # --dry-run
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '-n',
+            '--dry-run',
+            action='store_true',
+            help='Preview what would be ingested without moving anything',
+        )
+
+    def run(self, args: Args) -> None:
+        untracked = find_untracked_claude_files()
+        if not untracked:
+            printf('✅ Nothing to track: everything under ~/.claude is already in the repo', fg='bright_green')
+            return
+
+        printf(
+            f'Found {len(untracked)} untracked file(s) under {folduser(CLAUDE_CONFIG_DIR)}:',
+            bold=True,
+            fg='bright_white',
+        )
+
+        # Plan moves: src (real file in ~/.claude) -> dst (mirrored path in the stow package). A dst that already
+        # exists is a conflict (the repo has a different file there) and is left untouched.
+        moves:     list[tuple[Path, Path]] = []
+        conflicts: list[Path]              = []
+        for src in untracked:
+            rel = src.relative_to(CLAUDE_CONFIG_DIR)
+            dst = CLAUDE_STOW_DIR / rel
+            if dst.exists():
+                conflicts.append(rel)
+                printf(f'{style("CONFLICT", fg="red")}  {rel}', indent=2)
+            else:
+                moves.append((src, dst))
+                printf(f'{style("→ repo", fg="green")}  {rel}', indent=2)
+
+        if conflicts:
+            printf('')
+            printf(f'🟡 {len(conflicts)} file(s) already exist in the repo; skipped (resolve manually)', fg='yellow')
+
+        if not moves:
+            printf('')
+            printf('Nothing to move.', fg='yellow')
+            return
+
+        if args.dry_run:
+            printf('')
+            printf(f'Dry run: would move {len(moves)} file(s) and restow. No changes made.', fg='cyan')
+            return
+
+        printf('')
+        if not confirm(f'Move {len(moves)} file(s) into the repo and restow?'):
+            printf('⚠️  Cancelled', fg='yellow')
+            return
+
+        for src, dst in moves:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src), str(dst))
+            printf(f'└─ {src.relative_to(CLAUDE_CONFIG_DIR)}', fg='green')
+
+        # The source paths are vacant now, so a plain restow links the moved files back in without conflicts
+        printf('')
+        printf('🔗 Restowing claude package...', fg='bright_cyan')
+        try:
+            shell_command(['bash', str(STOW_SCRIPT), 'claude'], indent=3)
+        except subprocess.CalledProcessError:
+            printf('❌ Restow failed: files moved into the repo, but symlinks may be incomplete', fg='red', bold=True)
+            printf(f'Re-run: {style("python3 run.py stow claude", fg="bright_magenta")}', indent=3)
+            sys.exit(ExitCode.COMMAND_FAILED)
+
+        printf('')
+        printf(f'✅ Ingested {len(moves)} file(s). Review and commit them:', fg='bright_green', bold=True)
+        printf(style('git add stow/claude/.claude && git commit', fg='bright_magenta'), indent=3)
 
 
 class TestCommand(Command):
