@@ -154,6 +154,24 @@ class TestResolveNasTarget:
         assert exc_info.value.code == 1
         assert 'Unexpected' in _output(capsys)
 
+    @pytest.mark.parametrize('stdout', ['[]', 'null', '"nas"', '42'])
+    def test_valid_json_that_is_not_an_object_exits(
+        self,
+        fake_shell: FakeShell,
+        capsys: pytest.CaptureFixture[str],
+        stdout: str,
+    ) -> None:
+        """
+        Test that valid JSON other than an object exits 1 as unexpected output instead of crashing on a missing .get
+        """
+        fake_shell.results['ansible-inventory'] = _done(stdout=stdout)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run.resolve_nas_target()
+
+        assert exc_info.value.code == 1
+        assert 'Unexpected ansible-inventory output for host "nas"' in _output(capsys)
+
     def test_templated_values_are_rejected(self, fake_shell: FakeShell, capsys: pytest.CaptureFixture[str]) -> None:
         """
         Test that a Jinja-templated ansible_host is refused with a hint to use a literal value
