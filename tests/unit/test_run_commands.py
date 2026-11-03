@@ -192,7 +192,7 @@ class TestBuildParser:
         Test that subcommand options land on the root Args namespace
         """
         args = run.build_parser().parse_args(['stow', '-n', 'zsh'], namespace=run.Args())
-        assert args.command == 'stow'
+        assert args.command  == 'stow'
         assert args.simulate is True
         assert args.packages == ['zsh']
 
@@ -243,12 +243,12 @@ class TestMain:
         assert [a.command for a in seen] == ['record']
 
     @pytest.mark.parametrize(
-        ('env_debug', 'argv',                   'expected'),
+        ('env_debug', 'argv', 'expected'),
         [
-            (False,       ['probe'],               False),
-            (False,       ['-d',         'probe'], True),
-            (True,        ['probe'],               True),
-            (True,        ['--no-debug', 'probe'], False),
+            (False, ['probe'],               False),
+            (False, ['-d',         'probe'], True),
+            (True,  ['probe'],               True),
+            (True,  ['--no-debug', 'probe'], False),
         ],
     )
     def test_debug_flag_sets_run_debug(
@@ -263,6 +263,7 @@ class TestMain:
         Test that the parsed --debug/--no-debug value (defaulting to the env var) is what commands see as RUN_DEBUG
         """
         monkeypatch.setattr(run, 'RUN_DEBUG', env_debug)
+
         seen: list[bool] = []
         _make_command('ProbeCommand', run=lambda self, args: seen.append(run.RUN_DEBUG))
         run.main(argv)
@@ -281,7 +282,7 @@ class TestMain:
         assert exc_info.value.code == run.ExitCode.USER_CANCELLED
 
     @pytest.mark.parametrize(
-        ('argv',              'traceback_shown'),
+        ('argv', 'traceback_shown'),
         [
             (['explode'],       False),
             (['-d', 'explode'], True),
@@ -323,13 +324,13 @@ class TestUpdateInventory:
         """
         Point the inventory at a temp dir, fake shell_command, and record every command it is asked to run
         """
-        monkeypatch.setattr(run, 'INVENTORY_DIR', tmp_path / 'inventory')
-        monkeypatch.setattr(run, 'handle_command_error', lambda *args, **kwargs: None)
-        monkeypatch.setattr(run.time, 'sleep', lambda seconds: None)
+        monkeypatch.setattr(run,      'INVENTORY_DIR',        tmp_path / 'inventory')
+        monkeypatch.setattr(run,      'handle_command_error', lambda *args, **kwargs: None)
+        monkeypatch.setattr(run.time, 'sleep',                lambda seconds: None)
 
-        self.failing: set[str] = set()
-        self.dirty = False
-        recorded: list[list[str]] = []
+        self.failing: set[str]        = set()
+        self.dirty:   bool            = False
+        recorded:     list[list[str]] = []
 
         def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             recorded.append(cmd)

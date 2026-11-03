@@ -795,7 +795,6 @@ def shell_command(
                 print(f'{indent_str}{buffer}', end='')
         finally:
             os.close(master_fd)
-            # No `return`/`raise` here: either would replace an exception already propagating from the read loop
             if not timed_out:
                 try:
                     returncode = process.wait(timeout=None if deadline is None else max(deadline - time.monotonic(), 0))
@@ -806,8 +805,8 @@ def shell_command(
                 process.wait()
 
         if timed_out:
-            printf(f'❌ Command timed out after {timeout}s', fg='red', bold=True, indent=indent or 0)
-            printf(f'  └─ Command: {shlex.join(cmd)}',        fg='red',           indent=(indent or 0) + 1)
+            printf(f'❌ Command timed out after {timeout}s',  fg='red', bold=True, indent=indent or 0)
+            printf(f'  └─ Command: {shlex.join(cmd)}',        fg='red',            indent=(indent or 0) + 1)
             if check:
                 raise subprocess.TimeoutExpired(cmd, cast('float', timeout), output=all_output)
             return subprocess.CompletedProcess(cmd, -1, stdout=all_output)
@@ -987,16 +986,54 @@ def parse_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
 #
 # Commands for managing the standalone inventory git repository
 #
-# The inventory is NOT a git submodule - it's a separate repository cloned into the inventory/ directory by run.py.
+# The inventory is a separate repository cloned into the inventory/ directory by run.py.
 #
 # Key commands:
-# - list-hosts:       Parse inventory.yml and display available bootstrap targets
-# - inventory-status: Show git status and metadata for inventory directory
-# - update-inventory: Clone (if missing) or pull (if exists) inventory repo
-#   - Supports --force flag to reset uncommitted changes before pulling
-#   - Includes retry logic with exponential backoff for network resilience
-#   - Provides SSH error detection and troubleshooting guidance
+#   - list-hosts:       Parse inventory.yml and display available bootstrap targets
+#   - inventory-status: Show git status and metadata for inventory directory
+#   - update-inventory: Clone (if missing) or pull (if exists) inventory repo
+#     - Supports --force flag to reset uncommitted changes before pulling
+#     - Includes retry logic with exponential backoff for network resilience
+#     - Provides SSH error detection and troubleshooting guidance
 # ====================================================================================================
+
+
+def find_vault_files() -> list[Path]:
+    """
+    Find all vault.yml files in the inventory directory
+
+    :return: sorted list of vault file paths
+    """
+    vault_files: list[Path] = []
+    for pattern in VAULT_FILE_PATTERNS:
+        vault_files.extend(INVENTORY_DIR.glob(pattern))
+    return sorted(vault_files)
+
+
+def require_vault_password() -> None:
+    """
+    Validate that the vault password file exists and exit with an error if not
+
+    :raises SystemExit: if vault password file is missing
+    """
+    if not VAULT_PASSWORD.is_file():
+        printf('❌ Vault password file not found', fg='red', bold=True)
+        printf(f'   Expected: {folduser(VAULT_PASSWORD)}', indent=3)
+        printf(f'   Create it with: {style("echo YOUR_PASSWORD > vault_password.txt", fg="bright_magenta")}', indent=3)
+        sys.exit(ExitCode.COMMAND_FAILED)
+
+
+def require_inventory() -> None:
+    """
+    Validate that the inventory directory exists and exit with an error if not
+
+    :raises SystemExit: if inventory directory is missing
+    """
+    if not INVENTORY_DIR.exists():
+        printf('❌ Inventory directory not found', fg='red', bold=True)
+        printf(f'   Expected: {folduser(INVENTORY_DIR)}', indent=3)
+        printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
+        sys.exit(ExitCode.COMMAND_FAILED)
 
 
 class ListHostsCommand(Command):
@@ -1176,7 +1213,7 @@ class UpdateInventoryCommand(Command):
     group: ClassVar[str] = 'Inventory'
 
     class Args(argparse.Namespace):
-        force: bool
+        force: bool     # --force
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
@@ -1273,44 +1310,6 @@ class UpdateInventoryCommand(Command):
         except Exception:
             printf('❌ Failed to update inventory after multiple attempts', fg='red', bold=True)
             sys.exit(ExitCode.COMMAND_FAILED)
-
-
-def find_vault_files() -> list[Path]:
-    """
-    Find all vault.yml files in the inventory directory
-
-    :return: sorted list of vault file paths
-    """
-    vault_files: list[Path] = []
-    for pattern in VAULT_FILE_PATTERNS:
-        vault_files.extend(INVENTORY_DIR.glob(pattern))
-    return sorted(vault_files)
-
-
-def require_vault_password() -> None:
-    """
-    Validate that the vault password file exists and exit with an error if not
-
-    :raises SystemExit: if vault password file is missing
-    """
-    if not VAULT_PASSWORD.is_file():
-        printf('❌ Vault password file not found', fg='red', bold=True)
-        printf(f'   Expected: {folduser(VAULT_PASSWORD)}', indent=3)
-        printf(f'   Create it with: {style("echo YOUR_PASSWORD > vault_password.txt", fg="bright_magenta")}', indent=3)
-        sys.exit(ExitCode.COMMAND_FAILED)
-
-
-def require_inventory() -> None:
-    """
-    Validate that the inventory directory exists and exit with an error if not
-
-    :raises SystemExit: if inventory directory is missing
-    """
-    if not INVENTORY_DIR.exists():
-        printf('❌ Inventory directory not found', fg='red', bold=True)
-        printf(f'   Expected: {folduser(INVENTORY_DIR)}', indent=3)
-        printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
-        sys.exit(ExitCode.COMMAND_FAILED)
 
 
 class VaultDecryptCommand(Command):
@@ -1693,8 +1692,8 @@ class NasDeployCommand(Command):
     script_only: ClassVar[bool] = True
 
     class Args(argparse.Namespace):
-        service: str
-        dry_run: bool
+        service: str        # positional arg "SERVICE"
+        dry_run: bool       # --dry-run
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
@@ -1729,12 +1728,12 @@ class NasProvisionCommand(Command):
     group: ClassVar[str] = 'NAS'
 
     class Args(argparse.Namespace):
-        tags:       str | None
-        limit:      str | None
-        check:      bool
-        diff:       bool
-        extra_vars: list[str] | None
-        verbose:    int
+        tags:       str | None          # --tags
+        limit:      str | None          # --limit
+        check:      bool                # --check
+        diff:       bool                # --diff
+        extra_vars: list[str] | None    # --extra-vars
+        verbose:    int                 # --verbose
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
@@ -1879,7 +1878,7 @@ def check_links() -> DoctorCheck:
     ):
         return DoctorCheck('links', True, 'all packages linked')
 
-    fix = ['bash', str(STOW_SCRIPT), '--backup-conflicts']
+    fix: list[str] = ['bash', str(STOW_SCRIPT), '--backup-conflicts']
     if result.returncode != 0:
         return DoctorCheck('links', False, _first_line(result.stderr or result.stdout, 'stow simulation failed'), fix)
 
@@ -1952,7 +1951,7 @@ class DoctorCommand(Command):
     group: ClassVar[str] = 'Dotfiles'
 
     class Args(argparse.Namespace):
-        fix: bool
+        fix: bool       # --fix
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
@@ -1992,13 +1991,13 @@ class BootstrapCommand(Command):
     group: ClassVar[str] = 'Dotfiles'
 
     class Args(argparse.Namespace):
-        dry_run:    bool
-        list:       bool
-        only:       str | None
-        from_stage: str | None
-        resume:     bool
-        verify:     bool
-        no_log:     bool
+        dry_run:    bool            # --dry-run
+        list:       bool            # --list
+        only:       str | None      # --only
+        from_stage: str | None      # --from
+        resume:     bool            # --resume
+        verify:     bool            # --verify
+        no_log:     bool            # --no-log
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
@@ -2068,10 +2067,10 @@ class StowCommand(Command):
     group: ClassVar[str] = 'Dotfiles'
 
     class Args(argparse.Namespace):
-        packages:         list[str]
-        simulate:         bool
-        backup_conflicts: bool
-        verbose:          bool
+        packages:         list[str]     # positional arg(s) "PACKAGES"
+        simulate:         bool          # --simulate
+        backup_conflicts: bool          # --backup-conflicts
+        verbose:          bool          # --verbose
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
@@ -2119,11 +2118,11 @@ class RenderCommand(Command):
     group: ClassVar[str] = 'Dotfiles'
 
     class Args(argparse.Namespace):
-        targets: list[str]
-        diff:    bool
-        check:   bool
-        force:   bool
-        verbose: bool
+        targets: list[str]      # positional arg(s) "TARGETS"
+        diff:    bool           # --diff
+        check:   bool           # --check
+        force:   bool           # --force
+        verbose: bool           # --verbose
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
@@ -2177,15 +2176,21 @@ class TestCommand(Command):
     group: ClassVar[str] = 'Dotfiles'
 
     class Args(argparse.Namespace):
-        paths: list[str]
+        paths: list[str]        # positional arg(s) "PATHS"
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument('paths', nargs='*', help='Test paths (default: tests/)')
+        parser.add_argument(
+            'paths',
+            nargs='*',
+            help='Test paths (default: tests/)',
+        )
 
     def run(self, args: Args) -> None:
-        cmd: list[str] = [str(UV_PUBLIC), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])]
         sys.exit(
-            shell_command(cmd, check=False).returncode,
+            shell_command(
+                [str(UV_PUBLIC), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])],
+                check=False,
+            ).returncode,
         )
 
 
