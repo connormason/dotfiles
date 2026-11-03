@@ -76,9 +76,22 @@
       loop:
         - "{{ docker_dir }}"
         - "{{ docker_dir }}/.build"
-        - "{{ docker_dir }}/pihole-data/etc-pihole"
       loop_control:
         loop_var: docker_dir_path
+
+    # PiHole re-owns this bind mount once it runs, so create the directory once and never enforce its mode or owner
+    # afterwards (an enforced mode would report changed, or fail, on every run)
+    - name: Check for the PiHole config directory
+      ansible.builtin.stat:
+        path: "{{ docker_dir }}/pihole-data/etc-pihole"
+      register: docker_pihole_config_dir
+
+    - name: Create the PiHole config directory
+      ansible.builtin.file:
+        path: "{{ docker_dir }}/pihole-data/etc-pihole"
+        state: directory
+        mode: "0755"
+      when: not docker_pihole_config_dir.stat.exists
 
     # Shared, non-secret values only; per-service secrets are rendered by the services role. diff is off because a host
     # that predates the split still holds a password line in the old file, which --check --diff would print as removed

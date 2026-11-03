@@ -17,6 +17,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PLAYBOOK  = REPO_ROOT / 'playbooks' / 'nas_bootstrap.yml'
 ROLES     = REPO_ROOT / 'roles'
 
+ANSIBLE_PLAYBOOK = Path(sys.executable).parent / 'ansible-playbook'
+SERVICES_DIR     = REPO_ROOT / 'services'
+
+needs_ansible = pytest.mark.skipif(not ANSIBLE_PLAYBOOK.exists(), reason='ansible-playbook not in this environment')
+
 TaskDict = dict[str, Any]  # Any: heterogeneous, yaml-loaded task structure
 
 
@@ -273,11 +278,34 @@ class TestDockerRole:
         ignore = (REPO_ROOT / '.ansible-lint-ignore').read_text(encoding='utf-8')
         assert 'roles/docker/' not in ignore
 
+    def test_directory_loop_leaves_the_pihole_path_to_the_guarded_task(self) -> None:
+        """
+        Test that the enforced-mode directory loop no longer includes the PiHole config directory
+        """
+        loop = _task('docker', 'Create docker directory structure')['loop']
+        assert not any('pihole' in entry for entry in loop), loop
 
-ANSIBLE_PLAYBOOK = Path(sys.executable).parent / 'ansible-playbook'
-SERVICES_DIR     = REPO_ROOT / 'services'
+    @needs_ansible
+    def test_pihole_config_dir_is_created_once_and_never_re_enforced(self, tmp_path: Path) -> None:
+        """
+        Test that a container re-chmodding the bind mount does not make later runs report changed or reset the mode
+        """
+        play = _task_play(
+            'docker', 'Check for the PiHole config directory', 'Create the PiHole config directory',
+        )
+        docker_dir = tmp_path / 'docker'
+        pihole     = docker_dir / 'pihole-data' / 'etc-pihole'
 
-needs_ansible = pytest.mark.skipif(not ANSIBLE_PLAYBOOK.exists(), reason='ansible-playbook not in this environment')
+        code, output = _run_play(tmp_path, play, '-e', f'docker_dir={docker_dir}')
+        assert code == 0, output
+        assert pihole.is_dir()
+        assert 'changed=1' in output, output
+
+        pihole.chmod(0o775)  # what a running container may do to its bind mount
+        code, output = _run_play(tmp_path, play, '-e', f'docker_dir={docker_dir}')
+        assert code == 0, output
+        assert 'changed=0' in output, output
+        assert pihole.stat().st_mode & 0o777 == 0o775
 
 
 def _include_play(role: str) -> str:
@@ -296,6 +324,18 @@ def _include_play(role: str) -> str:
     include = next(task for task in play['tasks'] if task.get(key, {}).get('name') == f'roles/{role}')
     include = {**include, key: {**include[key], 'name': role}}
     return yaml.safe_dump([{'hosts': 'all', 'gather_facts': False, 'connection': 'local', 'tasks': [include]}])
+
+
+def _task_play(role: str, *names: str) -> str:
+    """
+    Build a one-play localhost playbook from the named tasks of a role, exactly as the role defines them
+
+    :param role: role directory name
+    :param names: task names, in the order they should run
+    :return: playbook YAML text
+    """
+    tasks = [_task(role, name) for name in names]
+    return yaml.safe_dump([{'hosts': 'all', 'gather_facts': False, 'connection': 'local', 'tasks': tasks}])
 
 
 def _run_play(tmp_path: Path, play: str, *args: str) -> tuple[int, str]:
