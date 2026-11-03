@@ -162,6 +162,13 @@ class TestServicesRole:
         assert task['diff'] is False
         assert 'services_secret_found' in task['loop']
 
+    def test_secret_tasks_skip_services_without_a_compose_file(self) -> None:
+        """
+        Test that the directory and render tasks are guarded by the presence of the service's compose.yml
+        """
+        for name in ('Create per-service secret directories', 'Render per-service secret files'):
+            assert "'/compose.yml') is file" in _task('services', name)['when'], name
+
     def test_discovery_does_not_rely_on_a_wildcard_directory_glob(self) -> None:
         """
         Test that templates are found with the find module, since lookup('fileglob') cannot glob a directory part
@@ -382,22 +389,75 @@ class TestTagSelection:
             assert task not in output, output
 
 
+def _write(path: Path, text: str) -> None:
+    """
+    Write a file, creating its parent directories
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding='utf-8')
+
+
 @needs_ansible
 class TestSecretsRender:
     """
     End-to-end test of the secrets tasks: discovery, directory creation, and rendering, against a temp directory
     """
-    def test_renders_every_env_template_privately_and_silently(self, tmp_path: Path) -> None:
+    def test_renders_an_enabled_service_privately_and_silently(self, tmp_path: Path) -> None:
         """
-        Test that --tags secrets renders services/pihole/env.j2 to a 0600 .env without echoing the value
+        Test that --tags secrets renders PiHole's real env.j2 for a service with a compose.yml, 0600, without echoing it
 
         Guards the first-live-run failure where discovery found no templates and nothing was rendered
         """
-        code, output, target = _render_secrets(tmp_path, SERVICES_DIR, 'pihole_web_password=hunter2-test-value')
+        source = tmp_path / 'services'
+        _write(source / 'on' / 'compose.yml', 'services: {}\n')
+        _write(source / 'on' / 'env.j2', (SERVICES_DIR / 'pihole' / 'env.j2').read_text(encoding='utf-8'))
+
+        code, output, target = _render_secrets(tmp_path, source, 'pihole_web_password=hunter2-test-value')
 
         assert code == 0, output
-        env_file = target / 'pihole' / '.env'
+        env_file = target / 'on' / '.env'
         assert env_file.read_text(encoding='utf-8').strip() == 'FTLCONF_webserver_api_password=hunter2-test-value'
         assert env_file.stat().st_mode & 0o777 == 0o600
         assert 'hunter2-test-value' not in output
         assert 'Sync compose files' not in output
+
+    def test_skips_a_service_without_a_compose_file(self, tmp_path: Path) -> None:
+        """
+        Test that a disabled service's template is neither rendered nor required to have its variable defined
+        """
+        source = tmp_path / 'services'
+        _write(source / 'off' / 'compose.yml.disabled', 'services: {}\n')
+        _write(source / 'off' / 'env.j2', 'TOKEN={{ off_token }}\n')  # off_token is deliberately undefined
+
+        code, output, target = _render_secrets(tmp_path, source)
+
+        assert code == 0, output
+        assert not (target / 'off').exists()
+
+    def test_real_tree_renders_exactly_the_enabled_services(self, tmp_path: Path) -> None:
+        """
+        Test that the repository's own services/ tree renders a .env for each service with both env.j2 and compose.yml
+
+        The expectation is computed, not hard-coded, so re-enabling PiHole later does not break this test
+        """
+        enabled = {
+            path.parent.name for path in SERVICES_DIR.glob('*/env.j2') if (path.parent / 'compose.yml').is_file()
+        }
+
+        code, output, target = _render_secrets(tmp_path, SERVICES_DIR, 'pihole_web_password=hunter2-test-value')
+
+        assert code == 0, output
+        assert {path.parent.name for path in target.glob('*/.env')} == enabled
+
+    def test_rendering_nothing_is_not_an_error(self, tmp_path: Path) -> None:
+        """
+        Test that a tree whose only template belongs to a disabled service renders nothing and still succeeds
+        """
+        source = tmp_path / 'services'
+        _write(source / 'off' / 'compose.yml.disabled', 'services: {}\n')
+        _write(source / 'off' / 'env.j2', 'TOKEN=x\n')
+
+        code, output, target = _render_secrets(tmp_path, source)
+
+        assert code == 0, output
+        assert not list(target.glob('*/.env'))

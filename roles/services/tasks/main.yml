@@ -22,8 +22,10 @@
       - "--exclude=.DS_Store"
 
 # A service opts in with services/<svc>/env.j2 and `env_file: <svc>/.env` in its compose.yml (deploy.sh passes
-# --project-directory ~/docker, so the path is relative to that directory). Discovery uses find, not
-# lookup('fileglob'): fileglob only globs the last path component, so services/*/env.j2 silently matches nothing.
+# --project-directory ~/docker, so the path is relative to that directory). Only services that have a compose.yml are
+# rendered: a disabled service (compose.yml.disabled) has no consumer for its secret, and its vault variable may be
+# undefined. Discovery uses find, not lookup('fileglob'): fileglob only globs the last path component, so
+# services/*/env.j2 silently matches nothing.
 # connection: local because the inventory's localhost entry points at 127.0.0.1 over ssh.
 - name: Find per-service secret templates
   ansible.builtin.find:
@@ -50,6 +52,7 @@
   loop_control:
     loop_var: services_secret_template
     label: "{{ services_secret_template | dirname | basename }}"
+  when: ((services_secret_template | dirname) ~ '/compose.yml') is file
   tags:
     - secrets
 
@@ -64,6 +67,7 @@
   loop_control:
     loop_var: services_secret_template
     label: "{{ services_secret_template | dirname | basename }}"
+  when: ((services_secret_template | dirname) ~ '/compose.yml') is file
   tags:
     - secrets
 
