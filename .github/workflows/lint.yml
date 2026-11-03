@@ -82,6 +82,9 @@ jobs:
         run: brew install stow
       - name: Install dependencies
         run: uv sync --group test
+      # tests/unit/test_services_role.py runs the services role for real, which needs the collections it uses
+      - name: Install Ansible collections
+        run: uv run ansible-galaxy collection install -r roles/requirements.yml
       - name: Pytest
         run: uv run pytest
       - name: Bootstrap dry run (throwaway HOME)
@@ -114,6 +117,9 @@ jobs:
         run: brew bundle list --tap --file bootstrap/Brewfile | xargs -n1 brew tap
       - name: Install dependencies
         run: uv sync --group test
+      # tests/unit/test_services_role.py runs the services role for real, which needs the collections it uses
+      - name: Install Ansible collections
+        run: uv run ansible-galaxy collection install -r roles/requirements.yml
       - name: Pytest
         run: uv run pytest
       - name: Bootstrap dry run (throwaway HOME)

@@ -70,9 +70,8 @@ Machine-specific additions come from [`profiles/`](profiles/README.md) overlays 
 
 1. Pull inventory repository: `python3 run.py update-inventory`
 2. Create file `vault_password.txt` in the repo root and paste in the Ansible Vault password from password manager
-3. Run bootstrapping script
-   - `chmod u+x nas_bootstrap.sh`
-   - `./nas_bootstrap.sh`
+3. Run the provisioning command (`./nas_bootstrap.sh` is a thin wrapper around it)
+   - `python3 run.py nas-provision`
 4. Point router DNS at NAS for PiHole
 
 ## Architecture Overview<a name="architecture-overview"></a>
@@ -209,15 +208,20 @@ See [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md) for the corresponding `
 ### Ansible Playbook Execution (NAS)<a name="ansible-playbook-execution-nas"></a>
 
 ```bash
-# Full NAS bootstrap
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv
+# Full NAS provisioning (preflight, collections, playbook)
+python3 run.py nas-provision
 
 # Update specific role
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --tags dotfiles -vv
+python3 run.py nas-provision --tags dotfiles
 
 # Update only Docker stack
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --tags docker -vv
+python3 run.py nas-provision --tags docker
+
+# Deploy one Compose service (or `all`) without running the playbook
+python3 run.py nas-deploy glance
 ```
+
+The equivalent direct invocation is `ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv`.
 
 ### Using Make Targets<a name="using-make-targets"></a>
 
@@ -238,7 +242,7 @@ make pre
 dotfiles/
 ├── run.py                                  # Python CLI for repository management
 ├── stow.sh                                 # Links stow packages into $HOME
-├── nas_bootstrap.sh                        # NAS bootstrap script
+├── nas_bootstrap.sh                        # Wrapper for `run.py nas-provision`
 ├── Makefile                                # Auto-generated from run.py commands
 │
 ├── bootstrap/                              # macOS stage driver, stages, and install manifests
@@ -301,7 +305,7 @@ dotfiles/
 ### Security Features<a name="security-features"></a>
 
 - **Ansible Vault encryption** for all NAS secrets (passwords, API keys, tokens)
-- **Homebrew installer checksum verification** in the bootstrap scripts
+- **Homebrew installer checksum verification** in the macOS bootstrap (`bootstrap/50-brew.sh`)
 - **SSH key-based authentication** for remote host management
 - **Gitignored sensitive files** (vault_password.txt, decrypted secrets)
 
@@ -339,8 +343,9 @@ Edit the manifests in [`bootstrap/`](bootstrap/README.md#manifests): CLI tools a
 
 ### Adding Services (NAS)<a name="adding-services-nas"></a>
 
-Add a `services/<name>/compose.yml` (see [services/README.md](services/README.md)) and see
-[roles/docker/README.md](roles/docker/README.md) for the deployment flow.
+Add a `services/<name>/compose.yml` (see [services/README.md](services/README.md)), then deploy it with
+`python3 run.py nas-deploy <name>`; pushes to `main` that touch the service deploy it from CI. A service that needs a
+secret also ships `services/<name>/env.j2` (see [services/README.md](services/README.md#secrets)).
 
 ### Creating New Roles<a name="creating-new-roles"></a>
 
@@ -405,18 +410,16 @@ The installer is pinned to an upstream commit (URL) and verified against a SHA-2
 the download differs from the pinned content. Content at a commit-pinned URL does not change when Homebrew updates
 `install.sh`, so a mismatch points to a bad or tampered download, not to an outdated pin.
 
-Treat it as a bad download first: re-run (`bootstrap/bootstrap.sh --resume` on macOS, `./nas_bootstrap.sh` on the NAS).
-If the mismatch persists, do not run the installer by other means; find out why the download differs.
+Treat it as a bad download first: re-run (`bootstrap/bootstrap.sh --resume` on macOS, `python3 run.py nas-provision` for
+the NAS). If the mismatch persists, do not run the installer by other means; find out why the download differs.
 
-Re-pin only when deliberately moving to a newer upstream commit, and change both scripts in one commit:
+Re-pin only when deliberately moving to a newer upstream commit. The single pin lives in `bootstrap/50-brew.sh`:
 
 1. Pick a commit SHA from the upstream history of `install.sh` at
-   https://github.com/Homebrew/install/commits/HEAD/install.sh and put it in the installer URL in both scripts
-   (`nas_bootstrap.sh` and `bootstrap/50-brew.sh`; a test keeps them identical)
+   https://github.com/Homebrew/install/commits/HEAD/install.sh and put it in `BREW_INSTALLER_URL`
 2. Generate the new checksum of that exact URL:
    `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/<commit-sha>/install.sh | shasum -a 256`
-3. Update the checksum constant in both scripts: `EXPECTED_CHECKSUM` in `nas_bootstrap.sh` and `BREW_INSTALLER_SHA256`
-   in `bootstrap/50-brew.sh`
+3. Update `BREW_INSTALLER_SHA256` and the "Last updated" comment above it
 
 ### Role Failures<a name="role-failures"></a>
 

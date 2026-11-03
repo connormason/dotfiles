@@ -94,25 +94,12 @@ jobs:
           chmod 600 ~/.ssh/id_nas
           ssh-keyscan -H ${{ secrets.NAS_TAILSCALE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Rsync compose.base.yml
-        run: |
-          rsync -avz --exclude='*.j2' \
-            services/compose.base.yml \
-            ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_HOST }}:~/docker/compose.base.yml \
-            -e "ssh -i ~/.ssh/id_nas -o StrictHostKeyChecking=accept-new"
-
-      - name: Rsync service directory
-        run: |
-          rsync -avz --exclude='*.j2' \
-            services/${{ matrix.service }}/ \
-            ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_HOST }}:~/docker/${{ matrix.service }}/ \
-            -e "ssh -i ~/.ssh/id_nas -o StrictHostKeyChecking=accept-new"
-
       - name: Deploy service
-        run: |
-          ssh -i ~/.ssh/id_nas -o StrictHostKeyChecking=accept-new \
-            ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_HOST }} \
-            "~/docker/deploy.sh ${{ matrix.service }}"
+        env:
+          NAS_HOST: ${{ secrets.NAS_TAILSCALE_HOST }}
+          NAS_USER: ${{ secrets.NAS_USER }}
+          SERVICE: ${{ matrix.service }}
+        run: NAS_SSH_KEY="$HOME/.ssh/id_nas" scripts/nas/deploy-services.sh "$SERVICE"
 
   deploy-manual:
     if: github.event_name == 'workflow_dispatch'
@@ -134,15 +121,9 @@ jobs:
           chmod 600 ~/.ssh/id_nas
           ssh-keyscan -H ${{ secrets.NAS_TAILSCALE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Rsync all services
-        run: |
-          rsync -avz --exclude='*.j2' \
-            services/ \
-            ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_HOST }}:~/docker/ \
-            -e "ssh -i ~/.ssh/id_nas -o StrictHostKeyChecking=accept-new"
-
       - name: Deploy
-        run: |
-          ssh -i ~/.ssh/id_nas -o StrictHostKeyChecking=accept-new \
-            ${{ secrets.NAS_USER }}@${{ secrets.NAS_TAILSCALE_HOST }} \
-            "~/docker/deploy.sh ${{ github.event.inputs.service }}"
+        env:
+          NAS_HOST: ${{ secrets.NAS_TAILSCALE_HOST }}
+          NAS_USER: ${{ secrets.NAS_USER }}
+          SERVICE: ${{ github.event.inputs.service || 'all' }}
+        run: NAS_SSH_KEY="$HOME/.ssh/id_nas" scripts/nas/deploy-services.sh "$SERVICE"

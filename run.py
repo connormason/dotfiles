@@ -56,7 +56,9 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import errno
+import getpass
 import inspect
+import json
 import os
 import pty
 import re
@@ -107,6 +109,12 @@ STOW_SCRIPT:      Path = DOTFILES_DIR / 'stow.sh'
 BOOTSTRAP_SCRIPT: Path = DOTFILES_DIR / 'bootstrap' / 'bootstrap.sh'
 RENDER_SCRIPT:    Path = DOTFILES_DIR / 'scripts' / 'dotfiles' / 'render.py'
 UV_PUBLIC:        Path = DOTFILES_DIR / 'scripts' / 'hooks' / 'uv-public.sh'
+
+# NAS provisioning (Ansible playbook, collections) and service deploys (script shared with CI)
+NAS_PLAYBOOK:       Path = PLAYBOOKS_DIR / 'nas_bootstrap.yml'
+NAS_REQUIREMENTS:   Path = DOTFILES_DIR  / 'roles' / 'requirements.yml'
+NAS_DEPLOY_SCRIPT:  Path = DOTFILES_DIR  / 'scripts' / 'nas' / 'deploy-services.sh'
+NAS_INVENTORY_HOST: str  = 'nas'
 
 # Doctor requirements
 REQUIRED_TOOLS:  tuple[str, ...] = ('brew', 'git', 'stow', 'uv', 'zsh')
@@ -172,9 +180,11 @@ AddArgumentsFunc = Callable[[argparse.ArgumentParser], None]
 
 class SupportsWrite(Protocol[T_contra]):
     """
-    Protocol for types that support being written to
+    Protocol for types that support being written to and flushed (what ``print(..., flush=True)`` requires)
     """
     def write(self, s: T_contra, /) -> object: ...
+
+    def flush(self) -> object: ...
 
 
 # ====================================================================================================
@@ -493,6 +503,9 @@ def printf(
             reset=reset,
         ),
         file=file,
+        # Flush so our lines stay ordered with child-process output when stdout is a pipe (e.g. `| tee`): Python
+        # block-buffers a pipe, while subprocesses write to it directly
+        flush=True,
     )
 
 
@@ -1424,6 +1437,229 @@ def cmd_makefile(args: argparse.Namespace) -> None:
     with MAKEFILE_PATH.open('w') as f:
         f.write('\n'.join(lines))
     printf('✅ Makefile updated', fg='bright_green')
+
+
+# ====================================================================================================
+# NAS commands
+#
+# Provision the home NAS and deploy its Compose services from this machine, over SSH (tailnet or LAN):
+#   - nas-provision: Run the Ansible playbook (playbooks/nas_bootstrap.yml) against the inventory's ``nas`` host
+#   - nas-deploy:    Sync services/ to the NAS and run deploy.sh there (scripts/nas/deploy-services.sh, as CI does)
+# ====================================================================================================
+
+
+def resolve_nas_target(host: str = NAS_INVENTORY_HOST) -> tuple[str, str]:
+    """
+    Resolve the SSH host and user of an inventory host through ``ansible-inventory``
+
+    :param host: inventory host name
+    :return: tuple of (``ansible_host``, ``ansible_user``); missing values fall back to the inventory name and the
+             local login, as ssh would
+    """
+    result = shell_command(
+        [
+            str(UV_PUBLIC), 'run', 'ansible-inventory',
+            '-i', str(INVENTORY_FILE),
+            '--vault-password-file', str(VAULT_PASSWORD),
+            '--host', host,
+        ],
+        capture_output=True,
+        check=False,
+        cwd=DOTFILES_DIR,
+    )
+    if result.returncode != 0:
+        printf(f'❌ Could not read host "{host}" from the inventory', fg='red', bold=True)
+        printf(result.stderr.strip(), indent=3)
+        sys.exit(1)
+
+    try:
+        variables = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        variables = None
+    if not isinstance(variables, dict):
+        printf(f'❌ Unexpected ansible-inventory output for host "{host}"', fg='red', bold=True)
+        sys.exit(1)
+
+    ssh_host = str(variables.get('ansible_host') or host)
+    ssh_user = str(variables.get('ansible_user') or getpass.getuser())
+    if '{{' in (ssh_host + ssh_user):
+        printf(f'❌ ansible_host/ansible_user for "{host}" are templated: {ssh_user}@{ssh_host}', fg='red', bold=True)
+        printf('The NAS commands need literal values in the inventory', indent=3)
+        sys.exit(1)
+
+    return ssh_host, ssh_user
+
+
+def require_nas_reachable(host: str, user: str) -> None:
+    """
+    Exit with a remedy unless the NAS answers a non-interactive SSH probe
+
+    :param host: SSH host
+    :param user: SSH user
+    :raises SystemExit: if the probe fails
+    """
+    result = shell_command(
+        ['ssh', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes', f'{user}@{host}', 'true'],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        printf(f'❌ Cannot reach the NAS at {user}@{host} over SSH', fg='red', bold=True)
+        printf('Is Tailscale up? Does the host resolve? Is your SSH key loaded (ssh-add)?',                 indent=3)
+        printf(f'The host comes from ansible_host of "{NAS_INVENTORY_HOST}" in {folduser(INVENTORY_FILE)}', indent=3)
+        printf(f'ssh said: {result.stderr.strip()}', indent=3, dim=True)
+        sys.exit(1)
+
+
+def resolve_reachable_nas() -> tuple[str, str]:
+    """
+    Check the inventory and vault password, resolve the NAS target, and probe it over SSH
+
+    :return: tuple of (SSH host, SSH user)
+    """
+    require_inventory()
+    require_vault_password()
+
+    host, user = resolve_nas_target()
+    require_nas_reachable(host, user)
+    return host, user
+
+
+def warn_on_dirty_services() -> None:
+    """
+    Warn when services/ has uncommitted changes, since a deploy ships the working tree
+    """
+    result = shell_command(
+        ['git', 'status', '--porcelain', '--', 'services'],
+        capture_output=True,
+        check=False,
+        cwd=DOTFILES_DIR,
+    )
+    if (result.returncode == 0) and result.stdout.strip():
+        printf('🟡 services/ has uncommitted changes; deploying the working tree', fg='bright_yellow')
+        printf('CI redeploys main whenever it changes a service, which supersedes a branch deploy', indent=3, dim=True)
+
+
+def add_nas_deploy_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register nas-deploy options
+    """
+    parser.add_argument(
+        'service',
+        help="Directory under services/ to deploy, or 'all'",
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Preview the rsync and print the remote command without running it',
+    )
+
+
+@command(group='NAS', add_arguments=add_nas_deploy_arguments, script_only=True)
+def cmd_nas_deploy(args: argparse.Namespace) -> None:
+    """
+    Sync services/ to the NAS and run deploy.sh there (the same script CI uses)
+    """
+    host, user = resolve_reachable_nas()
+    warn_on_dirty_services()
+
+    cmd: list[str] = ['bash', str(NAS_DEPLOY_SCRIPT)]
+    if args.dry_run:
+        cmd.append('--dry-run')
+    cmd.append(args.service)
+
+    sys.exit(
+        shell_command(cmd, env={'NAS_HOST': host, 'NAS_USER': user}, check=False).returncode
+    )
+
+
+def add_nas_provision_arguments(parser: argparse.ArgumentParser) -> None:
+    """
+    Register nas-provision options
+    """
+    parser.add_argument(
+        '--tags',
+        metavar='TAGS',
+        help='Only run tasks with these comma-separated tags (e.g. debian,dotfiles,haos,services,secrets)',
+    )
+    parser.add_argument(
+        '--limit',
+        metavar='HOSTS',
+        help='Limit the run to these inventory hosts',
+    )
+    parser.add_argument(
+        '--check',
+        action='store_true',
+        help='Predict changes without making them',
+    )
+    parser.add_argument(
+        '--diff',
+        action='store_true',
+        help='Show file and template differences',
+    )
+    parser.add_argument(
+        '-e',
+        '--extra-vars',
+        action='append',
+        metavar='KEY=VALUE',
+        help='Extra playbook variable (repeatable), e.g. -e dotfiles_repo_version=my-branch',
+    )
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='count',
+        default=0,
+        help='Increase Ansible verbosity (-v, -vv, ...)',
+    )
+
+
+def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
+    """
+    Build the ``ansible-playbook`` command line for nas-provision
+
+    :param args: parsed nas-provision arguments
+    :return: command and arguments
+    """
+    cmd: list[str] = [
+        str(UV_PUBLIC), 'run', 'ansible-playbook', str(NAS_PLAYBOOK),
+        '-i', str(INVENTORY_FILE),
+        '--vault-password-file', str(VAULT_PASSWORD),
+    ]
+    if args.tags:
+        cmd.extend(['--tags', args.tags])
+    if args.limit:
+        cmd.extend(['--limit', args.limit])
+    if args.check:
+        cmd.append('--check')
+    if args.diff:
+        cmd.append('--diff')
+    for key, value in parse_extra_vars(args.extra_vars).items():
+        cmd.extend(['-e', f'{key}={value}'])
+    if args.verbose:
+        cmd.append('-' + 'v' * args.verbose)
+    return cmd
+
+
+@command(group='NAS', add_arguments=add_nas_provision_arguments)
+def cmd_nas_provision(args: argparse.Namespace) -> None:
+    """
+    Provision the NAS with the Ansible playbook: system config, the stow engine, then services
+    """
+    playbook_cmd = build_nas_provision_command(args)
+    resolve_reachable_nas()
+
+    printf('📦 Installing Ansible collections', fg='bright_cyan')
+    galaxy = shell_command(
+        [str(UV_PUBLIC), 'run', 'ansible-galaxy', 'collection', 'install', '-r', str(NAS_REQUIREMENTS)],
+        check=False,
+        cwd=DOTFILES_DIR,
+    )
+    if galaxy.returncode != 0:
+        printf('🟡 Collection install failed; continuing with the collections already installed', fg='bright_yellow')
+
+    sys.exit(
+        shell_command(playbook_cmd, check=False, cwd=DOTFILES_DIR).returncode
+    )
 
 
 # ====================================================================================================

@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean pre install-hooks uninstall-hooks makefile doctor bootstrap stow render test
+.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean pre install-hooks uninstall-hooks makefile nas-provision doctor bootstrap stow render test
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -26,6 +26,9 @@ help: ## Show this help message
 	@echo "  $(YELLOW)install-hooks   $(NC) Install prek git hook shims (overwrites any existing shims)"
 	@echo "  $(YELLOW)uninstall-hooks $(NC) Uninstall prek git hook shims"
 	@echo "  $(YELLOW)makefile        $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
+	@echo ""
+	@echo "$(BRIGHT_WHITE)NAS:$(NC)"
+	@echo "  $(YELLOW)nas-provision   $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Dotfiles:$(NC)"
 	@echo "  $(YELLOW)doctor          $(NC) Check overlay registry, links, rendered settings, git version, and tools"
@@ -66,6 +69,10 @@ uninstall-hooks: ## Uninstall prek git hook shims
 
 makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
 	@python3 run.py makefile
+
+# NAS
+nas-provision: ## Provision the NAS with the Ansible playbook: system config, the stow engine, then services
+	@python3 run.py nas-provision
 
 # Dotfiles
 doctor: ## Check overlay registry, links, rendered settings, git version, and tools

@@ -3,6 +3,9 @@
 Comprehensive Ansible role for managing a Docker-based home media server and automation stack on Debian/Ubuntu NAS
 systems.
 
+> **Note:** deploying services and rendering per-service secrets moved to the [`services`](../services/README.md) role;
+> this document is rewritten in the docs truth-up (NAS sub-project 4).
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -366,7 +369,9 @@ To enable:
 **Secrets (from `.env` file):**
 
 - `DNSIMPLE_OAUTH_TOKEN`: DNSimple API token for Caddy ACME DNS-01
-- `FTLCONF_webserver_api_password`: PiHole admin password
+
+The PiHole admin password is a per-service secret rendered to `pihole/.env` by the [`services`](../services/README.md)
+role.
 
 **Service-Specific:**
 
@@ -1045,26 +1050,26 @@ Note: Does not automatically restart services. Use `docker-compose up -d` after 
 
 Defined in `roles/docker/defaults/main.yml`:
 
-| Variable                     | Default                                         | Description                      |
-| ---------------------------- | ----------------------------------------------- | -------------------------------- |
-| `docker_dir`                 | `{{ ansible_facts['user_dir'] }}/docker`        | Docker Compose project directory |
-| `autoplex_repo_url`          | `https://github.com/danielmmetz/autoplex.git`   | Autoplex source repository       |
-| `autoplex_repo_branch`       | `master`                                        | Autoplex git branch              |
-| `pyautoplex_repo_url`        | `git@github.com:connormason/pyautoplex.git`     | PyAutoplex source repository     |
-| `pyautoplex_repo_branch`     | `main`                                          | PyAutoplex git branch            |
-| `caddy_dnsimple_repo_url`    | `https://github.com/danielmmetz/caddy-dnsimple` | Caddy DNSimple source            |
-| `caddy_dnsimple_repo_branch` | `master`                                        | Caddy DNSimple git branch        |
-| `homeassistant_repo_url`     | `git@github.com:connormason/homeassistant.git`  | Home Assistant config repo       |
-| `homeassistant_repo_branch`  | `nas_bringup`                                   | Home Assistant git branch        |
+| Variable                      | Default                                         | Description                      |
+| ----------------------------- | ----------------------------------------------- | -------------------------------- |
+| `docker_dir`                  | `{{ ansible_facts['user_dir'] }}/docker`        | Docker Compose project directory |
+| `docker_autoplex_repo_url`    | `https://github.com/danielmmetz/autoplex.git`   | Autoplex source repository       |
+| `docker_autoplex_repo_branch` | `master`                                        | Autoplex git branch              |
+| `pyautoplex_repo_url`         | `git@github.com:connormason/pyautoplex.git`     | PyAutoplex source repository     |
+| `pyautoplex_repo_branch`      | `main`                                          | PyAutoplex git branch            |
+| `caddy_dnsimple_repo_url`     | `https://github.com/danielmmetz/caddy-dnsimple` | Caddy DNSimple source            |
+| `caddy_dnsimple_repo_branch`  | `master`                                        | Caddy DNSimple git branch        |
+| `homeassistant_repo_url`      | `git@github.com:connormason/homeassistant.git`  | Home Assistant config repo       |
+| `homeassistant_repo_branch`   | `nas_bringup`                                   | Home Assistant git branch        |
 
 ### Required Variables from Inventory
 
 Must be defined in inventory vault files:
 
-| Variable               | Source | Used By           |
-| ---------------------- | ------ | ----------------- |
-| `dnsimple_oauth_token` | Vault  | Caddy ACME DNS-01 |
-| `pihole_web_password`  | Vault  | PiHole web UI     |
+| Variable               | Source | Used By                                  |
+| ---------------------- | ------ | ---------------------------------------- |
+| `dnsimple_oauth_token` | Vault  | Caddy ACME DNS-01                        |
+| `pihole_web_password`  | Vault  | PiHole `.env` (`services/pihole/env.j2`) |
 
 Home Assistant secrets (defined in `templates/ha_secrets.yaml.j2`) - refer to Home Assistant repository for details.
 

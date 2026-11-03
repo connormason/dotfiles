@@ -51,7 +51,7 @@ KVM_DEVICE="${HAOS_KVM_DEVICE:-/dev/kvm}"
 DISK="${IMAGES_DIR}/${HAOS_NAME}.qcow2"
 OVMF_CODE='/usr/share/OVMF/OVMF_CODE_4M.fd' # non-Secure-Boot firmware; HAOS images are not MS-signed
 OVMF_VARS='/usr/share/OVMF/OVMF_VARS_4M.fd'
-PACKAGES=(qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients virtinst ovmf xz-utils curl)
+PACKAGES=(qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients virtinst ovmf xz-utils curl usbutils)
 DRY_RUN=0
 CHANGES=0    # mutations made (or, under --dry-run, that would be made); printed as `haos: changes=N`
 VM_STARTED=0 # 1 when this run defined or started the VM, so the address wait below is worth doing

@@ -15,12 +15,7 @@ FQCN_MODULE = re.compile(r'^\s*(?:-\s+)?([a-z0-9_]+)\.([a-z0-9_]+)\.[a-z0-9_]+:'
 # A collection entry in requirements.yml (e.g. ``  - name: community.docker``)
 REQUIREMENT = re.compile(r'^\s*-\s+name:\s*([a-z0-9_]+\.[a-z0-9_]+)\s*$', re.MULTILINE)
 
-# The pinned Homebrew installer SHA-256 in nas_bootstrap.sh and in bootstrap/50-brew.sh (group 1 is the digest)
-NAS_PIN  = re.compile(r'^\s*EXPECTED_CHECKSUM="([0-9a-f]{64})"', re.MULTILINE)
-BREW_PIN = re.compile(r'^BREW_INSTALLER_SHA256="([0-9a-f]{64})"', re.MULTILINE)
-
-# The Homebrew installer download URL in nas_bootstrap.sh (the curl line) and bootstrap/50-brew.sh (group 1 is the URL)
-NAS_URL  = re.compile(r'^\s*curl -fsSL (\S+) -o "\$BREW_INSTALLER"$', re.MULTILINE)
+# The Homebrew installer download URL in bootstrap/50-brew.sh (group 1 is the URL)
 BREW_URL = re.compile(r'^BREW_INSTALLER_URL="([^"]+)"$', re.MULTILINE)
 
 # A commit-pinned upstream installer URL: the ref segment is a full 40-hex commit SHA, never a moving ref such as HEAD
@@ -33,52 +28,48 @@ class TestNasBootstrapScript:
     """
     SCRIPT = REPO_ROOT / 'nas_bootstrap.sh'
 
-    def test_installer_is_not_a_predictable_tmp_path(self) -> None:
+    def test_delegates_to_nas_provision_through_uv(self) -> None:
         """
-        Test that the Homebrew installer is not written to a fixed /tmp path
-        """
-        text = self.SCRIPT.read_text(encoding='utf-8')
-        assert '/tmp/brew-install.sh' not in text
-
-    def test_installer_uses_mktemp_with_exit_trap(self) -> None:
-        """
-        Test that the installer is created with mktemp and removed by an EXIT trap
+        Test that the script hands every argument to run.py nas-provision through the public-index uv wrapper
         """
         text = self.SCRIPT.read_text(encoding='utf-8')
-        assert re.search(r'BREW_INSTALLER="\$\(mktemp ',                 text)
-        assert re.search(r"^\s*trap 'rm -f \"\$BREW_INSTALLER\"' EXIT$", text, re.MULTILINE)
+        assert re.search(
+            r'^exec "\$\{SCRIPT_DIR\}/scripts/hooks/uv-public\.sh" run python "\$\{SCRIPT_DIR\}/run\.py" '
+            r'nas-provision "\$@"$',
+            text,
+            re.MULTILINE,
+        )
 
-    def test_checksum_hint_names_this_script(self) -> None:
+    def test_installs_nothing_on_the_controller(self) -> None:
         """
-        Test that the mismatch hint points at the file that defines EXPECTED_CHECKSUM
+        Test that the Homebrew and Ansible installs, and their platform-specific paths, are gone
+        """
+        text = self.SCRIPT.read_text(encoding='utf-8').lower()
+        for needle in ('brew', '/opt/', 'shasum', 'curl', 'ansible-playbook'):
+            assert needle not in text, needle
+
+    def test_still_validates_the_repository_layout(self) -> None:
+        """
+        Test that the script refuses to run outside the dotfiles directory
         """
         text = self.SCRIPT.read_text(encoding='utf-8')
-        assert 'EXPECTED_CHECKSUM='                           in text
-        assert 'Update EXPECTED_CHECKSUM in nas_bootstrap.sh' in text
+        assert '"${SCRIPT_DIR}/run.py"' in text
+        assert '"${SCRIPT_DIR}/playbooks"' in text
 
-    def test_installer_checksum_matches_macos_brew_stage(self) -> None:
-        """
-        Test that nas_bootstrap.sh and bootstrap/50-brew.sh pin the same Homebrew installer SHA-256
-        """
-        nas  = NAS_PIN.search(self.SCRIPT.read_text(encoding='utf-8'))
-        brew = BREW_PIN.search((REPO_ROOT / 'bootstrap' / '50-brew.sh').read_text(encoding='utf-8'))
 
-        assert nas,  'EXPECTED_CHECKSUM pin not found in nas_bootstrap.sh'
-        assert brew, 'BREW_INSTALLER_SHA256 pin not found in bootstrap/50-brew.sh'
-        assert nas.group(1) == brew.group(1)
-
-    def test_installer_url_is_commit_pinned_and_identical_in_both_scripts(self) -> None:
+class TestBrewInstallerPin:
+    """
+    Tests for the Homebrew installer URL pinned in bootstrap/50-brew.sh
+    """
+    def test_installer_url_is_commit_pinned(self) -> None:
         """
-        Test that both scripts download the same installer URL and that it is pinned to a 40-hex commit, not HEAD
+        Test that the macOS brew stage downloads the installer from a 40-hex commit, never a moving ref
         """
-        nas  = NAS_URL.search(self.SCRIPT.read_text(encoding='utf-8'))
         brew = BREW_URL.search((REPO_ROOT / 'bootstrap' / '50-brew.sh').read_text(encoding='utf-8'))
 
-        assert nas,  'installer curl line not found in nas_bootstrap.sh'
         assert brew, 'BREW_INSTALLER_URL not found in bootstrap/50-brew.sh'
-        assert nas.group(1) == brew.group(1)
-        assert COMMIT_PINNED_URL.match(nas.group(1)), nas.group(1)
-        assert '/HEAD/' not in nas.group(1)
+        assert COMMIT_PINNED_URL.match(brew.group(1)), brew.group(1)
+        assert '/HEAD/' not in brew.group(1)
 
 
 class TestRolesRequirements:

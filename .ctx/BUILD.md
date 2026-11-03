@@ -8,18 +8,27 @@ Full command reference for the dotfiles repository. Loaded on demand from [`CLAU
 # Bootstrap a Mac (stow engine + numbered stages; --dry-run previews, --list shows stages, --resume continues)
 bootstrap/bootstrap.sh
 
-# Bootstrap NAS server (Ansible; the become password comes from the vault)
-chmod u+x nas_bootstrap.sh && ./nas_bootstrap.sh
+# Provision the NAS (Ansible; the become password comes from the vault). nas_bootstrap.sh is a thin wrapper.
+python3 run.py nas-provision --check --diff
+python3 run.py nas-provision
+
+# Deploy Compose services to the NAS (the script CI uses); --dry-run previews
+python3 run.py nas-deploy glance --dry-run
+python3 run.py nas-deploy glance
 ```
 
 ## Running Ansible Playbooks (NAS)
 
 ```bash
-# Run specific tags only
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags dotfiles,haos
+# Run specific tags only (system: debian,zfs,samba,docker,tailscale; $HOME: dotfiles; VM: haos; stack: services)
+python3 run.py nas-provision --tags dotfiles,haos
 
-# Run with extra variables
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -e "some_var=value"
+# Extra variables, e.g. test the dotfiles role against a branch
+python3 run.py nas-provision --tags dotfiles -e dotfiles_repo_version=my-branch
+
+# Rotate per-service secrets, then restart the service
+python3 run.py nas-provision --tags secrets
+python3 run.py nas-deploy <svc>
 
 # Syntax check
 ansible-playbook --syntax-check -i localhost, playbooks/nas_bootstrap.yml

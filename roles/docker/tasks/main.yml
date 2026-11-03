@@ -15,32 +15,27 @@
               - gnupg
 
         - name: Add Docker GPG signing key
+          become: true
           ansible.builtin.get_url:
             url: "https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}/gpg"
             dest: /usr/share/keyrings/docker.asc
+            mode: "0644"
 
-        - name: Get debian architecture
-          block:
-            - name: Print debian architecture
-              ansible.builtin.shell: "dpkg --print-architecture"
-              register: dpkg_print_architecture
+        - name: Print debian architecture
+          ansible.builtin.command: dpkg --print-architecture
+          register: docker_dpkg_architecture
+          changed_when: false
+          check_mode: false
 
-            - name: Set debian architecture fact
-              ansible.builtin.set_fact:
-                deb_architecture: "{{ dpkg_print_architecture.stdout }}"
-
+        # apt_repository refreshes the package index itself when it adds the repository
         - name: Add Docker repository
           become: true
           ansible.builtin.apt_repository:
-            repo: "deb [arch={{ deb_architecture }} signed-by=/usr/share/keyrings/docker.asc] https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }} {{ ansible_facts['distribution_release'] }} stable"
+            repo: >-
+              deb [arch={{ docker_dpkg_architecture.stdout }} signed-by=/usr/share/keyrings/docker.asc]
+              https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}
+              {{ ansible_facts['distribution_release'] }} stable
             state: present
-          register: docker_repo_add
-
-        - name: Update apt package index
-          become: true
-          ansible.builtin.apt:
-            update_cache: true
-          when: docker_repo_add.changed
 
     - name: Install Docker engine
       become: true
@@ -54,10 +49,19 @@
           - docker-compose
 
     - name: Ensure docker daemon is running
-      service:
+      become: true
+      ansible.builtin.service:
         name: docker
         state: started
+
+    # deploy.sh runs as this user; the group applies to new sessions, which is why the services role deploys through
+    # become as the same user
+    - name: Allow the SSH user to run docker without sudo
       become: true
+      ansible.builtin.user:
+        name: "{{ ansible_facts['user_id'] }}"
+        groups: docker
+        append: true
 
 # ============================================================
 # Directory and environment setup
@@ -66,17 +70,24 @@
   block:
     - name: Create docker directory structure
       ansible.builtin.file:
-        path: "{{ item }}"
+        path: "{{ docker_dir_path }}"
         state: directory
+        mode: "0755"
       loop:
         - "{{ docker_dir }}"
         - "{{ docker_dir }}/.build"
         - "{{ docker_dir }}/pihole-data/etc-pihole"
+      loop_control:
+        loop_var: docker_dir_path
 
+    # Shared, non-secret values only; per-service secrets are rendered by the services role. diff is off because a host
+    # that predates the split still holds a password line in the old file, which --check --diff would print as removed
     - name: Render docker .env file
       ansible.builtin.template:
         src: env.j2
         dest: "{{ docker_dir }}/.env"
+        mode: "0600"
+      diff: false
       tags:
         - configfile
 
@@ -87,9 +98,9 @@
   block:
     - name: Clone autoplex repo
       ansible.builtin.git:
-        repo: "{{ autoplex_repo_url }}"
-        dest: "{{ autoplex_repo_dest }}"
-        version: "{{ autoplex_repo_branch }}"
+        repo: "{{ docker_autoplex_repo_url }}"
+        dest: "{{ docker_autoplex_repo_dest }}"
+        version: "{{ docker_autoplex_repo_branch }}"
         clone: true
         update: true
         accept_hostkey: true
@@ -97,27 +108,19 @@
     - name: Build autoplex docker image
       community.docker.docker_image:
         build:
-          path: "{{ autoplex_repo_dest }}"
+          path: "{{ docker_autoplex_repo_dest }}"
         name: danielmmetz/autoplex
         tag: latest
         source: build
       become: true
 
 # ============================================================
-# Deploy script and initial deploy
+# Deploy script (the services role runs it)
 # ============================================================
-- name: Deploy docker containers
-  block:
-    - name: Copy deploy script
-      ansible.builtin.copy:
-        src: deploy.sh
-        dest: "{{ docker_dir }}/deploy.sh"
-        mode: "0755"
-      tags:
-        - configfile
-
-    - name: Run initial full deploy
-      ansible.builtin.command:
-        cmd: "{{ docker_dir }}/deploy.sh all"
-      environment:
-        HOME: "{{ ansible_facts['user_dir'] }}"
+- name: Copy deploy script
+  ansible.builtin.copy:
+    src: deploy.sh
+    dest: "{{ docker_dir }}/deploy.sh"
+    mode: "0755"
+  tags:
+    - configfile

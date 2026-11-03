@@ -1,7 +1,8 @@
 # run.py - Command Reference
 
 Python CLI tool for managing the dotfiles repository. Provides commands for inventory management, codebase maintenance,
-and the layered dev environment (stow, bootstrap, render, doctor), with ANSI styling and retry logic for robustness.
+NAS provisioning and service deploys, and the layered dev environment (stow, bootstrap, render, doctor), with ANSI
+styling and retry logic for robustness.
 
 ## Quick Start
 
@@ -228,6 +229,42 @@ when either fails.
 fix runs `stow.sh --backup-conflicts`, which moves any blocking files into `~/.dotfiles-backup/<timestamp>/` before
 linking. Without `--fix`, every probe is read-only (`stow.sh -n`, `render.py --check`). `bootstrap --verify` invokes
 `doctor` after all stages succeed.
+
+### NAS
+
+Provision the home NAS and deploy its Compose services from this machine, over SSH (tailnet or LAN). Both commands
+belong to the `NAS` group and run the same preflight first: the inventory is present, `vault_password.txt` exists, and
+the `nas` host answers a non-interactive SSH probe (`ConnectTimeout=5`, `BatchMode=yes`) as the user from the inventory.
+A failed probe exits 1 with a remedy.
+
+| Command         | Runs                                                     | Options                                                                                                          |
+| --------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `nas-provision` | `playbooks/nas_bootstrap.yml` through `ansible-playbook` | `--tags TAGS`, `--check`, `--diff`, `--limit HOSTS`, `-e/--extra-vars KEY=VALUE` (repeatable), `-v` (repeatable) |
+| `nas-deploy`    | `scripts/nas/deploy-services.sh`                         | `<service\|all>`, `--dry-run`                                                                                    |
+
+```bash
+python3 run.py nas-provision --check --diff                  # preview the whole playbook
+python3 run.py nas-provision --tags dotfiles,haos            # selected roles only
+python3 run.py nas-provision --tags secrets                  # re-render per-service secrets
+python3 run.py nas-deploy glance --dry-run                   # preview the rsync and the remote command
+python3 run.py nas-deploy all
+```
+
+#### `nas-provision`
+
+Runs the preflight, installs the Ansible collections with `ansible-galaxy collection install -r roles/requirements.yml`,
+then runs `ansible-playbook playbooks/nas_bootstrap.yml` (with the inventory and vault password file) through
+[`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh). A failed collection install prints a warning and the
+playbook still runs with the collections already installed. The exit status is Ansible's. `nas_bootstrap.sh` is a thin
+wrapper that forwards its arguments to this command.
+
+#### `nas-deploy`
+
+Resolves `ansible_host` and `ansible_user` of the `nas` host with `ansible-inventory` (literal values are required;
+templated values are rejected, and the user falls back to the local login), warns when `services/` has uncommitted
+changes (a deploy ships the working tree), then runs `scripts/nas/deploy-services.sh` with `NAS_HOST` and `NAS_USER`
+set. The script rsyncs `services/` to `~/docker/` and runs `~/docker/deploy.sh` on the NAS; it is the same script CI
+uses. The command is registered `script_only`, so `run.py makefile` does not generate a Makefile target for it.
 
 ## Architecture
 

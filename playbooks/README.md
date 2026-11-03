@@ -8,9 +8,9 @@ is preserved in [`archive/ansible-macos/`](../archive/ansible-macos/README.md).
 
 ## Overview
 
-| Playbook            | Target                   | Bootstrap script   | Purpose                                                              |
-| ------------------- | ------------------------ | ------------------ | -------------------------------------------------------------------- |
-| `nas_bootstrap.yml` | Debian server (nas host) | `nas_bootstrap.sh` | Home NAS with Docker media stack, file sharing, and network services |
+| Playbook            | Target                   | Entry point                                          | Purpose                                                              |
+| ------------------- | ------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------- |
+| `nas_bootstrap.yml` | Debian server (nas host) | `run.py nas-provision` (wrapper: `nas_bootstrap.sh`) | Home NAS with Docker media stack, file sharing, and network services |
 
 The playbook:
 
@@ -36,6 +36,7 @@ The playbook:
 7. **dotfiles** - hands `$HOME` to the stow engine (clone, `profiles/nas` overlay, login shell, `bootstrap.sh`). Tags:
    `dotfiles`, `configfile`
 8. **haos** - Home Assistant OS VM via `vms/haos/setup.sh`. Tags: `haos`, `configfile`
+9. **services** - Compose sync, per-service secrets, deploy. Tags: `services`, `secrets`, `configfile`
 
 **Variables required:** `admin_password` (from `inventory/group_vars/all/vault.yml` or
 `inventory/host_vars/nas/vault.yml`).
@@ -45,21 +46,21 @@ and shared by the `dotfiles` and `haos` roles.
 
 ## Running
 
-### Bootstrap script
+### `run.py nas-provision`
 
 ```bash
-chmod u+x nas_bootstrap.sh
-./nas_bootstrap.sh
+python3 run.py nas-provision                 # preflight, collections, then the playbook
+python3 run.py nas-provision --check --diff  # preview
+python3 run.py nas-provision --tags services -v
 ```
 
-The script validates the repository layout (`run.py`, `nas_bootstrap.sh`, `playbooks/`), installs Homebrew (installer
-checksum-verified before execution) and Ansible if missing, then runs the playbook with `-vv`.
+The command checks that the inventory and `vault_password.txt` exist and that the `nas` host answers over SSH, installs
+the collections from `roles/requirements.yml`, then runs `ansible-playbook playbooks/nas_bootstrap.yml` in the uv
+environment. Options are documented in [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md#nas).
 
-The Homebrew installer URL is pinned to an upstream commit. To update the pin, pick a commit SHA from the history of
-`install.sh` at https://github.com/Homebrew/install, put it in the URL, regenerate the checksum of that exact URL
-(`curl -fsSL https://raw.githubusercontent.com/Homebrew/install/<commit-sha>/install.sh | shasum -a 256`), and update
-the URL, `EXPECTED_CHECKSUM` and its "Last updated" comment in `nas_bootstrap.sh` (and the matching values in
-`bootstrap/50-brew.sh`).
+`nas_bootstrap.sh` validates the repository layout (`run.py`, `nas_bootstrap.sh`, `playbooks/`) and hands every argument
+to `run.py nas-provision`. The Homebrew installer pin lives only in `bootstrap/50-brew.sh` (`BREW_INSTALLER_URL` and
+`BREW_INSTALLER_SHA256`; see the [README](../README.md#homebrew-checksum-mismatch) for how to re-pin).
 
 ### Direct execution
 
@@ -90,6 +91,8 @@ ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --ta
 | --------------- | ----------------------------------------------------------------------------- |
 | `configfile`    | Roles that create or link configuration files                                 |
 | `docker`        | Docker and container services                                                 |
+| `services`      | Compose sync, per-service secrets, and deploy                                 |
+| `secrets`       | Only the per-service secret directories and `.env` files in `services`        |
 | `homeassistant` | Home Assistant configuration inside the docker role                           |
 | `always`        | Tasks that always run (setting the become password, refreshing the apt index) |
 

@@ -1,0 +1,84 @@
+---
+# synchronize runs rsync on both ends; a minimal Debian install ships without it
+- name: Install rsync
+  become: true
+  ansible.builtin.apt:
+    name: rsync
+    state: present
+
+# Pushes the controller's services/ tree, so a run from a branch deploys that branch (same as `run.py nas-deploy`).
+# *.j2 templates and .env files never travel: secrets are rendered below, on the NAS side of the connection. Directory
+# times are not copied (rendering pihole/.env would otherwise bump the mtime and report changed on every run), and
+# laptop-only junk stays home. Keep these filters identical to rsync_flags in scripts/nas/deploy-services.sh.
+- name: Sync compose files to the NAS
+  ansible.posix.synchronize:
+    src: "{{ services_source_dir }}/"
+    dest: "{{ services_target_dir }}/"
+    rsync_opts:
+      - "--omit-dir-times"
+      - "--exclude=*.j2"
+      - "--exclude=.env"
+      - "--exclude=.backups/"
+      - "--exclude=.DS_Store"
+
+# A service opts in with services/<svc>/env.j2 and `env_file: <svc>/.env` in its compose.yml (deploy.sh passes
+# --project-directory ~/docker, so the path is relative to that directory). Discovery uses find, not
+# lookup('fileglob'): fileglob only globs the last path component, so services/*/env.j2 silently matches nothing.
+# connection: local because the inventory's localhost entry points at 127.0.0.1 over ssh.
+- name: Find per-service secret templates
+  ansible.builtin.find:
+    paths: "{{ services_source_dir }}"
+    patterns: env.j2
+    recurse: true
+    depth: 2
+    file_type: file
+  delegate_to: localhost
+  connection: local
+  become: false
+  run_once: true
+  check_mode: false
+  register: services_secret_found
+  tags:
+    - secrets
+
+- name: Create per-service secret directories
+  ansible.builtin.file:
+    path: "{{ services_target_dir }}/{{ services_secret_template | dirname | basename }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ services_secret_found.files | map(attribute='path') | sort | list }}"
+  loop_control:
+    loop_var: services_secret_template
+    label: "{{ services_secret_template | dirname | basename }}"
+  tags:
+    - secrets
+
+# diff is off so rendered values never reach the console or a saved log
+- name: Render per-service secret files
+  ansible.builtin.template:
+    src: "{{ services_secret_template }}"
+    dest: "{{ services_target_dir }}/{{ services_secret_template | dirname | basename }}/.env"
+    mode: "0600"
+  diff: false
+  loop: "{{ services_secret_found.files | map(attribute='path') | sort | list }}"
+  loop_control:
+    loop_var: services_secret_template
+    label: "{{ services_secret_template | dirname | basename }}"
+  tags:
+    - secrets
+
+# compose prints its progress on stderr, and reports "Running" for containers it leaves alone. become as the same user
+# starts a fresh login, so the docker group added by the docker role applies on the very first run. A fresh host pulls
+# images, so this runs async: a dropped SSH session would otherwise kill the deploy mid-pull.
+- name: Deploy all services
+  become: true
+  become_user: "{{ ansible_facts['user_id'] }}"
+  ansible.builtin.command:
+    cmd: "{{ services_target_dir }}/deploy.sh all"
+  environment:
+    HOME: "{{ ansible_facts['user_dir'] }}"
+  async: 3600
+  poll: 15
+  register: services_deploy
+  changed_when: (services_deploy.stdout ~ services_deploy.stderr) is search('(Started|Recreated|Created|Pulled)')
+  when: not ansible_check_mode
