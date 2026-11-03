@@ -1467,6 +1467,7 @@ class RunHooksCommand(Command):
     group: ClassVar[str] = 'Codebase'
 
     class Args(argparse.Namespace):
+        # `pre` parses none of the file/ref selection options below (PreCommand.run sets all_files itself)
         hooks:       list[str] | None   # positional arg(s) "HOOK|PROJECT"
         skip:        list[str] | None   # --skip
         all_files:   bool               # --all-files
@@ -1481,7 +1482,7 @@ class RunHooksCommand(Command):
         dry_run:     bool               # --dry-run
         verbose:     bool               # --verbose
 
-    def add_arguments(self, parser: argparse.ArgumentParser, *, include_files: bool = True) -> None:
+    def add_arguments(self, parser: argparse.ArgumentParser, *, include_selection: bool = True) -> None:
         parser.add_argument(
             'hooks',
             nargs='*',
@@ -1490,7 +1491,7 @@ class RunHooksCommand(Command):
             help='Hooks or projects to run (default: all)',
         )
 
-        if include_files:
+        if include_selection:
             file_opts = parser.add_argument_group('File selection')
             file_opts.add_argument(
                 '-a',
@@ -1511,24 +1512,24 @@ class RunHooksCommand(Command):
                 help='Run on all files in this directory',
             )
 
-        ref_opts = parser.add_argument_group('Ref selection')
-        ref_opts.add_argument(
-            '-s',
-            '--from-ref',
-            metavar='REF',
-            help='Original ref in a from_ref...to_ref diff expression',
-        )
-        ref_opts.add_argument(
-            '-o',
-            '--to-ref',
-            metavar='REF',
-            help='Destination ref in a from_ref...to_ref diff expression (default: HEAD)',
-        )
-        ref_opts.add_argument(
-            '--last-commit',
-            action='store_true',
-            help='Run on the files of the last commit (--from-ref HEAD~1 --to-ref HEAD)',
-        )
+            ref_opts = parser.add_argument_group('Ref selection')
+            ref_opts.add_argument(
+                '-s',
+                '--from-ref',
+                metavar='REF',
+                help='Original ref in a from_ref...to_ref diff expression',
+            )
+            ref_opts.add_argument(
+                '-o',
+                '--to-ref',
+                metavar='REF',
+                help='Destination ref in a from_ref...to_ref diff expression (default: HEAD)',
+            )
+            ref_opts.add_argument(
+                '--last-commit',
+                action='store_true',
+                help='Run on the files of the last commit (--from-ref HEAD~1 --to-ref HEAD)',
+            )
 
         run_opts = parser.add_argument_group('Run options')
         run_opts.add_argument(
@@ -1572,7 +1573,8 @@ class RunHooksCommand(Command):
 
         Hook names go first: prek's ``--files`` is greedy, so a trailing hook name would be read as a filename.
 
-        :param args: parsed arguments (the file-selection attributes are absent for commands that omit those options)
+        :param args: parsed arguments (the file and ref selection attributes are absent for commands that omit those
+                     options)
         :return: command and arguments
         """
         cmd: list[str] = ['prek', 'run', *(args.hooks or [])]
@@ -1584,11 +1586,11 @@ class RunHooksCommand(Command):
         if directory := getattr(args, 'directory', None):
             cmd.extend(['--directory', directory])
 
-        if args.from_ref:
-            cmd.extend(['--from-ref', args.from_ref])
-        if args.to_ref:
-            cmd.extend(['--to-ref', args.to_ref])
-        if args.last_commit:
+        if from_ref := getattr(args, 'from_ref', None):
+            cmd.extend(['--from-ref', from_ref])
+        if to_ref := getattr(args, 'to_ref', None):
+            cmd.extend(['--to-ref', to_ref])
+        if getattr(args, 'last_commit', False):
             cmd.append('--last-commit')
 
         for skip in (args.skip or []):
@@ -1624,7 +1626,7 @@ class PreCommand(RunHooksCommand):
     name: ClassVar[str] = 'pre'
 
     def add_arguments(self, parser: argparse.ArgumentParser, **_kwargs: object) -> None:
-        super().add_arguments(parser, include_files=False)
+        super().add_arguments(parser, include_selection=False)
 
     def run(self, args: RunHooksCommand.Args) -> None:
         args.all_files = True

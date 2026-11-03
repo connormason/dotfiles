@@ -127,11 +127,25 @@ class TestPre:
         assert exc_info.value.code == 0
         assert calls[0][0] == ['prek', 'run', 'mdformat', '--all-files', '--skip', 'mypy']
 
+    def test_propagates_exit_code(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that a failing prek run exits with prek's return code
+        """
+        calls = _record(monkeypatch, returncode=3)
+        with pytest.raises(SystemExit) as exc_info:
+            run.get_commands()['pre'](_parse('pre'))
+
+        assert exc_info.value.code == 3
+        assert calls == [(['prek', 'run', '--all-files'], {'check': False})]
+
     def test_file_selection_options_are_not_offered(self) -> None:
         """
-        Test that pre does not accept the file-selection options it overrides
+        Test that pre offers none of the file or ref selection options, which conflict with its forced --all-files
         """
-        assert not {'--all-files', '--files', '--directory'} & _option_strings('pre')
+        selection_options = {'--all-files', '--files', '--directory', '--from-ref', '--to-ref', '--last-commit'}
+
+        assert selection_options <= _option_strings('run-hooks')
+        assert not selection_options & _option_strings('pre')
 
     def test_description_is_unchanged(self) -> None:
         """
