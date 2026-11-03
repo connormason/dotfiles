@@ -3,7 +3,10 @@ Structural tests for the services role and its place in the NAS playbook (no NAS
 """
 from __future__ import annotations
 
+import os
 import shlex
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -138,22 +141,41 @@ class TestServicesRole:
 
     def test_only_the_secret_tasks_carry_the_secrets_tag(self) -> None:
         """
-        Test that the secrets tag reaches exactly the directory and render tasks
+        Test that the secrets tag reaches exactly the discovery, directory, and render tasks
         """
         tagged = {task['name'] for task in _tasks('services') if 'secrets' in task.get('tags', [])}
 
-        assert tagged == {'Create per-service secret directories', 'Render per-service secret files'}
+        assert tagged == {
+            'Find per-service secret templates',
+            'Create per-service secret directories',
+            'Render per-service secret files',
+        }
 
-    def test_secrets_render_to_private_env_files_from_the_controller_checkout(self) -> None:
+    def test_secrets_render_to_private_env_files_from_the_discovered_templates(self) -> None:
         """
-        Test that each services/*/env.j2 renders to a 0600 file, without echoing a diff
+        Test that each discovered env.j2 renders to a 0600 file, without echoing a diff
         """
         task = _task('services', 'Render per-service secret files')
 
         assert task['ansible.builtin.template']['mode'] == '0600'
         assert task['ansible.builtin.template']['dest'].endswith('/.env')
         assert task['diff'] is False
-        assert '/*/env.j2' in task['loop']
+        assert 'services_secret_found' in task['loop']
+
+    def test_discovery_does_not_rely_on_a_wildcard_directory_glob(self) -> None:
+        """
+        Test that templates are found with the find module, since lookup('fileglob') cannot glob a directory part
+
+        A fileglob over services/*/env.j2 matched nothing on the first live check, so no secret was ever rendered
+        """
+        text = (ROLES / 'services' / 'tasks' / 'main.yml').read_text(encoding='utf-8')
+        task = _task('services', 'Find per-service secret templates')
+
+        assert "lookup('ansible.builtin.fileglob'" not in text
+        assert task['ansible.builtin.find']['patterns'] == 'env.j2'
+        assert task['delegate_to'] == 'localhost'
+        assert task['connection'] == 'local'
+        assert task['check_mode'] is False
 
     def test_deploy_reports_changes_only_when_containers_change(self) -> None:
         """
@@ -246,3 +268,61 @@ class TestDockerRole:
         ignore = (REPO_ROOT / '.ansible-lint-ignore').read_text(encoding='utf-8')
 
         assert 'roles/docker/' not in ignore
+
+
+ANSIBLE_PLAYBOOK = Path(sys.executable).parent / 'ansible-playbook'
+
+# The production include, run against localhost with only the secrets tag selected
+SECRETS_PLAYBOOK = """\
+- hosts: all
+  gather_facts: false
+  connection: local
+  tasks:
+    - name: Deploy the container services
+      ansible.builtin.include_role:
+        name: services
+        apply:
+          tags: services
+      tags: [services, secrets, configfile]
+"""
+
+
+@pytest.mark.skipif(not ANSIBLE_PLAYBOOK.exists(), reason='ansible-playbook not in this environment')
+class TestSecretsRender:
+    """
+    End-to-end test of the secrets tasks: discovery, directory creation, and rendering, against a temp directory
+    """
+    def test_renders_every_env_template_privately_and_silently(self, tmp_path: Path) -> None:
+        """
+        Test that --tags secrets renders services/pihole/env.j2 to a 0600 .env without echoing the value
+
+        Guards the first-live-run failure where discovery found no templates and nothing was rendered
+        """
+        playbook = tmp_path / 'secrets.yml'
+        playbook.write_text(SECRETS_PLAYBOOK, encoding='utf-8')
+        vault = tmp_path / 'vault-pass'
+        vault.write_text('unused\n', encoding='utf-8')
+        target = tmp_path / 'docker'
+
+        result = subprocess.run(
+            [
+                str(ANSIBLE_PLAYBOOK), str(playbook), '-i', 'localhost,', '--tags', 'secrets', '--diff',
+                '-e', f'services_source_dir={REPO_ROOT / "services"}',
+                '-e', f'services_target_dir={target}',
+                '-e', 'pihole_web_password=hunter2-test-value',
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=REPO_ROOT,
+            env={**os.environ, 'ANSIBLE_VAULT_PASSWORD_FILE': str(vault), 'ANSIBLE_NOCOLOR': '1'},
+            timeout=300,
+        )
+        output = result.stdout + result.stderr
+
+        assert result.returncode == 0, output
+        env_file = target / 'pihole' / '.env'
+        assert env_file.read_text(encoding='utf-8').strip() == 'FTLCONF_webserver_api_password=hunter2-test-value'
+        assert env_file.stat().st_mode & 0o777 == 0o600
+        assert 'hunter2-test-value' not in output
+        assert 'Sync compose files' not in output
