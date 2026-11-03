@@ -612,6 +612,28 @@ def arg_note(name: str, val: str, *, dim: bool = True, color: StyleColor | None 
     ])
 
 
+def confirm(prompt_text: str, *, default: bool = True, indent: int = 0) -> bool:
+    """
+    Prompt the user for Y/n confirmation
+
+    :param prompt_text: the question to display
+    :param default: the answer used when the user presses Enter without typing
+    :param indent: number of spaces to indent the prompt by
+    :return: True if the user confirmed; False if they declined or stdin is closed (EOF). Ctrl-C is not caught, so it
+             cancels the whole run through :func:`main`
+    """
+    suffix = '[Y/n]' if default else '[y/N]'
+    try:
+        answer = input(f'{" " * indent}{prompt_text} {suffix}: ').strip().lower()
+    except EOFError:
+        printf('')
+        return False
+
+    if not answer:
+        return default
+    return answer in ('y', 'yes')
+
+
 # ====================================================================================================
 # Command utils
 #
@@ -2169,6 +2191,7 @@ class DoctorCommand(Command):
 
     class Args(argparse.Namespace):
         fix: bool       # --fix
+        yes: bool       # --yes
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
@@ -2176,20 +2199,34 @@ class DoctorCommand(Command):
             '--fix',
             action='store_true',
             help=(
-                'Run the fix for each failing check, then re-check\n'
+                'Run the fix for each failing check (after confirming), then re-check\n'
                 '(links: stow.sh --backup-conflicts, which moves blocking files\n'
                 'into ~/.dotfiles-backup/<timestamp>/)'
             ),
+        )
+        parser.add_argument(
+            '-y',
+            '--yes',
+            action='store_true',
+            help='Apply fixes without prompting for confirmation (implies --fix)',
         )
 
     def run(self, args: Args) -> None:
         checks = doctor_checks()
 
-        if args.fix:
+        if args.fix or args.yes:
             for check in checks:
-                if not check.ok and check.fix:
-                    printf(f'🔧 {check.name}: {shlex.join(check.fix)}', fg='bright_cyan')
-                    shell_command(check.fix, indent=3, check=False)
+                if check.ok or not check.fix:
+                    continue
+
+                command  = shlex.join(check.fix)
+                question = f'Run {style(command, fg="bright_magenta")} to fix {style(check.name, bold=True)}?'
+                if not args.yes and not confirm(question, indent=3):
+                    printf(f'Skipped {check.name}', dim=True, indent=3)
+                    continue
+
+                printf(f'🔧 {check.name}: {command}', fg='bright_cyan')
+                shell_command(check.fix, indent=3, check=False)
             checks = doctor_checks()
 
         for check in checks:

@@ -225,7 +225,7 @@ class TestDoctorReadOnly:
 
         monkeypatch.setattr(run, 'shell_command', fail_shell_command)
         with pytest.raises(SystemExit):
-            run.get_commands()['doctor'](run.argparse.Namespace(fix=False))
+            run.get_commands()['doctor'](run.argparse.Namespace(fix=False, yes=False))
 
 
 class TestDoctorCommand:
@@ -246,7 +246,7 @@ class TestDoctorCommand:
         """
         monkeypatch.setattr(run, 'doctor_checks', lambda: [run.DoctorCheck('links', False, 'pending')])
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['doctor'](run.argparse.Namespace(fix=False))
+            run.get_commands()['doctor'](run.argparse.Namespace(fix=False, yes=False))
         assert exc_info.value.code == 1
 
     def test_doctor_passes_quietly_when_all_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -254,7 +254,7 @@ class TestDoctorCommand:
         Test that doctor returns normally when every check passes
         """
         monkeypatch.setattr(run, 'doctor_checks', lambda: [run.DoctorCheck('links', True, 'ok')])
-        run.get_commands()['doctor'](run.argparse.Namespace(fix=False))
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=False, yes=False))
 
     def test_fix_runs_fix_then_rechecks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -272,7 +272,80 @@ class TestDoctorCommand:
 
         monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
         monkeypatch.setattr(run, 'shell_command', fake_shell_command)
-        run.get_commands()['doctor'](run.argparse.Namespace(fix=True))
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=True, yes=True))
+        assert ran == [['echo', 'fix']]
+
+    def test_fix_asks_before_each_fix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that --fix names the fix command in a confirmation prompt before running it
+        """
+        results = iter([
+            [run.DoctorCheck('links', False, 'pending',             ['echo', 'fix'])],
+            [run.DoctorCheck('links', True,  'all packages linked')],
+        ])
+        asked: list[str] = []
+        ran:   list[list[str]] = []
+
+        def fake_confirm(prompt: str, **kwargs: object) -> bool:
+            asked.append(run.unstyle(prompt))
+            return True
+
+        def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            ran.append(cmd)
+            return _completed(0)
+
+        monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
+        monkeypatch.setattr(run, 'confirm', fake_confirm)
+        monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=True, yes=False))
+        assert len(asked) == 1
+        assert 'echo fix' in asked[0]
+        assert 'links' in asked[0]
+        assert ran == [['echo', 'fix']]
+
+    def test_declined_fix_is_skipped_and_doctor_still_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that a declined fix does not run, the checks are re-run, and the command exits 1
+        """
+        pending = [run.DoctorCheck('links', False, 'pending', ['echo', 'fix'])]
+        ran: list[list[str]] = []
+
+        def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            ran.append(cmd)
+            return _completed(0)
+
+        monkeypatch.setattr(run, 'doctor_checks', lambda: pending)
+        monkeypatch.setattr(run, 'confirm', lambda prompt, **kwargs: False)
+        monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run.get_commands()['doctor'](run.argparse.Namespace(fix=True, yes=False))
+        assert exc_info.value.code == 1
+        assert ran == []
+
+    def test_yes_implies_fix_without_prompting(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that --yes applies fixes without --fix and never asks
+        """
+        results = iter([
+            [run.DoctorCheck('links', False, 'pending',             ['echo', 'fix'])],
+            [run.DoctorCheck('links', True,  'all packages linked')],
+        ])
+        ran: list[list[str]] = []
+
+        def refuse_prompt(prompt: str, **kwargs: object) -> bool:
+            raise AssertionError('--yes must not prompt')
+
+        def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            ran.append(cmd)
+            return _completed(0)
+
+        monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
+        monkeypatch.setattr(run, 'confirm', refuse_prompt)
+        monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=False, yes=True))
         assert ran == [['echo', 'fix']]
 
     def test_dotfiles_commands_registered(self) -> None:
