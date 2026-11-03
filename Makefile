@@ -33,7 +33,7 @@ help: ## Show this help message
 	@echo "  $(YELLOW)nas-provision   $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Dotfiles:$(NC)"
-	@echo "  $(YELLOW)doctor          $(NC) Check overlay registry, links, rendered settings, git version, and tools"
+	@echo "  $(YELLOW)doctor          $(NC) Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles"
 	@echo "  $(YELLOW)bootstrap       $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh)"
 	@echo "  $(YELLOW)stow            $(NC) Link stow packages from every layer into the home directory (stow.sh)"
 	@echo "  $(YELLOW)render          $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
@@ -83,7 +83,7 @@ nas-provision: ## Provision the NAS with the Ansible playbook: system config, th
 	@python3 run.py nas-provision
 
 # Dotfiles
-doctor: ## Check overlay registry, links, rendered settings, git version, and tools
+doctor: ## Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles
 	@python3 run.py doctor
 
 bootstrap: ## Run the layered bootstrap stages (bootstrap/bootstrap.sh)
