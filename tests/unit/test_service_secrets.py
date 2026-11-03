@@ -58,6 +58,30 @@ class TestPiholeSecret:
         assert 'pihole' not in text.lower()
         assert 'password' not in text.lower()
 
+    def test_global_env_renders_without_the_tailscale_roles_defaults(self) -> None:
+        """
+        Test that ADVERTISE_IP renders when only the inventory's tailnet name is set
+
+        The docker role runs before the tailscale role, so tailscale_hostname (a default of that role) is undefined here
+        """
+        template = jinja2.Template(DOCKER_ENV.read_text(encoding='utf-8'), undefined=jinja2.StrictUndefined)
+
+        rendered = template.render(inventory_hostname='nas', tailscale_tailnet_name='tail1234.ts.net')
+
+        assert rendered.strip() == 'ADVERTISE_IP=https://nas.tail1234.ts.net:32443'
+
+    def test_global_env_prefers_an_explicit_tailscale_hostname(self) -> None:
+        """
+        Test that an inventory-set tailscale_hostname still wins over the inventory name
+        """
+        template = jinja2.Template(DOCKER_ENV.read_text(encoding='utf-8'), undefined=jinja2.StrictUndefined)
+
+        rendered = template.render(
+            inventory_hostname='nas', tailscale_hostname='media', tailscale_tailnet_name='tail1234.ts.net',
+        )
+
+        assert rendered.strip() == 'ADVERTISE_IP=https://media.tail1234.ts.net:32443'
+
     def test_compose_reads_the_service_env_file_without_a_shadowing_entry(self) -> None:
         """
         Test that PiHole loads pihole/.env and has no bare environment entry that could shadow it
