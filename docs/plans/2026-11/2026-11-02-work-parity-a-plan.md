@@ -802,6 +802,12 @@ git add run.py Makefile tests/unit/test_run_hooks.py tests/unit/test_run_command
 git commit -m "feat(run.py): add run-hooks and prepare-hooks, make pre a run-hooks subclass"
 ```
 
+> **Amendment after review (human ruling):** `pre` must not offer `--from-ref/-s`, `--to-ref/-o`, or `--last-commit`:
+> it forces `--all-files`, and prek 0.4.9 rejects that combination (exit 2). As implemented, the keyword-only parameter
+> of `RunHooksCommand.add_arguments` is `include_selection` (not `include_files`) and gates the file-selection **and**
+> ref-selection groups together; `build_command` reads the ref attributes with `getattr(..., default)`. The snippets
+> above show the pre-amendment code; `git log` has the fix commit.
+
 ______________________________________________________________________
 
 ### Task 5: `confirm()` and `doctor --yes`
@@ -1967,8 +1973,9 @@ fails). The hook filter is placed before the options because prek's `--files` is
 
 #### `pre`
 
-Run prek hooks on all project files. This is `run-hooks --all-files`: it accepts the same hook filter, ref, and run
-options but not the file-selection options.
+Run prek hooks on all project files. This is `run-hooks --all-files`: it accepts the same hook filter and run options,
+but no file or ref selection, because prek rejects `--all-files` combined with `--files`, `--directory`, `--from-ref`,
+`--to-ref`, or `--last-commit`. Use `run-hooks` for those.
 
 ```bash
 python3 run.py pre
