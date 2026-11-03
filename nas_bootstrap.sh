@@ -14,4 +14,10 @@ if [[ ! -f "${SCRIPT_DIR}/run.py" ]] ||
     exit 1
 fi
 
+if ! command -v uv >/dev/null 2>&1; then
+    echo "ERROR: uv is required to run the Ansible tooling but was not found on PATH." >&2
+    echo "Install it (https://docs.astral.sh/uv/getting-started/installation/) and re-run." >&2
+    exit 1
+fi
+
 exec "${SCRIPT_DIR}/scripts/hooks/uv-public.sh" run python "${SCRIPT_DIR}/run.py" nas-provision "$@"

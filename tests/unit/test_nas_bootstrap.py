@@ -4,6 +4,8 @@ Static guardrail tests for the NAS bootstrap entry point and its Ansible collect
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -55,6 +57,32 @@ class TestNasBootstrapScript:
         text = self.SCRIPT.read_text(encoding='utf-8')
         assert '"${SCRIPT_DIR}/run.py"' in text
         assert '"${SCRIPT_DIR}/playbooks"' in text
+
+    def test_stops_with_a_clear_message_when_uv_is_missing(self, tmp_path: Path) -> None:
+        """
+        Test that a PATH without uv ends the script with exit 1 and a message naming uv, before any exec
+        """
+        bin_dir = tmp_path / 'bin'
+        bin_dir.mkdir()
+        (bin_dir / 'dirname').symlink_to(shutil.which('dirname') or '/usr/bin/dirname')
+
+        result = subprocess.run(
+            ['/bin/bash', str(self.SCRIPT)],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={'PATH': str(bin_dir)},
+        )
+
+        assert result.returncode == 1
+        assert 'uv is required' in result.stderr
+
+    def test_uv_check_precedes_the_exec(self) -> None:
+        """
+        Test that the uv guard sits before the exec line, so a missing uv never reaches the wrapper
+        """
+        text = self.SCRIPT.read_text(encoding='utf-8')
+        assert text.index('command -v uv') < text.index('exec "${SCRIPT_DIR}')
 
 
 class TestBrewInstallerPin:
