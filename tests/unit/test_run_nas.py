@@ -108,24 +108,28 @@ class TestResolveNasTarget:
         )
 
         assert run.resolve_nas_target() == ('nas.example.ts.net', 'tester')
+
         cmd, kwargs = fake_shell.find('ansible-inventory')
         assert cmd[cmd.index('--host') + 1] == 'nas'
         assert kwargs['capture_output'] is True
-        assert kwargs['cwd'] == run.DOTFILES_DIR
+        assert kwargs['cwd']            == run.DOTFILES_DIR
 
     def test_falls_back_to_the_host_name_and_local_user(
-        self, fake_shell: FakeShell, monkeypatch: pytest.MonkeyPatch,
+        self,
+        fake_shell: FakeShell,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """
         Test that missing variables fall back to the inventory name and the local login, as ssh would
         """
         fake_shell.results['ansible-inventory'] = _done(stdout='{}')
         monkeypatch.setattr(run.getpass, 'getuser', lambda: 'local')
-
         assert run.resolve_nas_target() == ('nas', 'local')
 
     def test_inventory_failure_exits_with_the_error(
-        self, fake_shell: FakeShell, capsys: pytest.CaptureFixture[str],
+        self,
+        fake_shell: FakeShell,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that an ansible-inventory failure exits 1 and shows its stderr
@@ -188,7 +192,7 @@ class TestRequireNasReachable:
 
         out = _output(capsys)
         assert exc_info.value.code == 1
-        assert 'Tailscale' in out
+        assert 'Tailscale'            in out
         assert 'Connection timed out' in out
 
 
@@ -237,7 +241,7 @@ class TestNasDeploy:
         Test that nas-deploy is grouped under NAS and kept out of the Makefile (its argument is required)
         """
         info = run.REGISTERED_COMMANDS['nas-deploy']
-        assert info.group == 'NAS'
+        assert info.group       == 'NAS'
         assert info.script_only is True
 
     def test_runs_the_shared_script_with_the_resolved_target(self, fake_shell: FakeShell) -> None:
@@ -252,7 +256,7 @@ class TestNasDeploy:
         cmd, kwargs = fake_shell.find('bash')
         assert exc_info.value.code == 3
         assert cmd == ['bash', str(run.NAS_DEPLOY_SCRIPT), 'glance']
-        assert kwargs['env'] == {'NAS_HOST': 'h', 'NAS_USER': 'u'}
+        assert kwargs['env']   == {'NAS_HOST': 'h', 'NAS_USER': 'u'}
         assert kwargs['check'] is False
 
     def test_dry_run_flag_precedes_the_service(self, fake_shell: FakeShell) -> None:
@@ -265,7 +269,9 @@ class TestNasDeploy:
         assert fake_shell.find('bash')[0] == ['bash', str(run.NAS_DEPLOY_SCRIPT), '--dry-run', 'all']
 
     def test_warns_about_a_dirty_services_tree_and_still_deploys(
-        self, fake_shell: FakeShell, capsys: pytest.CaptureFixture[str],
+        self,
+        fake_shell: FakeShell,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that uncommitted changes under services/ warn but do not block the deploy
@@ -285,7 +291,6 @@ class TestNasDeploy:
         """
         with pytest.raises(SystemExit):
             run.cmd_nas_deploy(argparse.Namespace(service='glance', dry_run=False))
-
         assert 'uncommitted' not in _output(capsys)
 
 
@@ -294,7 +299,12 @@ def _provision_args(**overrides: Any) -> argparse.Namespace:  # Any: free-form N
     Build the Namespace nas-provision receives, with every option at its default unless overridden
     """
     fields: dict[str, Any] = {  # Any: heterogeneous Namespace fields
-        'tags': None, 'limit': None, 'check': False, 'diff': False, 'extra_vars': None, 'verbose': 0,
+        'tags':       None,
+        'limit':      None,
+        'check':      False,
+        'diff':       False,
+        'extra_vars': None,
+        'verbose':    0,
     }
     fields.update(overrides)
     return argparse.Namespace(**fields)
@@ -321,7 +331,12 @@ class TestBuildNasProvisionCommand:
         Test that tags, limit, check, diff, extra vars, and verbosity map to ansible-playbook flags
         """
         args = _provision_args(
-            tags='dotfiles,haos', limit='nas', check=True, diff=True, extra_vars=['a=1', 'b=two'], verbose=2,
+            tags='dotfiles,haos',
+            limit='nas',
+            check=True,
+            diff=True,
+            extra_vars=['a=1', 'b=two'],
+            verbose=2,
         )
 
         assert run.build_nas_provision_command(args) == [
@@ -359,7 +374,7 @@ class TestNasProvision:
         Test that nas-provision is a NAS command that also gets a Makefile target
         """
         info = run.REGISTERED_COMMANDS['nas-provision']
-        assert info.group == 'NAS'
+        assert info.group       == 'NAS'
         assert info.script_only is False
 
     def test_installs_collections_then_runs_the_playbook_from_the_repo_root(self, fake_shell: FakeShell) -> None:
@@ -373,13 +388,17 @@ class TestNasProvision:
 
         assert exc_info.value.code == 4
         assert [call[0][2] for call in fake_shell.calls] == ['ansible-galaxy', 'ansible-playbook']
+
         galaxy, galaxy_kwargs = fake_shell.find('ansible-galaxy')
         assert galaxy[-2:] == ['-r', str(run.NAS_REQUIREMENTS)]
+
         _playbook, playbook_kwargs = fake_shell.find('ansible-playbook')
         assert galaxy_kwargs['cwd'] == playbook_kwargs['cwd'] == run.DOTFILES_DIR
 
     def test_collection_install_failure_warns_and_continues(
-        self, fake_shell: FakeShell, capsys: pytest.CaptureFixture[str],
+        self,
+        fake_shell: FakeShell,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that an offline collection install does not block a run with collections already installed

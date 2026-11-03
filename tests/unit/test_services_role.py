@@ -97,7 +97,7 @@ class TestServicesRole:
         """
         args = _task('services', 'Sync compose files to the NAS')['ansible.posix.synchronize']
 
-        assert '--exclude=*.j2' in args['rsync_opts']
+        assert '--exclude=*.j2'  in args['rsync_opts']
         assert '--exclude=.env'  in args['rsync_opts']
         assert not args.get('delete')
         assert args['dest'].startswith('{{ services_target_dir }}')
@@ -107,7 +107,6 @@ class TestServicesRole:
         Test that the sync ignores directory mtimes, backups, and .DS_Store files
         """
         opts = _task('services', 'Sync compose files to the NAS')['ansible.posix.synchronize']['rsync_opts']
-
         for opt in ('--omit-dir-times', '--exclude=.backups/', '--exclude=.DS_Store'):
             assert opt in opts
 
@@ -117,11 +116,13 @@ class TestServicesRole:
         """
         script = (REPO_ROOT / 'scripts' / 'nas' / 'deploy-services.sh').read_text(encoding='utf-8')
         line   = next(line for line in script.splitlines() if line.startswith('rsync_flags=('))
+
         script_tokens = {
             token for token in shlex.split(line.removeprefix('rsync_flags=(').removesuffix(')'))
             if token.startswith('--exclude=') or token == '--omit-dir-times'
         }
-        opts = _task('services', 'Sync compose files to the NAS')['ansible.posix.synchronize']['rsync_opts']
+
+        opts        = _task('services', 'Sync compose files to the NAS')['ansible.posix.synchronize']['rsync_opts']
         role_tokens = {opt for opt in opts if opt.startswith('--exclude=') or opt == '--omit-dir-times'}
 
         assert script_tokens
@@ -133,9 +134,9 @@ class TestServicesRole:
         """
         first = yaml.safe_load((ROLES / 'services' / 'tasks' / 'main.yml').read_text(encoding='utf-8'))[0]
 
-        assert first['name'] == 'Install rsync'
+        assert first['name']   == 'Install rsync'
         assert first['become'] is True
-        assert first['ansible.builtin.apt']['name'] == 'rsync'
+        assert first['ansible.builtin.apt']['name']  == 'rsync'
         assert first['ansible.builtin.apt']['state'] == 'present'
         assert 'secrets' not in first.get('tags', [])
 
@@ -144,7 +145,6 @@ class TestServicesRole:
         Test that the secrets tag reaches exactly the discovery, directory, and render tasks
         """
         tagged = {task['name'] for task in _tasks('services') if 'secrets' in task.get('tags', [])}
-
         assert tagged == {
             'Find per-service secret templates',
             'Create per-service secret directories',
@@ -174,16 +174,16 @@ class TestServicesRole:
         assert "lookup('ansible.builtin.fileglob'" not in text
         assert task['ansible.builtin.find']['patterns'] == 'env.j2'
         assert task['delegate_to'] == 'localhost'
-        assert task['connection'] == 'local'
-        assert task['check_mode'] is False
+        assert task['connection']  == 'local'
+        assert task['check_mode']  is False
 
     def test_deploy_reports_changes_only_when_containers_change(self) -> None:
         """
         Test that deploy.sh all is skipped in check mode and counts compose changes, not 'Running'
         """
         task = _task('services', 'Deploy all services')
-
         assert task['when'] == 'not ansible_check_mode'
+
         for verb in ('Started', 'Recreated', 'Created', 'Pulled'):
             assert verb in task['changed_when']
         assert 'Running' not in task['changed_when']
@@ -193,8 +193,7 @@ class TestServicesRole:
         Test that deploy.sh runs through become as the same user, so a docker group added this run applies
         """
         task = _task('services', 'Deploy all services')
-
-        assert task['become'] is True
+        assert task['become']      is True
         assert task['become_user'] == "{{ ansible_facts['user_id'] }}"
 
     def test_target_dir_matches_the_docker_role(self) -> None:
@@ -234,7 +233,7 @@ class TestDockerRole:
 
         assert 'ansible.builtin.command' in task
         assert task['changed_when'] is False
-        assert task['check_mode'] is False
+        assert task['check_mode']   is False
 
     def test_ssh_user_joins_the_docker_group(self) -> None:
         """
@@ -251,7 +250,6 @@ class TestDockerRole:
         Test that the docker .env render suppresses diffs, so a --check --diff run cannot echo a secret
         """
         task = _task('docker', 'Render docker .env file')
-
         assert task['diff'] is False
         assert task['ansible.builtin.template']['mode'] == '0600'
 
@@ -266,7 +264,6 @@ class TestDockerRole:
         Test that .ansible-lint-ignore holds no entry for the docker role
         """
         ignore = (REPO_ROOT / '.ansible-lint-ignore').read_text(encoding='utf-8')
-
         assert 'roles/docker/' not in ignore
 
 
@@ -300,10 +297,11 @@ class TestSecretsRender:
         """
         playbook = tmp_path / 'secrets.yml'
         playbook.write_text(SECRETS_PLAYBOOK, encoding='utf-8')
+
         vault = tmp_path / 'vault-pass'
         vault.write_text('unused\n', encoding='utf-8')
-        target = tmp_path / 'docker'
 
+        target = tmp_path / 'docker'
         result = subprocess.run(
             [
                 str(ANSIBLE_PLAYBOOK), str(playbook), '-i', 'localhost,', '--tags', 'secrets', '--diff',
@@ -318,9 +316,10 @@ class TestSecretsRender:
             env={**os.environ, 'ANSIBLE_VAULT_PASSWORD_FILE': str(vault), 'ANSIBLE_NOCOLOR': '1'},
             timeout=300,
         )
-        output = result.stdout + result.stderr
 
+        output = result.stdout + result.stderr
         assert result.returncode == 0, output
+
         env_file = target / 'pihole' / '.env'
         assert env_file.read_text(encoding='utf-8').strip() == 'FTLCONF_webserver_api_password=hunter2-test-value'
         assert env_file.stat().st_mode & 0o777 == 0o600

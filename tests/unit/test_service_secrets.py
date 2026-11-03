@@ -22,7 +22,7 @@ def _compose_services(service_dir: Path) -> dict[str, dict[str, Any]]:  # Any: y
     Load the services mapping from a service's compose file (enabled or .disabled)
     """
     candidates = [service_dir / 'compose.yml', service_dir / 'compose.yml.disabled']
-    compose = next(path for path in candidates if path.exists())
+    compose    = next(path for path in candidates if path.exists())
     return yaml.safe_load(compose.read_text(encoding='utf-8'))['services']
 
 
@@ -55,8 +55,8 @@ class TestPiholeSecret:
         text = DOCKER_ENV.read_text(encoding='utf-8')
 
         assert 'ADVERTISE_IP=' in text
-        assert 'pihole' not in text.lower()
-        assert 'password' not in text.lower()
+        assert 'pihole'    not in text.lower()
+        assert 'password'  not in text.lower()
 
     def test_global_env_renders_without_the_tailscale_roles_defaults(self) -> None:
         """
@@ -65,9 +65,7 @@ class TestPiholeSecret:
         The docker role runs before the tailscale role, so tailscale_hostname (a default of that role) is undefined here
         """
         template = jinja2.Template(DOCKER_ENV.read_text(encoding='utf-8'), undefined=jinja2.StrictUndefined)
-
         rendered = template.render(inventory_hostname='nas', tailscale_tailnet_name='tail1234.ts.net')
-
         assert rendered.strip() == 'ADVERTISE_IP=https://nas.tail1234.ts.net:32443'
 
     def test_global_env_prefers_an_explicit_tailscale_hostname(self) -> None:
@@ -75,11 +73,11 @@ class TestPiholeSecret:
         Test that an inventory-set tailscale_hostname still wins over the inventory name
         """
         template = jinja2.Template(DOCKER_ENV.read_text(encoding='utf-8'), undefined=jinja2.StrictUndefined)
-
         rendered = template.render(
-            inventory_hostname='nas', tailscale_hostname='media', tailscale_tailnet_name='tail1234.ts.net',
+            inventory_hostname='nas',
+            tailscale_hostname='media',
+            tailscale_tailnet_name='tail1234.ts.net',
         )
-
         assert rendered.strip() == 'ADVERTISE_IP=https://media.tail1234.ts.net:32443'
 
     def test_compose_reads_the_service_env_file_without_a_shadowing_entry(self) -> None:

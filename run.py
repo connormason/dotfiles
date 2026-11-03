@@ -1505,7 +1505,7 @@ def require_nas_reachable(host: str, user: str) -> None:
     )
     if result.returncode != 0:
         printf(f'❌ Cannot reach the NAS at {user}@{host} over SSH', fg='red', bold=True)
-        printf('Is Tailscale up? Does the host resolve? Is your SSH key loaded (ssh-add)?', indent=3)
+        printf('Is Tailscale up? Does the host resolve? Is your SSH key loaded (ssh-add)?',                 indent=3)
         printf(f'The host comes from ansible_host of "{NAS_INVENTORY_HOST}" in {folduser(INVENTORY_FILE)}', indent=3)
         printf(f'ssh said: {result.stderr.strip()}', indent=3, dim=True)
         sys.exit(1)
@@ -1519,6 +1519,7 @@ def resolve_reachable_nas() -> tuple[str, str]:
     """
     require_inventory()
     require_vault_password()
+
     host, user = resolve_nas_target()
     require_nas_reachable(host, user)
     return host, user
@@ -1534,7 +1535,7 @@ def warn_on_dirty_services() -> None:
         check=False,
         cwd=DOTFILES_DIR,
     )
-    if result.returncode == 0 and result.stdout.strip():
+    if (result.returncode == 0) and result.stdout.strip():
         printf('🟡 services/ has uncommitted changes; deploying the working tree', fg='bright_yellow')
         printf('CI redeploys main whenever it changes a service, which supersedes a branch deploy', indent=3, dim=True)
 
