@@ -140,6 +140,7 @@ RUN_DEBUG_ENVVAR:          str = f'{ENVVAR_PREFIX}_RUN_DEBUG'
 INVENTORY_REPO_URL_ENVVAR: str = f'{ENVVAR_PREFIX}_INVENTORY_REPO_URL'
 
 RUN_DEBUG:          bool = os.getenv(RUN_DEBUG_ENVVAR, 'false').lower() == 'true'
+NO_COLOR:           bool = bool(os.getenv('NO_COLOR'))      # https://no-color.org: any non-empty value disables color
 INVENTORY_REPO_URL: str  = os.getenv(
     INVENTORY_REPO_URL_ENVVAR,
     'git@github.com:connormason/dotfiles-inventory.git',
@@ -477,7 +478,7 @@ def style(
     reset: bool = True,
 ) -> str:
     """
-    Style text with ANSI escape codes.
+    Style text with ANSI escape codes. Returns the text unstyled when ``NO_COLOR`` is set.
 
     :param text: the string to style with ansi codes
     :param fg: foreground color
@@ -493,6 +494,8 @@ def style(
     :param reset: add a reset-all code at the end of the string
     :return: styled text
     """
+    if NO_COLOR:
+        return str(text)
     if not isinstance(text, str):
         text = str(text)
 
