@@ -1921,6 +1921,11 @@ git add run.py Makefile tests/unit/test_run_track_claude.py tests/unit/test_run_
 git commit -m "feat(run.py): add track-claude to ingest local ~/.claude config into the stow package"
 ```
 
+> **Amendment after review:** (1) a destination that is a dangling symlink counts as a conflict (`os.path.lexists`), and
+> the destination is re-checked immediately before each move; (2) when any conflict remains, the restow is skipped
+> (it would always fail: `stow.sh` aborts while a local regular file blocks a target) and the recovery steps are
+> printed instead. The snippets above show the pre-amendment code; `git log` has the fix commit.
+
 ______________________________________________________________________
 
 ### Task 8: Documentation, full verification, and PR
@@ -2037,9 +2042,12 @@ python3 run.py track-claude --dry-run     # list what would be ingested
 python3 run.py track-claude               # confirm, move, restow
 ```
 
-A file whose repo counterpart already exists is reported as a conflict and left alone. Stowed files are symlinks, so
-any regular file counts as local-only; `plugins/`, `projects/`, and other state directories are never touched. Review
-and commit the result with `git add stow/claude/.claude && git commit`.
+A file whose repo counterpart already exists (including a dangling symlink at that path) is reported as a conflict and
+left alone. Because `stow.sh` is all-or-nothing and refuses to run while a local regular file blocks a target, the
+restow is skipped while any conflict remains: the command prints the recovery steps instead (resolve the conflicts, then
+`python3 run.py stow claude`; add `--backup-conflicts` to move the blocking local files to `~/.dotfiles-backup/`).
+Stowed files are symlinks, so any regular file counts as local-only; `plugins/`, `projects/`, and other state
+directories are never touched. Review and commit the result with `git add stow/claude/.claude && git commit`.
 ```
 
 (d) In `### Constants` → environment variables, add `NO_COLOR = bool(os.getenv('NO_COLOR'))` with the comment
