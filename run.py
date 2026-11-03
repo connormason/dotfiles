@@ -23,9 +23,10 @@ which registers it on class definition and:
 Command Categories
 -----------------
 - **Inventory**: Manage the standalone inventory git repository
-- **Codebase**: Clean build artifacts, run prek hooks, generate Makefile
+- **Codebase**: Clean build artifacts, run and prepare prek hooks, generate Makefile
 - **NAS**: Provision the home NAS and deploy its Compose services
-- **Dotfiles**: Wrap the layered engine (doctor, bootstrap, stow, render, test)
+- **Dotfiles**: Wrap the layered engine (doctor, bootstrap, stow, render, test) and ingest local Claude config
+  (track-claude)
 
 Key Features
 -----------
@@ -39,6 +40,7 @@ Environment Variables
 --------------------
 - DOTFILES_RUN_DEBUG: Enable debug output (true/false)
 - DOTFILES_INVENTORY_REPO_URL: Override inventory repository URL
+- NO_COLOR: Disable ANSI styling when set to any non-empty value
 
 Usage Examples
 -------------
@@ -2066,7 +2068,7 @@ class NasProvisionCommand(Command):
 #   - stow:         Link stow packages from every layer into $HOME
 #   - render:       Render settings files from per-layer fragments
 #   - track-claude: Ingest local ~/.claude agents/commands/skills/hooks/rules into the ``claude`` stow package
-#   - doctor:       Verify the environment (``--fix`` runs each failing check's repair command, then re-checks)
+#   - doctor:       Verify the environment (``--fix`` confirms each repair, then re-checks; ``--yes`` skips the prompts)
 #   - test:         Run the test suite through the public-index uv wrapper
 # ====================================================================================================
 
@@ -2299,9 +2301,11 @@ class DoctorCommand(Command):
             '--fix',
             action='store_true',
             help=(
-                'Run the fix for each failing check (after confirming), then re-check\n'
-                '(links: stow.sh --backup-conflicts, which moves blocking files\n'
-                'into ~/.dotfiles-backup/<timestamp>/)'
+                'Ask before fixing each failing check, then re-check. The fixes are:\n'
+                '  links:    stow.sh --backup-conflicts (moves blocking files into\n'
+                '            ~/.dotfiles-backup/<timestamp>/)\n'
+                '  hooks:    prek install\n'
+                '  brewfile: brew bundle --file for each unsatisfied Brewfile'
             ),
         )
         parser.add_argument(
