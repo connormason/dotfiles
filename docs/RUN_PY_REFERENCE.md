@@ -281,9 +281,13 @@ python3 run.py track-claude               # confirm, move, restow
 A file whose repo counterpart already exists (including a dangling symlink at that path) is reported as a conflict and
 left alone. Because `stow.sh` is all-or-nothing and refuses to run while a local regular file blocks a target, the
 restow is skipped while any conflict remains: the command prints the recovery steps instead (resolve the conflicts, then
-`python3 run.py stow claude`; add `--backup-conflicts` to move the blocking local files to `~/.dotfiles-backup/`).
-Stowed files are symlinks, so any regular file counts as local-only; `plugins/`, `projects/`, and other state
-directories are never touched. Review and commit the result with `git add stow/claude/.claude && git commit`.
+`python3 run.py stow claude`; add `--backup-conflicts` to move the blocking local files to `~/.dotfiles-backup/`). When
+no conflict remains, the command first simulates the restow (`stow.sh -n claude`) and, if that fails, prints the first
+lines of stow's output and exits 1 before prompting or moving anything (under `--dry-run` it only warns). If the real
+restow still fails after the move, the files are in the repo but not linked back into `~/.claude`; fix what stow
+reported and run `python3 run.py stow claude`. Stowed files are symlinks, so any regular file counts as local-only;
+`plugins/`, `projects/`, and other state directories are never touched. Review and commit the result with
+`git add stow/claude/.claude && git commit`.
 
 ### NAS
 

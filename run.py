@@ -141,6 +141,9 @@ CLAUDE_CONFIG_DIR:      Path      = Path.home() / '.claude'
 CLAUDE_TRACKED_SUBDIRS: list[str] = ['agents', 'commands', 'skills', 'hooks', 'rules']
 CLAUDE_IGNORE_NAMES:    set[str]  = {'.DS_Store'}
 
+# Lines of a failed `stow.sh -n claude` shown by the track-claude preflight
+TRACK_CLAUDE_PREFLIGHT_LINES: int = 8
+
 # Git hook types `prek install` must have shimmed (mirrors `default_install_hook_types` in .pre-commit-config.yaml;
 # a test keeps the two in sync) and the marker prek writes into every shim it generates
 GIT_HOOK_TYPES: tuple[str, ...] = (
@@ -2571,6 +2574,78 @@ class TrackClaudeCommand(Command):
             help='Preview what would be ingested without moving anything',
         )
 
+    @staticmethod
+    def _preflight_restow() -> list[str] | None:
+        """
+        Simulate the restow that follows the moves, so a failure surfaces before any file is moved
+
+        :return: ``None`` when stow would succeed, otherwise the first few lines of its output
+        """
+        result = _capture(['bash', str(STOW_SCRIPT), '-n', 'claude'])
+        if result.returncode == 0:
+            return None
+
+        lines = [line.strip() for line in unstyle(f'{result.stderr}\n{result.stdout}').splitlines() if line.strip()]
+        return lines[:TRACK_CLAUDE_PREFLIGHT_LINES] or ['stow simulation failed']
+
+    @staticmethod
+    def _report_preflight_failure(stow_output: list[str], *, dry_run: bool) -> None:
+        """
+        Print why the restow would fail: a warning for a dry run, an error stating nothing was moved otherwise
+
+        :param stow_output: leading lines of the failed stow simulation
+        :param dry_run: whether the run only previews (the caller continues instead of exiting)
+        """
+        printf('')
+        if dry_run:
+            printf(
+                '🟡 The claude restow would fail right now; a real run would stop before moving anything:',
+                fg='yellow',
+            )
+        else:
+            printf(
+                '❌ The claude restow would fail, so nothing was moved (~/.claude is unchanged):',
+                fg='red',
+                bold=True,
+            )
+
+        for line in stow_output:
+            printf(line, dim=True, indent=3)
+
+        if not dry_run:
+            printf(
+                f'Fix what stow reported, then re-run {style("python3 run.py track-claude", fg="bright_magenta")}',
+                indent=3,
+            )
+
+    @staticmethod
+    def _report_partial_move(moved_rels: list[Path], total: int) -> None:
+        """
+        Print which files already left ``~/.claude`` when the move loop was cut short, and how to recover
+
+        :param moved_rels: ``~/.claude``-relative paths already moved into the repo
+        :param total: number of files the run planned to move
+        """
+        printf('')
+        if not moved_rels:
+            printf('❌ Move aborted before any file was moved', fg='red', bold=True)
+            return
+
+        printf(
+            f'❌ Move aborted: {len(moved_rels)} of {total} file(s) already moved into the repo '
+            f'and absent from ~/.claude:',
+            fg='red',
+            bold=True,
+        )
+        for rel in moved_rels:
+            printf(f'└─ {rel}', indent=3)
+
+        printf(
+            f'Recover: run {style("python3 run.py stow claude", fg="bright_magenta")} to link them back, then review '
+            f'and commit ({style("git add stow/claude/.claude && git commit", fg="bright_magenta")})',
+            indent=3,
+        )
+
     def run(self, args: Args) -> None:
         untracked = find_untracked_claude_files()
         if not untracked:
@@ -2611,6 +2686,15 @@ class TrackClaudeCommand(Command):
 
         # stow.sh aborts without changing anything if a regular file blocks a link, so any conflict rules out the restow
         scope = f'{len(moves)} file(s) into the repo' + ('' if conflicts else ' and restow')
+
+        # A restow follows the moves unless a conflict rules it out. Prove it can succeed before touching any file:
+        # files moved into the repo that then cannot be linked back would simply vanish from ~/.claude
+        preflight_failure = None if conflicts else self._preflight_restow()
+        if preflight_failure is not None:
+            self._report_preflight_failure(preflight_failure, dry_run=args.dry_run)
+            if not args.dry_run:
+                sys.exit(ExitCode.COMMAND_FAILED)
+
         if args.dry_run:
             printf('')
             printf(f'Dry run: would move {scope}. No changes made.', fg='cyan')
@@ -2621,22 +2705,27 @@ class TrackClaudeCommand(Command):
             printf('⚠️  Cancelled', fg='yellow')
             return
 
-        moved = 0
-        for src, dst in moves:
-            rel = src.relative_to(CLAUDE_CONFIG_DIR)
+        moved_rels: list[Path] = []
+        try:
+            for src, dst in moves:
+                rel = src.relative_to(CLAUDE_CONFIG_DIR)
 
-            # Re-check right before moving: shutil.move silently replaces an existing destination (rename semantics),
-            # and the repo may have changed since planning
-            if os.path.lexists(dst):
-                conflicts.append(rel)
-                printf(f'{style("CONFLICT", fg="red")}  {rel}', indent=2)
-                continue
+                # Re-check right before moving: shutil.move silently replaces an existing destination (rename
+                # semantics), and the repo may have changed since planning
+                if os.path.lexists(dst):
+                    conflicts.append(rel)
+                    printf(f'{style("CONFLICT", fg="red")}  {rel}', indent=2)
+                    continue
 
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(src), str(dst))
-            moved += 1
-            printf(f'└─ {rel}', fg='green')
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dst))
+                moved_rels.append(rel)
+                printf(f'└─ {rel}', fg='green')
+        except (OSError, KeyboardInterrupt):
+            self._report_partial_move(moved_rels, len(moves))
+            raise
 
+        moved = len(moved_rels)
         if conflicts:
             printf('')
             printf(
@@ -2645,6 +2734,12 @@ class TrackClaudeCommand(Command):
                 fg='yellow',
                 bold=True,
             )
+            if moved:
+                printf(
+                    f'The {moved} moved file(s) are absent from ~/.claude until the restow succeeds',
+                    fg='yellow',
+                    indent=3,
+                )
             printf('Next steps:', fg='bright_white', bold=True)
             printf('1. Resolve the conflicts above (diff/merge, or delete the local copies)', indent=3)
             printf(
@@ -2665,8 +2760,16 @@ class TrackClaudeCommand(Command):
         try:
             shell_command(['bash', str(STOW_SCRIPT), 'claude'], indent=3)
         except subprocess.CalledProcessError:
-            printf('❌ Restow failed: files moved into the repo, but symlinks may be incomplete', fg='red', bold=True)
-            printf(f'Re-run: {style("python3 run.py stow claude", fg="bright_magenta")}', indent=3)
+            printf(
+                f'❌ Restow failed: {moved} file(s) are now in the repo but NOT linked back into ~/.claude '
+                f'(stow.sh is all-or-nothing, so none were linked)',
+                fg='red',
+                bold=True,
+            )
+            printf(
+                f'Fix what stow reported above, then re-run {style("python3 run.py stow claude", fg="bright_magenta")}',
+                indent=3,
+            )
             sys.exit(ExitCode.COMMAND_FAILED)
 
         printf('')

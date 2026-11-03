@@ -129,6 +129,32 @@ class TestTrackClaudeCommand:
         monkeypatch.setattr(run, 'confirm', fake_confirm)
         return prompts
 
+    @staticmethod
+    def _stub_preflight(
+        monkeypatch: pytest.MonkeyPatch,
+        returncode: int = 0,
+        stdout: str = '',
+        stderr: str = '',
+    ) -> list[list[str]]:
+        """
+        Patch _capture (the stow preflight) to record commands and return the given result
+        """
+        calls: list[list[str]] = []
+
+        def fake_capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
+
+        monkeypatch.setattr(run, '_capture', fake_capture)
+        return calls
+
+    @pytest.fixture(autouse=True)
+    def preflight_calls(self, monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+        """
+        Default the stow preflight to success so no test ever shells out to the real stow.sh
+        """
+        return self._stub_preflight(monkeypatch)
+
     def test_registered_in_dotfiles_group(self) -> None:
         """
         Test that track-claude is a Dotfiles command
@@ -231,6 +257,7 @@ class TestTrackClaudeCommand:
         claude: tuple[Path, Path],
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
+        preflight_calls: list[list[str]],
     ) -> None:
         """
         Test that with a conflict present the movable file moves, stow is not run, and recovery steps are printed
@@ -248,12 +275,14 @@ class TestTrackClaudeCommand:
         assert local.read_text(encoding='utf-8') == 'local'
         assert repo.read_text(encoding='utf-8')  == 'repo'
         assert calls == []
+        assert preflight_calls == []
         assert len(prompts) == 1
         assert 'restow' not in prompts[0]
 
         out = run.unstyle(capsys.readouterr().out)
         for expected in ('CONFLICT', 'stow claude', '--backup-conflicts', 'git add stow/claude/.claude'):
             assert expected in out
+        assert 'absent from ~/.claude until the restow succeeds' in out
 
     def test_dry_run_with_conflicts_does_not_promise_a_restow(
         self,
@@ -328,9 +357,10 @@ class TestTrackClaudeCommand:
         self,
         claude: tuple[Path, Path],
         monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
-        Test that a failing restow exits 1 after the files were already moved
+        Test that a failing restow exits 1, says the moved files are not linked back, and names the count and recovery
         """
         config, stow = claude
         _write(config / 'agents' / 'new.md')
@@ -341,3 +371,125 @@ class TestTrackClaudeCommand:
             self._run()
         assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
         assert (stow / 'agents' / 'new.md').exists()
+
+        out = run.unstyle(capsys.readouterr().out)
+        assert '1 file(s) are now in the repo but NOT linked back into ~/.claude' in out
+        assert 'all-or-nothing' in out
+        assert 'python3 run.py stow claude' in out
+
+    def test_preflight_runs_stow_simulation_before_the_prompt(
+        self,
+        claude: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        preflight_calls: list[list[str]],
+    ) -> None:
+        """
+        Test that a passing stow simulation of the claude package happens once, before confirming, and the run proceeds
+        """
+        config, stow = claude
+        _write(config / 'skills' / 'foo' / 'SKILL.md', 'skill')
+        calls = self._record_shell(monkeypatch)
+        seen_at_prompt: list[int] = []
+
+        def fake_confirm(prompt_text: str, **kwargs: object) -> bool:
+            seen_at_prompt.append(len(preflight_calls))
+            return True
+
+        monkeypatch.setattr(run, 'confirm', fake_confirm)
+
+        self._run()
+        assert preflight_calls == [['bash', str(run.STOW_SCRIPT), '-n', 'claude']]
+        assert seen_at_prompt == [1]
+        assert (stow / 'skills' / 'foo' / 'SKILL.md').exists()
+        assert calls == [['bash', str(run.STOW_SCRIPT), 'claude']]
+
+    def test_failed_preflight_moves_nothing_and_exits_command_failed(
+        self,
+        claude: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that a failing stow simulation aborts before prompting or moving, shows stow's first lines, and exits 1
+        """
+        config, stow = claude
+        src = _write(config / 'agents' / 'new.md')
+        stow_lines = [f'\033[31mstow: blocked path {n}\033[0m' for n in range(12)]
+        self._stub_preflight(monkeypatch, returncode=1, stderr='\n'.join(stow_lines) + '\n')
+        calls = self._record_shell(monkeypatch)
+        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: pytest.fail('must not prompt'))
+
+        with pytest.raises(SystemExit) as exc_info:
+            self._run()
+        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert src.exists()
+        assert not (stow / 'agents' / 'new.md').exists()
+        assert calls == []
+
+        out = run.unstyle(capsys.readouterr().out)
+        assert 'nothing was moved' in out
+        assert 'stow: blocked path 0' in out
+        assert 'stow: blocked path 7' in out
+        assert 'stow: blocked path 8' not in out
+
+    def test_dry_run_warns_when_the_preflight_fails_but_does_not_exit(
+        self,
+        claude: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that --dry-run reports a failing stow simulation as a warning, moves nothing, and still returns normally
+        """
+        config, stow = claude
+        src = _write(config / 'agents' / 'new.md')
+        self._stub_preflight(monkeypatch, returncode=1, stdout='stow: blocked path\n')
+        calls = self._record_shell(monkeypatch)
+
+        self._run(dry_run=True)
+        assert src.exists()
+        assert not (stow / 'agents' / 'new.md').exists()
+        assert calls == []
+
+        out = run.unstyle(capsys.readouterr().out)
+        assert 'stow: blocked path' in out
+        assert 'would fail' in out
+        assert 'Dry run' in out
+
+    @pytest.mark.parametrize('error_type', [OSError, KeyboardInterrupt])
+    def test_interrupted_move_reports_the_files_already_moved(
+        self,
+        claude: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        error_type: type[BaseException],
+    ) -> None:
+        """
+        Test that a failure on the second move lists the first moved file with the recovery command, then propagates
+        """
+        config, stow = claude
+        _write(config / 'agents' / 'a.md')
+        _write(config / 'agents' / 'b.md')
+        calls = self._record_shell(monkeypatch)
+        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: True)
+        real_move = run.shutil.move
+        attempts: list[str] = []
+
+        def flaky_move(src: str, dst: str) -> str:
+            attempts.append(src)
+            if len(attempts) == 2:
+                raise error_type('boom')
+            return real_move(src, dst)
+
+        monkeypatch.setattr(run.shutil, 'move', flaky_move)
+
+        with pytest.raises(error_type):
+            self._run()
+        assert (stow / 'agents' / 'a.md').exists()
+        assert (config / 'agents' / 'b.md').exists()
+        assert calls == []
+
+        report = run.unstyle(capsys.readouterr().out).split('already moved', 1)[1]
+        assert 'agents/a.md' in report
+        assert 'agents/b.md' not in report
+        assert 'python3 run.py stow claude' in report
