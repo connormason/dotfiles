@@ -318,6 +318,8 @@ class TestSecretsRender:
         )
 
         output = result.stdout + result.stderr
+        if "couldn't resolve module/action 'ansible.posix" in output:
+            pytest.skip('ansible.posix is not installed: ansible-galaxy collection install -r roles/requirements.yml')
         assert result.returncode == 0, output
 
         env_file = target / 'pihole' / '.env'
