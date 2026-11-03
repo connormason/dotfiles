@@ -25,6 +25,7 @@ def claude(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Path, Path]
     stow   = tmp_path / 'repo' / 'stow' / 'claude' / '.claude'
     config.mkdir(parents=True)
     stow.mkdir(parents=True)
+
     monkeypatch.setattr(run, 'CLAUDE_CONFIG_DIR', config)
     monkeypatch.setattr(run, 'CLAUDE_STOW_DIR',   stow)
     return config, stow
@@ -61,6 +62,7 @@ class TestFindUntrackedClaudeFiles:
         target = _write(stow / 'agents' / 'tracked.md')
         (config / 'agents').mkdir()
         (config / 'agents' / 'tracked.md').symlink_to(target)
+
         _write(config / 'agents' / '.DS_Store')
         _write(config / 'projects' / 'session.jsonl')
         _write(config / 'plugins' / 'cache.json')
@@ -94,6 +96,7 @@ class TestFindUntrackedClaudeFiles:
         """
         config, _ = claude
         real = _write(config / 'skills' / 'foo' / 'SKILL.md')
+
         _write(config / 'skills' / 'foo' / '.backups' / 'SKILL.md.1.bak')
         _write(config / 'skills' / 'foo' / '.backups' / 'nested' / 'deep.md.2.bak')
         _write(config / 'hooks' / '__pycache__' / 'y.cpython-312.pyc')
@@ -223,6 +226,7 @@ class TestTrackClaudeCommand:
         """
         config, stow = claude
         src = _write(config / 'agents' / 'new.md')
+
         calls = self._record_shell(monkeypatch)
         monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: pytest.fail('must not prompt'))
 
@@ -241,6 +245,7 @@ class TestTrackClaudeCommand:
         """
         config, stow = claude
         src = _write(config / 'agents' / 'new.md')
+
         calls = self._record_shell(monkeypatch)
         monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: False)
 
@@ -260,6 +265,7 @@ class TestTrackClaudeCommand:
         config, stow = claude
         local = _write(config / 'agents' / 'dup.md', 'local')
         repo  = _write(stow / 'agents' / 'dup.md', 'repo')
+
         self._record_shell(monkeypatch)
         monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: pytest.fail('nothing movable, must not prompt'))
 
@@ -278,10 +284,12 @@ class TestTrackClaudeCommand:
         """
         config, stow = claude
         local = _write(config / 'agents' / 'new.md', 'local')
+
         dst = stow / 'agents' / 'new.md'
         dst.parent.mkdir(parents=True)
         dst.symlink_to(stow / 'agents' / 'missing.md')
-        calls = self._record_shell(monkeypatch)
+
+        calls   = self._record_shell(monkeypatch)
         prompts = self._fake_confirm(monkeypatch)
 
         self._run()
@@ -290,7 +298,7 @@ class TestTrackClaudeCommand:
         assert local.read_text(encoding='utf-8') == 'local'
         assert 'CONFLICT' in run.unstyle(capsys.readouterr().out)
         assert prompts == []
-        assert calls == []
+        assert calls   == []
 
     def test_mixed_conflict_moves_the_rest_but_skips_the_doomed_restow(
         self,
@@ -305,8 +313,9 @@ class TestTrackClaudeCommand:
         config, stow = claude
         local = _write(config / 'agents' / 'dup.md', 'local')
         repo  = _write(stow / 'agents' / 'dup.md', 'repo')
+
         _write(config / 'skills' / 'foo' / 'SKILL.md', 'skill')
-        calls = self._record_shell(monkeypatch)
+        calls   = self._record_shell(monkeypatch)
         prompts = self._fake_confirm(monkeypatch)
 
         self._run()
@@ -314,9 +323,10 @@ class TestTrackClaudeCommand:
         assert (stow / 'skills' / 'foo' / 'SKILL.md').read_text(encoding='utf-8') == 'skill'
         assert local.read_text(encoding='utf-8') == 'local'
         assert repo.read_text(encoding='utf-8')  == 'repo'
-        assert calls == []
+
+        assert calls           == []
         assert preflight_calls == []
-        assert len(prompts) == 1
+        assert len(prompts)    == 1
         assert 'restow' not in prompts[0]
 
         out = run.unstyle(capsys.readouterr().out)
@@ -372,7 +382,7 @@ class TestTrackClaudeCommand:
         assert calls == []
 
         out = run.unstyle(capsys.readouterr().out)
-        assert 'CONFLICT' in out
+        assert 'CONFLICT'           in out
         assert '--backup-conflicts' in out
 
     def test_confirmed_files_move_into_the_repo_and_claude_is_restowed(
@@ -414,8 +424,8 @@ class TestTrackClaudeCommand:
 
         out = run.unstyle(capsys.readouterr().out)
         assert '1 file(s) are now in the repo but NOT linked back into ~/.claude' in out
-        assert 'all-or-nothing' in out
-        assert 'python3 run.py stow claude' in out
+        assert 'all-or-nothing'                                                   in out
+        assert 'python3 run.py stow claude'                                       in out
 
     def test_preflight_runs_stow_simulation_before_the_prompt(
         self,
@@ -454,22 +464,25 @@ class TestTrackClaudeCommand:
         """
         config, stow = claude
         src = _write(config / 'agents' / 'new.md')
+
         stow_lines = [f'\033[31mstow: blocked path {n}\033[0m' for n in range(12)]
         self._stub_preflight(monkeypatch, returncode=1, stderr='\n'.join(stow_lines) + '\n')
+
         calls = self._record_shell(monkeypatch)
         monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: pytest.fail('must not prompt'))
 
         with pytest.raises(SystemExit) as exc_info:
             self._run()
+
         assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
         assert src.exists()
         assert not (stow / 'agents' / 'new.md').exists()
         assert calls == []
 
         out = run.unstyle(capsys.readouterr().out)
-        assert 'nothing was moved' in out
-        assert 'stow: blocked path 0' in out
-        assert 'stow: blocked path 7' in out
+        assert 'nothing was moved'        in out
+        assert 'stow: blocked path 0'     in out
+        assert 'stow: blocked path 7'     in out
         assert 'stow: blocked path 8' not in out
 
     def test_dry_run_warns_when_the_preflight_fails_but_does_not_exit(
@@ -493,8 +506,8 @@ class TestTrackClaudeCommand:
 
         out = run.unstyle(capsys.readouterr().out)
         assert 'stow: blocked path' in out
-        assert 'would fail' in out
-        assert 'Dry run' in out
+        assert 'would fail'         in out
+        assert 'Dry run'            in out
 
     @pytest.mark.parametrize('error_type', [OSError, KeyboardInterrupt])
     def test_interrupted_move_reports_the_files_already_moved(
@@ -510,9 +523,11 @@ class TestTrackClaudeCommand:
         config, stow = claude
         _write(config / 'agents' / 'a.md')
         _write(config / 'agents' / 'b.md')
+
         calls = self._record_shell(monkeypatch)
         monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: True)
         real_move = run.shutil.move
+
         attempts: list[str] = []
 
         def flaky_move(src: str, dst: str) -> str:
@@ -530,6 +545,6 @@ class TestTrackClaudeCommand:
         assert calls == []
 
         report = run.unstyle(capsys.readouterr().out).split('already moved', 1)[1]
-        assert 'agents/a.md' in report
-        assert 'agents/b.md' not in report
+        assert 'agents/a.md'                in report
+        assert 'agents/b.md'            not in report
         assert 'python3 run.py stow claude' in report

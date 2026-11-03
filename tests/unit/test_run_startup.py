@@ -29,6 +29,7 @@ def _script_metadata() -> dict[str, Any]:
     text   = (ROOT / 'run.py').read_text(encoding='utf-8')
     blocks = [m for m in PEP723_RE.finditer(text) if m.group('type') == 'script']
     assert len(blocks) == 1
+
     toml_text = ''.join(
         line[2:] if line.startswith('# ') else line[1:]
         for line in blocks[0].group('content').splitlines(keepends=True)
@@ -84,5 +85,5 @@ class TestListHostsDependency:
 
         out = run.unstyle(capsys.readouterr().out)
         assert exc_info.value.code == run.ExitCode.SETUP_ERROR
-        assert 'PyYAML is required' in out
+        assert 'PyYAML is required'  in out
         assert 'Failed to parse' not in out

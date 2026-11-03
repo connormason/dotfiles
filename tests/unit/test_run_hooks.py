@@ -61,12 +61,12 @@ class TestRunHooks:
     @pytest.mark.parametrize(
         ('argv', 'expected'),
         [
-            (['run-hooks'],                                      ['prek', 'run']),
-            (['run-hooks', 'mdformat', 'ruff'],                  ['prek', 'run', 'mdformat', 'ruff']),
-            (['run-hooks', '-a'],                                ['prek', 'run', '--all-files']),
-            (['run-hooks', '-d', 'docs'],                        ['prek', 'run', '--directory', 'docs']),
-            (['run-hooks', '--last-commit'],                     ['prek', 'run', '--last-commit']),
-            (['run-hooks', '--stage', 'pre-push'],               ['prek', 'run', '--stage', 'pre-push']),
+            (['run-hooks'],                        ['prek', 'run']),
+            (['run-hooks', 'mdformat', 'ruff'],    ['prek', 'run', 'mdformat', 'ruff']),
+            (['run-hooks', '-a'],                  ['prek', 'run', '--all-files']),
+            (['run-hooks', '-d', 'docs'],          ['prek', 'run', '--directory', 'docs']),
+            (['run-hooks', '--last-commit'],       ['prek', 'run', '--last-commit']),
+            (['run-hooks', '--stage', 'pre-push'], ['prek', 'run', '--stage', 'pre-push']),
             (
                 ['run-hooks', '-s', 'main', '-o', 'HEAD'],
                 ['prek', 'run', '--from-ref', 'main', '--to-ref', 'HEAD'],

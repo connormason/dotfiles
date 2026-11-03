@@ -274,6 +274,7 @@ class TestDoctorCommand:
 
         monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
         monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+
         run.get_commands()['doctor'](run.argparse.Namespace(fix=True, yes=True))
         assert ran == [['echo', 'fix']]
         assert kwargs_seen[0]['cwd'] == run.DOTFILES_DIR
@@ -298,13 +299,13 @@ class TestDoctorCommand:
             return _completed(0)
 
         monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
-        monkeypatch.setattr(run, 'confirm', fake_confirm)
+        monkeypatch.setattr(run, 'confirm',       fake_confirm)
         monkeypatch.setattr(run, 'shell_command', fake_shell_command)
 
         run.get_commands()['doctor'](run.argparse.Namespace(fix=True, yes=False))
         assert len(asked) == 1
         assert 'echo fix' in asked[0]
-        assert 'links' in asked[0]
+        assert 'links'    in asked[0]
         assert ran == [['echo', 'fix']]
 
     def test_declined_fix_is_skipped_and_doctor_still_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -319,7 +320,7 @@ class TestDoctorCommand:
             return _completed(0)
 
         monkeypatch.setattr(run, 'doctor_checks', lambda: pending)
-        monkeypatch.setattr(run, 'confirm', lambda prompt, **kwargs: False)
+        monkeypatch.setattr(run, 'confirm',       lambda prompt, **kwargs: False)
         monkeypatch.setattr(run, 'shell_command', fake_shell_command)
 
         with pytest.raises(SystemExit) as exc_info:
@@ -345,7 +346,7 @@ class TestDoctorCommand:
             return _completed(0)
 
         monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
-        monkeypatch.setattr(run, 'confirm', refuse_prompt)
+        monkeypatch.setattr(run, 'confirm',       refuse_prompt)
         monkeypatch.setattr(run, 'shell_command', fake_shell_command)
 
         run.get_commands()['doctor'](run.argparse.Namespace(fix=False, yes=True))
@@ -388,7 +389,7 @@ class TestForwarding:
 
         assert exc_info.value.code == 0
         assert seen[0][2:] == ['-n', '--backup-conflicts', '--verbose', 'zsh', 'git']
-        assert seen[0][1] == str(run.STOW_SCRIPT)
+        assert seen[0][1]  == str(run.STOW_SCRIPT)
 
     def test_stow_propagates_exit_code(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -508,7 +509,7 @@ class TestCheckHooks:
         """
         _write_shims(tmp_path / '.git' / 'hooks', run.GIT_HOOK_TYPES)
         monkeypatch.setattr(run, 'DOTFILES_DIR', tmp_path)
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, '.git/hooks\n'))
+        monkeypatch.setattr(run, '_capture',     lambda cmd: _completed(0, '.git/hooks\n'))
         assert run.check_hooks().ok
 
     def test_absolute_hooks_path_from_a_linked_worktree(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -518,7 +519,7 @@ class TestCheckHooks:
         common = tmp_path / 'main-checkout' / '.git' / 'hooks'
         _write_shims(common, run.GIT_HOOK_TYPES)
         monkeypatch.setattr(run, 'DOTFILES_DIR', tmp_path / 'worktree')
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, f'{common}\n'))
+        monkeypatch.setattr(run, '_capture',     lambda cmd: _completed(0, f'{common}\n'))
         assert run.check_hooks().ok
 
     def test_fails_outside_a_git_checkout(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -535,8 +536,8 @@ class TestCheckHooks:
         """
         Test that the check offers no fix (and says why) when prek is not on PATH
         """
-        monkeypatch.setattr(run.shutil, 'which', lambda name: None)
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, f'{tmp_path / "hooks"}\n'))
+        monkeypatch.setattr(run.shutil, 'which',    lambda name: None)
+        monkeypatch.setattr(run,        '_capture', lambda cmd: _completed(0, f'{tmp_path / "hooks"}\n'))
 
         check = run.check_hooks()
         assert not check.ok
@@ -605,8 +606,8 @@ class TestCheckBrewfiles:
                 return _completed(layers_rc, stdout)
             return _completed(1 if Path(cmd[-1]) in (unsatisfied or set()) else 0)
 
-        monkeypatch.setattr(run, '_capture', fake_capture)
-        monkeypatch.setattr(run.shutil, 'which', lambda name: f'/usr/bin/{name}')
+        monkeypatch.setattr(run,        '_capture', fake_capture)
+        monkeypatch.setattr(run.shutil, 'which',    lambda name: f'/usr/bin/{name}')
         return seen
 
     def test_ok_when_every_brewfile_is_satisfied(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
