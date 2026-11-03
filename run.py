@@ -180,9 +180,11 @@ AddArgumentsFunc = Callable[[argparse.ArgumentParser], None]
 
 class SupportsWrite(Protocol[T_contra]):
     """
-    Protocol for types that support being written to
+    Protocol for types that support being written to and flushed (what ``print(..., flush=True)`` requires)
     """
     def write(self, s: T_contra, /) -> object: ...
+
+    def flush(self) -> object: ...
 
 
 # ====================================================================================================
@@ -501,6 +503,9 @@ def printf(
             reset=reset,
         ),
         file=file,
+        # Flush so our lines stay ordered with child-process output when stdout is a pipe (e.g. `| tee`): Python
+        # block-buffers a pipe, while subprocesses write to it directly
+        flush=True,
     )
 
 

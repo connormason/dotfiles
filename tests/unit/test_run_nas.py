@@ -66,6 +66,35 @@ def _output(capsys: pytest.CaptureFixture[str]) -> str:
     return run.unstyle(capsys.readouterr().out)
 
 
+class TestPrintfFlush:
+    """
+    Tests for printf's flushing
+    """
+    def test_flushes_so_output_stays_ordered_with_child_processes(self) -> None:
+        """
+        Test that printf flushes after writing
+
+        Python block-buffers a pipe (`| tee`) while subprocesses write to it directly, so an unflushed status line
+        lands after the output of commands that ran later
+        """
+        class Recorder:
+            def __init__(self) -> None:
+                self.events: list[str] = []
+
+            def write(self, text: str, /) -> int:
+                self.events.append('write')
+                return len(text)
+
+            def flush(self) -> None:
+                self.events.append('flush')
+
+        recorder = Recorder()
+        run.printf('hello', file=recorder)
+
+        assert recorder.events[-1] == 'flush'
+        assert 'write' in recorder.events
+
+
 class TestResolveNasTarget:
     """
     Tests for resolve_nas_target
