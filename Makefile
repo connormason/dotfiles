@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean pre install-hooks uninstall-hooks makefile nas-provision doctor bootstrap stow render test
+.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks makefile nas-provision doctor bootstrap stow render test
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -22,7 +22,9 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Codebase:$(NC)"
 	@echo "  $(YELLOW)clean           $(NC) Remove all environments, build artifacts, and caches"
+	@echo "  $(YELLOW)run-hooks       $(NC) Run prek hooks on modified or specified project files"
 	@echo "  $(YELLOW)pre             $(NC) Run prek (pre-commit) hooks on all project files"
+	@echo "  $(YELLOW)prepare-hooks   $(NC) Prepare the environments of all prek hooks"
 	@echo "  $(YELLOW)install-hooks   $(NC) Install prek git hook shims (overwrites any existing shims)"
 	@echo "  $(YELLOW)uninstall-hooks $(NC) Uninstall prek git hook shims"
 	@echo "  $(YELLOW)makefile        $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
@@ -58,8 +60,14 @@ vault-encrypt: ## Re-encrypt all inventory vault files after editing
 clean: ## Remove all environments, build artifacts, and caches
 	@python3 run.py clean
 
+run-hooks: ## Run prek hooks on modified or specified project files
+	@python3 run.py run-hooks
+
 pre: ## Run prek (pre-commit) hooks on all project files
 	@python3 run.py pre
+
+prepare-hooks: ## Prepare the environments of all prek hooks
+	@python3 run.py prepare-hooks
 
 install-hooks: ## Install prek git hook shims (overwrites any existing shims)
 	@python3 run.py install-hooks
