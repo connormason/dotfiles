@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # A bootstrap stage id: a two-digit ordering prefix plus a lowercase-kebab name (e.g. ``00-preflight``, ``72-vscode``)
@@ -212,3 +214,73 @@ class TestRolesReadme:
         Test that every role directory has a table row and every row has a directory
         """
         assert _roles_readme_rows(REPO_ROOT) == _role_dirs(REPO_ROOT)
+
+
+# A services/README.md Quick Reference row: the container name in the first cell (e.g. ``| `caddy` | ...``)
+SERVICE_ROW = re.compile(r'^\|\s*`([a-z0-9_-]+)`\s*\|(.*)$', re.MULTILINE)
+
+
+def _services_readme_rows(repo: Path) -> dict[str, str]:
+    """
+    Return the rows of the ``services/README.md`` Quick Reference table, keyed by container name
+
+    :param repo: repository root
+    :return: mapping of container name to the remainder of its table row
+    """
+    text  = (repo / 'services' / 'README.md').read_text(encoding='utf-8')
+    quick = text.split('## Quick Reference', 1)[1].split('\n## ', 1)[0]
+    return dict(SERVICE_ROW.findall(quick))
+
+
+def _compose_containers(repo: Path) -> dict[str, bool]:
+    """
+    Return every container defined under ``services/`` and whether its compose file is enabled
+
+    :param repo: repository root
+    :return: mapping of container name (``container_name``, else the service key) to True for ``compose.yml`` and
+             False for ``compose.yml.disabled``
+    """
+    found: dict[str, bool] = {}
+    for path in sorted((repo / 'services').glob('*/compose.yml*')):
+        if path.name not in ('compose.yml', 'compose.yml.disabled'):
+            continue
+        for key, service in yaml.safe_load(path.read_text(encoding='utf-8'))['services'].items():
+            found[service.get('container_name', key)] = path.name == 'compose.yml'
+    return found
+
+
+class TestServicesReadme:
+    """
+    Guardrails tying the services/README.md container table to the compose files
+    """
+    def test_container_table_matches_compose_files(self) -> None:
+        """
+        The Quick Reference table lists exactly the containers the compose files define
+        """
+        documented = set(_services_readme_rows(REPO_ROOT))
+        on_disk    = set(_compose_containers(REPO_ROOT))
+
+        assert documented == on_disk, _out_of_sync_message(
+            'services/README.md Quick Reference', documented, 'services/*/compose.yml*', on_disk,
+        )
+
+    def test_disabled_marker_matches_disabled_compose_files(self) -> None:
+        """
+        A row is marked (**disabled**) exactly when its compose file is compose.yml.disabled
+        """
+        rows    = _services_readme_rows(REPO_ROOT)
+        enabled = _compose_containers(REPO_ROOT)
+
+        mismatches: list[str] = []
+        for name, rest in rows.items():
+            marked_disabled = '(**disabled**)' in rest
+            if name in enabled and marked_disabled == enabled[name]:
+                mismatches.append(f'{name}: marked disabled={marked_disabled}, compose enabled={enabled[name]}')
+
+        assert not mismatches, 'services/README.md disabled markers are out of sync:\n  ' + '\n  '.join(mismatches)
+
+    def test_container_table_is_not_empty(self) -> None:
+        """
+        The container-table parser finds rows (guards against a silently broken regex)
+        """
+        assert _services_readme_rows(REPO_ROOT), 'parsed zero containers from services/README.md'
