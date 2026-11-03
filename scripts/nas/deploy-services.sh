@@ -32,6 +32,10 @@ service="$1"
 [[ -n "${NAS_HOST:-}" ]] || die "NAS_HOST is not set"
 [[ -n "${NAS_USER:-}" ]] || die "NAS_USER is not set"
 
+# A leading '-' would let ssh or rsync read the destination as an option
+[[ "$NAS_HOST" != -* ]] || die "NAS_HOST must not start with '-'"
+[[ "$NAS_USER" != -* ]] || die "NAS_USER must not start with '-'"
+
 # A service is a directory under services/; refuse anything that could escape it or reach the remote shell
 if [[ "$service" != "all" ]]; then
     [[ "$service" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "invalid service name: ${service}"
@@ -40,8 +44,13 @@ fi
 
 target="${NAS_USER}@${NAS_HOST}"
 ssh_cmd=(ssh)
+rsh="ssh"
 if [[ -n "${NAS_SSH_KEY:-}" ]]; then
+    # rsync splits its -e string on whitespace but honours single quotes (not backslashes), so the key path is quoted
+    # there and refused when it contains a quote itself
+    [[ "$NAS_SSH_KEY" != *\'* ]] || die "NAS_SSH_KEY must not contain a single quote"
     ssh_cmd+=(-i "$NAS_SSH_KEY" -o StrictHostKeyChecking=accept-new)
+    rsh="ssh -i '${NAS_SSH_KEY}' -o StrictHostKeyChecking=accept-new"
 fi
 
 rsync_flags=(-avz --omit-dir-times --exclude='*.j2' --exclude='.env' --exclude='.backups/' --exclude='.DS_Store')
@@ -50,7 +59,7 @@ if [[ $dry_run -eq 1 ]]; then
 fi
 
 push() {
-    rsync "${rsync_flags[@]}" -e "${ssh_cmd[*]}" "$1" "$2"
+    rsync "${rsync_flags[@]}" -e "$rsh" -- "$1" "$2"
 }
 
 if [[ "$service" == "all" ]]; then
@@ -64,7 +73,7 @@ fi
 # shellcheck disable=SC2088
 remote="~/docker/deploy.sh ${service}"
 if [[ $dry_run -eq 1 ]]; then
-    echo "dry-run: would run: ${ssh_cmd[*]} ${target} ${remote}"
+    echo "dry-run: would run: $(printf '%q ' "${ssh_cmd[@]}")-- ${target} ${remote}"
 else
-    "${ssh_cmd[@]}" "$target" "$remote"
+    "${ssh_cmd[@]}" -- "$target" "$remote"
 fi
