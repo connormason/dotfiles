@@ -258,22 +258,25 @@ class TestDoctorCommand:
 
     def test_fix_runs_fix_then_rechecks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
-        Test that --fix runs each failing check's fix command and re-runs the checks
+        Test that --fix runs each failing check's fix command from the repo root and re-runs the checks
         """
         results = iter([
             [run.DoctorCheck('links', False, 'pending',             ['echo', 'fix'])],
             [run.DoctorCheck('links', True,  'all packages linked')],
         ])
         ran: list[list[str]] = []
+        kwargs_seen: list[dict[str, object]] = []
 
         def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             ran.append(cmd)
+            kwargs_seen.append(kwargs)
             return _completed(0)
 
         monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
         monkeypatch.setattr(run, 'shell_command', fake_shell_command)
         run.get_commands()['doctor'](run.argparse.Namespace(fix=True, yes=True))
         assert ran == [['echo', 'fix']]
+        assert kwargs_seen[0]['cwd'] == run.DOTFILES_DIR
 
     def test_fix_asks_before_each_fix(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """

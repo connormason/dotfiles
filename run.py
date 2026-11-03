@@ -2328,7 +2328,7 @@ class DoctorCommand(Command):
                     continue
 
                 printf(f'🔧 {check.name}: {command}', fg='bright_cyan')
-                shell_command(check.fix, indent=3, check=False)
+                shell_command(check.fix, indent=3, check=False, cwd=DOTFILES_DIR)
             checks = doctor_checks()
 
         for check in checks:
