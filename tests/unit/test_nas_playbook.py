@@ -254,3 +254,66 @@ class TestPlaybookOrder:
         task = next(task for task in play['tasks'] if task.get('name') == 'Update apt package index')
         assert 'always' in task['tags']
         assert task['ansible.builtin.apt']['cache_valid_time'] == 86400
+
+
+def _collect_tags(node: object) -> set[str]:
+    """
+    Collect every value of a ``tags`` key anywhere inside a yaml-loaded task structure
+
+    :param node: yaml-loaded structure (nested dicts and lists)
+    :return: all tag names found, whether written as a string or a list
+    """
+    found: set[str] = set()
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == 'tags':
+                found.update([value] if isinstance(value, str) else value)
+            else:
+                found |= _collect_tags(value)
+    elif isinstance(node, list):
+        for item in node:
+            found |= _collect_tags(item)
+    return found
+
+
+def _role_tags(role: str) -> set[str]:
+    """
+    Return every tag carried by a task anywhere in a role's tasks/*.yml (block members and included files included)
+    """
+    tags: set[str] = set()
+    for path in sorted((ROLES / role / 'tasks').glob('*.yml')):
+        tags |= _collect_tags(yaml.safe_load(path.read_text(encoding='utf-8')))
+    return tags
+
+
+def _includes() -> list[dict[str, Any]]:  # Any: heterogeneous, yaml-loaded task structure
+    """
+    Return the include_role tasks of the NAS play, in order
+    """
+    play = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
+    return [task for task in play['tasks'] if 'ansible.builtin.include_role' in task]
+
+
+class TestPlaybookTags:
+    """
+    Tests for the tags on the playbook's role includes
+    """
+    @pytest.mark.parametrize(
+        'include',
+        _includes(),
+        ids=lambda include: include['ansible.builtin.include_role']['name'],
+    )
+    def test_every_include_tag_reaches_a_task_in_the_role(self, include: dict[str, Any]) -> None:  # Any: yaml task
+        """
+        Test that each tag on an include is the apply tag or is carried by a task inside the role
+
+        A tag on include_role selects only the include itself, so a tag that no inner task carries selects nothing
+        """
+        spec       = include['ansible.builtin.include_role']
+        name       = spec['name']
+        apply_tags = spec['apply']['tags']
+        reachable  = {apply_tags} if isinstance(apply_tags, str) else set(apply_tags)
+        reachable |= _role_tags(name.removeprefix('roles/'))
+
+        dead = sorted(set(include['tags']) - reachable)
+        assert not dead, f'tags {dead} on the {name} include reach no task'

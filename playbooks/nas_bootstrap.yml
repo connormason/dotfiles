@@ -24,6 +24,10 @@
       tags:
         - always
 
+    # A tag on include_role selects only the include itself; the role's tasks see just the apply tag plus their own
+    # tags. So every tag below must be the role name (via apply) or be carried by a task inside the role (guarded by
+    # tests/unit/test_nas_playbook.py::TestPlaybookTags). configfile appears only where a task carries it.
+
     # Tasks for Debian Linux
     - name: Configure Debian
       ansible.builtin.include_role:
@@ -32,7 +36,6 @@
           tags: debian
       tags:
         - debian
-        - configfile
 
     # Tasks for ZFS filesystem
     - name: Install ZFS
@@ -42,7 +45,6 @@
           tags: zfs
       tags:
         - zfs
-        - configfile
 
     # Tasks for Samba file sharing
     - name: Configure Samba file sharing
@@ -63,7 +65,6 @@
       tags:
         - docker
         - configfile
-        - homeassistant
 
     # Tasks for Tailscale configuration
     - name: Configure Tailscale
@@ -73,7 +74,6 @@
           tags: tailscale
       tags:
         - tailscale
-        - configfile
 
     # $HOME: clone the repo, register profiles/nas, login shell, run the stow engine as the user
     - name: Hand the home directory to the stow engine
@@ -83,7 +83,6 @@
           tags: dotfiles
       tags:
         - dotfiles
-        - configfile
 
     # Home Assistant OS VM: preconditions, then vms/haos/setup.sh from the clone (never bridge.sh)
     - name: Provision the Home Assistant OS VM
@@ -93,7 +92,6 @@
           tags: haos
       tags:
         - haos
-        - configfile
 
     # Compose services: sync services/ to ~/docker, render per-service secrets, deploy everything
     - name: Deploy the container services
@@ -104,4 +102,3 @@
       tags:
         - services
         - secrets
-        - configfile

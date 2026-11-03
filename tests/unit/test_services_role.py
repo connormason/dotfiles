@@ -74,11 +74,11 @@ class TestPlaybookWiring:
         """
         assert include['ansible.builtin.include_role']['name'] == 'roles/services'
 
-    def test_include_is_reachable_by_services_secrets_and_configfile_tags(self, include: TaskDict) -> None:
+    def test_include_is_reachable_by_the_services_and_secrets_tags(self, include: TaskDict) -> None:
         """
-        Test that the include carries the services, secrets, and configfile tags
+        Test that the include carries exactly the services and secrets tags (configfile selected nothing inside it)
         """
-        assert include['tags'] == ['services', 'secrets', 'configfile']
+        assert include['tags'] == ['services', 'secrets']
 
     def test_only_the_services_tag_is_applied_inside_the_role(self, include: TaskDict) -> None:
         """
@@ -268,23 +268,121 @@ class TestDockerRole:
 
 
 ANSIBLE_PLAYBOOK = Path(sys.executable).parent / 'ansible-playbook'
+SERVICES_DIR     = REPO_ROOT / 'services'
 
-# The production include, run against localhost with only the secrets tag selected
-SECRETS_PLAYBOOK = """\
-- hosts: all
-  gather_facts: false
-  connection: local
-  tasks:
-    - name: Deploy the container services
-      ansible.builtin.include_role:
-        name: services
-        apply:
-          tags: services
-      tags: [services, secrets, configfile]
-"""
+needs_ansible = pytest.mark.skipif(not ANSIBLE_PLAYBOOK.exists(), reason='ansible-playbook not in this environment')
 
 
-@pytest.mark.skipif(not ANSIBLE_PLAYBOOK.exists(), reason='ansible-playbook not in this environment')
+def _include_play(role: str) -> str:
+    """
+    Build a one-task localhost play from the production include of a role
+
+    The include keeps its production tags and apply block; only the role name is made bare so Ansible finds it through
+    ansible.cfg's roles_path when run from the repository root. Using the production include (not a copy) means a tag
+    change in the playbook is exercised by these tests.
+
+    :param role: role directory name, e.g. ``services``
+    :return: playbook YAML text
+    """
+    key     = 'ansible.builtin.include_role'
+    play    = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
+    include = next(task for task in play['tasks'] if task.get(key, {}).get('name') == f'roles/{role}')
+    include = {**include, key: {**include[key], 'name': role}}
+    return yaml.safe_dump([{'hosts': 'all', 'gather_facts': False, 'connection': 'local', 'tasks': [include]}])
+
+
+def _run_play(tmp_path: Path, play: str, *args: str) -> tuple[int, str]:
+    """
+    Run a one-play playbook against localhost with a throwaway vault password file
+
+    Skips the calling test when the ansible.posix collection is not installed.
+
+    :param tmp_path: scratch directory for the playbook and vault file
+    :param play: playbook YAML text
+    :param args: extra ansible-playbook arguments
+    :return: tuple of (return code, combined stdout and stderr)
+    """
+    playbook = tmp_path / 'play.yml'
+    playbook.write_text(play, encoding='utf-8')
+
+    vault = tmp_path / 'vault-pass'
+    vault.write_text('unused\n', encoding='utf-8')
+
+    result = subprocess.run(
+        [str(ANSIBLE_PLAYBOOK), str(playbook), '-i', 'localhost,', *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=REPO_ROOT,
+        env={**os.environ, 'ANSIBLE_VAULT_PASSWORD_FILE': str(vault), 'ANSIBLE_NOCOLOR': '1'},
+        timeout=300,
+    )
+    output = result.stdout + result.stderr
+    if "couldn't resolve module/action 'ansible.posix" in output:
+        pytest.skip('ansible.posix is not installed: ansible-galaxy collection install -r roles/requirements.yml')
+    return result.returncode, output
+
+
+def _render_secrets(tmp_path: Path, source: Path, *extra_vars: str) -> tuple[int, str, Path]:
+    """
+    Run the production services include with only the secrets tag selected
+
+    :param tmp_path: scratch directory; the rendered tree lands in ``tmp_path / 'docker'``
+    :param source: directory standing in for the repository's services/ tree
+    :param extra_vars: ``name=value`` extra variables (vault values)
+    :return: tuple of (return code, combined output, target directory)
+    """
+    target = tmp_path / 'docker'
+    args   = [
+        '--tags', 'secrets', '--diff',
+        '-e', f'services_source_dir={source}',
+        '-e', f'services_target_dir={target}',
+    ]
+    for var in extra_vars:
+        args += ['-e', var]
+    code, output = _run_play(tmp_path, _include_play('services'), *args)
+    return code, output, target
+
+
+@needs_ansible
+class TestTagSelection:
+    """
+    Real-run tests of what '--tags configfile' selects (a tag on include_role selects only the include itself)
+    """
+    def test_configfile_selects_nothing_in_the_services_play(self, tmp_path: Path) -> None:
+        """
+        Test that --tags configfile runs no task of the services role and does not even select its include
+        """
+        target = tmp_path / 'docker'
+        code, output = _run_play(
+            tmp_path, _include_play('services'), '--tags', 'configfile',
+            '-e', f'services_source_dir={SERVICES_DIR}', '-e', f'services_target_dir={target}',
+        )
+
+        assert code == 0, output
+        for task in ('Install rsync', 'Sync compose files', 'Render per-service secret files', 'Deploy all services'):
+            assert task not in output, output
+        assert not target.exists()
+        assert 'Deploy the container services' not in output, output
+
+    def test_configfile_renders_only_the_env_file_and_deploy_script_in_the_docker_role(self, tmp_path: Path) -> None:
+        """
+        Test that --tags configfile reaches exactly the two docker tasks that carry the tag
+        """
+        docker_dir = tmp_path / 'docker'
+        docker_dir.mkdir()
+        code, output = _run_play(
+            tmp_path, _include_play('docker'), '--tags', 'configfile',
+            '-e', f'docker_dir={docker_dir}', '-e', 'tailscale_tailnet_name=example.ts.net',
+        )
+
+        assert code == 0, output
+        assert sorted(path.name for path in docker_dir.iterdir()) == ['.env', 'deploy.sh']
+        for task in ('Create docker directory structure', 'Install Docker engine', 'Build autoplex docker image'):
+            assert task not in output, output
+
+
+@needs_ansible
 class TestSecretsRender:
     """
     End-to-end test of the secrets tasks: discovery, directory creation, and rendering, against a temp directory
@@ -295,33 +393,9 @@ class TestSecretsRender:
 
         Guards the first-live-run failure where discovery found no templates and nothing was rendered
         """
-        playbook = tmp_path / 'secrets.yml'
-        playbook.write_text(SECRETS_PLAYBOOK, encoding='utf-8')
+        code, output, target = _render_secrets(tmp_path, SERVICES_DIR, 'pihole_web_password=hunter2-test-value')
 
-        vault = tmp_path / 'vault-pass'
-        vault.write_text('unused\n', encoding='utf-8')
-
-        target = tmp_path / 'docker'
-        result = subprocess.run(
-            [
-                str(ANSIBLE_PLAYBOOK), str(playbook), '-i', 'localhost,', '--tags', 'secrets', '--diff',
-                '-e', f'services_source_dir={REPO_ROOT / "services"}',
-                '-e', f'services_target_dir={target}',
-                '-e', 'pihole_web_password=hunter2-test-value',
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            cwd=REPO_ROOT,
-            env={**os.environ, 'ANSIBLE_VAULT_PASSWORD_FILE': str(vault), 'ANSIBLE_NOCOLOR': '1'},
-            timeout=300,
-        )
-
-        output = result.stdout + result.stderr
-        if "couldn't resolve module/action 'ansible.posix" in output:
-            pytest.skip('ansible.posix is not installed: ansible-galaxy collection install -r roles/requirements.yml')
-        assert result.returncode == 0, output
-
+        assert code == 0, output
         env_file = target / 'pihole' / '.env'
         assert env_file.read_text(encoding='utf-8').strip() == 'FTLCONF_webserver_api_password=hunter2-test-value'
         assert env_file.stat().st_mode & 0o777 == 0o600
