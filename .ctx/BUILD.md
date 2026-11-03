@@ -28,7 +28,7 @@ python3 run.py nas-provision --tags dotfiles -e dotfiles_repo_version=my-branch
 
 # Rotate per-service secrets, then restart the service
 python3 run.py nas-provision --tags secrets
-python3 run.py nas-deploy pihole
+python3 run.py nas-deploy <svc>
 
 # Syntax check
 ansible-playbook --syntax-check -i localhost, playbooks/nas_bootstrap.yml
