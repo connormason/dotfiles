@@ -44,6 +44,7 @@ Environment Variables
 
 Usage Examples
 -------------
+
     # List inventory hosts
     python3 run.py list-hosts
 
@@ -83,6 +84,7 @@ import sys
 import textwrap
 import time
 import traceback
+from collections.abc import Sequence
 from functools import partial
 from functools import wraps
 from pathlib import Path
@@ -100,7 +102,6 @@ from typing import overload
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from collections.abc import Mapping
-    from collections.abc import Sequence
 
 
 # ====================================================================================================
@@ -449,6 +450,75 @@ def get_commands(
 
 # ====================================================================================================
 # Formatting
+# ====================================================================================================
+
+
+def folduser(path: PathLike) -> str:
+    """
+    Does the opposite of :meth:`pathlib.Path.expanduser`, replacing the user's home directory with a "~"
+
+    :param path: path
+    :return: str folded path
+    """
+    home = str(Path.home())
+    return str(path).replace(home, '~')
+
+
+def format_elapsed(seconds: float) -> str:
+    """
+    Format elapsed time for display
+
+    Shows seconds with one decimal for short durations, mm:ss for longer ones
+
+    :param seconds: elapsed wall-clock time in seconds
+    :return: human-readable duration string (e.g. "3.2s", "1:05")
+    """
+    if seconds < 60:
+        return f'{seconds:.1f}s'
+    minutes = int(seconds) // 60
+    secs    = int(seconds) % 60
+    return f'{minutes}:{secs:02d}'
+
+
+def canonical_pkg_name(name: str) -> str:
+    """
+    Normalize a Python package name per PEP 503
+
+    :param name: package name as it appears in pyproject.toml or a dist-info directory
+    :return: canonical lowercase form with single hyphens between words
+    """
+    return re.sub(r'[-_.]+', '-', name).lower()
+
+
+def cleanup_whitespace(text: str) -> str:
+    r"""
+    Strip trailing whitespace from each line and ensure the content ends with exactly one newline
+
+    Mirrors the behavior of the ``trailing-whitespace`` and ``end-of-file-fixer`` pre-commit hooks, allowing
+    programmatically generated text to be written to files without requiring a second pass from those hooks
+
+    Examples
+    --------
+        >>> cleanup_whitespace('hello   \\nworld  \\n')
+        'hello\\nworld\\n'
+        >>> cleanup_whitespace('no trailing newline')
+        'no trailing newline\\n'
+        >>> cleanup_whitespace('extra\\n\\n\\n')
+        'extra\\n'
+
+    :param text: text content to clean up
+    :return: cleaned text content
+    """
+    lines   = text.splitlines()
+    cleaned = '\n'.join(line.rstrip() for line in lines)
+    cleaned = cleaned.rstrip('\n')
+    if cleaned:
+        cleaned += '\n'
+    return cleaned
+
+
+# ====================================================================================================
+# Text styling
 #
 # ANSI styling functions for terminal output. The style() function is inspired by Click's style implementation but
 # standalone (no external dependencies)
@@ -497,7 +567,7 @@ def _interpret_color(_color: StyleColor, offset: int = 0) -> str:
 
 
 def style(
-    text: Any,
+    text: Any = '',
     *,
     fg: StyleColor | None = None,
     bg: StyleColor | None = None,
@@ -514,6 +584,16 @@ def style(
     """
     Style text with ANSI escape codes. Returns the text unstyled when ``NO_COLOR`` is set.
 
+    By default, the styling is self-contained. This means that at the end of the string, a reset code is issued.
+    This can be prevented by passing ``reset=False``
+
+    Examples::
+
+        print(style('Hello World!', fg='green'))
+        print(style('ATTENTION!', blink=True))
+        print(style('Some things', reverse=True, fg='cyan'))
+        print(style('More colors', fg=(255, 12, 128), bg=117))
+
     :param text: the string to style with ansi codes
     :param fg: foreground color
     :param bg: background color
@@ -525,7 +605,9 @@ def style(
     :param blink: enable or disable blinking
     :param reverse: enable or disable inverse rendering
     :param strikethrough: enable or disable striking through text
-    :param reset: add a reset-all code at the end of the string
+    :param reset: by default a reset-all code is added at the end of the string which means that styles do not carry
+                  over. This can be disabled to compose styles
+    :raises TypeError: if invalid fg/bg color requested
     :return: styled text
     """
     if NO_COLOR:
@@ -577,6 +659,96 @@ def unstyle(text: str) -> str:
     return re.sub(r'\033\[[;?0-9]*[a-zA-Z]', '', text)
 
 
+def arg_note(name: str, val: str, *, dim: bool = True, color: StyleColor | None = 'yellow') -> str:
+    """
+    Format a bracketed annotation string for argparse help text
+
+    Produces styled output like ``[env var: MAKE_DEBUG]`` or ``[default: False]``
+
+    :param name: the annotation label (e.g. ``"env var"``, ``"default"``)
+    :param val: the annotation value
+    :param dim: whether to apply dim styling
+    :param color: foreground color for the value portion
+    :return: the styled annotation string
+    """
+    return ''.join([
+        style(f'[{name}: ', dim=dim),
+        style(val,          dim=dim, fg=color),
+        style(']',          dim=dim),
+    ])
+
+
+def dim_paren(s: str, *, fg: StyleColor | None = None) -> str:
+    """
+    Wrap text in dimmed parentheses with optional foreground color for the inner text
+
+    :param s: text to wrap in parentheses
+    :param fg: optional foreground color for the inner text
+    :return: ANSI-styled string in the form ``(text)``
+    """
+    return ''.join([
+        style('(', dim=True),
+        style(s,   dim=True, fg=fg),
+        style(')', dim=True),
+    ])
+
+
+def pathstyle(path: PathLike, **opts: Any) -> str:
+    """
+    Style a file path in magenta with the home directory folded to ``~``
+
+    :param path: the file path to style
+    :return: the ANSI-styled path string
+    """
+    return style(folduser(path), fg='magenta', **opts)
+
+
+def optstyle(text: Any, **opts: Any) -> str:
+    """
+    Style a CLI option name in yellow.
+
+    :param text: the option name to style
+    :return: the ANSI-styled option string
+    """
+    return style(text, fg='yellow', **opts)
+
+
+def typestyle(val: Any, **opts: Any) -> str:
+    """
+    Style a Python value by its type using semantic colors (roughly matching default repr styling provided by rich).
+
+    Color mapping:
+
+        - ``None`` = magenta italic
+        - ``bool`` = green (True) / red (False) italic
+        - ``Path`` = magenta with folduser
+        - ``int``/``float`` = bright cyan bold
+        - ``str`` = green
+
+    Other types fall through to ``str(val)`` unstyled
+
+    :param val: the Python value to style
+    :return: the ANSI-styled representation
+    """
+    if val is None:
+        return style(str(val),      fg='magenta',                             italic=True, **opts)
+    if isinstance(val, bool):
+        return style(str(val),      fg=f'bright_{"green" if val else "red"}', italic=True, **opts)
+    if isinstance(val, Path):
+        return style(folduser(val), fg='magenta',                                          **opts)
+    if isinstance(val, (int, float)):
+        return style(repr(val),     fg='bright_cyan',                         bold=True,   **opts)
+    if isinstance(val, str):
+        return style(repr(val),     fg='green',                                            **opts)
+    if isinstance(val, Sequence):
+        return ''.join([
+            style('[', fg='bright_white'),
+            ', '.join(typestyle(item, **opts) for item in val),
+            style(']', fg='bright_white'),
+        ])
+    return str(val)
+
+
 def printf(
     text: str,
     *,
@@ -595,6 +767,28 @@ def printf(
     debug: bool = False,
     file: SupportsWrite[str] | None = None,
 ) -> None:
+    """
+    Print styled text with optional indentation and debug gating
+
+    Applies ANSI styling via :func:`style` and prints the result. When ``debug=True``, the message is only emitted
+    if the global ``MAKE_DEBUG`` flag is set, defaults to dim bright-white text, and routes output to stderr
+
+    :param text: the content to print (converted to str if needed)
+    :param fg: foreground color
+    :param bg: background color
+    :param bold: enable or disable bold
+    :param dim: enable or disable dim
+    :param underline: enable or disable underline
+    :param overline: enable or disable overline
+    :param italic: enable or disable italic
+    :param blink: enable or disable blink
+    :param reverse: enable or disable reverse video
+    :param strikethrough: enable or disable strikethrough
+    :param reset: if True, append an ANSI reset sequence after the text
+    :param indent: number of leading spaces to prepend
+    :param debug: if True, only print when ``MAKE_DEBUG`` is enabled and route to stderr
+    :param file: output stream (defaults to stdout, or stderr when debug is True)
+    """
     if debug and not RUN_DEBUG:
         return
     if debug:
@@ -624,28 +818,49 @@ def printf(
     )
 
 
-def folduser(path: PathLike) -> str:
+def status_line(
+    name: str,
+    detail: str,
+    path: Path | None = None,
+    *,
+    ok: bool = True,
+    warn: bool = False,
+    optional: bool = False,
+    note: str = '',
+) -> None:
     """
-    Does the opposite of :meth:`pathlib.Path.expanduser`, replacing the user's home directory with a "~"
+    Print a single status line with emoji, tool name, and detail.
 
-    :param path: path
-    :return: str folded path
+    :param name: tool or component name
+    :param detail: status detail text (version, message, etc.)
+    :param path: optional path to display after the detail
+    :param ok: True if the check passed
+    :param warn: True if the check is a non-fatal warning
+    :param optional: True if the component is optional
+    :param note: additional note (e.g. what the tool is needed for)
     """
-    home = str(Path.home())
-    return str(path).replace(home, '~')
+    emoji       = '✅' if ok else ('🟡' if (warn or optional) else '🔴')
+    name_styled = style(name.ljust(12), fg='white', bold=True)
+    if ok:
+        detail_styled = style(detail, fg='bright_cyan')
+    elif warn:
+        detail_styled = style(detail, fg='bright_yellow')
+    else:
+        detail_styled = style(detail, fg='bright_red')
+
+    loc    = f' {style(f"@ {folduser(path)}", dim=True)}' if path else ''
+    suffix = f'  {style(f"({note})", dim=True)}' if note else ''
+    printf(f'{emoji}  {name_styled} {detail_styled}{loc}{suffix}')
 
 
-def arg_note(name: str, val: str, *, dim: bool = True, color: StyleColor | None = 'yellow') -> str:
-    return ''.join([
-        style(f'[{name}: ', dim=dim),
-        style(val,          dim=dim, fg=color),
-        style(']',          dim=dim)
-    ])
+# ====================================================================================================
+# Prompting helpers
+# ====================================================================================================
 
 
 def confirm(prompt_text: str, *, default: bool = True, indent: int = 0) -> bool:
     """
-    Prompt the user for Y/n confirmation
+    Prompt the user for Y/n confirmation. Returns ``default`` without prompting in CI mode
 
     :param prompt_text: the question to display
     :param default: the answer used when the user presses Enter without typing
