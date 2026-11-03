@@ -12,7 +12,8 @@ Self-contained Python style for this repository (does not depend on any global `
 - Always run Python via **`uv`** (`uv run …`) — never bare `python`, `python3`, `pip`, or `hatch`.
 - `ruff check --fix` is encouraged. **Never** run `ruff format` — this repo does not use the formatter.
 - Config lives in `pyproject.toml`: ruff `line-length = 120`, `target-version = "py39"` (`keep-runtime-typing = true`),
-  space indent (width 4). `interrogate` enforces **70%** docstring coverage (`fail-under = 70`).
+  space indent (width 4). `interrogate` enforces **70%** docstring coverage (`fail-under = 70`); `run.py` is excluded
+  (its `Command` overrides of `run` / `add_arguments` / nested `Args` inherit the base-class docs).
 
 ## Imports
 
@@ -40,6 +41,8 @@ Self-contained Python style for this repository (does not depend on any global `
 
 ## `run.py` patterns
 
-Commands register via the `@command` decorator into a global registry that drives both argparse and Makefile generation;
-subprocess calls go through the typed `shell_command()` wrapper. Match these when adding commands. See
+Commands are subclasses of the abstract `Command` base, which registers each one on class definition into a global
+registry that drives both argparse and Makefile generation. Set `name`/`group` as `ClassVar`s, put options in
+`add_arguments()` with a nested typed `Args(argparse.Namespace)`, and exit via `ExitCode`. Subprocess calls go through
+the typed `shell_command()` wrapper. Match these when adding commands. See
 [`.ctx/CONVENTIONS.md`](../../.ctx/CONVENTIONS.md).

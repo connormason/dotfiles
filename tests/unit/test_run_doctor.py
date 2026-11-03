@@ -225,7 +225,7 @@ class TestDoctorReadOnly:
 
         monkeypatch.setattr(run, 'shell_command', fail_shell_command)
         with pytest.raises(SystemExit):
-            run.cmd_doctor(run.argparse.Namespace(fix=False))
+            run.get_commands()['doctor'](run.argparse.Namespace(fix=False))
 
 
 class TestDoctorCommand:
@@ -246,7 +246,7 @@ class TestDoctorCommand:
         """
         monkeypatch.setattr(run, 'doctor_checks', lambda: [run.DoctorCheck('links', False, 'pending')])
         with pytest.raises(SystemExit) as exc_info:
-            run.cmd_doctor(run.argparse.Namespace(fix=False))
+            run.get_commands()['doctor'](run.argparse.Namespace(fix=False))
         assert exc_info.value.code == 1
 
     def test_doctor_passes_quietly_when_all_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -254,7 +254,7 @@ class TestDoctorCommand:
         Test that doctor returns normally when every check passes
         """
         monkeypatch.setattr(run, 'doctor_checks', lambda: [run.DoctorCheck('links', True, 'ok')])
-        run.cmd_doctor(run.argparse.Namespace(fix=False))
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=False))
 
     def test_fix_runs_fix_then_rechecks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -272,14 +272,14 @@ class TestDoctorCommand:
 
         monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
         monkeypatch.setattr(run, 'shell_command', fake_shell_command)
-        run.cmd_doctor(run.argparse.Namespace(fix=True))
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=True))
         assert ran == [['echo', 'fix']]
 
     def test_dotfiles_commands_registered(self) -> None:
         """
         Test that every Dotfiles command is registered under the Dotfiles group
         """
-        group = run.get_command_groups()['Dotfiles']
+        group = run.get_commands(by_group=True)['Dotfiles']
         assert set(group) == {'bootstrap', 'stow', 'render', 'doctor', 'test'}
 
 
@@ -308,7 +308,7 @@ class TestForwarding:
         seen = self._capture_cmd(monkeypatch)
         args = run.argparse.Namespace(simulate=True, backup_conflicts=True, verbose=True, packages=['zsh', 'git'])
         with pytest.raises(SystemExit) as exc_info:
-            run.cmd_stow(args)
+            run.get_commands()['stow'](args)
 
         assert exc_info.value.code == 0
         assert seen[0][2:] == ['-n', '--backup-conflicts', '--verbose', 'zsh', 'git']
@@ -321,7 +321,7 @@ class TestForwarding:
         self._capture_cmd(monkeypatch, returncode=1)
         args = run.argparse.Namespace(simulate=False, backup_conflicts=False, verbose=False, packages=[])
         with pytest.raises(SystemExit) as exc_info:
-            run.cmd_stow(args)
+            run.get_commands()['stow'](args)
         assert exc_info.value.code == 1
 
     def test_bootstrap_forwards_flags(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -339,7 +339,7 @@ class TestForwarding:
             from_stage='20-x',
         )
         with pytest.raises(SystemExit):
-            run.cmd_bootstrap(args)
+            run.get_commands()['bootstrap'](args)
 
         assert seen[0][2:] == [
             '--dry-run', '--resume', '--verify', '--no-log', '--only', '00-preflight', '--from', '20-x',
@@ -352,7 +352,7 @@ class TestForwarding:
         seen = self._capture_cmd(monkeypatch)
         args = run.argparse.Namespace(targets=['claude'], diff=True, check=True, force=True, verbose=True)
         with pytest.raises(SystemExit):
-            run.cmd_render(args)
+            run.get_commands()['render'](args)
         assert seen[0][2:] == ['claude', '--diff', '--check', '--force', '-v']
 
     def test_test_defaults_to_tests_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -361,5 +361,5 @@ class TestForwarding:
         """
         seen = self._capture_cmd(monkeypatch)
         with pytest.raises(SystemExit):
-            run.cmd_test(run.argparse.Namespace(paths=[]))
+            run.get_commands()['test'](run.argparse.Namespace(paths=[]))
         assert seen[0] == [str(run.UV_PUBLIC), 'run', '--group', 'test', 'pytest', 'tests']

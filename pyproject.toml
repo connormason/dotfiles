@@ -155,6 +155,7 @@ exclude = [
     "archive/",
     "build/",
     "docs/",
+    "run.py",
     "tests/",
     # keep-sorted end
 ]

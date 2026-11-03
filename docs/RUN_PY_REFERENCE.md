@@ -157,7 +157,7 @@ python3 run.py makefile
 
 **Behavior:**
 
-- Reads all `@command` decorated functions from `run.py`
+- Reads every registered `Command` in `run.py`
 - Generates `Makefile` with targets for each command
 - Excludes commands marked `script_only=True`
 - Organizes targets by command groups
@@ -270,32 +270,40 @@ uses. The command is registered `script_only`, so `run.py makefile` does not gen
 
 ### Command Registration System
 
-Commands are registered using the `@command` decorator:
+Commands are classes deriving from the abstract `Command` base. Defining a subclass registers an instance of it
+(`Command.__init_subclass__`), so no separate registration call exists:
 
 ```python
-@command(
-    group='Inventory',
-    description='List available bootstrap targets',
-    add_arguments=my_args_func,  # Optional
-    epilog='Additional help text',  # Optional
-)
-def cmd_list_hosts(args: argparse.Namespace) -> None:
-    """Command implementation"""
-    pass
+class ListHostsCommand(Command):
+    """
+    List available bootstrap targets from inventory
+    """
+    name:  ClassVar[str] = 'list-hosts'
+    group: ClassVar[str] = 'Inventory'
+
+    def run(self, args: argparse.Namespace) -> None:
+        ...
 ```
 
-**Decorator parameters:**
+**Class attributes:**
 
-- `name`: Command name (defaults to function name with prefixes removed)
-- `add_arguments`: Function to add command-specific arguments to subparser
-- `description`: Command description (defaults to docstring)
-- `epilog`: Additional help text shown after arguments
-- `formatter_class`: argparse formatter class (default: `RawDescriptionHelpFormatter`)
-- `group`: Group name for organizing help output
-- `script_only`: If True, exclude from Makefile generation
-- `makefile_only`: If True, exclude from script help output
+| Attribute       | Default                                                      | Meaning                                                      |
+| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| `name`          | class name minus its `Command` suffix, lowercased, `_` → `-` | Subcommand name; multi-word commands set it explicitly       |
+| `description`   | class docstring                                              | First line feeds the script help, Makefile help, and targets |
+| `epilog`        | `None`                                                       | Text shown after the subcommand's arguments                  |
+| `group`         | `None` (listed under "Other commands")                       | Help-output section                                          |
+| `add_help`      | `True`                                                       | Add `-h/--help` to a trailing "Other options" group          |
+| `script_only`   | `False`                                                      | Exclude from Makefile generation                             |
+| `makefile_only` | `False`                                                      | Exclude from the script's own help output                    |
 
-**Registry:** All registered commands stored in `REGISTERED_COMMANDS` dict mapping `name -> CommandInfo`.
+Setting both `script_only` and `makefile_only` raises `ValueError` at class definition. Pass `register=False` in the
+class statement (`class _Base(Command, register=False)`) for an intermediate base that should not become a command.
+Override the `help_formatter_type` property to change a subcommand's formatter (default:
+`get_default_help_formatter_cls()`, a `RawTextHelpFormatter` that does not re-wrap help text).
+
+**Registry:** `REGISTERED_COMMANDS` maps `name -> Command` instance. Query it with
+`get_commands(by_group=..., group_order=..., exclude=...)`, which returns commands by name, or by group then name.
 
 ### ANSI Styling System
 
@@ -444,27 +452,23 @@ INVENTORY_REPO_URL = os.getenv(
 **Key type aliases:**
 
 ```python
-PathLike         = Union[str, Path]
-StyleColor       = Union[int, tuple[int, int, int], str]
-CommandFunc      = Callable[[argparse.Namespace], None]
-AddArgumentsFunc = Callable[[argparse.ArgumentParser], None]
+PathLike   = Union[str, Path]
+StyleColor = Union[int, tuple[int, int, int], str]
 ```
 
-**Command info dataclass:**
+**Exit codes:**
 
 ```python
-@dataclass
-class CommandInfo:
-    name: str
-    func: CommandFunc
-    add_arguments: AddArgumentsFunc | None = None
-    description: str | None = None
-    epilog: str | None = None
-    formatter_class: type[argparse.HelpFormatter] = argparse.RawDescriptionHelpFormatter
-    group: str | None = None
-    script_only: bool = False
-    makefile_only: bool = False
+class ExitCode(int, enum.Enum):
+    SUCCESS        = 0
+    COMMAND_FAILED = 1
+    SETUP_ERROR    = 2   # unknown command
+    USER_CANCELLED = 3   # Ctrl-C
 ```
+
+**Parsed arguments:** `main()` parses into the root `Args(argparse.Namespace)` (`command: str | None`, `debug: bool`).
+Commands with options declare a nested `Args(argparse.Namespace)` listing their own fields and annotate
+`run(self, args: Args)` with it.
 
 ## Error Handling
 
@@ -505,7 +509,7 @@ except subprocess.CalledProcessError as e:
 
 - `subprocess.CalledProcessError`: Non-zero exit code
 - `subprocess.TimeoutExpired`: Command exceeded timeout
-- `KeyboardInterrupt`: User cancelled operation (caught in `main()`)
+- `KeyboardInterrupt`: User cancelled operation (caught in `main()`, exits `ExitCode.USER_CANCELLED` = 3)
 
 ## Usage Examples
 
@@ -573,33 +577,41 @@ def flaky_operation():
 
 ### Adding New Commands
 
-1. **Define command function:**
+1. **Subclass `Command`** (the docstring becomes the help description; defining the class registers it):
 
 ```python
-@command(
-    group='My Group',
-    description='Does something useful',
-)
-def cmd_my_command(args: argparse.Namespace) -> None:
-    """Detailed help text shown with --help"""
-    printf('Executing my command...', fg='bright_cyan')
-    # Implementation here
-    printf('✅ Complete', fg='bright_green')
+class MyThingCommand(Command):
+    """
+    Does something useful
+    """
+    name:  ClassVar[str] = 'my-thing'
+    group: ClassVar[str] = 'My Group'
+
+    def run(self, args: argparse.Namespace) -> None:
+        printf('Executing my command...', fg='bright_cyan')
+        # Implementation here
+        printf('✅ Complete', fg='bright_green')
 ```
 
-2. **Add arguments (optional):**
+2. **Add arguments (optional):** override `add_arguments` and type the parsed fields with a nested `Args`:
 
 ```python
-def add_my_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument('--option', help='Some option')
+class MyThingCommand(Command):
+    """
+    Does something useful
+    """
+    name:  ClassVar[str] = 'my-thing'
+    group: ClassVar[str] = 'My Group'
 
-@command(
-    group='My Group',
-    add_arguments=add_my_args,
-)
-def cmd_my_command(args: argparse.Namespace) -> None:
-    if args.option:
-        printf(f'Option: {args.option}')
+    class Args(argparse.Namespace):
+        option: str | None
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument('--option', help='Some option')
+
+    def run(self, args: Args) -> None:
+        if args.option:
+            printf(f'Option: {args.option}')
 ```
 
 3. **Regenerate Makefile:**
@@ -608,23 +620,32 @@ def cmd_my_command(args: argparse.Namespace) -> None:
 python3 run.py makefile
 ```
 
+`tests/unit/test_run_commands.py` fails if the checked-in `Makefile` drifts from the generated one.
+
 ### Adding New Command Groups
 
-Groups are automatically created when you use the `group` parameter in `@command`:
+Groups are created by the `group` class attribute:
 
 ```python
-@command(group='Deployment')
-def cmd_deploy(args: argparse.Namespace) -> None:
-    """Deploy the application"""
-    pass
+class DeployCommand(Command):
+    """
+    Deploy the application
+    """
+    group: ClassVar[str] = 'Deployment'
 
-@command(group='Deployment')
-def cmd_rollback(args: argparse.Namespace) -> None:
-    """Rollback deployment"""
-    pass
+    def run(self, args: argparse.Namespace) -> None: ...
+
+
+class RollbackCommand(Command):
+    """
+    Rollback deployment
+    """
+    group: ClassVar[str] = 'Deployment'
+
+    def run(self, args: argparse.Namespace) -> None: ...
 ```
 
-Both commands will appear under "Deployment:" in help output.
+Both commands (`deploy`, `rollback`) will appear under "Deployment" in help output.
 
 ### Custom Clean Patterns
 
@@ -652,7 +673,7 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 2. **Handle errors gracefully:** Use `handle_command_error()` for subprocess failures
 3. **Provide helpful messages:** Clear success/failure indicators with emojis
 4. **Support debug mode:** Add debug output with `printf(..., debug=True)`
-5. **Return appropriate exit codes:** Use `sys.exit(1)` on failure
+5. **Return appropriate exit codes:** Use `sys.exit(ExitCode.COMMAND_FAILED)` on failure
 
 ### Shell Command Execution
 
@@ -732,9 +753,11 @@ python3 run.py pre
 
 ### Argument Parser Construction
 
-1. **Main parser:** Built with `build_parser()`, includes global `--debug` and `--help` flags
-2. **Subparsers:** One subparser per registered command
-3. **Command arguments:** Added via `add_arguments` callback if provided
+1. **Main parser:** Built with `build_parser()`; a "Debug Options" group holds `-d/--debug/--no-debug` (default from
+   `DOTFILES_RUN_DEBUG`) and an "Other Options" group holds `-h/--help`
+2. **Subparsers:** One subparser per registered command, using the command's `help_formatter_type`
+3. **Command arguments:** Added by the command's `add_arguments()`; `-h/--help` follows in an "Other options" group
+   unless `add_help = False`
 4. **Help text:** Custom formatted using `style()` for colors, organized by groups
 
 ### Makefile Generation

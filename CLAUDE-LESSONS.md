@@ -46,3 +46,13 @@ Each lesson follows this pattern:
   code, plus a probe script, exposed the larger defect: the streaming path never enforced `timeout` at all.
 - **Rule**: Run a new regression test against the unfixed code and confirm it fails with the expected message before
   writing the fix. For time-based behavior, assert on elapsed time, not only on the exception or return value.
+
+### The edit-time ruff hook rewrites Python mid-refactor — add imports with their first use
+
+- **Context**: Migrating `run.py` from the `@command` decorator to `Command` classes in several sequential edits. The
+  project `PostToolUse` hook runs `ruff check --fix-only` on every edited `.py` file.
+- **Mistake**: Added the new imports (`abc`, `enum`, `ClassVar`, `Sequence`, `traceback`) in their own edit ahead of the
+  code using them; the hook deleted them as unused (F401). Worse, while `abc` was briefly missing, B027 stopped firing
+  on the intentional no-op `Command.add_arguments`, so the hook also stripped its now-"unused" `# noqa: B027` (RUF100).
+- **Rule**: In multi-step Python refactors, add an import in the same edit as (or after) its first use, and after any
+  edit that leaves the file temporarily broken, re-check that `noqa` comments and imports survived before moving on.
