@@ -2,8 +2,8 @@
 
 # docker
 
-Installs Docker Engine from Docker's apt repository on the NAS, prepares the `~/docker` stack directory, builds the one
-image the stack cannot pull from a registry (`danielmmetz/autoplex`), and installs `deploy.sh`. It does not sync compose
+Installs Docker Engine from Docker's apt repository on the NAS, prepares the `~/docker` stack directory, builds the
+image the stack runs from a local build (`danielmmetz/autoplex`), and installs `deploy.sh`. It does not sync compose
 files, render per-service secrets, or start containers: the [`services`](../services/README.md) role does that and runs
 last in `playbooks/nas_bootstrap.yml`.
 
@@ -82,7 +82,7 @@ so those defaults are not loaded here. The port `32443` is written into `env.j2`
 
 ```bash
 python3 run.py nas-provision --tags docker          # the whole role
-python3 run.py nas-provision --tags configfile      # only the .env render and the deploy.sh copy
+python3 run.py nas-provision --tags configfile      # the docker role's .env render and deploy.sh copy (plus samba's smb.conf)
 ```
 
 The playbook include carries the tags `docker` and `configfile`, and `apply` hands `docker` to every task in the role. A
@@ -101,9 +101,8 @@ The clone lives at `docker_autoplex_repo_dest` (`~/docker/.build/autoplex`), on 
 
 The image is built only when it is missing. The build task sets `source: build` and no `force_source`, and the module
 default (`force_source: false`) skips an existing `danielmmetz/autoplex:latest`. A moved clone therefore does not
-refresh the image; rebuilding requires removing the image first. `services/autoplex/compose.yml` has no `build:` entry
-and runs the image by name, so it exists only after this role has run; the playbook runs `docker` before `services` to
-provide that.
+refresh the image; rebuilding requires removing the image first. `services/autoplex/compose.yml` only names the image,
+so the build here is what supplies it; the playbook runs `docker` before `services`.
 
 ## Contract with the services role<a name="contract-with-the-services-role"></a>
 
