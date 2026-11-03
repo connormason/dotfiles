@@ -115,6 +115,20 @@ class TestTrackClaudeCommand:
         monkeypatch.setattr(run, 'shell_command', fake_shell_command)
         return calls
 
+    @staticmethod
+    def _fake_confirm(monkeypatch: pytest.MonkeyPatch, answer: bool = True) -> list[str]:
+        """
+        Patch confirm to record each prompt and answer it
+        """
+        prompts: list[str] = []
+
+        def fake_confirm(prompt_text: str, **kwargs: object) -> bool:
+            prompts.append(prompt_text)
+            return answer
+
+        monkeypatch.setattr(run, 'confirm', fake_confirm)
+        return prompts
+
     def test_registered_in_dotfiles_group(self) -> None:
         """
         Test that track-claude is a Dotfiles command
@@ -186,6 +200,111 @@ class TestTrackClaudeCommand:
         self._run()
         assert local.read_text(encoding='utf-8') == 'local'
         assert repo.read_text(encoding='utf-8')  == 'repo'
+
+    def test_dangling_symlink_destination_is_a_conflict(
+        self,
+        claude: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that a dangling symlink at the repo destination counts as occupied and is never replaced
+        """
+        config, stow = claude
+        local = _write(config / 'agents' / 'new.md', 'local')
+        dst = stow / 'agents' / 'new.md'
+        dst.parent.mkdir(parents=True)
+        dst.symlink_to(stow / 'agents' / 'missing.md')
+        calls = self._record_shell(monkeypatch)
+        prompts = self._fake_confirm(monkeypatch)
+
+        self._run()
+        assert dst.is_symlink()
+        assert dst.readlink() == stow / 'agents' / 'missing.md'
+        assert local.read_text(encoding='utf-8') == 'local'
+        assert 'CONFLICT' in run.unstyle(capsys.readouterr().out)
+        assert prompts == []
+        assert calls == []
+
+    def test_mixed_conflict_moves_the_rest_but_skips_the_doomed_restow(
+        self,
+        claude: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that with a conflict present the movable file moves, stow is not run, and recovery steps are printed
+        """
+        config, stow = claude
+        local = _write(config / 'agents' / 'dup.md', 'local')
+        repo  = _write(stow / 'agents' / 'dup.md', 'repo')
+        _write(config / 'skills' / 'foo' / 'SKILL.md', 'skill')
+        calls = self._record_shell(monkeypatch)
+        prompts = self._fake_confirm(monkeypatch)
+
+        self._run()
+        assert not (config / 'skills' / 'foo' / 'SKILL.md').exists()
+        assert (stow / 'skills' / 'foo' / 'SKILL.md').read_text(encoding='utf-8') == 'skill'
+        assert local.read_text(encoding='utf-8') == 'local'
+        assert repo.read_text(encoding='utf-8')  == 'repo'
+        assert calls == []
+        assert len(prompts) == 1
+        assert 'restow' not in prompts[0]
+
+        out = run.unstyle(capsys.readouterr().out)
+        for expected in ('CONFLICT', 'stow claude', '--backup-conflicts', 'git add stow/claude/.claude'):
+            assert expected in out
+
+    def test_dry_run_with_conflicts_does_not_promise_a_restow(
+        self,
+        claude: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that the dry-run summary omits the restow when a conflict would block it
+        """
+        config, stow = claude
+        _write(config / 'agents' / 'dup.md', 'local')
+        _write(stow / 'agents' / 'dup.md', 'repo')
+        _write(config / 'agents' / 'new.md')
+        self._record_shell(monkeypatch)
+
+        self._run(dry_run=True)
+        summary = next(line for line in run.unstyle(capsys.readouterr().out).splitlines() if 'Dry run' in line)
+        assert 'would move 1 file(s)' in summary
+        assert 'restow' not in summary
+
+    def test_destination_that_appears_before_the_move_is_not_overwritten(
+        self,
+        claude: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that a destination created after planning (while confirming) is skipped as a conflict, not replaced
+        """
+        config, stow = claude
+        raced = _write(config / 'agents' / 'raced.md', 'local')
+        clean = _write(config / 'agents' / 'clean.md', 'clean')
+        calls = self._record_shell(monkeypatch)
+
+        def confirm_then_race(prompt_text: str, **kwargs: object) -> bool:
+            _write(stow / 'agents' / 'raced.md', 'appeared')
+            return True
+
+        monkeypatch.setattr(run, 'confirm', confirm_then_race)
+
+        self._run()
+        assert raced.read_text(encoding='utf-8') == 'local'
+        assert (stow / 'agents' / 'raced.md').read_text(encoding='utf-8') == 'appeared'
+        assert not clean.exists()
+        assert (stow / 'agents' / 'clean.md').read_text(encoding='utf-8') == 'clean'
+        assert calls == []
+
+        out = run.unstyle(capsys.readouterr().out)
+        assert 'CONFLICT' in out
+        assert '--backup-conflicts' in out
 
     def test_confirmed_files_move_into_the_repo_and_claude_is_restowed(
         self,

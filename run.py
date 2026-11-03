@@ -2581,14 +2581,15 @@ class TrackClaudeCommand(Command):
             fg='bright_white',
         )
 
-        # Plan moves: src (real file in ~/.claude) -> dst (mirrored path in the stow package). A dst that already
-        # exists is a conflict (the repo has a different file there) and is left untouched.
+        # Plan moves: src (real file in ~/.claude) -> dst (mirrored path in the stow package). Any existing directory
+        # entry at dst (even a dangling symlink, which exists() reports as absent) is a conflict: the repo has
+        # something there and it is left untouched.
         moves:     list[tuple[Path, Path]] = []
         conflicts: list[Path]              = []
         for src in untracked:
             rel = src.relative_to(CLAUDE_CONFIG_DIR)
             dst = CLAUDE_STOW_DIR / rel
-            if dst.exists():
+            if os.path.lexists(dst):
                 conflicts.append(rel)
                 printf(f'{style("CONFLICT", fg="red")}  {rel}', indent=2)
             else:
@@ -2598,26 +2599,63 @@ class TrackClaudeCommand(Command):
         if conflicts:
             printf('')
             printf(f'🟡 {len(conflicts)} file(s) already exist in the repo; skipped (resolve manually)', fg='yellow')
+            if moves:
+                printf('Restow will be skipped: the conflicting local files would block stow', fg='yellow', indent=3)
 
         if not moves:
             printf('')
             printf('Nothing to move.', fg='yellow')
             return
 
+        # stow.sh aborts without changing anything if a regular file blocks a link, so any conflict rules out the restow
+        scope = f'{len(moves)} file(s) into the repo' + ('' if conflicts else ' and restow')
         if args.dry_run:
             printf('')
-            printf(f'Dry run: would move {len(moves)} file(s) and restow. No changes made.', fg='cyan')
+            printf(f'Dry run: would move {scope}. No changes made.', fg='cyan')
             return
 
         printf('')
-        if not confirm(f'Move {len(moves)} file(s) into the repo and restow?'):
+        if not confirm(f'Move {scope}?'):
             printf('⚠️  Cancelled', fg='yellow')
             return
 
+        moved = 0
         for src, dst in moves:
+            rel = src.relative_to(CLAUDE_CONFIG_DIR)
+
+            # Re-check right before moving: shutil.move silently replaces an existing destination (rename semantics),
+            # and the repo may have changed since planning
+            if os.path.lexists(dst):
+                conflicts.append(rel)
+                printf(f'{style("CONFLICT", fg="red")}  {rel}', indent=2)
+                continue
+
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src), str(dst))
-            printf(f'└─ {src.relative_to(CLAUDE_CONFIG_DIR)}', fg='green')
+            moved += 1
+            printf(f'└─ {rel}', fg='green')
+
+        if conflicts:
+            printf('')
+            printf(
+                f'🟡 Moved {moved} file(s) into the repo; restow skipped: {len(conflicts)} conflicting local file(s) '
+                f'would block stow',
+                fg='yellow',
+                bold=True,
+            )
+            printf('Next steps:', fg='bright_white', bold=True)
+            printf('1. Resolve the conflicts above (diff/merge, or delete the local copies)', indent=3)
+            printf(
+                f'2. Run {style("python3 run.py stow claude", fg="bright_magenta")} '
+                f'(add {style("--backup-conflicts", fg="yellow")} to move the blocking local files to '
+                f'~/.dotfiles-backup/<timestamp>/ instead)',
+                indent=3,
+            )
+            printf(
+                f'3. Review and commit: {style("git add stow/claude/.claude && git commit", fg="bright_magenta")}',
+                indent=3,
+            )
+            return
 
         # The source paths are vacant now, so a plain restow links the moved files back in without conflicts
         printf('')
@@ -2630,7 +2668,7 @@ class TrackClaudeCommand(Command):
             sys.exit(ExitCode.COMMAND_FAILED)
 
         printf('')
-        printf(f'✅ Ingested {len(moves)} file(s). Review and commit them:', fg='bright_green', bold=True)
+        printf(f'✅ Ingested {moved} file(s). Review and commit them:', fg='bright_green', bold=True)
         printf(style('git add stow/claude/.claude && git commit', fg='bright_magenta'), indent=3)
 
 
