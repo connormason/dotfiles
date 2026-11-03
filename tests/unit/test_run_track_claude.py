@@ -4,6 +4,7 @@ Unit tests for the run.py track-claude command
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -87,8 +88,45 @@ class TestFindUntrackedClaudeFiles:
 
         assert run.find_untracked_claude_files() == []
 
+    def test_skips_gitignored_backups_and_bytecode(self, claude: tuple[Path, Path]) -> None:
+        """
+        Test that .backups and __pycache__ directories and stray .pyc files are not reported next to real files
+        """
+        config, _ = claude
+        real = _write(config / 'skills' / 'foo' / 'SKILL.md')
+        _write(config / 'skills' / 'foo' / '.backups' / 'SKILL.md.1.bak')
+        _write(config / 'skills' / 'foo' / '.backups' / 'nested' / 'deep.md.2.bak')
+        _write(config / 'hooks' / '__pycache__' / 'y.cpython-312.pyc')
+        _write(config / 'hooks' / 'z.pyc')
 
-class TestTrackClaudeCommand:
+        assert run.find_untracked_claude_files() == [real]
+
+    @pytest.mark.skipif(not shutil.which('git'), reason='Git not available')
+    @pytest.mark.parametrize(
+        'relpath',
+        [
+            'stow/claude/.claude/skills/x/.backups/y.md.1.bak',
+            'stow/claude/.claude/hooks/__pycache__/z.cpython-312.pyc',
+            'stow/claude/.claude/hooks/z.pyc',
+        ],
+    )
+    def test_ignored_junk_is_gitignored(self, relpath: str) -> None:
+        """
+        Test that each kind of junk track-claude skips is also ignored by the repo's .gitignore
+        """
+        result = subprocess.run(['git', 'check-ignore', '-q', relpath], cwd=run.DOTFILES_DIR, check=False)
+        assert result.returncode == 0
+
+    @pytest.mark.skipif(not shutil.which('git'), reason='Git not available')
+    @pytest.mark.parametrize('dirname', sorted(run.CLAUDE_IGNORE_DIRS))
+    def test_every_ignored_directory_name_is_gitignored(self, dirname: str) -> None:
+        """
+        Test that a directory name in CLAUDE_IGNORE_DIRS is covered by .gitignore, so the two cannot drift apart
+        """
+        relpath = f'stow/claude/.claude/skills/x/{dirname}/y.md.1.bak'
+        result = subprocess.run(['git', 'check-ignore', '-q', relpath], cwd=run.DOTFILES_DIR, check=False)
+        assert result.returncode == 0
+
     """
     Tests for the track-claude command flow
     """

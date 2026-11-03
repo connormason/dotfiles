@@ -139,7 +139,13 @@ MIN_GIT_VERSION: tuple[int, int] = (2, 36)  # includeIf "hasconfig:remote.*.url:
 # (plugins/, projects/, caches) stays untracked; stowed files are symlinks, so a regular file here is local-only.
 CLAUDE_CONFIG_DIR:      Path      = Path.home() / '.claude'
 CLAUDE_TRACKED_SUBDIRS: list[str] = ['agents', 'commands', 'skills', 'hooks', 'rules']
+
+# Never ingested: .DS_Store plus the gitignored junk that appears next to tracked files (the settings-backup hook's
+# `.backups/` and Python bytecode). Directories are pruned from the walk by name, files skipped by name or suffix;
+# .gitignore must cover the directory names and suffixes (a test checks).
 CLAUDE_IGNORE_NAMES:    set[str]  = {'.DS_Store'}
+CLAUDE_IGNORE_DIRS:     set[str]  = {'.backups', '__pycache__'}
+CLAUDE_IGNORE_SUFFIXES: set[str]  = {'.pyc'}
 
 # Lines of a failed `stow.sh -n claude` shown by the track-claude preflight
 TRACK_CLAUDE_PREFLIGHT_LINES: int = 8
@@ -2534,7 +2540,8 @@ def find_untracked_claude_files() -> list[Path]:
     Stowed agents/commands/skills/hooks/rules are symlinks into the repo, so any regular file is something Claude Code
     or the user created locally that the ``claude`` stow package does not have yet. Symlinked directories are never
     descended into, and a tracked subdirectory that is itself a symlink is skipped, so repo files reached through a
-    link are never mistaken for local ones.
+    link are never mistaken for local ones. Gitignored junk (``.backups/`` and ``__pycache__/`` directories, ``.pyc``
+    files, ``.DS_Store``) is skipped, since ingesting it would put ignored files in the repo working copy.
 
     :return: sorted absolute paths of untracked files
     """
@@ -2544,9 +2551,12 @@ def find_untracked_claude_files() -> list[Path]:
         if base.is_symlink() or not base.is_dir():
             continue
 
-        for dirpath, _dirnames, filenames in os.walk(base):
+        for dirpath, dirnames, filenames in os.walk(base):
+            # Prune in place so os.walk never descends into gitignored junk directories
+            dirnames[:] = [dirname for dirname in dirnames if dirname not in CLAUDE_IGNORE_DIRS]
+
             for filename in filenames:
-                if filename in CLAUDE_IGNORE_NAMES:
+                if filename in CLAUDE_IGNORE_NAMES or Path(filename).suffix in CLAUDE_IGNORE_SUFFIXES:
                     continue
 
                 path = Path(dirpath) / filename
