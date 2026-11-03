@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#     "PyYaml >= 6.0",
+# ]
+# ///
 """
 run.py - CLI interface for Connor's personal dotfiles repository
 
@@ -93,9 +99,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from collections.abc import Mapping
     from collections.abc import Sequence
-
-
-# TODO: some commands have dependency on `yaml`. Maybe we should add `uv` metadata to top of script?
 
 
 # ====================================================================================================
@@ -1058,9 +1061,18 @@ class ListHostsCommand(Command):
             printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
             sys.exit(ExitCode.COMMAND_FAILED)
 
-        # Parse inventory file
+        # PyYAML is the one third-party dependency: report a missing module separately from an unparsable inventory
         try:
             import yaml
+        except ImportError:
+            hint = style('scripts/hooks/uv-public.sh run python run.py list-hosts', fg='bright_magenta')
+            printf('')
+            printf('❌ PyYAML is required to read the inventory', fg='red', bold=True)
+            printf(f'Run it through uv: {hint}', indent=3)
+            sys.exit(ExitCode.SETUP_ERROR)
+
+        # Parse inventory file
+        try:
             with INVENTORY_FILE.open() as f:
                 inventory = yaml.safe_load(f)
         except Exception as e:
