@@ -59,9 +59,9 @@ python3 run.py makefile
 
 ## Layered Dev Environment (`run.py` Dotfiles group)
 
-Wrappers over `stow.sh`, `bootstrap/bootstrap.sh`, and `scripts/dotfiles/render.py`; see
-[`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. Prefer `scripts/hooks/uv-public.sh run python`
-over bare `python3` when running them from this repo.
+`bootstrap`, `stow`, and `render` wrap `bootstrap/bootstrap.sh`, `stow.sh`, and `scripts/dotfiles/render.py`; `doctor`
+and `track-claude` run their own logic in `run.py`. See [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for
+options. Prefer `scripts/hooks/uv-public.sh run python` over bare `python3` when running them from this repo.
 
 ```bash
 # Stages across all layers / simulate every stage / run them

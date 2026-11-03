@@ -221,10 +221,12 @@ update-inventory: ## Update inventory repo
 
 ### Dotfiles
 
-Thin wrappers over the layered dev-env engine: [`stow.sh`](../stow.sh),
+Wrappers over the layered dev-env engine: [`stow.sh`](../stow.sh),
 [`bootstrap/bootstrap.sh`](../bootstrap/bootstrap.sh), and
-[`scripts/dotfiles/render.py`](../scripts/dotfiles/render.py). Each wrapper forwards its flags and exits with the
-underlying script's return code. All commands belong to the `Dotfiles` group.
+[`scripts/dotfiles/render.py`](../scripts/dotfiles/render.py), plus `test`, which runs the suite through
+[`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh). `bootstrap`, `stow`, `render`, and `test` forward their
+flags and exit with the underlying script's return code; `doctor` and `track-claude` run their own logic (described
+below). All commands belong to the `Dotfiles` group.
 
 | Command        | Forwards to                          | Options                                                                                   |
 | -------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |

@@ -2063,7 +2063,7 @@ class NasProvisionCommand(Command):
 # Dotfiles commands
 #
 # Thin wrappers over the layered engine (stow.sh, bootstrap/bootstrap.sh, scripts/dotfiles/render.py)
-# plus a doctor that checks the overlay registry, link state, render drift, git version, and required tools:
+# plus a doctor that checks tools, overlays, git version and hook shims, links, render drift, and Brewfile drift:
 #   - bootstrap:    Run the layered bootstrap stages
 #   - stow:         Link stow packages from every layer into $HOME
 #   - render:       Render settings files from per-layer fragments
@@ -2302,9 +2302,10 @@ class DoctorCommand(Command):
             action='store_true',
             help=(
                 'Ask before fixing each failing check, then re-check. The fixes are:\n'
+                '  hooks:    prek install\n'
                 '  links:    stow.sh --backup-conflicts (moves blocking files into\n'
                 '            ~/.dotfiles-backup/<timestamp>/)\n'
-                '  hooks:    prek install\n'
+                '  render:   render.py (without --force)\n'
                 '  brewfile: brew bundle --file for each unsatisfied Brewfile'
             ),
         )
