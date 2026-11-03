@@ -645,19 +645,21 @@ class TestCheckBrewfiles:
         assert str(layers[0] / 'bootstrap' / 'Brewfile') not in check.detail
         assert check.fix is not None
         assert check.fix[:2] == ['bash', '-c']
-        assert 'brew bundle --file' in check.fix[2]
+        assert 'brew bundle --no-upgrade --file "$brewfile"' in check.fix[2]
         assert check.fix[-1] == str(drifted)
 
     def test_probe_is_read_only(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """
-        Test that the check only runs "brew bundle check" with auto-update disabled
+        Test that the check only runs "brew bundle check --no-upgrade" with auto-update disabled
         """
         layers = self._layers(tmp_path, with_brewfile=(True,))
         seen   = self._capture_with(monkeypatch, layers)
 
         run.check_brewfiles()
         brewfile = layers[0] / 'bootstrap' / 'Brewfile'
-        assert seen[1:] == [['env', 'HOMEBREW_NO_AUTO_UPDATE=1', 'brew', 'bundle', 'check', '--file', str(brewfile)]]
+        assert seen[1:] == [
+            ['env', 'HOMEBREW_NO_AUTO_UPDATE=1', 'brew', 'bundle', 'check', '--no-upgrade', '--file', str(brewfile)],
+        ]
 
     def test_fails_when_layers_cannot_be_enumerated(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """

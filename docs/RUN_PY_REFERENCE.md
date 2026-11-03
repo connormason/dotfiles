@@ -250,23 +250,24 @@ python3 run.py test tests/unit/test_run_doctor.py
 Runs one check per line and exits 1 if any check fails. `tools` and `layers` run first; the remaining checks are skipped
 when either fails.
 
-| Check      | Passes when                                                                                          | Fix (`--fix`)                     |
-| ---------- | ---------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `tools`    | `brew`, `git`, `stow`, `uv`, `zsh` are on `PATH`                                                     | none                              |
-| `layers`   | the overlay registry resolves (`dotfiles_layers` in `bootstrap/lib.sh`) and every overlay exists     | none                              |
-| `git`      | `git --version` is at least 2.36 (needed for `includeIf "hasconfig:remote.*.url:"`)                  | none                              |
-| `hooks`    | every hook type in `default_install_hook_types` has a prek-generated shim in the git hooks directory | `prek install`                    |
-| `links`    | `stow.sh -n` reports `no changes` or `no packages found`                                             | `stow.sh --backup-conflicts`      |
-| `render`   | `render.py --check` exits 0 (exit 1 is drift; exit 2 is a config or I/O error with no fix)           | `render.py` (without `--force`)   |
-| `brewfile` | `brew bundle check` passes for every layer's `bootstrap/Brewfile`                                    | `brew bundle --file` per Brewfile |
+| Check      | Passes when                                                                                          | Fix (`--fix`)                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `tools`    | `brew`, `git`, `stow`, `uv`, `zsh` are on `PATH`                                                     | none                                           |
+| `layers`   | the overlay registry resolves (`dotfiles_layers` in `bootstrap/lib.sh`) and every overlay exists     | none                                           |
+| `git`      | `git --version` is at least 2.36 (needed for `includeIf "hasconfig:remote.*.url:"`)                  | none                                           |
+| `hooks`    | every hook type in `default_install_hook_types` has a prek-generated shim in the git hooks directory | `prek install`                                 |
+| `links`    | `stow.sh -n` reports `no changes` or `no packages found`                                             | `stow.sh --backup-conflicts`                   |
+| `render`   | `render.py --check` exits 0 (exit 1 is drift; exit 2 is a config or I/O error with no fix)           | `render.py` (without `--force`)                |
+| `brewfile` | `brew bundle check --no-upgrade` passes for every layer's `bootstrap/Brewfile`                       | `brew bundle --no-upgrade --file` per Brewfile |
 
 `--fix` asks before running each failing check's fix, then re-runs every check and reports the final state; `-y/--yes`
 applies the fixes without asking (and implies `--fix`). The `links` fix runs `stow.sh --backup-conflicts`, which moves
-any blocking files into `~/.dotfiles-backup/<timestamp>/` before linking. Without `--fix`, every probe is read-only
-(`stow.sh -n`, `render.py --check`, `brew bundle check`). The `hooks` check resolves the hooks directory with
-`git rev-parse --git-path hooks`, so it is correct in linked worktrees; it matters because `pre-push` runs the
-public-repo leak guard and no bootstrap stage installs hooks. `bootstrap --verify` invokes `doctor` after all stages
-succeed.
+any blocking files into `~/.dotfiles-backup/<timestamp>/` before linking. The `brewfile` check passes when every
+declared entry is installed: outdated entries are not drift (`--no-upgrade`), and its fix installs the missing entries
+without upgrading anything. Without `--fix`, every probe is read-only (`stow.sh -n`, `render.py --check`,
+`brew bundle check --no-upgrade`). The `hooks` check resolves the hooks directory with `git rev-parse --git-path hooks`,
+so it is correct in linked worktrees; it matters because `pre-push` runs the public-repo leak guard and no bootstrap
+stage installs hooks. `bootstrap --verify` invokes `doctor` after all stages succeed.
 
 #### `track-claude`
 

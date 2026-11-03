@@ -2175,10 +2175,12 @@ def check_hooks() -> DoctorCheck:
 
 def check_brewfiles() -> DoctorCheck:
     """
-    Check that every layer's Brewfile is satisfied (``brew bundle check``)
+    Check that every layer's Brewfile is satisfied: everything it declares is installed (``brew bundle check``)
 
-    Homebrew has no lockfile, so ``brew bundle check`` is the reproducibility signal; bootstrap stage 50-brew runs the
-    same probe while applying the Brewfiles.
+    Homebrew has no lockfile, so ``brew bundle check`` is the reproducibility signal. ``--no-upgrade`` keeps merely
+    outdated entries from counting as drift (a plain check also flags those, and shells out to ``mas outdated``), and
+    the fix installs the missing entries without upgrading anything. Bootstrap stage 50-brew runs a similar probe
+    without ``--no-upgrade`` and treats a mismatch as non-fatal.
     """
     if shutil.which('brew') is None:
         return DoctorCheck('brewfile', False, 'brew not found')
@@ -2199,13 +2201,16 @@ def check_brewfiles() -> DoctorCheck:
         brewfile
         for brewfile in brewfiles
         if _capture(
-            ['env', 'HOMEBREW_NO_AUTO_UPDATE=1', 'brew', 'bundle', 'check', '--file', str(brewfile)],
+            [
+                'env', 'HOMEBREW_NO_AUTO_UPDATE=1',
+                'brew', 'bundle', 'check', '--no-upgrade', '--file', str(brewfile),
+            ],
         ).returncode != 0
     ]
     if not drifted:
         return DoctorCheck('brewfile', True, f'{len(brewfiles)} Brewfile(s) satisfied')
 
-    install = 'for brewfile in "$@"; do brew bundle --file "$brewfile" || exit 1; done'
+    install = 'for brewfile in "$@"; do brew bundle --no-upgrade --file "$brewfile" || exit 1; done'
     return DoctorCheck(
         'brewfile',
         False,
@@ -2312,7 +2317,7 @@ class DoctorCommand(Command):
                 '  links:    stow.sh --backup-conflicts (moves blocking files into\n'
                 '            ~/.dotfiles-backup/<timestamp>/)\n'
                 '  render:   render.py (without --force)\n'
-                '  brewfile: brew bundle --file for each unsatisfied Brewfile'
+                '  brewfile: brew bundle --no-upgrade --file for each unsatisfied Brewfile'
             ),
         )
         parser.add_argument(
