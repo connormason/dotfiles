@@ -20,6 +20,7 @@ Roles are included in the order the playbook runs them; each is selectable with 
 | [`tailscale`](tailscale/README.md) | Tailscale install and configuration, plus HTTPS certificates and Caddy for the NAS      |
 | [`dotfiles`](dotfiles/README.md)   | `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh` |
 | [`haos`](haos/README.md)           | Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)                        |
+| [`services`](services/README.md)   | Syncs `services/` to the NAS, renders per-service secrets, deploys the stack            |
 
 ## External dependencies
 
@@ -32,8 +33,8 @@ ansible-galaxy install -r roles/requirements.yml
 ## Running roles
 
 ```bash
-# Whole NAS playbook
-./nas_bootstrap.sh
+# Whole NAS playbook (preflight, collections, then ansible-playbook)
+python3 run.py nas-provision
 
 # A single role (or several) by tag
 ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags dotfiles

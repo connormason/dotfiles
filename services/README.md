@@ -4,8 +4,10 @@ Docker Compose definitions for the home NAS stack. Each subdirectory contains a 
 single service; `compose.base.yml` provides the shared project name and the `nas-network` bridge that ties them
 together.
 
-These files are deployed to the NAS at `~/docker/` by the `roles/docker` Ansible role and brought up by
-`roles/docker/files/deploy.sh`, which discovers every subdirectory containing a `compose.yml` and runs
+These files reach the NAS at `~/docker/` by three routes (see [Deploying](#deploying)): CI on a push to `main`,
+`run.py nas-deploy` from a laptop, and the [`services`](../roles/services/README.md) Ansible role. Each ends in
+`~/docker/deploy.sh` (installed by the `docker` role from `roles/docker/files/deploy.sh`), which discovers every
+subdirectory containing a `compose.yml` and runs
 `docker compose -f compose.base.yml -f <service>/compose.yml up -d <service>`.
 
 A service is **disabled** by renaming its `compose.yml` to `compose.yml.disabled`: both `deploy.sh` and the CI deploy
@@ -107,10 +109,34 @@ Built from source (`danielmmetz/autoplex`) by the `docker` Ansible role. Watches
 `/storage/media/downloads/complete/{tv,movies}` and copies new files into the `tv/` and `movies/` trees consumed by Plex
 and Sonarr/Radarr. Talks to `transmission` for completion status.
 
+## Secrets
+
+A service that needs a secret ships `services/<svc>/env.j2` and sets `env_file: <svc>/.env` in its `compose.yml`. The
+path is relative to `~/docker`, because `deploy.sh` passes `--project-directory ~/docker`. The `services` role renders
+each `env.j2` to `~/docker/<svc>/.env` (mode `0600`) from vault variables; `pihole` is the current example.
+
+Files named `*.j2` and `.env` are never rsynced, so a checkout never carries a rendered secret to the NAS. To rotate a
+secret, change it in the vault, re-render, and restart the service:
+
+```bash
+python3 run.py nas-provision --tags secrets
+python3 run.py nas-deploy <svc>
+```
+
 ## Deploying
 
-The Ansible bootstrap installs `~/docker/deploy.sh` on the NAS. It is idempotent and used by both the initial provision
-and the GitHub Actions CI workflow on push to `main`.
+`~/docker/deploy.sh` on the NAS is installed by the `docker` role and is idempotent. Everything that deploys a service
+runs it:
+
+| Route                                  | What it does                                                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| CI (`.github/workflows/deploy.yml`)    | On a push to `main` that touches `services/`, or a manual run; calls `scripts/nas/deploy-services.sh` |
+| `python3 run.py nas-deploy <svc\|all>` | The same script, from a laptop; `--dry-run` previews the rsync and the remote command                 |
+| `python3 run.py nas-provision`         | The `services` role syncs `services/`, renders secrets, and runs `deploy.sh all`                      |
+
+[`scripts/nas/deploy-services.sh`](../scripts/nas/README.md) rsyncs without deleting (`all` syncs the whole `services/`
+tree; a single service syncs `compose.base.yml` and its own directory), then runs `deploy.sh` on the NAS. On the NAS
+itself:
 
 ```bash
 # Deploy everything
@@ -122,9 +148,9 @@ and the GitHub Actions CI workflow on push to `main`.
 
 ### CI deploys
 
-`.github/workflows/deploy.yml` joins the tailnet as `tag:ci`, rsyncs the changed service directories to `~/docker/`, and
-runs `deploy.sh` for them over SSH. A push to `main` touching `services/<name>/` deploys just that service; a manual
-`workflow_dispatch` run syncs all of `services/` and deploys the named service (default `all`):
+`.github/workflows/deploy.yml` joins the tailnet as `tag:ci` and runs `scripts/nas/deploy-services.sh` over SSH. A push
+to `main` touching `services/<name>/` deploys just that service (a change to `compose.base.yml` deploys every service,
+one at a time); a manual `workflow_dispatch` run deploys the named service (default `all`):
 
 ```bash
 gh workflow run deploy.yml -f service=glance

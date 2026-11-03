@@ -3,6 +3,9 @@
 Comprehensive Ansible role for managing a Docker-based home media server and automation stack on Debian/Ubuntu NAS
 systems.
 
+> **Note:** deploying services and rendering per-service secrets moved to the [`services`](../services/README.md) role;
+> this document is rewritten in the docs truth-up (NAS sub-project 4).
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -367,7 +370,8 @@ To enable:
 
 - `DNSIMPLE_OAUTH_TOKEN`: DNSimple API token for Caddy ACME DNS-01
 
-The PiHole admin password is no longer in this file; it lives in the service's own `pihole/.env` (see `services/`).
+The PiHole admin password is a per-service secret rendered to `pihole/.env` by the [`services`](../services/README.md)
+role.
 
 **Service-Specific:**
 

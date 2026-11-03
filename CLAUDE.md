@@ -16,14 +16,16 @@ For detailed reference, load on-demand:
 ## Entry Points
 
 1. **`bootstrap/bootstrap.sh`** — personal Mac configuration (stow packages in `stow/`, overlays in `profiles/`).
-2. **`nas_bootstrap.sh`** → `playbooks/nas_bootstrap.yml` — home NAS / server configuration.
+2. **`run.py nas-provision`** (wrapped by `nas_bootstrap.sh`) → `playbooks/nas_bootstrap.yml` — home NAS / server
+   configuration; **`run.py nas-deploy`** deploys Compose services.
 3. **`run.py`** — repository-management CLI (inventory pull, codebase chores, wrappers for the macOS engine). `Makefile`
    wraps these (`make help`). Full command reference in [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 
-`nas_bootstrap.sh` validates the repo, installs Homebrew (checksum-verified) and Ansible, then runs the NAS playbook.
-The Home Assistant OS VM is outside Ansible: [`vms/haos/`](vms/haos/README.md) holds its hand-run scripts and runbook.
-See [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flows and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation
-(stage flags / tags / extra-vars).
+`nas_bootstrap.sh` validates the repo, then hands off to `run.py nas-provision`, which checks the inventory, vault
+password, and SSH reachability before running the NAS playbook in the uv environment. The Home Assistant OS VM is
+outside Ansible: [`vms/haos/`](vms/haos/README.md) holds its hand-run scripts and runbook. See
+[`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flows and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation (stage
+flags / tags / extra-vars).
 
 ## Inventory
 

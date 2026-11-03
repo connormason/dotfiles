@@ -6,17 +6,19 @@ Directory layout, key components, and provisioning flow for the dotfiles reposit
 ## Two Provisioning Systems
 
 - **macOS** — the stow engine and `bootstrap/` stage scripts. Entry point: `bootstrap/bootstrap.sh`.
-- **NAS** — Ansible. Entry point: `nas_bootstrap.sh` → `playbooks/nas_bootstrap.yml`.
+- **NAS** — Ansible plus the stow engine. Entry point: `run.py nas-provision` (wrapped by `nas_bootstrap.sh`) →
+  `playbooks/nas_bootstrap.yml`; services deploy with `run.py nas-deploy`.
 
 The retired Ansible macOS setup survives as a frozen, unmaintained snapshot in `archive/ansible-macos/` (reference only;
 skipped by the lint tooling).
 
-`nas_bootstrap.sh`:
+`run.py nas-provision`:
 
-1. Validates repository structure
-2. Installs Homebrew with checksum verification
-3. Installs Ansible via Homebrew
-4. Executes the NAS playbook
+1. Preflight: inventory present, vault password file present, `nas` reachable over SSH
+2. Installs the Ansible collections from `roles/requirements.yml`
+3. Runs `playbooks/nas_bootstrap.yml` in the uv environment
+
+`nas_bootstrap.sh` validates the repository layout and delegates to it.
 
 ## Stow Engine and Bootstrap Stages (macOS + Linux)
 
@@ -82,6 +84,8 @@ In playbook order:
 - `tailscale`: Tailscale install and configuration, plus HTTPS certificates and Caddy for the NAS
 - `dotfiles`: `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh`
 - `haos`: Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)
+- `services`: syncs `services/` to `~/docker`, renders per-service secrets from `services/*/env.j2`, runs
+  `deploy.sh all`
 
 ## Python Management Script (`run.py`)
 
@@ -91,6 +95,7 @@ In playbook order:
 
 - **Inventory**: `list-hosts`, `update-inventory`
 - **Codebase**: `clean`, `pre`, `makefile`
+- **NAS**: `nas-provision`, `nas-deploy`
 - **Layered dev environment**: `bootstrap`, `stow`, `render`, `doctor`, `test`
 
 **Key features**:
@@ -108,8 +113,8 @@ In playbook order:
 
 ## Docker Stack (NAS)
 
-Media server and home automation stack in `roles/docker/files/docker-compose.yml`, with per-service definitions under
-`services/`:
+Media server and home automation stack defined by `services/compose.base.yml` plus one `services/<name>/compose.yml` per
+service. The `services` role, CI, and `run.py nas-deploy` sync them to `~/docker/` and run `deploy.sh`:
 
 **Services**:
 
@@ -131,7 +136,6 @@ Media server and home automation stack in `roles/docker/files/docker-compose.yml
 
 ## Bootstrap Script Security
 
-- Homebrew installer pinned to an upstream commit URL and checksum-verified before execution (`nas_bootstrap.sh`,
-  `bootstrap/50-brew.sh`; a test keeps the two pins identical)
+- Homebrew installer pinned to an upstream commit URL and checksum-verified before execution (`bootstrap/50-brew.sh`)
 - To update, put a commit SHA from the upstream history of `install.sh` in the URL, then take the SHA-256 of that exact
   URL: `curl -fsSL https://raw.githubusercontent.com/Homebrew/install/<commit-sha>/install.sh | shasum -a 256`
