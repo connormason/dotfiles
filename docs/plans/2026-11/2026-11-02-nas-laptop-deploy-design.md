@@ -1,7 +1,7 @@
 # NAS Sub-project 3: Deploy from the Laptop
 
 **Date:** 2026-11-02
-**Status:** Draft, pending owner review
+**Status:** Implemented on branch worktree-nas-laptop-deploy; live acceptance pending (owner)
 **Parent design:** [`2026-10-31-nas-provisioning-design.md`](../2026-10/2026-10-31-nas-provisioning-design.md)
 (decisions D1–D9 and the "Sub-project 3" section; this document refines them against the repository as of `5401a8a`)
 **Goal:** Provision the NAS and deploy its services from the work MacBook with one command each, make a fresh NAS
