@@ -267,7 +267,9 @@ declared entry is installed: outdated entries are not drift (`--no-upgrade`), an
 without upgrading anything. Without `--fix`, every probe is read-only (`stow.sh -n`, `render.py --check`,
 `brew bundle check --no-upgrade`). The `hooks` check resolves the hooks directory with `git rev-parse --git-path hooks`,
 so it is correct in linked worktrees; it matters because `pre-push` runs the public-repo leak guard and no bootstrap
-stage installs hooks. `bootstrap --verify` invokes `doctor` after all stages succeed.
+stage installs hooks. When `prek` is not on `PATH` the check offers no `--fix`; once prek is available, the manual path
+is `python3 run.py install-hooks` (it runs `prek install -f`). `bootstrap --verify` invokes `doctor` after all stages
+succeed, so it fails the `hooks` check until the shims are installed.
 
 #### `track-claude`
 
