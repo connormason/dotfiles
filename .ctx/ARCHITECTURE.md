@@ -102,7 +102,7 @@ In playbook order:
 
 - Type-annotated with full typing support
 - ANSI styling via a custom `style()` function
-- Command registration via the `@command` decorator
+- Command registration via `Command` subclasses (auto-registered by `__init_subclass__`)
 - Auto-generates the `Makefile` from registered commands
 - Retry logic with exponential backoff for network operations
 

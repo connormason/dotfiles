@@ -551,6 +551,7 @@ repos:
               ^archive/|
               ^build/|
               ^docs/|
+              ^run\.py$|
               ^tests/
           )
 
