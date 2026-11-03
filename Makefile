@@ -27,7 +27,7 @@ help: ## Show this help message
 	@echo "  $(YELLOW)prepare-hooks   $(NC) Prepare the environments of all prek hooks"
 	@echo "  $(YELLOW)install-hooks   $(NC) Install prek git hook shims (overwrites any existing shims)"
 	@echo "  $(YELLOW)uninstall-hooks $(NC) Uninstall prek git hook shims"
-	@echo "  $(YELLOW)makefile        $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
+	@echo "  $(YELLOW)makefile        $(NC) Generate Makefile from project management script commands (run.py)"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)NAS:$(NC)"
 	@echo "  $(YELLOW)nas-provision   $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
@@ -76,7 +76,7 @@ install-hooks: ## Install prek git hook shims (overwrites any existing shims)
 uninstall-hooks: ## Uninstall prek git hook shims
 	@python3 run.py uninstall-hooks
 
-makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
+makefile: ## Generate Makefile from project management script commands (run.py)
 	@python3 run.py makefile
 
 # NAS

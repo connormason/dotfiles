@@ -4,6 +4,7 @@ Unit tests for run.py command registration, parser construction, and dispatch
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import types
@@ -415,4 +416,25 @@ class TestMakefileCommand:
         generated = tmp_path / 'Makefile'
         monkeypatch.setattr(run, 'MAKEFILE_PATH', generated)
         run.get_commands()['makefile'](argparse.Namespace())
+        assert generated.read_text() == (run.DOTFILES_DIR / 'Makefile').read_text()
+
+    @pytest.mark.parametrize('no_color', [None, '1'])
+    def test_generated_makefile_is_independent_of_no_color(self, tmp_path: Path, no_color: str | None) -> None:
+        """
+        Test that the generated Makefile matches the checked-in file whether or not NO_COLOR is set
+        """
+        generated = tmp_path / 'Makefile'
+        env = {key: val for key, val in os.environ.items() if key != 'NO_COLOR'}
+        if no_color is not None:
+            env['NO_COLOR'] = no_color
+
+        code = (
+            'import argparse, sys; '
+            f'sys.path.insert(0, {str(run.DOTFILES_DIR)!r}); '
+            'import run; '
+            'from pathlib import Path; '
+            f'run.MAKEFILE_PATH = Path({str(generated)!r}); '
+            "run.get_commands()['makefile'](argparse.Namespace())"
+        )
+        subprocess.run([sys.executable, '-c', code], env=env, capture_output=True, text=True, check=True)
         assert generated.read_text() == (run.DOTFILES_DIR / 'Makefile').read_text()

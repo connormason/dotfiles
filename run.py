@@ -159,7 +159,7 @@ VAULT_FILE_PATTERNS: list[str] = [
     'host_vars/*/vault.yml',
 ]
 
-# Environment variables - All prefixed with DOTFILES_ namespace
+# Environment variables - All prefixed with DOTFILES_ namespace (except the standard NO_COLOR)
 ENVVAR_PREFIX:             str = 'DOTFILES'
 RUN_DEBUG_ENVVAR:          str = f'{ENVVAR_PREFIX}_RUN_DEBUG'
 INVENTORY_REPO_URL_ENVVAR: str = f'{ENVVAR_PREFIX}_INVENTORY_REPO_URL'
@@ -1759,10 +1759,7 @@ class MakefileCommand(Command):
     """
     name:        ClassVar[str] = 'makefile'
     group:       ClassVar[str] = 'Codebase'
-    description: ClassVar[str] = ' '.join([
-        'Generate Makefile from project management script commands',
-        style(f'({Path(__file__).name})', dim=True),
-    ])
+    description: ClassVar[str] = f'Generate Makefile from project management script commands ({Path(__file__).name})'
 
     def run(self, args: argparse.Namespace) -> None:
         command_groups: dict[str, dict[str, Command]] = {}
