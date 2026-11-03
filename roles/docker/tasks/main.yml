@@ -80,12 +80,14 @@
       loop_control:
         loop_var: docker_dir_path
 
-    # Shared, non-secret values only; per-service secrets are rendered by the services role
+    # Shared, non-secret values only; per-service secrets are rendered by the services role. diff is off because a host
+    # that predates the split still holds a password line in the old file, which --check --diff would print as removed
     - name: Render docker .env file
       ansible.builtin.template:
         src: env.j2
         dest: "{{ docker_dir }}/.env"
         mode: "0600"
+      diff: false
       tags:
         - configfile
 

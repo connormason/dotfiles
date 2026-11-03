@@ -1,13 +1,25 @@
 ---
+# synchronize runs rsync on both ends; a minimal Debian install ships without it
+- name: Install rsync
+  become: true
+  ansible.builtin.apt:
+    name: rsync
+    state: present
+
 # Pushes the controller's services/ tree, so a run from a branch deploys that branch (same as `run.py nas-deploy`).
-# *.j2 templates and .env files never travel: secrets are rendered below, on the NAS side of the connection.
+# *.j2 templates and .env files never travel: secrets are rendered below, on the NAS side of the connection. Directory
+# times are not copied (rendering pihole/.env would otherwise bump the mtime and report changed on every run), and
+# laptop-only junk stays home. Keep these filters identical to rsync_flags in scripts/nas/deploy-services.sh.
 - name: Sync compose files to the NAS
   ansible.posix.synchronize:
     src: "{{ services_source_dir }}/"
     dest: "{{ services_target_dir }}/"
     rsync_opts:
+      - "--omit-dir-times"
       - "--exclude=*.j2"
       - "--exclude=.env"
+      - "--exclude=.backups/"
+      - "--exclude=.DS_Store"
 
 # A service opts in with services/<svc>/env.j2 and `env_file: <svc>/.env` in its compose.yml (deploy.sh passes
 # --project-directory ~/docker, so the path is relative to that directory)

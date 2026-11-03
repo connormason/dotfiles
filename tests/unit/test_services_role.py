@@ -3,6 +3,7 @@ Structural tests for the services role and its place in the NAS playbook (no NAS
 """
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -98,6 +99,43 @@ class TestServicesRole:
         assert not args.get('delete')
         assert args['dest'].startswith('{{ services_target_dir }}')
 
+    def test_sync_is_idempotent_and_skips_laptop_junk(self) -> None:
+        """
+        Test that the sync ignores directory mtimes, backups, and .DS_Store files
+        """
+        opts = _task('services', 'Sync compose files to the NAS')['ansible.posix.synchronize']['rsync_opts']
+
+        for opt in ('--omit-dir-times', '--exclude=.backups/', '--exclude=.DS_Store'):
+            assert opt in opts
+
+    def test_role_and_script_share_the_same_rsync_filters(self) -> None:
+        """
+        Test that the role's rsync_opts and deploy-services.sh's rsync_flags carry identical exclude/omit tokens
+        """
+        script = (REPO_ROOT / 'scripts' / 'nas' / 'deploy-services.sh').read_text(encoding='utf-8')
+        line   = next(line for line in script.splitlines() if line.startswith('rsync_flags=('))
+        script_tokens = {
+            token for token in shlex.split(line.removeprefix('rsync_flags=(').removesuffix(')'))
+            if token.startswith('--exclude=') or token == '--omit-dir-times'
+        }
+        opts = _task('services', 'Sync compose files to the NAS')['ansible.posix.synchronize']['rsync_opts']
+        role_tokens = {opt for opt in opts if opt.startswith('--exclude=') or opt == '--omit-dir-times'}
+
+        assert script_tokens
+        assert script_tokens == role_tokens
+
+    def test_rsync_is_installed_first_on_the_nas(self) -> None:
+        """
+        Test that the role's first task installs rsync as root, because synchronize runs rsync on both ends
+        """
+        first = yaml.safe_load((ROLES / 'services' / 'tasks' / 'main.yml').read_text(encoding='utf-8'))[0]
+
+        assert first['name'] == 'Install rsync'
+        assert first['become'] is True
+        assert first['ansible.builtin.apt']['name'] == 'rsync'
+        assert first['ansible.builtin.apt']['state'] == 'present'
+        assert 'secrets' not in first.get('tags', [])
+
     def test_only_the_secret_tasks_carry_the_secrets_tag(self) -> None:
         """
         Test that the secrets tag reaches exactly the directory and render tasks
@@ -185,6 +223,15 @@ class TestDockerRole:
         assert args['name']   == "{{ ansible_facts['user_id'] }}"
         assert args['groups'] == 'docker'
         assert args['append'] is True
+
+    def test_env_render_never_prints_a_diff(self) -> None:
+        """
+        Test that the docker .env render suppresses diffs, so a --check --diff run cannot echo a secret
+        """
+        task = _task('docker', 'Render docker .env file')
+
+        assert task['diff'] is False
+        assert task['ansible.builtin.template']['mode'] == '0600'
 
     def test_autoplex_variables_carry_the_role_prefix(self) -> None:
         """

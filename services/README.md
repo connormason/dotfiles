@@ -115,8 +115,8 @@ A service that needs a secret ships `services/<svc>/env.j2` and sets `env_file: 
 path is relative to `~/docker`, because `deploy.sh` passes `--project-directory ~/docker`. The `services` role renders
 each `env.j2` to `~/docker/<svc>/.env` (mode `0600`) from vault variables; `pihole` is the current example.
 
-Files named `*.j2` and `.env` are never rsynced, so a checkout never carries a rendered secret to the NAS. To rotate a
-secret, change it in the vault, re-render, and restart the service:
+Files named `*.j2` and `.env` (plus `.backups/` and `.DS_Store`) are never rsynced, so a checkout never carries a
+rendered secret to the NAS. To rotate a secret, change it in the vault, re-render, and restart the service:
 
 ```bash
 python3 run.py nas-provision --tags secrets

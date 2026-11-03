@@ -8,8 +8,9 @@
 #   NAS_USER     SSH user on the NAS (required)
 #   NAS_SSH_KEY  private key to use, with host-key auto-accept (CI); unset to use the caller's SSH configuration
 #
-# rsync never deletes, and never ships *.j2 templates or .env files: secrets are rendered on the NAS by the `services`
-# Ansible role, not copied from a checkout.
+# rsync never deletes, and never ships *.j2 templates, .env files, .backups/ or .DS_Store: secrets are rendered on the
+# NAS by the `services` Ansible role, not copied from a checkout. Directory times are not copied, so a re-sync of an
+# unchanged tree is a no-op. Keep these filters identical to rsync_opts in roles/services/tasks/main.yml.
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
@@ -43,7 +44,7 @@ if [[ -n "${NAS_SSH_KEY:-}" ]]; then
     ssh_cmd+=(-i "$NAS_SSH_KEY" -o StrictHostKeyChecking=accept-new)
 fi
 
-rsync_flags=(-avz --exclude='*.j2' --exclude='.env')
+rsync_flags=(-avz --omit-dir-times --exclude='*.j2' --exclude='.env' --exclude='.backups/' --exclude='.DS_Store')
 if [[ $dry_run -eq 1 ]]; then
     rsync_flags+=(-n)
 fi

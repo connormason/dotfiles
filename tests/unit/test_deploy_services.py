@@ -79,10 +79,25 @@ class TestDeployOneService:
         """
         _run(env, 'glance')
 
-        for call in _calls(env)[:2]:
+        calls = _calls(env)
+        assert len(calls) == 3
+        for call in calls[:2]:
             assert '--exclude=*.j2' in call
             assert '--exclude=.env'  in call
             assert '--delete'    not in call
+
+    @pytest.mark.parametrize('service', ['glance', 'all'])
+    def test_rsync_is_idempotent_and_skips_laptop_junk(self, env: dict[str, str], service: str) -> None:
+        """
+        Test that rsync ignores directory mtimes, backups, and .DS_Store files
+        """
+        _run(env, service)
+
+        rsync_calls = [call for call in _calls(env) if call.startswith('rsync ')]
+        assert rsync_calls
+        for call in rsync_calls:
+            for flag in ('--omit-dir-times', '--exclude=.backups/', '--exclude=.DS_Store'):
+                assert flag in call
 
     def test_key_adds_identity_and_host_key_policy(self, env: dict[str, str]) -> None:
         """
