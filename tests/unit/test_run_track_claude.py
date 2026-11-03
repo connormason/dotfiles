@@ -127,6 +127,8 @@ class TestFindUntrackedClaudeFiles:
         result = subprocess.run(['git', 'check-ignore', '-q', relpath], cwd=run.DOTFILES_DIR, check=False)
         assert result.returncode == 0
 
+
+class TestTrackClaudeCommand:
     """
     Tests for the track-claude command flow
     """
