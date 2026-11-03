@@ -304,10 +304,9 @@ ignore = [
 # =========================================
 [tool.ruff.lint.per-file-ignores]
 # keep-sorted start
-"run.py"                                                   = ["S112"]
-"services/homeassistant/config/scripts/get_lutron_cert.py" = ["S"]
-"stow/**/startup/*.py"                                     = ["INP001"]                # IPython startup scripts are not a package
-"tests/**"                                                 = ["B", "S", "SIM", "PERF"]
+"run.py"               = ["S112"]
+"stow/**/startup/*.py" = ["INP001"]                # IPython startup scripts are not a package
+"tests/**"             = ["B", "S", "SIM", "PERF"]
 # keep-sorted end
 
 # `ruff check` linter rule group-specific settings
