@@ -342,3 +342,13 @@ class TestRoleOrderDocs:
         assert _playbook_role_order(REPO_ROOT)
         assert _playbooks_readme_role_order(REPO_ROOT)
         assert _roles_readme_role_order(REPO_ROOT)
+
+    def test_architecture_role_list_follows_the_playbook(self) -> None:
+        """
+        The role bullets in .ctx/ARCHITECTURE.md name the roles in the playbook's order
+        """
+        text    = (REPO_ROOT / '.ctx' / 'ARCHITECTURE.md').read_text(encoding='utf-8')
+        section = text.split('## Role System (NAS)', 1)[1].split('\n## ', 1)[0]
+        roles   = re.findall(r'^- `([a-z0-9_-]+)`:', section, re.MULTILINE)
+
+        assert roles == _playbook_role_order(REPO_ROOT)
