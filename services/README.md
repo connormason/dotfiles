@@ -4,8 +4,9 @@
 
 Docker Compose definitions for the home NAS stack. Each subdirectory holds the `compose.yml` of one service;
 `compose.base.yml` provides the shared project name (`nas-stack`) and the `nas-network` bridge that ties them together.
-A `compose.yml` is self-contained apart from two things: Glance and Plex also read the shared `~/docker/.env` (see
-[Secrets](#secrets)), and the `autoplex` image is built locally (see [`autoplex`](#autoplex)).
+Besides the compose files, some services need inputs that exist only on the NAS: the shared `~/docker/.env` (Glance and
+Plex; see [Secrets](#secrets)), the locally built `autoplex` image (see [`autoplex`](#autoplex)), Caddy's `Caddyfile`
+and certificates (see [`caddy`](#caddy)), and PiHole's rendered `pihole/.env` (see [`pihole`](#pihole)).
 
 These files reach the NAS at `~/docker/` by three routes (see [Deploying](#deploying)): CI on a push to `main`,
 `run.py nas-deploy` from a laptop, and the [`services`](../roles/services/README.md) Ansible role. Each ends in
@@ -80,8 +81,8 @@ The compose files declare neither the Home Assistant port `8123` nor the Flareso
 defaults.
 
 LAN access is `http://<nas-host>:<port>` (e.g. `http://nas.local:8989` for Sonarr). While PiHole is disabled, its admin
-UI (`http://<nas-host>:8053/admin`) is not deployed. Home Assistant now runs as a VM with its own LAN address (see
-[`vms/haos/`](../vms/haos/README.md)).
+UI (`http://<nas-host>:8053/admin`) is not deployed by this repository. Home Assistant now runs as a VM with its own LAN
+address (see [`vms/haos/`](../vms/haos/README.md)).
 
 ## Tailscale / HTTPS<a name="tailscale--https"></a>
 
@@ -90,15 +91,15 @@ hostname. Configuration is templated by
 [`roles/tailscale/templates/Caddyfile.j2`](../roles/tailscale/templates/Caddyfile.j2) from the `tailscale_services`
 variable in `inventory/host_vars/nas/vars.yml`.
 
-| Service      | External URL                                | Notes                                                                                 |
-| ------------ | ------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Sonarr       | `https://nas.<tailnet>.ts.net/sonarr`       | Requires `UrlBase = /sonarr` in app settings                                          |
-| Radarr       | `https://nas.<tailnet>.ts.net/radarr`       | Requires `UrlBase = /radarr` in app settings                                          |
-| Prowlarr     | `https://nas.<tailnet>.ts.net/prowlarr`     | Requires `UrlBase = /prowlarr` in app settings                                        |
-| Transmission | `https://nas.<tailnet>.ts.net/transmission` | Requires `rpc-url = /transmission/` in settings                                       |
-| PiHole       | `https://nas.<tailnet>.ts.net/pihole`       | Caddy rewrites `/pihole` → `/admin`; unavailable while PiHole is disabled (see below) |
-| Glance       | `https://nas.<tailnet>.ts.net/glance`       | Prefix stripped before proxying                                                       |
-| Plex         | `https://nas.<tailnet>.ts.net:32443`        | Dedicated port; `ADVERTISE_IP` must match                                             |
+| Service      | External URL                                | Notes                                                                                                     |
+| ------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Sonarr       | `https://nas.<tailnet>.ts.net/sonarr`       | Requires `UrlBase = /sonarr` in app settings                                                              |
+| Radarr       | `https://nas.<tailnet>.ts.net/radarr`       | Requires `UrlBase = /radarr` in app settings                                                              |
+| Prowlarr     | `https://nas.<tailnet>.ts.net/prowlarr`     | Requires `UrlBase = /prowlarr` in app settings                                                            |
+| Transmission | `https://nas.<tailnet>.ts.net/transmission` | Requires `rpc-url = /transmission/` in settings                                                           |
+| PiHole       | `https://nas.<tailnet>.ts.net/pihole`       | Caddy rewrites `/pihole` → `/admin`; not deployed by this repository while PiHole is disabled (see below) |
+| Glance       | `https://nas.<tailnet>.ts.net/glance`       | Prefix stripped before proxying                                                                           |
+| Plex         | `https://nas.<tailnet>.ts.net:32443`        | Dedicated port; `ADVERTISE_IP` must match                                                                 |
 
 The template skips the `pihole` entry of `tailscale_services` in its loop and emits a hard-coded `/pihole` route to
 `pihole:80` instead. The route is therefore always in the Caddyfile, even while PiHole is disabled and nothing in this
@@ -109,8 +110,8 @@ repository deploys that container.
 ### `caddy`<a name="caddy"></a>
 
 Reverse proxy that serves the stack over HTTPS under the NAS's Tailscale hostname. Publishes `443` and `32443`, reads
-its `Caddyfile` from `/etc/caddy/` and TLS material from `/etc/tailscale/certs/` on the host (both populated by the
-`tailscale` role), and keeps its own state in the `caddy_data` named volume.
+its `Caddyfile` from `/etc/caddy/` and TLS material from `/etc/tailscale/certs/` on the host (both mounted read-only and
+populated by the `tailscale` role), and keeps its own state in the `caddy_data` named volume.
 
 ### `glance`<a name="glance"></a>
 
@@ -124,8 +125,9 @@ socket (read-only). Its `env_file: .env` resolves against `--project-directory ~
 **Disabled** (`compose.yml.disabled`) in favor of Home Assistant OS running as a libvirt VM, which adds the Supervisor
 (apps, managed backups, OS updates). See [`vms/haos/`](../vms/haos/README.md) for the VM and the cutover steps.
 
-The disabled definition uses `network_mode: host`; its service key is `homeassistant` and its container name is
-`home-assistant`. `homeassistant/config/` and `homeassistant/shared/` hold only a `.gitkeep` in the repository.
+The disabled definition uses `network_mode: host` and mounts `homeassistant/config`, `homeassistant/shared`, and
+`/etc/localtime` (read-only). Its service key is `homeassistant` and its container name is `home-assistant`.
+`homeassistant/config/` and `homeassistant/shared/` hold only a `.gitkeep` in the repository.
 
 ### `pihole`<a name="pihole"></a>
 
@@ -134,10 +136,10 @@ network runs a `dnsmasq` on `:53`, which blocks PiHole. [`vms/haos/setup.sh`](..
 and disables its autostart; otherwise bind the DNS ports to the NAS's LAN address.
 
 DNS server and DHCP-capable ad-blocker. Binds privileged DNS/DHCP ports on the host; the admin UI is remapped to host
-port `8053` to avoid colliding with other web services. `FTLCONF_webserver_api_password` comes from `pihole/.env`,
-rendered from [`pihole/env.j2`](pihole/env.j2) (variable `pihole_web_password`) and loaded through `env_file`. To
-re-enable, rename the file back to `compose.yml`, run `python3 run.py nas-provision --tags secrets` to render
-`pihole/.env`, then `python3 run.py nas-deploy pihole`.
+port `8053` to avoid colliding with other web services. Its state lives in `~/docker/pihole-data/etc-pihole`.
+`FTLCONF_webserver_api_password` comes from `pihole/.env`, rendered from [`pihole/env.j2`](pihole/env.j2) (variable
+`pihole_web_password`) and loaded through `env_file`. To re-enable, rename the file back to `compose.yml`, run
+`python3 run.py nas-provision --tags secrets` to render `pihole/.env`, then `python3 run.py nas-deploy pihole`.
 
 ### `plex`<a name="plex"></a>
 
@@ -191,8 +193,8 @@ flow:
 1. **Search.** Sonarr (TV) and Radarr (movies) search through Prowlarr, which aggregates the indexers. Flaresolverr
    clears Cloudflare challenges for Prowlarr.
 2. **Download.** Sonarr and Radarr hand the release to Transmission, whose `/downloads` is `/storage/media/downloads`.
-3. **Copy.** Autoplex (`--mode copy`) copies what is in `downloads/complete/tv` and `downloads/complete/movies` into the
-   `tv/` and `movies/` trees. `--host transmission` points it at the Transmission container.
+3. **Copy.** Autoplex (started with `--mode copy --host transmission`) copies what is in `downloads/complete/tv` and
+   `downloads/complete/movies` into the `tv/` and `movies/` trees.
 4. **Serve.** Plex and Jellyfin mount `tv/`, `movies/`, and `music/`.
 
 ## Storage layout<a name="storage-layout"></a>
@@ -227,11 +229,9 @@ Every media bind mount comes from `/storage/media`. Nothing in this repository c
 | `movies`                      | `plex`, `jellyfin`, `radarr`, `autoplex`                                                      |
 | `music`                       | `plex`, `jellyfin`                                                                            |
 
-All of these mounts are read-write (no compose file sets `:ro` on them). `flaresolverr` mounts nothing. The other bind
-mounts are `~/docker/glance/{config,assets}`, `~/docker/pihole-data/etc-pihole` (PiHole),
-`~/docker/homeassistant/{config,shared}` (Home Assistant), and, for Caddy, `/etc/tailscale/certs` and
-`/etc/caddy/Caddyfile` (both read-only) and the `caddy_data` named volume. Relative paths in the compose files resolve
-against `--project-directory ~/docker`.
+All of these mounts are read-write (no compose file sets `:ro` on them). `flaresolverr` mounts nothing. The mounts of
+the other services (Glance, Caddy, PiHole, Home Assistant) are listed in their sections above. Relative paths in the
+compose files resolve against `--project-directory ~/docker`.
 
 ## Secrets<a name="secrets"></a>
 
@@ -240,9 +240,9 @@ Secrets and other per-host values are rendered on the NAS and never copied from 
 
 **Shared `~/docker/.env`.** The `docker` role renders it from
 [`roles/docker/templates/env.j2`](../roles/docker/templates/env.j2) (mode `0600`). It holds only
-`ADVERTISE_IP=https://<host>.<tailnet>:32443`, which is not a secret. Plex reads it through the bare `ADVERTISE_IP`
-entry in its `environment`; Glance reads it through `env_file: .env`, although no file under `services/glance/` refers
-to `ADVERTISE_IP`.
+`ADVERTISE_IP=https://<host>.<tailnet>.ts.net:32443` (`<tailnet>` is the part of `tailscale_tailnet_name` before
+`.ts.net`), which is not a secret. Plex reads it through the bare `ADVERTISE_IP` entry in its `environment`; Glance
+reads it through `env_file: .env`, although no file under `services/glance/` refers to `ADVERTISE_IP`.
 
 **Per-service secrets.** A service that needs a secret ships `services/<svc>/env.j2` and sets `env_file: <svc>/.env` in
 its `compose.yml`. The path is relative to `~/docker`, because `deploy.sh` passes `--project-directory ~/docker`. The
@@ -271,7 +271,8 @@ runs it:
 
 `scripts/nas/deploy-services.sh` (see the [NAS scripts README](../scripts/nas/README.md)) rsyncs without deleting (`all`
 syncs the whole `services/` tree; a single service syncs `compose.base.yml` and its own directory), then runs
-`deploy.sh` on the NAS. A failed service does not stop the others; `deploy.sh` exits 1 at the end. On the NAS itself:
+`deploy.sh` on the NAS. Within one `deploy.sh` run, a failed service does not stop the others; the script exits 1 at the
+end. On the NAS itself:
 
 ```bash
 # Deploy everything
@@ -285,8 +286,8 @@ syncs the whole `services/` tree; a single service syncs `compose.base.yml` and 
 
 [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) joins the tailnet as `tag:ci` and runs
 `scripts/nas/deploy-services.sh` over SSH. A push to `main` touching `services/<name>/` deploys just that service. A
-change to `compose.base.yml`, or a push whose `before` SHA is null (force push, new branch), deploys every service that
-has a `compose.yml`, one at a time. A manual `workflow_dispatch` run deploys the named service (default `all`):
+change to `compose.base.yml`, or a push whose `before` SHA is null (a new branch), deploys every service that has a
+`compose.yml`, one at a time. A manual `workflow_dispatch` run deploys the named service (default `all`):
 
 ```bash
 gh workflow run deploy.yml -f service=glance
@@ -344,8 +345,8 @@ docker compose --project-directory ~/docker -f ~/docker/compose.base.yml -f ~/do
 A `python3 run.py nas-provision` run after a manual pull recreates the updated container through `deploy.sh all` and
 reports it as changed (the `services` role matches `Recreated`, `Started`, `Created`, and `Pulled`).
 
-The `autoplex` image is the exception. It is built on the NAS by the `docker` role, not by this stack, so `pull` is not
-how it is refreshed, and re-running the role does not rebuild an image that already exists (see
+The `autoplex` image is the exception: the `docker` role's build supplies it, so refresh it by rebuilding. Re-running
+the role alone does not rebuild an image that already exists (see
 [`roles/docker/README.md`](../roles/docker/README.md#autoplex-image)). To rebuild it, remove the container that uses the
 image and the image itself, then re-run the role and redeploy:
 
