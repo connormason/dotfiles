@@ -95,7 +95,8 @@ After first playbook run:
 1. Set URL base paths in each service's web UI (see table above)
 2. Check that the `caddy` container is running. A full `nas-provision` deploys it, because the `services` role runs
    after this one. After a run limited to `--tags tailscale` on a host that has no Caddy container yet, deploy it with
-   `python3 run.py nas-deploy caddy`, or `~/docker/deploy.sh caddy` on the NAS
+   `python3 run.py nas-deploy caddy` (it syncs first), or `~/docker/deploy.sh caddy` on the NAS once an earlier sync has
+   put `~/docker/caddy/compose.yml` there
 3. Verify access from a device on your tailnet
 
 Plex's `ADVERTISE_IP` needs no manual step: the `docker` role renders `~/docker/.env` with
