@@ -284,3 +284,61 @@ class TestServicesReadme:
         The container-table parser finds rows (guards against a silently broken regex)
         """
         assert _services_readme_rows(REPO_ROOT), 'parsed zero containers from services/README.md'
+
+
+def _playbook_role_order(repo: Path) -> list[str]:
+    """
+    Return the roles ``playbooks/nas_bootstrap.yml`` includes, in play order
+
+    :param repo: repository root
+    :return: role names without the ``roles/`` prefix
+    """
+    key  = 'ansible.builtin.include_role'
+    play = yaml.safe_load((repo / 'playbooks' / 'nas_bootstrap.yml').read_text(encoding='utf-8'))[0]
+    return [task[key]['name'].removeprefix('roles/') for task in play['tasks'] if key in task]
+
+
+def _playbooks_readme_role_order(repo: Path) -> list[str]:
+    """
+    Return the role names bolded in the numbered execution-order list of ``playbooks/README.md``
+
+    :param repo: repository root
+    :return: role names in document order (steps whose bold text is not a role directory, such as the apt refresh, are
+             ignored)
+    """
+    text  = (repo / 'playbooks' / 'README.md').read_text(encoding='utf-8')
+    names = re.findall(r'^\d+\. \*\*([a-z0-9_-]+)\*\*', text, re.MULTILINE)
+    return [name for name in names if name in _role_dirs(repo)]
+
+
+def _roles_readme_role_order(repo: Path) -> list[str]:
+    """
+    Return the role names linked in the first cell of the ``roles/README.md`` table, in table order
+    """
+    text = (repo / 'roles' / 'README.md').read_text(encoding='utf-8')
+    return re.findall(r'^\|\s*\[`([a-z0-9_-]+)`\]\(', text, re.MULTILINE)
+
+
+class TestRoleOrderDocs:
+    """
+    Guardrails tying the documented role order to the playbook
+    """
+    def test_playbooks_readme_follows_the_playbook(self) -> None:
+        """
+        The execution-order list in playbooks/README.md names the roles in the playbook's order
+        """
+        assert _playbooks_readme_role_order(REPO_ROOT) == _playbook_role_order(REPO_ROOT)
+
+    def test_roles_readme_table_follows_the_playbook(self) -> None:
+        """
+        The roles/README.md table lists the roles in the playbook's order
+        """
+        assert _roles_readme_role_order(REPO_ROOT) == _playbook_role_order(REPO_ROOT)
+
+    def test_order_parsers_are_not_empty(self) -> None:
+        """
+        The order parsers find roles (guards against silently broken regexes)
+        """
+        assert _playbook_role_order(REPO_ROOT)
+        assert _playbooks_readme_role_order(REPO_ROOT)
+        assert _roles_readme_role_order(REPO_ROOT)

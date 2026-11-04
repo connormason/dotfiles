@@ -11,24 +11,26 @@ as a frozen snapshot in [`archive/ansible-macos/`](../archive/ansible-macos/READ
 
 Roles are included in the order the playbook runs them; each is selectable with the Ansible tag of the same name.
 
-| Role                               | Purpose                                                                                 |
-| ---------------------------------- | --------------------------------------------------------------------------------------- |
-| [`debian`](debian/README.md)       | Setup tasks for Debian Linux                                                            |
-| [`zfs`](zfs/README.md)             | Dependencies for the ZFS filesystem                                                     |
-| [`samba`](samba/README.md)         | Samba file sharing                                                                      |
-| [`docker`](docker/README.md)       | Docker-based media server and home-automation stack                                     |
-| [`tailscale`](tailscale/README.md) | Tailscale install and configuration, plus HTTPS certificates and Caddy for the NAS      |
-| [`dotfiles`](dotfiles/README.md)   | `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh` |
-| [`haos`](haos/README.md)           | Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)                        |
-| [`services`](services/README.md)   | Syncs `services/` to the NAS, renders per-service secrets, deploys the stack            |
+| Role                               | Purpose                                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`debian`](debian/README.md)       | Base Debian configuration: system packages (including the stow engine's prerequisites), the Linuxbrew prefix, and the systemd sleep targets |
+| [`zfs`](zfs/README.md)             | ZFS installation: the `contrib` apt component, kernel packages, `zfs-dkms`, and `zfsutils-linux`                                            |
+| [`samba`](samba/README.md)         | Samba file sharing                                                                                                                          |
+| [`docker`](docker/README.md)       | Docker Engine, `~/docker` skeleton, autoplex image, `deploy.sh`                                                                             |
+| [`tailscale`](tailscale/README.md) | Tailscale install and configuration, HTTPS certificates, and the Caddyfile Caddy reads                                                      |
+| [`dotfiles`](dotfiles/README.md)   | `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh`                                                     |
+| [`haos`](haos/README.md)           | Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)                                                                            |
+| [`services`](services/README.md)   | Syncs `services/` to the NAS, renders per-service secrets, deploys the stack                                                                |
 
 ## External dependencies
 
-[`requirements.yml`](requirements.yml) lists the collections to install with `ansible-galaxy`:
+[`requirements.yml`](requirements.yml) lists collections only. Install them with `ansible-galaxy`:
 
 ```bash
-ansible-galaxy install -r roles/requirements.yml
+scripts/hooks/uv-public.sh run ansible-galaxy collection install -r roles/requirements.yml
 ```
+
+`run.py nas-provision` runs the same command through `scripts/hooks/uv-public.sh` before every playbook run.
 
 ## Running roles
 
@@ -37,19 +39,20 @@ ansible-galaxy install -r roles/requirements.yml
 python3 run.py nas-provision
 
 # A single role (or several) by tag
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags dotfiles
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags dotfiles,haos
-
-# Every role tagged configfile
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags configfile
+python3 run.py nas-provision --tags dotfiles
+python3 run.py nas-provision --tags dotfiles,haos
 ```
+
+A role-name tag runs the whole role. The `configfile` and `secrets` tags run only the tasks that carry them; see
+[Tags](../playbooks/README.md#tags) for what each tag selects.
 
 ## Adding a role
 
 1. Create `roles/<name>/` with the standard layout (`tasks/main.yml`, plus `defaults/`, `files/`, `templates/`,
    `handlers/` as needed) and a `README.md`.
 
-2. Include it in `playbooks/nas_bootstrap.yml` with `include_role` and matching `tags`:
+2. Include it in `playbooks/nas_bootstrap.yml` with `include_role`, the role-name tag in `apply`, and the same tag on
+   the include:
 
    ```yaml
      - name: <what the role does>
@@ -59,14 +62,21 @@ ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --ta
            tags: <name>
        tags:
          - <name>
-         - configfile
    ```
+
+   A tag on an `include_role` selects only the include itself; the `apply` tag is what reaches the role's tasks. Add
+   another tag (such as `configfile`) to the include only if a task inside the role carries that tag.
+   `tests/unit/test_nas_playbook.py::TestPlaybookTags` fails on an include tag that reaches no task.
 
 3. Add any new collection to `requirements.yml`.
 
-4. Add a row to the table above.
+4. Update `EXPECTED_ORDER` in `tests/unit/test_nas_playbook.py`.
 
-Use fully-qualified module names, a `defaults/` variable for file modes, and `become` only on tasks that need it.
+5. Add a row to the table above and a step to the execution-order list in
+   [`playbooks/README.md`](../playbooks/README.md), both in playbook order. `tests/unit/test_docs_consistency.py` checks
+   both against the playbook.
+
+Use fully-qualified module names and `become` only on tasks that need it.
 
 ## Variables
 
