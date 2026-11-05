@@ -22,11 +22,15 @@ which registers it on class definition and:
 
 Command Categories
 -----------------
-- **Inventory**: Manage the standalone inventory git repository
-- **Codebase**: Clean build artifacts, run and prepare prek hooks, generate Makefile
-- **NAS**: Provision the home NAS and deploy its Compose services
-- **Dotfiles**: Wrap the layered engine (doctor, bootstrap, stow, render, test) and ingest local Claude config
-  (track-claude)
+- **Setup & Environment**: Install and inspect the uv-managed ``.venv`` (install, dev, shell, status), verify the whole
+  environment (doctor), clean artifacts, and manage ``uv.lock`` (lock, lock-check, lock-upgrade)
+- **Bootstrap & Deploy**: Run the layered bootstrap stages, provision the home NAS and deploy its Compose services
+- **Dotfiles**: Wrap the stow and render tooling and ingest local Claude config (track-claude)
+- **Inventory**: Manage the standalone inventory git repository and its vault files
+- **Tool Installation**: Install uv and hatch with the bundled installer scripts
+- **Hooks**: Install, prepare, uninstall, and run prek hooks
+- **Testing**: Run the test suite
+- **Utilities**: Generate the Makefile, collect a Python environment diagnostic
 
 Key Features
 -----------
@@ -39,14 +43,18 @@ Key Features
 Environment Variables
 --------------------
 - DOTFILES_RUN_DEBUG: Enable debug output (true/false)
+- DOTFILES_UV_VERBOSE: Enable verbose uv logging (true/false)
 - DOTFILES_INVENTORY_REPO_URL: Override inventory repository URL
 - NO_COLOR: Disable ANSI styling when set to any non-empty value
 
 Usage Examples
 -------------
 
+    # Create .venv and install dependencies
+    python3 run.py install
+
     # List inventory hosts
-    python3 run.py list-hosts
+    python3 run.py inventory-hosts
 
     # Update inventory from remote
     python3 run.py update-inventory
@@ -254,9 +262,6 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 # Project filepaths
 #
 #   dotfiles/                       DOTFILES_DIR
-#     .git/                         GIT_DIR
-#       hooks/                      GIT_HOOKS_DIR
-#         pre-commit                PRE_COMMIT_HOOK
 #     .venv/                        VENV_DIR
 #     bootstrap/                    BOOTSTRAP_DIR
 #       bootstrap.sh                BOOTSTRAP_SCRIPT
@@ -307,9 +312,6 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 SCRIPT_PATH:            Path = Path(__file__)
 DOTFILES_DIR:           Path = SCRIPT_PATH.parent
 
-GIT_DIR:                Path = DOTFILES_DIR / '.git'
-GIT_HOOKS_DIR:          Path = GIT_DIR / 'hooks'
-PRE_COMMIT_HOOK:        Path = GIT_HOOKS_DIR / 'pre-commit'
 VENV_DIR:               Path = DOTFILES_DIR / '.venv'
 
 BOOTSTRAP_DIR:          Path = DOTFILES_DIR / 'bootstrap'
@@ -374,12 +376,6 @@ class ExitCode(int, enum.Enum):
 
 
 VERSION_RE:               re.Pattern[str] = re.compile(r'(?P<version>[\d.]+)')
-VERSION_PRERELEASE_RE:    re.Pattern[str] = re.compile(r'\d(?:a|b|rc)\d|\.dev|dev\d')
-UV_TOOL_LIST_RE:          re.Pattern[str] = re.compile(r'^(?P<name>\S+)\s+v(?P<version>\S+)$')
-UV_RECEIPT_REQS_BLOCK_RE: re.Pattern[str] = re.compile(r'requirements\s*=\s*\[(.*?)\]', re.DOTALL)
-UV_RECEIPT_REQ_ENTRY_RE:  re.Pattern[str] = re.compile(r'\{([^}]*)\}')
-UV_RECEIPT_KV_RE:         re.Pattern[str] = re.compile(r'([A-Za-z_][\w-]*)\s*=\s*"([^"]*)"')
-UV_RECEIPT_PYTHON_PIN_RE: re.Pattern[str] = re.compile(r'(?m)^\s*python\s*=\s*"([^"]+)"')
 
 
 # ====================================================================================================
@@ -499,10 +495,14 @@ class Command(metaclass=abc.ABCMeta):
 
         :param register: if False, skip registration (useful for abstract intermediate base classes)
         :raises TypeError: if a registered subclass doesn't implement every abstract method (e.g. :meth:`run`)
+        :raises ValueError: if both ``script_only`` and ``makefile_only`` are set
         """
         super().__init_subclass__(**kwargs)
         if not register:
             return
+
+        if cls.script_only and cls.makefile_only:
+            raise ValueError(f'{cls.__name__}: only one of `script_only` and `makefile_only` may be True')
 
         # ABCMeta only marks the class abstract after __init_subclass__ returns, so instantiating it below would succeed
         abstract_methods = sorted(
@@ -1017,6 +1017,10 @@ def status_line(
     printf(f'{emoji}  {name_styled} {detail_styled}{loc}{suffix}')
 
 
+UV    = style('uv',    fg='bright_magenta')
+HATCH = style('hatch', fg='bright_magenta')
+
+
 # ====================================================================================================
 # Prompting helpers
 # ====================================================================================================
@@ -1204,8 +1208,9 @@ def shell_command(
         buffer:     str = ''
         all_output: str = ''
 
-        timed_out = False
-        deadline  = None if timeout is None else time.monotonic() + timeout
+        returncode = -1
+        timed_out  = False
+        deadline   = None if timeout is None else time.monotonic() + timeout
         try:
             while True:
                 # Poll with the remaining budget: a bare blocking read would never notice a hung, silent child
@@ -1632,36 +1637,6 @@ def warn_on_dirty_services() -> None:
 
 
 # =======================================================================================
-# Git hook helpers
-# =======================================================================================
-
-
-class HookStatus(TypedDict):
-    """
-    Hook status info dict (returned by :func:`check_hooks_installed`).
-    """
-    installed: bool
-    detail:    str
-
-
-def check_hooks_installed() -> HookStatus:
-    """
-    Check if pre-commit hooks are installed in the git repository.
-
-    :return: dict with "installed" bool and "detail" string describing hook type
-    """
-    if not PRE_COMMIT_HOOK.is_file():
-        return {'installed': False, 'detail': ''}
-
-    try:
-        content = PRE_COMMIT_HOOK.read_text(encoding='utf-8')
-    except OSError:
-        return {'installed': False, 'detail': ''}
-    else:
-        return {'installed': True, 'detail': 'prek' if 'prek' in content else 'pre-commit'}
-
-
-# =======================================================================================
 # `uv` helpers
 # =======================================================================================
 
@@ -1681,6 +1656,30 @@ def find_uv_executable() -> Path | None:
     return None
 
 
+def uv_command(*args: str, public: bool = True) -> list[str]:
+    """
+    Build the argv for a ``uv`` invocation.
+
+    With ``public=True`` (the default, and the repo policy for every project-scoped call) the command runs through
+    :data:`UV_PUBLIC_SCRIPT`, which neutralizes internal package index configuration so ``uv.lock`` only ever references
+    public PyPI. The script ``exec``s a bare ``uv``, so when ``uv`` was found outside ``PATH`` (e.g. right after
+    ``install-uv``, before the shell restarts) the command is wrapped in ``env PATH=...`` to keep it resolvable.
+
+    :param args: arguments to pass to ``uv``
+    :param public: route through the public-index wrapper script. Pass False for tool-level calls
+                   (``uv --version``, ``uv tool ...``) that have no index involvement
+    :return: command and arguments
+    """
+    uv_exe = find_uv_executable()
+    if not public:
+        return [str(uv_exe or 'uv'), *args]
+
+    cmd: list[str] = [str(UV_PUBLIC_SCRIPT), *args]
+    if (uv_exe is not None) and (shutil.which('uv') is None):
+        cmd = ['env', f'PATH={uv_exe.parent}{os.pathsep}{os.environ.get("PATH", "")}', *cmd]
+    return cmd
+
+
 def check_uv(*, timeout: float | None = 5) -> ToolInfo | None:
     """
     Get ``uv`` executable path and version if installed.
@@ -1690,7 +1689,7 @@ def check_uv(*, timeout: float | None = 5) -> ToolInfo | None:
     """
     if uv_executable_path := find_uv_executable():
         try:
-            cp = shell_command([str(uv_executable_path), '--version'], capture_output=True, timeout=timeout)
+            cp = shell_command(uv_command('--version', public=False), capture_output=True, timeout=timeout)
         except (FileNotFoundError, ShellCommandError):
             return None
         else:
@@ -1775,12 +1774,12 @@ def uv_run(
     :param kwargs: additional keyword args to forward to :func:`shell_command`
     :return: :class:`subprocess.CompletedProcess`
     """
-    cmd: list[str] = [str(find_uv_executable()), 'run']
+    cmd: list[str] = ['run']
     if active:
         cmd.append('--active')
     if python:
         cmd.extend(['--python', str(python)])
-    return shell_command([*cmd, '--', *command], indent=indent, **kwargs)
+    return shell_command(uv_command(*cmd, '--', *command), indent=indent, **kwargs)
 
 
 def uv_sync(
@@ -1838,9 +1837,7 @@ def uv_sync(
     :raises ShellCommandError: if command exits with nonzero code and ``check=True``
     :return: :class:`subprocess.CompletedProcess`
     """
-    uv_exe = find_uv_executable()
-
-    cmd: list[str] = [str(uv_exe), 'sync']
+    cmd: list[str] = ['sync']
     if extra:
         cmd.extend(['--extra', extra])
     for e in (extras or []):
@@ -1880,7 +1877,41 @@ def uv_sync(
     if dry_run:
         cmd.append('--dry-run')
 
-    return shell_command(cmd, check=check, indent=indent, env=env, **kwargs)
+    return shell_command(uv_command(*cmd), check=check, indent=indent, env=env, **kwargs)
+
+
+def uv_lock(
+    *,
+    check_only: bool = False,
+    refresh: bool = False,
+    upgrade: bool = False,
+    upgrade_packages: Sequence[str] | None = None,
+    indent: int = 0,
+    **kwargs: Any,
+) -> subprocess.CompletedProcess[str]:
+    """
+    Update the project lockfile via ``uv lock``.
+
+    :param check_only: verify ``uv.lock`` is up to date without writing it (``--check``)
+    :param refresh: refresh cached package metadata (``--refresh``)
+    :param upgrade: allow upgrades of every package (``--upgrade``)
+    :param upgrade_packages: allow upgrades of only these packages (``--upgrade-package`` for each)
+    :param indent: number of spaces to indent command output by
+    :param kwargs: additional keyword args to forward to :func:`shell_command` (e.g. ``check=False`` to receive a
+                   nonzero exit status instead of an exception)
+    :raises ShellCommandError: if command exits with nonzero code (unless ``check=False`` is forwarded)
+    :return: :class:`subprocess.CompletedProcess`
+    """
+    cmd: list[str] = ['lock']
+    if check_only:
+        cmd.append('--check')
+    if refresh:
+        cmd.append('--refresh')
+    if upgrade:
+        cmd.append('--upgrade')
+    for package in (upgrade_packages or []):
+        cmd.extend(['--upgrade-package', package])
+    return shell_command(uv_command(*cmd), indent=indent, cwd=DOTFILES_DIR, **kwargs)
 
 
 def uv_pip_list(
@@ -2094,12 +2125,10 @@ def is_venv_stale(
     """
     if not venv_dir.exists():
         return False
-
-    uv_exe = find_uv_executable()
-    if uv_exe is None:
+    if find_uv_executable() is None:
         return False
 
-    cmd: list[str] = [str(uv_exe), 'sync', '--check']
+    cmd: list[str] = ['sync', '--check']
     if all_extras:
         cmd.append('--all-extras')
     if all_groups:
@@ -2120,7 +2149,7 @@ def is_venv_stale(
 
     try:
         result = shell_command(
-            cmd,
+            uv_command(*cmd),
             cwd=DOTFILES_DIR,
             capture_output=True,
             timeout=timeout,
@@ -2246,15 +2275,14 @@ def ensure_venv(
     :return: path to the ``.venv`` directory
     """
     if VENV_DIR.exists():
-        health = validate_venv(VENV_DIR)
+        health = validate_venv(VENV_DIR, check_stale=False)
         if health.status == VenvStatus.BROKEN_SYMLINK:
             printf('🔴 .venv has broken symlinks, recreating...', fg='bright_yellow', indent=indent)
             shutil.rmtree(VENV_DIR)
 
     if not VENV_DIR.exists():
         printf('💾 Creating virtual environment...', fg='bright_cyan', indent=indent)
-        uv_exe = find_uv_executable()
-        shell_command([str(uv_exe), 'venv'], indent=indent)
+        shell_command(uv_command('venv'), indent=indent)
         printf('')
 
     printf('📦 Syncing dependencies...', fg='bright_cyan', indent=indent)
@@ -2365,12 +2393,12 @@ def resolve_ssh_target_from_inventory_host(host: str) -> SSHTarget:
              local login, as ssh would
     """
     result = shell_command(
-        [
-            str(UV_PUBLIC_SCRIPT), 'run', 'ansible-inventory',
+        uv_command(
+            'run', 'ansible-inventory',
             '-i',                    str(INVENTORY_FILE),
             '--vault-password-file', str(VAULT_PASSWORD),
             '--host',                host,
-        ],
+        ),
         capture_output=True,
         check=False,
         cwd=DOTFILES_DIR,
@@ -2435,11 +2463,11 @@ def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
     :param args: parsed nas-provision arguments
     :return: command and arguments
     """
-    cmd: list[str] = [
-        str(UV_PUBLIC_SCRIPT), 'run', 'ansible-playbook', str(NAS_BOOTSTRAP_PLAYBOOK),
+    cmd: list[str] = uv_command(
+        'run', 'ansible-playbook', str(NAS_BOOTSTRAP_PLAYBOOK),
         '-i',                    str(INVENTORY_FILE),
         '--vault-password-file', str(VAULT_PASSWORD),
-    ]
+    )
     if args.tags:
         cmd.extend(['--tags', args.tags])
     if args.limit:
@@ -2496,6 +2524,44 @@ def resolve_reachable_nas() -> SSHTarget:
 
 
 # =======================================================================================
+# Claude Code config file utilities
+# =======================================================================================
+
+
+def find_untracked_claude_files() -> list[Path]:
+    """
+    Find real (non-symlink) files under the tracked ``~/.claude`` subdirectories
+
+    Stowed agents/commands/skills/hooks/rules are symlinks into the repo, so any regular file is something Claude Code
+    or the user created locally that the ``claude`` stow package does not have yet. Symlinked directories are never
+    descended into, and a tracked subdirectory that is itself a symlink is skipped, so repo files reached through a
+    link are never mistaken for local ones. Gitignored junk (``.backups/`` and ``__pycache__/`` directories, ``.pyc``
+    files, ``.DS_Store``) is skipped, since ingesting it would put ignored files in the repo working copy.
+
+    :return: sorted absolute paths of untracked files
+    """
+    untracked: list[Path] = []
+    for subdir in CLAUDE_TRACKED_SUBDIRS:
+        base = CLAUDE_CONFIG_DIR / subdir
+        if base.is_symlink() or not base.is_dir():
+            continue
+
+        for dirpath, dirnames, filenames in os.walk(base):
+            # Prune in place so os.walk never descends into gitignored junk directories
+            dirnames[:] = [dirname for dirname in dirnames if dirname not in CLAUDE_IGNORE_DIRS]
+
+            for filename in filenames:
+                if filename in CLAUDE_IGNORE_NAMES or Path(filename).suffix in CLAUDE_IGNORE_SUFFIXES:
+                    continue
+
+                path = Path(dirpath) / filename
+                if not path.is_symlink():
+                    untracked.append(path)
+
+    return sorted(untracked)
+
+
+# =======================================================================================
 # `doctor` command checks
 # =======================================================================================
 
@@ -2536,6 +2602,52 @@ def check_layers() -> DoctorCheck:
 
     count = len([line for line in result.stdout.splitlines() if line])
     return DoctorCheck(name='layers', ok=True, detail=f'{count} layer(s): base + {count - 1} overlay(s)')
+
+
+def check_python_tool() -> DoctorCheck:
+    """
+    Check that the running python satisfies :data:`MIN_PYTHON` (if one is set)
+    """
+    v      = sys.version_info
+    v_str  = f'{v.major}.{v.minor}.{v.micro}'
+    detail = f'{v_str} @ {folduser(sys.executable)}'
+    if (MIN_PYTHON is not None) and (v < MIN_PYTHON):
+        return DoctorCheck(name='python', ok=False, detail=f'{detail} (need >= {MIN_PYTHON[0]}.{MIN_PYTHON[1]})')
+    return DoctorCheck(name='python', ok=True, detail=detail)
+
+
+def check_uv_tool() -> DoctorCheck:
+    """
+    Check that ``uv`` is installed, offering the bundled installer as the fix
+    """
+    if uv_info := check_uv():
+        return DoctorCheck(name='uv', ok=True, detail=f'{uv_info["version"]} @ {folduser(uv_info["executable"])}')
+    return DoctorCheck(
+        name='uv',
+        ok=False,
+        detail='not installed',
+        fix=[sys.executable, str(INSTALLER_SCRIPTS['uv']), '--ensure'],
+    )
+
+
+def check_venv() -> DoctorCheck:
+    """
+    Check that the project ``.venv`` (or the externally active venv) exists and is in sync with ``uv.lock``
+
+    A venv that merely is not activated in this shell is healthy; the fix for a missing or stale one is
+    ``run.py install``.
+    """
+    target = get_external_active_venv() or VENV_DIR
+    health = validate_venv(target)
+    detail = f'Python {health.python_version or "?"}'
+    if health.package_count is not None:
+        detail += f', {health.package_count} packages'
+
+    if health.status in (VenvStatus.HEALTHY, VenvStatus.NOT_ACTIVATED):
+        return DoctorCheck(name='venv', ok=True, detail=f'{detail}, {health.message}')
+
+    fix = None if (target != VENV_DIR) else [sys.executable, str(SCRIPT_PATH), 'install']
+    return DoctorCheck(name='venv', ok=False, detail=health.message, fix=fix)
 
 
 def check_hooks() -> DoctorCheck:
@@ -2697,15 +2809,18 @@ def doctor_checks() -> list[DoctorCheck]:
 
     return [
         *first,
+        check_python_tool(),
+        check_uv_tool(),
         check_git_version(),
         check_hooks(),
+        check_venv(),
         check_links(),
         check_render(),
         check_brewfiles(),
     ]
 
 
-# =======================================================================================
+# ====================================================================================================
 # Setup & Environment commands
 #
 # Commands:
@@ -2715,7 +2830,7 @@ def doctor_checks() -> list[DoctorCheck]:
 #   - status:  Show environment health status
 #   - doctor:  Verify the environment (``--fix`` confirms each repair, then re-checks; ``--yes`` skips the prompts)
 #   - clean:   Remove environments, build artifacts, caches, and temporary files
-# =======================================================================================
+# ====================================================================================================
 
 
 class InstallCommand(Command):
@@ -2726,7 +2841,6 @@ class InstallCommand(Command):
     group: ClassVar[str] = 'Setup & Environment'
 
     class Args(argparse.Namespace):
-        all:   bool     # --all
         dev:   bool     # --dev
         hooks: bool     # --hooks/--no-hooks
         shell: bool     # --shell/--no-shell
@@ -2735,18 +2849,10 @@ class InstallCommand(Command):
         self,
         parser: argparse.ArgumentParser,
         *,
-        all: bool = True,
         dev: bool = True,
         hooks: bool | None = True,
         shell: bool | None = True,
     ) -> None:
-        if all:
-            parser.add_argument(
-                '-a',
-                '--all',
-                action='store_true',
-                help='Install all optional project dependencies',
-            )
         if dev:
             parser.add_argument(
                 '-d',
@@ -2796,7 +2902,6 @@ class InstallCommand(Command):
                 active=True,
                 inexact=True,
                 no_dev=not getattr(args, 'dev', False),
-                all_extras=getattr(args, 'all', False),
                 indent=3,
             )
             printf('')
@@ -2804,7 +2909,6 @@ class InstallCommand(Command):
             ensure_venv(
                 inexact=True,
                 no_dev=not getattr(args, 'dev', False),
-                all_extras=getattr(args, 'all', False),
             )
 
         if args.hooks:
@@ -2837,10 +2941,10 @@ class DevCommand(InstallCommand):
 
         if active_venv := os.environ.get('VIRTUAL_ENV'):
             printf(f'📦 Installing dependencies into active environment: {pathstyle(active_venv)}', fg='bright_cyan')
-            uv_sync(active=True, inexact=True, all_extras=getattr(args, 'all', False), indent=3)
+            uv_sync(active=True, inexact=True, indent=3)
             printf('')
         else:
-            ensure_venv(inexact=True, all_extras=getattr(args, 'all', False))
+            ensure_venv(inexact=True)
 
         if args.hooks:
             printf('💿 Installing pre-commit hooks...', fg='bright_cyan')
@@ -2894,13 +2998,10 @@ class StatusCommand(Command):
             status_line('uv', 'not installed', ok=False)
             all_ok = False
 
-        # Pre-commit hooks
-        hook_status = check_hooks_installed()
-        if hook_status['installed']:
-            status_line('hooks', f"installed ({hook_status['detail']})", ok=True)
-        else:
-            status_line('hooks', 'not installed (run `make dev`)',       ok=False)
-            all_ok = False
+        # Git hooks
+        hooks = check_hooks()
+        status_line('hooks', hooks.detail, ok=hooks.ok)
+        all_ok &= hooks.ok
 
         # Optional tools
         for tool_name, note in self.OPTIONAL_TOOLS:
@@ -2962,7 +3063,7 @@ class StatusCommand(Command):
 # TODO: cleanup formatting
 class DoctorCommand(Command):
     """
-    Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles
+    Check tools, python/uv/venv, overlays, git version and hooks, links, rendered settings, and Brewfiles
     """
     name:  ClassVar[str] = 'doctor'
     group: ClassVar[str] = 'Setup & Environment'
@@ -3222,7 +3323,7 @@ class NasProvisionCommand(Command):
 
         printf('📦 Installing Ansible collections', fg='bright_cyan')
         galaxy = shell_command(
-            [str(UV_PUBLIC_SCRIPT), 'run', 'ansible-galaxy', 'collection', 'install', '-r', str(ANSIBLE_REQUIREMENTS)],
+            uv_command('run', 'ansible-galaxy', 'collection', 'install', '-r', str(ANSIBLE_REQUIREMENTS)),
             check=False,
             cwd=DOTFILES_DIR,
         )
@@ -3388,39 +3489,6 @@ class RenderCommand(Command):
 
         result = shell_command(cmd, check=False)
         sys.exit(result.returncode)
-
-
-def find_untracked_claude_files() -> list[Path]:
-    """
-    Find real (non-symlink) files under the tracked ``~/.claude`` subdirectories
-
-    Stowed agents/commands/skills/hooks/rules are symlinks into the repo, so any regular file is something Claude Code
-    or the user created locally that the ``claude`` stow package does not have yet. Symlinked directories are never
-    descended into, and a tracked subdirectory that is itself a symlink is skipped, so repo files reached through a
-    link are never mistaken for local ones. Gitignored junk (``.backups/`` and ``__pycache__/`` directories, ``.pyc``
-    files, ``.DS_Store``) is skipped, since ingesting it would put ignored files in the repo working copy.
-
-    :return: sorted absolute paths of untracked files
-    """
-    untracked: list[Path] = []
-    for subdir in CLAUDE_TRACKED_SUBDIRS:
-        base = CLAUDE_CONFIG_DIR / subdir
-        if base.is_symlink() or not base.is_dir():
-            continue
-
-        for dirpath, dirnames, filenames in os.walk(base):
-            # Prune in place so os.walk never descends into gitignored junk directories
-            dirnames[:] = [dirname for dirname in dirnames if dirname not in CLAUDE_IGNORE_DIRS]
-
-            for filename in filenames:
-                if filename in CLAUDE_IGNORE_NAMES or Path(filename).suffix in CLAUDE_IGNORE_SUFFIXES:
-                    continue
-
-                path = Path(dirpath) / filename
-                if not path.is_symlink():
-                    untracked.append(path)
-
-    return sorted(untracked)
 
 
 class TrackClaudeCommand(Command):
@@ -3686,7 +3754,7 @@ class InventoryHostsCommand(Command):
         try:
             import yaml
         except ImportError:
-            hint = style('scripts/hooks/uv-public.sh run python run.py list-hosts', fg='bright_magenta')
+            hint = style('scripts/hooks/uv-public.sh run python run.py inventory-hosts', fg='bright_magenta')
             printf('')
             printf('❌ PyYAML is required to read the inventory', fg='red', bold=True)
             printf(f'Run it through uv: {hint}', indent=3)
@@ -4048,11 +4116,10 @@ class _InstallToolCommand(Command, register=False):
     """
     Base for tool installer commands that wrap a ``scripts/install/*.py`` installer script.
 
-    Subclasses set :cvar:`tool_name` and :cvar:`installer_script`.
+    Subclasses set :cvar:`tool_name`, which keys the script in :data:`INSTALLER_SCRIPTS`.
     """
-    group:            ClassVar[str] = 'Tool Installation'
-    tool_name:        ClassVar[str]
-    installer_script: ClassVar[Path]
+    group:     ClassVar[str] = 'Tool Installation'
+    tool_name: ClassVar[InstallableTool]
 
     class Args(argparse.Namespace):
         force:       bool           # --force
@@ -4087,7 +4154,10 @@ class _InstallToolCommand(Command, register=False):
         )
 
     def run(self, args: Args) -> None:
-        cmd: list[str] = [str(self.installer_script)]
+        script_path = INSTALLER_SCRIPTS[self.tool_name]
+        check_script_validity(script_path, f'{self.tool_name} installer script')
+
+        cmd: list[str] = [sys.executable, str(script_path)]
         if args.force:
             cmd.append('--force')
         if args.verbose:
@@ -4097,30 +4167,26 @@ class _InstallToolCommand(Command, register=False):
         if args.retry_delay is not None:
             cmd.extend(['--retry-delay', str(args.retry_delay)])
 
-        try:
-            shell_command(cmd)
-        except subprocess.CalledProcessError:
-            sys.exit(1)
+        result = shell_command(cmd, check=False)
+        sys.exit(result.returncode)
 
 
 class InstallUvCommand(_InstallToolCommand):
     """
     Install `uv` Python package installer tool
     """
-    name:             ClassVar[str]  = 'install-uv'
-    description:      ClassVar[str]  = f'Install {style("uv", fg="bright_magenta")} Python package installer tool'
-    tool_name:        ClassVar[str]  = 'uv'
-    installer_script: ClassVar[Path] = SCRIPTS_DIR / 'install' / 'install_uv.py'
+    name:        ClassVar[str]             = 'install-uv'
+    description: ClassVar[str]             = f'Install {UV} Python package installer tool'
+    tool_name:   ClassVar[InstallableTool] = 'uv'
 
 
 class InstallHatchCommand(_InstallToolCommand):
     """
     Install `hatch` Python project management tool
     """
-    name:             ClassVar[str]  = 'install-hatch'
-    description:      ClassVar[str]  = f'Install {style("hatch", fg="bright_magenta")} Python project management tool'
-    tool_name:        ClassVar[str]  = 'hatch'
-    installer_script: ClassVar[Path] = SCRIPTS_DIR / 'install' / 'install_hatch.py'
+    name:        ClassVar[str]             = 'install-hatch'
+    description: ClassVar[str]             = f'Install {HATCH} Python project management tool'
+    tool_name:   ClassVar[InstallableTool] = 'hatch'
 
 
 # ====================================================================================================
@@ -4137,7 +4203,7 @@ class InstallHatchCommand(_InstallToolCommand):
 
 class InstallHooksCommand(Command):
     """
-    Install prek git hook shims (overwrites any existing shims)
+    Install prek git hook shims
     """
     name:  ClassVar[str] = 'install-hooks'
     group: ClassVar[str] = 'Hooks'
@@ -4488,6 +4554,99 @@ class PreCommand(RunHooksCommand):
 
 
 # ====================================================================================================
+# Dependencies commands
+#
+# Commands:
+#   - lock:         Update uv.lock from pyproject.toml
+#   - lock-check:   Check that uv.lock is up to date
+#   - lock-upgrade: Upgrade locked dependency versions
+# ====================================================================================================
+
+
+class LockCommand(Command):
+    """
+    Update uv.lock from pyproject.toml
+    """
+    name:  ClassVar[str] = 'lock'
+    group: ClassVar[str] = 'Dependencies'
+
+    class Args(argparse.Namespace):
+        refresh: bool       # --refresh
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '--refresh',
+            action='store_true',
+            help='Refresh cached package metadata',
+        )
+
+    def run(self, args: Args) -> None:
+        check_python(quiet=True)
+        ensure_uv(quiet=True)
+
+        printf('🔒 Updating uv.lock...', fg='bright_cyan')
+        result = uv_lock(refresh=args.refresh, check=False, indent=3)
+        sys.exit(result.returncode)
+
+
+class LockCheckCommand(Command):
+    """
+    Check that uv.lock is up to date with pyproject.toml
+    """
+    name:  ClassVar[str] = 'lock-check'
+    group: ClassVar[str] = 'Dependencies'
+
+    def run(self, args: argparse.Namespace) -> None:
+        check_python(quiet=True)
+        ensure_uv(quiet=True)
+
+        printf('🔎 Checking uv.lock...', fg='bright_cyan')
+        result = uv_lock(check_only=True, check=False, indent=3)
+        if result.returncode != 0:
+            printf('🔴 uv.lock is out of date', fg='bright_red')
+            printf(f'Update it with: {style("make lock", fg="bright_magenta")}', fg='bright_white', indent=3)
+            sys.exit(ExitCode.COMMAND_FAILED)
+        printf('✅ uv.lock is up to date', fg='bright_green')
+
+
+class LockUpgradeCommand(Command):
+    """
+    Upgrade locked dependency versions in uv.lock
+    """
+    name:  ClassVar[str] = 'lock-upgrade'
+    group: ClassVar[str] = 'Dependencies'
+
+    class Args(argparse.Namespace):
+        packages: list[str] | None      # --package
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '-P',
+            '--package',
+            dest='packages',
+            action='append',
+            metavar='PACKAGE',
+            help='Upgrade only this package (may be repeated; default: upgrade all packages)',
+        )
+
+    def run(self, args: Args) -> None:
+        check_python(quiet=True)
+        ensure_uv(quiet=True)
+
+        printf('⏬ Upgrading uv.lock...', fg='bright_cyan')
+        result = uv_lock(upgrade=not args.packages, upgrade_packages=args.packages, check=False, indent=3)
+        if result.returncode == 0:
+            printf('✅ uv.lock upgraded', fg='bright_green')
+            printf(
+                'The uv-export and sync-with-uv hooks refresh requirements.txt and hook versions on the next commit',
+                fg='bright_white',
+                dim=True,
+                indent=3,
+            )
+        sys.exit(result.returncode)
+
+
+# ====================================================================================================
 # Testing commands
 #
 # Commands
@@ -4515,7 +4674,7 @@ class TestCommand(Command):
 
     def run(self, args: Args) -> None:
         result = shell_command(
-            [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])],
+            uv_command('run', '--group', 'test', 'pytest', *(args.paths or ['tests'])),
             check=False,
         )
         sys.exit(result.returncode)
@@ -4597,7 +4756,9 @@ class MakefileCommand(Command):
         for group_name, commands in command_groups.items():
             lines.append(f'\t@echo "$(BRIGHT_WHITE){group_name}:$(NC)"')
             for cmd_name, cmd_info in commands.items():
-                desc = cmd_info.description.splitlines()[0] if cmd_info.description else f'Run {cmd_name} command'
+                desc = (
+                    unstyle(cmd_info.description).splitlines()[0] if cmd_info.description else f'Run {cmd_name} command'
+                )
                 lines.append(f'\t@echo "  $(YELLOW){cmd_name:<{col1_width + args.col_spacing}}$(NC) {desc}"')
             lines.append('\t@echo ""')
         lines.append('')
@@ -4608,7 +4769,7 @@ class MakefileCommand(Command):
             for cmd_name, cmd_info in commands.items():
                 target = f'{cmd_name}:'
                 if cmd_info.description:
-                    target += f' ## {cmd_info.description.splitlines()[0]}'
+                    target += f' ## {unstyle(cmd_info.description).splitlines()[0]}'
                 lines.extend([target, f'\t@python3 {SCRIPT_PATH.relative_to(DOTFILES_DIR)} {cmd_name}', ''])
 
         with MAKEFILE.open('w') as f:
@@ -4845,8 +5006,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     # Enable debug logging
     if args.uv_verbose:
         RUN_COMMAND_ENVVARS['RUST_LOG'] = 'uv=debug'
-    if args.debug:
-        RUN_DEBUG = True
+    RUN_DEBUG = args.debug
 
     # Run specified command
     commands = get_commands()
