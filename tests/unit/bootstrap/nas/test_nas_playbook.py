@@ -1,0 +1,346 @@
+"""
+Structural tests for the NAS playbook and its roles (no NAS needed): syntax, wiring, and the summary-line contract
+"""
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+PLAYBOOK  = REPO_ROOT / 'playbooks' / 'nas_bootstrap.yml'
+ROLES     = REPO_ROOT / 'roles'
+LIB       = REPO_ROOT / 'bootstrap' / 'lib.sh'
+
+ANSIBLE_PLAYBOOK = Path(sys.executable).parent / 'ansible-playbook'
+
+
+def _role_defaults(role: str) -> dict[str, object]:
+    """
+    Load a role's defaults/main.yml
+    """
+    data = yaml.safe_load((ROLES / role / 'defaults' / 'main.yml').read_text(encoding='utf-8'))
+    assert isinstance(data, dict)
+    return data
+
+
+def _role_task(role: str, name: str) -> dict[str, Any]:  # Any: heterogeneous, yaml-loaded task structure
+    """
+    Load the task with the given name from a role's tasks/main.yml
+    """
+    tasks   = yaml.safe_load((ROLES / role / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+    matches = [task for task in tasks if task.get('name') == name]
+    assert len(matches) == 1, f'expected exactly one task named {name!r}'
+    return matches[0]
+
+
+class TestPlaybookSyntax:
+    """
+    Tests for the playbook as Ansible parses it
+    """
+    @pytest.mark.skipif(not ANSIBLE_PLAYBOOK.exists(), reason='ansible-playbook not in this environment')
+    def test_syntax_check_passes(self, tmp_path: Path) -> None:
+        """
+        Test that ansible-playbook --syntax-check accepts the playbook (with a throwaway vault password file)
+        """
+        vault = tmp_path / 'vault-pass'
+        vault.write_text('unused\n', encoding='utf-8')
+
+        result = subprocess.run(
+            [str(ANSIBLE_PLAYBOOK), '--syntax-check', '-i', 'localhost,', str(PLAYBOOK)],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=REPO_ROOT,
+            env={**os.environ, 'ANSIBLE_VAULT_PASSWORD_FILE': str(vault)},
+            timeout=300,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+
+class TestDotfilesRole:
+    """
+    Tests for the dotfiles role's wiring
+    """
+    def test_overlay_is_the_nas_profile(self) -> None:
+        """
+        Test that the role registers profiles/nas and that the profile exists in the repo
+        """
+        assert _role_defaults('dotfiles')['dotfiles_overlays'] == ['{{ dotfiles_repo_dir }}/profiles/nas']
+        assert (REPO_ROOT / 'profiles' / 'nas' / 'README.md').is_file()
+
+    def test_nas_profile_is_a_valid_layer(self, tmp_path: Path) -> None:
+        """
+        Test that the engine accepts profiles/nas as an overlay
+        """
+        registry = tmp_path / 'overlays'
+        registry.write_text(f'{REPO_ROOT / "profiles" / "nas"}\n', encoding='utf-8')
+
+        result = subprocess.run(
+            ['bash', '-c', f'source "{LIB}"; dotfiles_layers'],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, 'DOTFILES_OVERLAYS_FILE': str(registry), 'HOME': str(tmp_path)},
+            timeout=60,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines()[-1] == str((REPO_ROOT / 'profiles' / 'nas').resolve())
+
+    def test_summary_line_contract(self) -> None:
+        """
+        Test that the role matches the exact line the driver prints
+        """
+        driver = (REPO_ROOT / 'bootstrap' / 'bootstrap.sh').read_text(encoding='utf-8')
+        tasks  = (ROLES / 'dotfiles' / 'tasks' / 'main.yml').read_text(encoding='utf-8')
+
+        assert "printf 'bootstrap: changes=%d\\n'" in driver
+        assert "'bootstrap: changes=0'"            in tasks
+        assert "'^bootstrap: changes=[0-9]+$'"     in tasks
+
+    def test_play_defines_the_repo_dir(self) -> None:
+        """
+        Test that the play defines dotfiles_repo_dir for every role that needs it
+        """
+        play = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
+        assert play['vars']['dotfiles_repo_dir'] == "{{ ansible_facts['user_dir'] }}/dotfiles-personal"
+
+    def test_safety_assert_covers_every_probe(self) -> None:
+        """
+        Test that the refuse-to-update assert checks the status, remote-branch and local-branch ancestry probes
+        """
+        refuse     = _role_task('dotfiles', 'Refuse to update a clone with local work')
+        conditions = '\n'.join(refuse['ansible.builtin.assert']['that'])
+
+        assert 'dotfiles_clone_status.stdout | length == 0' in conditions
+        assert 'dotfiles_clone_remote.rc == 0'              in conditions
+        assert 'dotfiles_clone_remote.stdout | length > 0'  in conditions
+        assert 'dotfiles_clone_pushed.rc'                   in conditions
+
+        pushed = _role_task('dotfiles', 'Check that the local version branch is pushed')
+        argv   = pushed['ansible.builtin.command']['argv']
+        assert argv[-3:] == [
+            '--is-ancestor',
+            'refs/heads/{{ dotfiles_repo_version }}',
+            'refs/remotes/origin/{{ dotfiles_repo_version }}',
+        ]
+        assert pushed['check_mode']   is False
+        assert pushed['changed_when'] is False
+        assert pushed['failed_when']  is False
+
+    def test_login_shell_is_verified_before_it_is_set(self) -> None:
+        """
+        Test that the login shell is checked for existence, executability and /etc/shells ahead of the user task
+        """
+        tasks = yaml.safe_load((ROLES / 'dotfiles' / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+        names = [task['name'] for task in tasks]
+        assert names.index('Require a usable login shell') < names.index('Set the login shell')
+
+        require = _role_task('dotfiles', 'Require a usable login shell')
+        conditions = '\n'.join(require['ansible.builtin.assert']['that'])
+        assert 'dotfiles_shell.stat.exists'     in conditions
+        assert 'dotfiles_shell.stat.executable' in conditions
+        assert 'dotfiles_shell_listed.rc == 0'  in conditions
+
+    def test_engine_dry_run_only_under_check_or_preview(self) -> None:
+        """
+        Test that the engine argv adds --dry-run solely under check mode or the preview variable
+        """
+        engine = _role_task('dotfiles', 'Run the bootstrap engine')
+        argv   = engine['ansible.builtin.command']['argv']
+
+        assert argv.count('--dry-run') == 1
+        assert 'if (ansible_check_mode or dotfiles_bootstrap_preview | bool) else []' in argv
+        assert engine['environment']['DOTFILES_OVERLAYS_FILE'] == '{{ dotfiles_overlays_file }}'
+        assert engine['environment']['BOOTSTRAP_NONINTERACTIVE'] == '1'
+        assert (engine['async'], engine['poll']) == (7200, 30)
+
+    def test_engine_hardened_against_missing_results(self) -> None:
+        """
+        Test that the engine's summary conditions tolerate an async timeout result (no rc or stdout)
+        """
+        engine = _role_task('dotfiles', 'Run the bootstrap engine')
+        assert 'rc | default(1)' in engine['failed_when']
+        assert engine['failed_when'].count('stdout_lines | default([])') == 1
+        assert 'stdout_lines | default([])' in engine['changed_when']
+
+
+class TestHaosRole:
+    """
+    Tests for the haos role's wiring
+    """
+    def test_runs_the_repo_script(self) -> None:
+        """
+        Test that the role runs vms/haos/setup.sh from the clone and that the script exists
+        """
+        assert _role_defaults('haos')['haos_setup_script'] == '{{ dotfiles_repo_dir }}/vms/haos/setup.sh'
+        assert (REPO_ROOT / 'vms' / 'haos' / 'setup.sh').is_file()
+
+    def test_never_runs_bridge_sh(self) -> None:
+        """
+        Test that no role task executes bridge.sh (it blips the network and would cut the Ansible session)
+        """
+        tasks = yaml.safe_load((ROLES / 'haos' / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+        for task in tasks:
+            for module in ('ansible.builtin.command', 'ansible.builtin.shell', 'ansible.builtin.script'):
+                assert 'bridge.sh' not in str(task.get(module, ''))
+
+    def test_summary_line_contract(self) -> None:
+        """
+        Test that the role matches the exact line setup.sh prints
+        """
+        setup = (REPO_ROOT / 'vms' / 'haos' / 'setup.sh').read_text(encoding='utf-8')
+        tasks = (ROLES / 'haos' / 'tasks' / 'main.yml').read_text(encoding='utf-8')
+
+        assert "printf 'haos: changes=%d\\n'" in setup
+        assert "'haos: changes=0'"            in tasks
+        assert "'^haos: changes=[0-9]+$'"     in tasks
+
+    def test_setup_runs_async_and_dry_run_only_under_check(self) -> None:
+        """
+        Test that the setup task survives a dropped session and adds --dry-run solely under check mode
+        """
+        setup = _role_task('haos', 'Provision the Home Assistant OS VM')
+        argv  = setup['ansible.builtin.command']['argv']
+
+        assert argv.count('--dry-run') == 1
+        assert 'if ansible_check_mode else []' in argv
+        assert setup['environment']['BRIDGE'] == '{{ haos_bridge }}'
+        assert setup['become'] is True
+        assert setup['check_mode'] is False
+        assert (setup['async'], setup['poll']) == (3600, 15)
+
+    def test_hardened_against_missing_results(self) -> None:
+        """
+        Test that the clone path is asserted first and the summary conditions tolerate an async timeout result
+        """
+        tasks = yaml.safe_load((ROLES / 'haos' / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+        assert tasks[0]['name'] == 'Require the clone path'
+        assert 'dotfiles_repo_dir is defined' in tasks[0]['ansible.builtin.assert']['that']
+
+        setup = _role_task('haos', 'Provision the Home Assistant OS VM')
+        assert 'rc | default(1)' in setup['failed_when']
+        assert setup['failed_when'].count('stdout_lines | default([])') == 1
+        assert 'stdout_lines | default([])' in setup['changed_when']
+
+
+EXPECTED_ORDER = ['debian', 'zfs', 'samba', 'docker', 'tailscale', 'dotfiles', 'haos', 'services']
+
+
+class TestPlaybookOrder:
+    """
+    Tests for which roles the playbook runs, and in what order
+    """
+    def test_role_order(self) -> None:
+        """
+        Test that the playbook includes exactly the expected roles in order
+        """
+        play     = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
+        key      = 'ansible.builtin.include_role'
+        included = [task[key]['name'] for task in play['tasks'] if key in task]
+        assert [name.removeprefix('roles/') for name in included] == EXPECTED_ORDER
+
+    @pytest.mark.parametrize('role', ['git', 'ssh', 'zsh'])
+    def test_retired_roles_are_gone(self, role: str) -> None:
+        """
+        Test that the forked dev-environment roles no longer exist
+        """
+        assert not (ROLES / role).exists()
+
+    def test_apt_index_refresh_survives_tag_scoped_runs(self) -> None:
+        """
+        Test that the apt index task is tagged always and keeps its cache window (so re-runs stay ok)
+        """
+        play = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
+        task = next(task for task in play['tasks'] if task.get('name') == 'Update apt package index')
+        assert 'always' in task['tags']
+        assert task['ansible.builtin.apt']['cache_valid_time'] == 86400
+
+
+def _collect_tags(node: object) -> set[str]:
+    """
+    Collect every value of a ``tags`` key anywhere inside a yaml-loaded task structure
+
+    :param node: yaml-loaded structure (nested dicts and lists)
+    :return: all tag names found, whether written as a string or a list
+    """
+    found: set[str] = set()
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == 'tags':
+                found.update([value] if isinstance(value, str) else value)
+            else:
+                found |= _collect_tags(value)
+    elif isinstance(node, list):
+        for item in node:
+            found |= _collect_tags(item)
+    return found
+
+
+def _role_tags(role: str) -> set[str]:
+    """
+    Return every tag carried by a task anywhere in a role's tasks/*.yml (block members and included files included)
+    """
+    tags: set[str] = set()
+    for path in sorted((ROLES / role / 'tasks').glob('*.yml')):
+        tags |= _collect_tags(yaml.safe_load(path.read_text(encoding='utf-8')))
+    return tags
+
+
+def _includes() -> list[dict[str, Any]]:  # Any: heterogeneous, yaml-loaded task structure
+    """
+    Return the include_role tasks of the NAS play, in order
+    """
+    play = yaml.safe_load(PLAYBOOK.read_text(encoding='utf-8'))[0]
+    return [task for task in play['tasks'] if 'ansible.builtin.include_role' in task]
+
+
+def _apply_tags(include: dict[str, Any]) -> set[str]:  # Any: yaml task
+    """
+    Return the tags an include_role applies to the tasks inside the role, whether written as a string or a list
+    """
+    apply_tags = include['ansible.builtin.include_role']['apply']['tags']
+    return {apply_tags} if isinstance(apply_tags, str) else set(apply_tags)
+
+
+class TestPlaybookTags:
+    """
+    Tests for the tags on the playbook's role includes
+    """
+    @pytest.mark.parametrize(
+        'include',
+        _includes(),
+        ids=lambda include: include['ansible.builtin.include_role']['name'],
+    )
+    def test_every_include_tag_reaches_a_task_in_the_role(self, include: dict[str, Any]) -> None:  # Any: yaml task
+        """
+        Test that each tag on an include is the apply tag or is carried by a task inside the role
+
+        A tag on include_role selects only the include itself, so a tag that no inner task carries selects nothing
+        """
+        name      = include['ansible.builtin.include_role']['name']
+        reachable = _apply_tags(include) | _role_tags(name.removeprefix('roles/'))
+
+        dead = sorted(set(include['tags']) - reachable)
+        assert not dead, f'tags {dead} on the {name} include reach no task'
+
+    @pytest.mark.parametrize(
+        'include',
+        _includes(),
+        ids=lambda include: include['ansible.builtin.include_role']['name'],
+    )
+    def test_every_task_tag_is_selectable_through_the_include(self, include: dict[str, Any]) -> None:  # Any: yaml task
+        """
+        Test that each tag on a task inside a role is on its include or is the apply tag, or is always
+
+        The include is what --tags selects first, so an inner tag the include lacks can never be asked for
+        """
+        name        = include['ansible.builtin.include_role']['name']
+        selectable  = set(include['tags']) | _apply_tags(include)
+        unreachable = sorted(_role_tags(name.removeprefix('roles/')) - selectable - {'always'})
+        assert not unreachable, f'tags {unreachable} inside {name} cannot be selected through its include'
