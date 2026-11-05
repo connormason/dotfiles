@@ -14,31 +14,31 @@ help: ## Show this help message
 	@echo "$(BRIGHT_GREEN)Runner script for Connor's dotfiles$(NC)"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Inventory:$(NC)"
-	@echo "  $(YELLOW)list-hosts      $(NC) List available bootstrap targets from inventory"
-	@echo "  $(YELLOW)inventory-status$(NC) Display current status of inventory directory"
-	@echo "  $(YELLOW)update-inventory$(NC) Update inventory repo"
-	@echo "  $(YELLOW)vault-decrypt   $(NC) Decrypt all inventory vault files for editing"
-	@echo "  $(YELLOW)vault-encrypt   $(NC) Re-encrypt all inventory vault files after editing"
+	@echo "  $(YELLOW)list-hosts          $(NC) List available bootstrap targets from inventory"
+	@echo "  $(YELLOW)inventory-status    $(NC) Display current status of inventory directory"
+	@echo "  $(YELLOW)update-inventory    $(NC) Update inventory repo"
+	@echo "  $(YELLOW)vault-decrypt       $(NC) Decrypt all inventory vault files for editing"
+	@echo "  $(YELLOW)vault-encrypt       $(NC) Re-encrypt all inventory vault files after editing"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Codebase:$(NC)"
-	@echo "  $(YELLOW)clean           $(NC) Remove all environments, build artifacts, and caches"
-	@echo "  $(YELLOW)run-hooks       $(NC) Run prek hooks on modified or specified project files"
-	@echo "  $(YELLOW)pre             $(NC) Run prek (pre-commit) hooks on all project files"
-	@echo "  $(YELLOW)prepare-hooks   $(NC) Prepare the environments of all prek hooks"
-	@echo "  $(YELLOW)install-hooks   $(NC) Install prek git hook shims (overwrites any existing shims)"
-	@echo "  $(YELLOW)uninstall-hooks $(NC) Uninstall prek git hook shims"
-	@echo "  $(YELLOW)makefile        $(NC) Generate Makefile from project management script commands (run.py)"
+	@echo "  $(YELLOW)clean               $(NC) Remove all environments, build artifacts, and caches"
+	@echo "  $(YELLOW)run-hooks           $(NC) Run prek hooks on modified or specified project files"
+	@echo "  $(YELLOW)pre                 $(NC) Run prek (pre-commit) hooks on all project files"
+	@echo "  $(YELLOW)prepare-hooks       $(NC) Prepare the environments of all prek hooks"
+	@echo "  $(YELLOW)install-hooks       $(NC) Install prek git hook shims (overwrites any existing shims)"
+	@echo "  $(YELLOW)uninstall-hooks     $(NC) Uninstall prek git hook shims"
+	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)NAS:$(NC)"
-	@echo "  $(YELLOW)nas-provision   $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
+	@echo "  $(YELLOW)nas-provision       $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Dotfiles:$(NC)"
-	@echo "  $(YELLOW)doctor          $(NC) Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles"
-	@echo "  $(YELLOW)bootstrap       $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh)"
-	@echo "  $(YELLOW)stow            $(NC) Link stow packages from every layer into the home directory (stow.sh)"
-	@echo "  $(YELLOW)render          $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
-	@echo "  $(YELLOW)track-claude    $(NC) Ingest new ~/.claude agents, commands, skills, hooks, and rules into the repo"
-	@echo "  $(YELLOW)test            $(NC) Run the test suite via uv (public-index wrapper)"
+	@echo "  $(YELLOW)doctor              $(NC) Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles"
+	@echo "  $(YELLOW)bootstrap           $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh)"
+	@echo "  $(YELLOW)stow                $(NC) Link stow packages from every layer into the home directory (stow.sh)"
+	@echo "  $(YELLOW)render              $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
+	@echo "  $(YELLOW)track-claude        $(NC) Ingest new ~/.claude agents, commands, skills, hooks, and rules into the repo"
+	@echo "  $(YELLOW)test                $(NC) Run the test suite via uv (public-index wrapper)"
 	@echo ""
 
 # Inventory
@@ -76,7 +76,7 @@ install-hooks: ## Install prek git hook shims (overwrites any existing shims)
 uninstall-hooks: ## Uninstall prek git hook shims
 	@python3 run.py uninstall-hooks
 
-makefile: ## Generate Makefile from project management script commands (run.py)
+makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
 	@python3 run.py makefile
 
 # NAS
