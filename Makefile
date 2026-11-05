@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt nas-provision bootstrap stow render track-claude test install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre makefile diagnose
+.PHONY: help install dev shell status doctor clean nas-provision bootstrap stow render track-claude test install-uv install-hatch inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-hooks prepare-hooks uninstall-hooks run-hooks pre makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -21,13 +21,6 @@ help: ## Show this help message
 	@echo "  $(YELLOW)doctor              $(NC) Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles"
 	@echo "  $(YELLOW)clean               $(NC) Remove all environments, build artifacts, caches, and temporary files"
 	@echo ""
-	@echo "$(BRIGHT_WHITE)Inventory:$(NC)"
-	@echo "  $(YELLOW)inventory-hosts     $(NC) List available bootstrap targets from inventory"
-	@echo "  $(YELLOW)inventory-status    $(NC) Display current status of inventory directory"
-	@echo "  $(YELLOW)update-inventory    $(NC) Update inventory repo"
-	@echo "  $(YELLOW)vault-decrypt       $(NC) Decrypt all inventory vault files for editing"
-	@echo "  $(YELLOW)vault-encrypt       $(NC) Re-encrypt all inventory vault files after editing"
-	@echo ""
 	@echo "$(BRIGHT_WHITE)NAS:$(NC)"
 	@echo "  $(YELLOW)nas-provision       $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
 	@echo ""
@@ -41,6 +34,13 @@ help: ## Show this help message
 	@echo "$(BRIGHT_WHITE)Tool Installation:$(NC)"
 	@echo "  $(YELLOW)install-uv          $(NC) Install [95muv[0m Python package installer tool"
 	@echo "  $(YELLOW)install-hatch       $(NC) Install [95mhatch[0m Python project management tool"
+	@echo ""
+	@echo "$(BRIGHT_WHITE)Inventory:$(NC)"
+	@echo "  $(YELLOW)inventory-hosts     $(NC) List available bootstrap targets from inventory"
+	@echo "  $(YELLOW)inventory-status    $(NC) Display current status of inventory directory"
+	@echo "  $(YELLOW)update-inventory    $(NC) Update inventory repo"
+	@echo "  $(YELLOW)vault-decrypt       $(NC) Decrypt all inventory vault files for editing"
+	@echo "  $(YELLOW)vault-encrypt       $(NC) Re-encrypt all inventory vault files after editing"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Hooks:$(NC)"
 	@echo "  $(YELLOW)install-hooks       $(NC) Install prek git hook shims (overwrites any existing shims)"
@@ -73,22 +73,6 @@ doctor: ## Check tools, overlays, git version and hooks, links, rendered setting
 clean: ## Remove all environments, build artifacts, caches, and temporary files
 	@python3 run.py clean
 
-# Inventory
-inventory-hosts: ## List available bootstrap targets from inventory
-	@python3 run.py inventory-hosts
-
-inventory-status: ## Display current status of inventory directory
-	@python3 run.py inventory-status
-
-update-inventory: ## Update inventory repo
-	@python3 run.py update-inventory
-
-vault-decrypt: ## Decrypt all inventory vault files for editing
-	@python3 run.py vault-decrypt
-
-vault-encrypt: ## Re-encrypt all inventory vault files after editing
-	@python3 run.py vault-encrypt
-
 # NAS
 nas-provision: ## Provision the NAS with the Ansible playbook: system config, the stow engine, then services
 	@python3 run.py nas-provision
@@ -115,6 +99,22 @@ install-uv: ## Install [95muv[0m Python package installer tool
 
 install-hatch: ## Install [95mhatch[0m Python project management tool
 	@python3 run.py install-hatch
+
+# Inventory
+inventory-hosts: ## List available bootstrap targets from inventory
+	@python3 run.py inventory-hosts
+
+inventory-status: ## Display current status of inventory directory
+	@python3 run.py inventory-status
+
+update-inventory: ## Update inventory repo
+	@python3 run.py update-inventory
+
+vault-decrypt: ## Decrypt all inventory vault files for editing
+	@python3 run.py vault-decrypt
+
+vault-encrypt: ## Re-encrypt all inventory vault files after editing
+	@python3 run.py vault-encrypt
 
 # Hooks
 install-hooks: ## Install prek git hook shims (overwrites any existing shims)
