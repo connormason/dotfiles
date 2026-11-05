@@ -305,11 +305,12 @@ ignore = [
 # =========================================
 [tool.ruff.lint.per-file-ignores]
 # keep-sorted start
-"run.py"                                 = ["S112"]
-"scripts/env/venvshell.py"               = ["RUF001"]
-"stow/**/startup/*.py"                   = ["INP001"]
-"tests/**"                               = ["B", "S", "SIM", "PERF"]
-"tests/unit/scripts/env/test_loadenv.py" = ["E402"]
+"run.py"                                   = ["S112"]
+"scripts/env/venvshell.py"                 = ["RUF001"]
+"stow/**/startup/*.py"                     = ["INP001"]
+"tests/**"                                 = ["B", "S", "SIM", "PERF"]
+"tests/unit/scripts/env/test_loadenv.py"   = ["E402"]
+"tests/unit/scripts/env/test_venvshell.py" = ["E402"]
 # keep-sorted end
 
 # `ruff check` linter rule group-specific settings
