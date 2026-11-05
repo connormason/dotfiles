@@ -309,10 +309,13 @@ ignore = [
 # =========================================
 [tool.ruff.lint.per-file-ignores]
 # keep-sorted start
-"run.py"                                   = ["S112"]
+"run.py"                                   = ["BLE001", "S112"]
+"scripts/**/*.py"                          = ["BLE001"]
 "scripts/env/venvshell.py"                 = ["RUF001"]
+"scripts/utility/generate_completions.py"  = ["FLY002"]
 "stow/**/startup/*.py"                     = ["INP001"]
-"tests/**"                                 = ["B", "S", "SIM", "PERF"]
+"stow/claude/.claude/*.py"                 = ["BLE001"]
+"tests/**"                                 = ["B", "S", "SIM", "PERF", "PLR0917"]
 "tests/unit/scripts/env/test_loadenv.py"   = ["E402"]
 "tests/unit/scripts/env/test_venvshell.py" = ["E402"]
 # keep-sorted end
