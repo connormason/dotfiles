@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 TREES     = ('stow', 'render', 'profiles', 'tests/fixtures')
 NOISE     = ('.DS_Store', '__pycache__', '.pyc', '/.backups/')
 

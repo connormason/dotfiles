@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-SUMMARIZER = Path(__file__).parent.parent.parent / 'scripts' / 'utility' / 'summarize_stow.awk'
+REPO_ROOT  = Path(__file__).resolve().parents[3]
+SUMMARIZER = REPO_ROOT / 'scripts' / 'utility' / 'summarize_stow.awk'
 
 
 def run_summarizer(log: str, *, dry: bool = False) -> str:

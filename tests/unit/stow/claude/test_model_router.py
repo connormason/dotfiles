@@ -17,7 +17,8 @@ import pytest
 if TYPE_CHECKING:
     from types import ModuleType
 
-HOOKS_DIR   = Path(__file__).resolve().parents[2] / 'stow' / 'claude' / '.claude' / 'hooks'
+REPO_ROOT   = Path(__file__).resolve().parents[4]
+HOOKS_DIR   = REPO_ROOT / 'stow' / 'claude' / '.claude' / 'hooks'
 SCRIPT_PATH = HOOKS_DIR / 'model-router.py'
 
 
@@ -391,7 +392,7 @@ class TestDecide:
         assert model_router.apply_floor('haiku', 'opus')   == 'opus'
 
 
-FIXTURE_DIR = Path(__file__).resolve().parents[1] / 'fixtures' / 'model_router'
+FIXTURE_DIR = REPO_ROOT / 'tests' / 'fixtures' / 'model_router'
 
 
 def _event(tool_input: dict, env: Env, tool_name: str = 'Agent', **extra: object) -> str:
