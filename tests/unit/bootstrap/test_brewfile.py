@@ -83,17 +83,35 @@ class TestLinuxBrewfile:
         darwin = (GOLDEN_DIR / 'brewfile-darwin-formulae.txt').read_text(encoding='utf-8').splitlines()
         assert bundle_list('--formula') == sorted(set(darwin) - DARWIN_ONLY_FORMULAE)
 
-    def test_no_formula_requires_macos(self) -> None:
+    def test_no_formula_requires_macos(self, tmp_path: Path) -> None:
         """
         Test that no formula linux installs declares a macOS requirement (the Brewfile's taps must be tapped)
         """
         assert BREW is not None
+        formulae = bundle_list('--formula')
+
+        # Homebrew 7+ refuses `brew info` on untrusted third-party formulae; the Brewfile's `trusted: true` only covers
+        # `brew bundle`. Trust them in a throwaway config dir so neither CI nor a developer's trust store is touched.
+        env = {**os.environ, 'HOMEBREW_NO_AUTO_UPDATE': '1', 'XDG_CONFIG_HOME': str(tmp_path)}
+        third_party = [formula for formula in formulae if formula.count('/') == 2]
+
+        has_trust = subprocess.run([BREW, 'trust', '--help'], capture_output=True, check=False, env=env).returncode == 0
+        if third_party and has_trust:
+            trust = subprocess.run(
+                [BREW, 'trust', '--formula', *third_party],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            assert trust.returncode == 0, trust.stderr
+
         result = subprocess.run(
-            [BREW, 'info', '--json=v2', '--formula', *bundle_list('--formula')],
+            [BREW, 'info', '--json=v2', '--formula', *formulae],
             capture_output=True,
             text=True,
             check=False,
-            env={**os.environ, 'HOMEBREW_NO_AUTO_UPDATE': '1'},
+            env=env,
         )
         assert result.returncode == 0, result.stderr
 
