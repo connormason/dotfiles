@@ -38,5 +38,6 @@ From a laptop, prefer `python3 run.py nas-deploy <service>`, which resolves the 
 [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) calls the script as
 `NAS_SSH_KEY="$HOME/.ssh/id_nas" scripts/nas/deploy-services.sh "$SERVICE"`, with `NAS_HOST` and `NAS_USER` taken from
 repository secrets. A push to `main` that touches `services/` runs it once per changed service that has a `compose.yml`
-(every such service when `compose.base.yml` changed); a manual run passes its `service` input, which defaults to `all`.
+(every such service when `compose.base.yml` changed, or when the push's `before` SHA is null, as for a new branch); a
+manual run passes its `service` input, which defaults to `all`.
 [`services/README.md`](../../services/README.md#ci-deploys) describes the workflow and its secrets.

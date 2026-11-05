@@ -82,11 +82,11 @@ Available Bootstrap Targets
 
 macos:
   └─ connors-macbook
-     (connects to: localhost)
+        (connects to: localhost)
 
 servers:
   └─ nas
-     (connects to: 192.168.1.100)
+        (connects to: 192.168.1.100)
 
 ============================================================
 Total hosts: 2

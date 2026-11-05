@@ -20,9 +20,11 @@ content; you report precise, located findings so the main agent can fix them.
   here targets the Debian NAS.
 - Tags select roles and individual tasks for selective execution. Each role's `include_role` in
   `playbooks/nas_bootstrap.yml` carries the role name as a tag and `apply` hands that tag to every task in the role, so
-  role tasks need no tag of their own. A task carries an extra tag (`configfile`, `secrets`, or `always`) only to be
-  selectable by itself. A tag on the include selects just the include, so each tag listed there must be a role name or
-  be carried by a task inside the role (`tests/unit/test_nas_playbook.py::TestPlaybookTags`).
+  role tasks need no tag of their own. `configfile` and `secrets` make a task selectable on its own, whereas `always`
+  makes it run whenever its role's include runs, whichever tag is selected (samba's `samba_version` registration, which
+  the `smb.conf` template needs under `--tags configfile`). A tag on the include selects just the include, so each tag
+  listed there must be a role name or be carried by a task inside the role
+  (`tests/unit/test_nas_playbook.py::TestPlaybookTags`).
 - `mode:` is written as a quoted octal literal (`"0644"`) in the role tasks; no `defaults/` variable drives it.
 - Secrets are `ansible-vault`-encrypted in the separate `inventory/` clone; `vault_password_file=vault_password.txt`.
 - The NAS playbook sets `ansible_become_pass` from the vault; `become` is scoped per-task/block, not assumed global.
@@ -37,8 +39,8 @@ content; you report precise, located findings so the main agent can fix them.
    explicit `changed_when`).
 2. **Module over shell.** Prefer a real module to `command`/`shell` whenever one exists (`file`, `copy`, `template`,
    `git`, `apt`, `pip`, `systemd`, `lineinfile`). Flag shell-outs that reinvent a module.
-3. **Convention conformance.** FQCN module names; tags that follow the contract above (a task-level tag only where a
-   task must be selectable on its own); `mode` as a quoted octal string; symlinks created with `ansible.builtin.file`
+3. **Convention conformance.** FQCN module names; tags that follow the contract above (a task-level tag only where it
+   has one of the jobs described there); `mode` as a quoted octal string; symlinks created with `ansible.builtin.file`
    (`state: link`) rather than `command: ln`; handlers + `notify` used for service restarts rather than an inline
    restart task.
 4. **Provisioning safety.** No destructive task (`file: state=absent`, `command: rm/mv`) without a guarding `when:`; no
