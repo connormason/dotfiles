@@ -480,25 +480,33 @@ class Command(metaclass=abc.ABCMeta):
         """
         Register the command subclass in the global command registry.
 
-        Derives the command name from the class name (stripping a ``Command`` suffix and lowercasing) and populates
-        the description from the class docstring if not explicitly set.
+        Derives the command name from the class name (stripping a ``Command`` suffix and lowercasing), populates
+        the description from the class docstring if not explicitly set, and assigns the default help formatter.
 
         :param register: if False, skip registration (useful for abstract intermediate base classes)
-        :raises ValueError: if both ``script_only`` and ``makefile_only`` are set
+        :raises TypeError: if a registered subclass doesn't implement every abstract method (e.g. :meth:`run`)
         """
         super().__init_subclass__(**kwargs)
         if not register:
             return
 
-        if cls.script_only and cls.makefile_only:
-            raise ValueError(f'{cls.__name__}: only one of `script_only` and `makefile_only` may be True')
+        # ABCMeta only marks the class abstract after __init_subclass__ returns, so instantiating it below would succeed
+        abstract_methods = sorted(
+            attr for attr in dir(cls)
+            if getattr(getattr(cls, attr, None), '__isabstractmethod__', False)
+        )
+        if abstract_methods:
+            raise TypeError(
+                f'Command subclass {cls.__name__!r} must implement abstract method(s): '
+                f'{", ".join(abstract_methods)}'
+            )
 
-        if cls.name is None:
+        if cls.__dict__.get('name') is None:
             cls.name = cls.__name__.removesuffix('Command').replace('_', '-').lower()
         if 'description' not in cls.__dict__:
             cls.description = inspect.getdoc(cls)
 
-        REGISTERED_COMMANDS[cls.name] = cls()
+        REGISTERED_COMMANDS[cast('str', cls.name)] = cls()
 
     def __call__(self, args: argparse.Namespace) -> None:
         return self.run(args)
@@ -2546,8 +2554,8 @@ class ListHostsCommand(Command):
                 printf('')
 
         # Show total
-        printf('=' * 60,                         bold=True)
-        printf(f'Total hosts: {len(all_hosts)}', bold=True)
+        printf('=' * 60, bold=True)
+        printf(f'Total hosts: {typestyle(len(all_hosts))}', fg='bright_white', dim=True)
 
 
 # TODO: cleanup formatting
