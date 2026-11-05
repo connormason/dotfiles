@@ -204,21 +204,21 @@ repos:
 
       # Validate TOML file syntax
       - id: check-toml
-        name: "[check]  toml syntax"
+        name: "[check]  syntax - toml"
         groups: [check, local, ci, toml]
         stages: [pre-commit, manual]
         priority: 10
 
       # Validate XML file syntax
       - id: check-xml
-        name: "[check]  xml syntax"
+        name: "[check]  syntax - xml"
         groups: [check, local, ci, xml, plist]
         stages: [pre-commit, manual]
         priority: 10
 
       # Validate YAML file syntax
       - id: check-yaml
-        name: "[check]  yaml syntax"
+        name: "[check]  syntax - yaml"
         groups: [check, local, ci, yaml]
         stages: [pre-commit, manual]
         priority: 10
@@ -226,7 +226,7 @@ repos:
 
       # Validate JSON file syntax
       - id: check-json
-        name: "[check]  json syntax"
+        name: "[check]  syntax - json"
         groups: [check, local, ci, json]
         stages: [pre-commit, manual]
         priority: 10
@@ -237,7 +237,7 @@ repos:
 
       # Validate JSON5 file syntax (PEP 723 script; pyjson5 resolved at runtime)
       - id: check-json5
-        name: "[check]  json5 syntax"
+        name: "[check]  syntax - json5"
         groups: [check, local, ci, json, json5]
         stages: [pre-commit, manual]
         priority: 10
@@ -247,7 +247,7 @@ repos:
 
       # Validate Pkl file syntax via `pkl eval` (no-op if `pkl` is not installed)
       - id: check-pkl
-        name: "[check]  pkl syntax"
+        name: "[check]  syntax - pkl"
         groups: [check, local, ci, pkl]
         stages: [pre-commit, manual]
         priority: 10
@@ -262,7 +262,7 @@ repos:
 
       # Validate pyproject.toml
       - id: validate-pyproject
-        name: "[check]  pyproject.toml syntax/schema"
+        name: "[check]  syntax - pyproject.toml"
         groups: [check, local, ci, pyproject, toml]
         stages: [pre-commit, manual]
         priority: 10
