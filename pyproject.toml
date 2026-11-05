@@ -296,7 +296,7 @@ ignore = [
     # flake8-simplify -------------------------------------------------------------------------------------------------
     "SIM118", # Use `key {operator} dict` instead of `key {operator} dict.keys()`
 
-    # TODO: ??
+    # ruff (built-in) -------------------------------------------------------------------------------------------------
     # "RUF022",   # `__all__` is not sorted
 ]
 
@@ -305,9 +305,10 @@ ignore = [
 # =========================================
 [tool.ruff.lint.per-file-ignores]
 # keep-sorted start
-"run.py"               = ["S112"]
-"stow/**/startup/*.py" = ["INP001"]                # IPython startup scripts are not a package
-"tests/**"             = ["B", "S", "SIM", "PERF"]
+"run.py"                   = ["S112"]
+"scripts/env/venvshell.py" = ["RUF001"]
+"stow/**/startup/*.py"     = ["INP001"]
+"tests/**"                 = ["B", "S", "SIM", "PERF"]
 # keep-sorted end
 
 # `ruff check` linter rule group-specific settings
