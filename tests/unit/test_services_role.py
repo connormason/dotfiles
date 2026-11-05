@@ -37,18 +37,18 @@ def _flatten(tasks: list[TaskDict]) -> list[TaskDict]:
     return flat
 
 
-def _tasks(role: str) -> list[TaskDict]:
+def _tasks(role: str, file: str = 'main.yml') -> list[TaskDict]:
     """
-    Load every task in a role's tasks/main.yml
+    Load every task in one of a role's task files (tasks/main.yml unless another file is named)
     """
-    return _flatten(yaml.safe_load((ROLES / role / 'tasks' / 'main.yml').read_text(encoding='utf-8')))
+    return _flatten(yaml.safe_load((ROLES / role / 'tasks' / file).read_text(encoding='utf-8')))
 
 
-def _task(role: str, name: str) -> TaskDict:
+def _task(role: str, name: str, file: str = 'main.yml') -> TaskDict:
     """
-    Load the task with the given name from a role
+    Load the task with the given name from a role's task file
     """
-    matches = [task for task in _tasks(role) if task.get('name') == name]
+    matches = [task for task in _tasks(role, file) if task.get('name') == name]
     assert len(matches) == 1, f'expected exactly one task named {name!r} in role {role}'
     return matches[0]
 
@@ -326,6 +326,16 @@ def _include_play(role: str) -> str:
     return yaml.safe_dump([{'hosts': 'all', 'gather_facts': False, 'connection': 'local', 'tasks': [include]}])
 
 
+def _play_text(tasks: list[TaskDict]) -> str:
+    """
+    Wrap tasks in a one-play localhost playbook
+
+    :param tasks: task dicts, in the order they should run
+    :return: playbook YAML text
+    """
+    return yaml.safe_dump([{'hosts': 'all', 'gather_facts': False, 'connection': 'local', 'tasks': tasks}])
+
+
 def _task_play(role: str, *names: str) -> str:
     """
     Build a one-play localhost playbook from the named tasks of a role, exactly as the role defines them
@@ -334,11 +344,10 @@ def _task_play(role: str, *names: str) -> str:
     :param names: task names, in the order they should run
     :return: playbook YAML text
     """
-    tasks = [_task(role, name) for name in names]
-    return yaml.safe_dump([{'hosts': 'all', 'gather_facts': False, 'connection': 'local', 'tasks': tasks}])
+    return _play_text([_task(role, name) for name in names])
 
 
-def _run_play(tmp_path: Path, play: str, *args: str) -> tuple[int, str]:
+def _run_play(tmp_path: Path, play: str, *args: str, env: dict[str, str] | None = None) -> tuple[int, str]:
     """
     Run a one-play playbook against localhost with a throwaway vault password file
 
@@ -347,6 +356,7 @@ def _run_play(tmp_path: Path, play: str, *args: str) -> tuple[int, str]:
     :param tmp_path: scratch directory for the playbook and vault file
     :param play: playbook YAML text
     :param args: extra ansible-playbook arguments
+    :param env: extra environment variables, merged over the inherited environment
     :return: tuple of (return code, combined stdout and stderr)
     """
     playbook = tmp_path / 'play.yml'
@@ -361,7 +371,7 @@ def _run_play(tmp_path: Path, play: str, *args: str) -> tuple[int, str]:
         text=True,
         check=False,
         cwd=REPO_ROOT,
-        env={**os.environ, 'ANSIBLE_VAULT_PASSWORD_FILE': str(vault), 'ANSIBLE_NOCOLOR': '1'},
+        env={**os.environ, 'ANSIBLE_VAULT_PASSWORD_FILE': str(vault), 'ANSIBLE_NOCOLOR': '1', **(env or {})},
         timeout=300,
     )
     output = result.stdout + result.stderr
@@ -501,3 +511,77 @@ class TestSecretsRender:
 
         assert code == 0, output
         assert not list(target.glob('*/.env'))
+
+
+def _stub_tool(tmp_path: Path, name: str, output: str) -> dict[str, str]:
+    """
+    Put a fake executable that prints fixed text, whatever its arguments, first on PATH
+
+    :param tmp_path: scratch directory that receives the ``bin`` directory
+    :param name: executable name, e.g. ``smbd``
+    :param output: text the stub prints
+    :return: environment overrides for ``_run_play``
+    """
+    stub = tmp_path / 'bin' / name
+    _write(stub, f"#!/bin/sh\ncat <<'EOF'\n{output}\nEOF\n")
+    stub.chmod(0o755)
+    return {'PATH': f'{stub.parent}{os.pathsep}{os.environ["PATH"]}'}
+
+
+def _without_become(task: TaskDict) -> TaskDict:
+    """
+    Copy a production task minus ``become``, which a test without sudo cannot honour; nothing else changes
+    """
+    return {key: value for key, value in task.items() if key != 'become'}
+
+
+@needs_ansible
+class TestReadOnlyProbesRunUnderCheck:
+    """
+    Real-run tests that read-only probes execute under --check, so the tasks consuming them have a value to work with
+    """
+    def test_samba_version_probe_feeds_the_template_version_test(self, tmp_path: Path) -> None:
+        """
+        Test that --check still registers the Samba version that smb.conf.j2 compares
+
+        A skipped probe leaves stdout empty and the template raises "Input version value cannot be empty"
+        """
+        play = _play_text([
+            _without_become(_task('samba', 'Register Samba version')),
+            {
+                'name': 'Compare the version the way smb.conf.j2 does',
+                'ansible.builtin.assert': {
+                    'that': [
+                        "samba_version.stdout == '4.17.12-Debian'",
+                        "samba_version.stdout is version('3.5.0', '>=')",
+                    ],
+                },
+            },
+        ])
+
+        code, output = _run_play(
+            tmp_path, play, '--check', env=_stub_tool(tmp_path, 'smbd', 'Version 4.17.12-Debian'),
+        )
+
+        assert code == 0, output
+
+    def test_tailscale_status_probe_feeds_the_backend_state_parse(self, tmp_path: Path) -> None:
+        """
+        Test that --check still registers the tailscale status that the following task parses as JSON
+
+        A skipped probe leaves stdout empty and from_json raises "Expecting value"
+        """
+        play = _play_text([
+            _without_become(_task('tailscale', 'Check Tailscale backend state', 'configure.yml')),
+            _task('tailscale', 'Parse Tailscale backend state', 'configure.yml'),
+            {
+                'name': 'Require the parsed state',
+                'ansible.builtin.assert': {'that': ["_tailscale_backend_state == 'Running'"]},
+            },
+        ])
+
+        code, output = _run_play(
+            tmp_path, play, '--check', env=_stub_tool(tmp_path, 'tailscale', '{"BackendState": "Running"}'),
+        )
+
+        assert code == 0, output
