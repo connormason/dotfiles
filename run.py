@@ -4563,6 +4563,21 @@ class PreCommand(RunHooksCommand):
 # ====================================================================================================
 
 
+#: prek hook ids that regenerate files derived from ``uv.lock`` (run together after any lock change).
+DERIVED_FILE_HOOK_IDS: list[str] = ['uv-export', 'sync-with-uv', 'sync-pre-commit-deps']
+
+
+def regenerate_derived_files(*, indent: int = 0) -> None:
+    """
+    Regenerate files derived from ``uv.lock`` (exported requirements + pinned hook versions).
+
+    Runs the ``uv-export`` / ``sync-with-uv`` / ``sync-pre-commit-deps`` prek hooks against all files. These are fixer
+    hooks that exit nonzero when they rewrite a file, so the run uses ``check=False``.
+    """
+    printf('📦 Regenerating files derived from uv.lock...', fg='bright_cyan', indent=indent)
+    uv_run(['prek', 'run', '--all-files', '--no-progress', *DERIVED_FILE_HOOK_IDS], indent=indent + 3, check=False)
+
+
 class LockCommand(Command):
     """
     Update uv.lock from pyproject.toml
@@ -4586,6 +4601,9 @@ class LockCommand(Command):
 
         printf('🔒 Updating uv.lock...', fg='bright_cyan')
         result = uv_lock(refresh=args.refresh, check=False, indent=3)
+        if result.returncode == 0:
+            printf('')
+            regenerate_derived_files()
         sys.exit(result.returncode)
 
 
@@ -4636,13 +4654,8 @@ class LockUpgradeCommand(Command):
         printf('⏬ Upgrading uv.lock...', fg='bright_cyan')
         result = uv_lock(upgrade=not args.packages, upgrade_packages=args.packages, check=False, indent=3)
         if result.returncode == 0:
-            printf('✅ uv.lock upgraded', fg='bright_green')
-            printf(
-                'The uv-export and sync-with-uv hooks refresh requirements.txt and hook versions on the next commit',
-                fg='bright_white',
-                dim=True,
-                indent=3,
-            )
+            printf('')
+            regenerate_derived_files()
         sys.exit(result.returncode)
 
 
