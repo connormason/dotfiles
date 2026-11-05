@@ -106,30 +106,6 @@ if TYPE_CHECKING:
 
 
 # ====================================================================================================
-# Basic types
-# ====================================================================================================
-
-
-F        = TypeVar('F',        bound=Callable[..., Any])
-T_contra = TypeVar('T_contra', contravariant=True)
-ModT     = TypeVar('ModT',     bound='ModuleType')
-
-PathLike         = Union[str, Path]
-StyleColor       = Union[int, tuple[int, int, int], str]
-CommandFunc      = Callable[[argparse.Namespace],      None]
-AddArgumentsFunc = Callable[[argparse.ArgumentParser], None]
-
-
-class SupportsWrite(Protocol[T_contra]):
-    """
-    Protocol for types that support being written to and flushed (what ``print(..., flush=True)`` requires)
-    """
-    def write(self, s: T_contra, /) -> object: ...
-
-    def flush(self) -> object: ...
-
-
-# ====================================================================================================
 # Constants/configuration
 # ====================================================================================================
 
@@ -316,6 +292,30 @@ class ExitCode(int, enum.Enum):
     COMMAND_FAILED = 1
     SETUP_ERROR    = 2
     USER_CANCELLED = 3
+
+
+# ====================================================================================================
+# Basic types
+# ====================================================================================================
+
+
+F        = TypeVar('F',        bound=Callable[..., Any])
+T_contra = TypeVar('T_contra', contravariant=True)
+ModT     = TypeVar('ModT',     bound='ModuleType')
+
+PathLike         = Union[str, Path]
+StyleColor       = Union[int, tuple[int, int, int], str]
+CommandFunc      = Callable[[argparse.Namespace],      None]
+AddArgumentsFunc = Callable[[argparse.ArgumentParser], None]
+
+
+class SupportsWrite(Protocol[T_contra]):
+    """
+    Protocol for types that support being written to and flushed (what ``print(..., flush=True)`` requires)
+    """
+    def write(self, s: T_contra, /) -> object: ...
+
+    def flush(self) -> object: ...
 
 
 # ====================================================================================================
