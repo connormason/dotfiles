@@ -17,7 +17,7 @@ import pytest
 if TYPE_CHECKING:
     from types import ModuleType
 
-REPO_ROOT   = Path(__file__).resolve().parents[4]
+REPO_ROOT   = Path(__file__).resolve().parents[3]
 HOOKS_DIR   = REPO_ROOT / 'stow' / 'claude' / '.claude' / 'hooks'
 SCRIPT_PATH = HOOKS_DIR / 'model-router.py'
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT     = Path(__file__).resolve().parents[2]
+REPO_ROOT     = Path(__file__).resolve().parents[3]
 LIB           = REPO_ROOT / 'bootstrap' / 'lib.sh'
 PROFILE       = REPO_ROOT / 'profiles' / 'personal-mac'
 BASE_BREWFILE = REPO_ROOT / 'bootstrap' / 'Brewfile'
