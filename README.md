@@ -273,7 +273,7 @@ bootstrap/bootstrap.sh
 # Link stow packages into $HOME (-n previews without writing)
 ./stow.sh -n
 
-# Verify tools, overlay registry, links, and rendered settings
+# Verify tools, overlays, git hooks, links, rendered settings, and Brewfiles
 python3 run.py doctor
 ```
 
@@ -469,7 +469,7 @@ See [roles/README.md](roles/README.md#adding-a-role).
 # Run the test suite through the public-index uv wrapper
 python3 run.py test
 
-# Run prek hooks
+# Run prek hooks (python3 run.py run-hooks --last-commit for just the files of the last commit)
 python3 run.py pre
 
 # Syntax-check the NAS playbook (parses only; needs vault_password.txt, or ANSIBLE_VAULT_PASSWORD_FILE naming any
@@ -481,10 +481,11 @@ The dry run and the other direct invocations are in [playbooks/README.md](playbo
 
 ## Environment Variables<a name="environment-variables"></a>
 
-| Variable                      | Purpose                       | Default                                             |
-| ----------------------------- | ----------------------------- | --------------------------------------------------- |
-| `DOTFILES_RUN_DEBUG`          | Enable debug output in run.py | `false`                                             |
-| `DOTFILES_INVENTORY_REPO_URL` | Inventory repository URL      | `git@github.com:connormason/dotfiles-inventory.git` |
+| Variable                      | Purpose                                                     | Default                                             |
+| ----------------------------- | ----------------------------------------------------------- | --------------------------------------------------- |
+| `DOTFILES_RUN_DEBUG`          | Enable debug output in run.py                               | `false`                                             |
+| `DOTFILES_INVENTORY_REPO_URL` | Inventory repository URL                                    | `git@github.com:connormason/dotfiles-inventory.git` |
+| `NO_COLOR`                    | Disable ANSI styling in run.py output (any non-empty value) | unset                                               |
 
 ## Troubleshooting<a name="troubleshooting"></a>
 

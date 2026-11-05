@@ -225,7 +225,7 @@ class TestDoctorReadOnly:
 
         monkeypatch.setattr(run, 'shell_command', fail_shell_command)
         with pytest.raises(SystemExit):
-            run.get_commands()['doctor'](run.argparse.Namespace(fix=False))
+            run.get_commands()['doctor'](run.argparse.Namespace(fix=False, yes=False))
 
 
 class TestDoctorCommand:
@@ -246,7 +246,7 @@ class TestDoctorCommand:
         """
         monkeypatch.setattr(run, 'doctor_checks', lambda: [run.DoctorCheck('links', False, 'pending')])
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['doctor'](run.argparse.Namespace(fix=False))
+            run.get_commands()['doctor'](run.argparse.Namespace(fix=False, yes=False))
         assert exc_info.value.code == 1
 
     def test_doctor_passes_quietly_when_all_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -254,11 +254,83 @@ class TestDoctorCommand:
         Test that doctor returns normally when every check passes
         """
         monkeypatch.setattr(run, 'doctor_checks', lambda: [run.DoctorCheck('links', True, 'ok')])
-        run.get_commands()['doctor'](run.argparse.Namespace(fix=False))
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=False, yes=False))
 
     def test_fix_runs_fix_then_rechecks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
-        Test that --fix runs each failing check's fix command and re-runs the checks
+        Test that --fix runs each failing check's fix command from the repo root and re-runs the checks
+        """
+        results = iter([
+            [run.DoctorCheck('links', False, 'pending',             ['echo', 'fix'])],
+            [run.DoctorCheck('links', True,  'all packages linked')],
+        ])
+        ran: list[list[str]] = []
+        kwargs_seen: list[dict[str, object]] = []
+
+        def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            ran.append(cmd)
+            kwargs_seen.append(kwargs)
+            return _completed(0)
+
+        monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
+        monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=True, yes=True))
+        assert ran == [['echo', 'fix']]
+        assert kwargs_seen[0]['cwd'] == run.DOTFILES_DIR
+
+    def test_fix_asks_before_each_fix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that --fix names the fix command in a confirmation prompt before running it
+        """
+        results = iter([
+            [run.DoctorCheck('links', False, 'pending',             ['echo', 'fix'])],
+            [run.DoctorCheck('links', True,  'all packages linked')],
+        ])
+        asked: list[str] = []
+        ran:   list[list[str]] = []
+
+        def fake_confirm(prompt: str, **kwargs: object) -> bool:
+            asked.append(run.unstyle(prompt))
+            return True
+
+        def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            ran.append(cmd)
+            return _completed(0)
+
+        monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
+        monkeypatch.setattr(run, 'confirm',       fake_confirm)
+        monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=True, yes=False))
+        assert len(asked) == 1
+        assert 'echo fix' in asked[0]
+        assert 'links'    in asked[0]
+        assert ran == [['echo', 'fix']]
+
+    def test_declined_fix_is_skipped_and_doctor_still_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that a declined fix does not run, the checks are re-run, and the command exits 1
+        """
+        pending = [run.DoctorCheck('links', False, 'pending', ['echo', 'fix'])]
+        ran: list[list[str]] = []
+
+        def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            ran.append(cmd)
+            return _completed(0)
+
+        monkeypatch.setattr(run, 'doctor_checks', lambda: pending)
+        monkeypatch.setattr(run, 'confirm',       lambda prompt, **kwargs: False)
+        monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run.get_commands()['doctor'](run.argparse.Namespace(fix=True, yes=False))
+        assert exc_info.value.code == 1
+        assert ran == []
+
+    def test_yes_implies_fix_without_prompting(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that --yes applies fixes without --fix and never asks
         """
         results = iter([
             [run.DoctorCheck('links', False, 'pending',             ['echo', 'fix'])],
@@ -266,13 +338,18 @@ class TestDoctorCommand:
         ])
         ran: list[list[str]] = []
 
+        def refuse_prompt(prompt: str, **kwargs: object) -> bool:
+            raise AssertionError('--yes must not prompt')
+
         def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             ran.append(cmd)
             return _completed(0)
 
         monkeypatch.setattr(run, 'doctor_checks', lambda: next(results))
+        monkeypatch.setattr(run, 'confirm',       refuse_prompt)
         monkeypatch.setattr(run, 'shell_command', fake_shell_command)
-        run.get_commands()['doctor'](run.argparse.Namespace(fix=True))
+
+        run.get_commands()['doctor'](run.argparse.Namespace(fix=False, yes=True))
         assert ran == [['echo', 'fix']]
 
     def test_dotfiles_commands_registered(self) -> None:
@@ -280,7 +357,7 @@ class TestDoctorCommand:
         Test that every Dotfiles command is registered under the Dotfiles group
         """
         group = run.get_commands(by_group=True)['Dotfiles']
-        assert set(group) == {'bootstrap', 'stow', 'render', 'doctor', 'test'}
+        assert set(group) == {'bootstrap', 'stow', 'render', 'doctor', 'test', 'track-claude'}
 
 
 class TestForwarding:
@@ -312,7 +389,7 @@ class TestForwarding:
 
         assert exc_info.value.code == 0
         assert seen[0][2:] == ['-n', '--backup-conflicts', '--verbose', 'zsh', 'git']
-        assert seen[0][1] == str(run.STOW_SCRIPT)
+        assert seen[0][1]  == str(run.STOW_SCRIPT)
 
     def test_stow_propagates_exit_code(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -362,4 +439,264 @@ class TestForwarding:
         seen = self._capture_cmd(monkeypatch)
         with pytest.raises(SystemExit):
             run.get_commands()['test'](run.argparse.Namespace(paths=[]))
-        assert seen[0] == [str(run.UV_PUBLIC), 'run', '--group', 'test', 'pytest', 'tests']
+        assert seen[0] == [str(run.UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', 'tests']
+
+
+SHIM = '#!/bin/sh\n# File generated by prek: https://github.com/j178/prek\nexec prek hook-impl "$@"\n'
+
+
+def _write_shims(hooks_dir: Path, hook_types: tuple[str, ...], content: str = SHIM) -> None:
+    """
+    Create hook shim files for the given hook types
+    """
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    for hook_type in hook_types:
+        (hooks_dir / hook_type).write_text(content, encoding='utf-8')
+
+
+class TestCheckHooks:
+    """
+    Tests for the git hooks doctor check
+    """
+    @pytest.fixture(autouse=True)
+    def _prek_on_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Pretend prek is installed unless a test says otherwise
+        """
+        monkeypatch.setattr(run.shutil, 'which', lambda name: f'/usr/bin/{name}')
+
+    def test_ok_when_every_shim_is_installed(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that the check passes when all hook types have a prek shim
+        """
+        hooks = tmp_path / 'hooks'
+        _write_shims(hooks, run.GIT_HOOK_TYPES)
+        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, f'{hooks}\n'))
+
+        check = run.check_hooks()
+        assert check.ok
+        assert check.detail == '6 prek hook shims installed'
+
+    def test_missing_shim_fails_and_offers_prek_install(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that a missing pre-push shim (the leak guard) fails the check and is named in the detail
+        """
+        hooks = tmp_path / 'hooks'
+        _write_shims(hooks, tuple(t for t in run.GIT_HOOK_TYPES if t != 'pre-push'))
+        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, f'{hooks}\n'))
+
+        check = run.check_hooks()
+        assert not check.ok
+        assert 'pre-push' in check.detail
+        assert check.fix == ['prek', 'install']
+
+    def test_foreign_shim_counts_as_missing(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that a hook file not generated by prek does not satisfy the check
+        """
+        hooks = tmp_path / 'hooks'
+        _write_shims(hooks, run.GIT_HOOK_TYPES, content='#!/bin/sh\necho custom hook\n')
+        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, f'{hooks}\n'))
+        assert not run.check_hooks().ok
+
+    def test_relative_hooks_path_is_resolved_against_the_repo(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """
+        Test that the relative path git prints in a plain checkout is resolved against the repo root
+        """
+        _write_shims(tmp_path / '.git' / 'hooks', run.GIT_HOOK_TYPES)
+        monkeypatch.setattr(run, 'DOTFILES_DIR', tmp_path)
+        monkeypatch.setattr(run, '_capture',     lambda cmd: _completed(0, '.git/hooks\n'))
+        assert run.check_hooks().ok
+
+    def test_absolute_hooks_path_from_a_linked_worktree(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that the absolute common-dir path git prints inside a linked worktree is used as is
+        """
+        common = tmp_path / 'main-checkout' / '.git' / 'hooks'
+        _write_shims(common, run.GIT_HOOK_TYPES)
+        monkeypatch.setattr(run, 'DOTFILES_DIR', tmp_path / 'worktree')
+        monkeypatch.setattr(run, '_capture',     lambda cmd: _completed(0, f'{common}\n'))
+        assert run.check_hooks().ok
+
+    def test_fails_outside_a_git_checkout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that a failing git probe fails the check with git's message
+        """
+        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(128, '', 'fatal: not a git repository\n'))
+
+        check = run.check_hooks()
+        assert not check.ok
+        assert 'not a git repository' in check.detail
+
+    def test_no_fix_when_prek_is_missing(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that the check offers no fix (and says why) when prek is not on PATH
+        """
+        monkeypatch.setattr(run.shutil, 'which',    lambda name: None)
+        monkeypatch.setattr(run,        '_capture', lambda cmd: _completed(0, f'{tmp_path / "hooks"}\n'))
+
+        check = run.check_hooks()
+        assert not check.ok
+        assert check.fix is None
+        assert 'prek not on PATH' in check.detail
+
+    def test_probe_only_resolves_the_hooks_path(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that the check runs a single read-only git probe
+        """
+        seen: list[list[str]] = []
+
+        def fake_capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+            seen.append(cmd)
+            return _completed(0, f'{tmp_path}\n')
+
+        monkeypatch.setattr(run, '_capture', fake_capture)
+        run.check_hooks()
+        assert seen == [['git', 'rev-parse', '--git-path', 'hooks']]
+
+    def test_hook_types_match_the_prek_config(self) -> None:
+        """
+        Test that GIT_HOOK_TYPES mirrors default_install_hook_types in .pre-commit-config.yaml
+        """
+        import yaml
+
+        config = yaml.safe_load((run.DOTFILES_DIR / '.pre-commit-config.yaml').read_text(encoding='utf-8'))
+        assert list(run.GIT_HOOK_TYPES) == config['default_install_hook_types']
+
+
+class TestCheckBrewfiles:
+    """
+    Tests for the Brewfile drift doctor check
+    """
+    @staticmethod
+    def _layers(tmp_path: Path, *, with_brewfile: tuple[bool, ...]) -> list[Path]:
+        """
+        Create one layer directory per flag, with a bootstrap/Brewfile where the flag is true
+        """
+        layers: list[Path] = []
+        for index, has_brewfile in enumerate(with_brewfile):
+            layer = tmp_path / f'layer{index}'
+            (layer / 'bootstrap').mkdir(parents=True)
+            if has_brewfile:
+                (layer / 'bootstrap' / 'Brewfile').write_text('brew "jq"\n', encoding='utf-8')
+            layers.append(layer)
+        return layers
+
+    @staticmethod
+    def _capture_with(
+        monkeypatch: pytest.MonkeyPatch,
+        layers: list[Path],
+        *,
+        unsatisfied: set[Path] | None = None,
+        layers_rc: int = 0,
+    ) -> list[list[str]]:
+        """
+        Stub _capture: the layer probe lists ``layers``; ``brew bundle check`` fails for the ``unsatisfied`` Brewfiles
+        """
+        seen: list[list[str]] = []
+        stdout = ''.join(f'{layer}\n' for layer in layers)
+
+        def fake_capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+            seen.append(cmd)
+            if cmd[:2] == ['bash', '-c']:
+                return _completed(layers_rc, stdout)
+            return _completed(1 if Path(cmd[-1]) in (unsatisfied or set()) else 0)
+
+        monkeypatch.setattr(run,        '_capture', fake_capture)
+        monkeypatch.setattr(run.shutil, 'which',    lambda name: f'/usr/bin/{name}')
+        return seen
+
+    def test_ok_when_every_brewfile_is_satisfied(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that the check passes and counts only layers that declare a Brewfile
+        """
+        layers = self._layers(tmp_path, with_brewfile=(True, False, True))
+        self._capture_with(monkeypatch, layers)
+
+        check = run.check_brewfiles()
+        assert check.ok
+        assert check.detail == '2 Brewfile(s) satisfied'
+
+    def test_ok_when_no_layer_declares_a_brewfile(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that a repo without Brewfiles is not reported as drifted
+        """
+        self._capture_with(monkeypatch, self._layers(tmp_path, with_brewfile=(False,)))
+        assert run.check_brewfiles().ok
+
+    def test_drift_fails_names_the_brewfile_and_offers_a_bundle_fix(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """
+        Test that only the unsatisfied Brewfile is named and fixed
+        """
+        layers  = self._layers(tmp_path, with_brewfile=(True, True))
+        drifted = layers[1] / 'bootstrap' / 'Brewfile'
+        self._capture_with(monkeypatch, layers, unsatisfied={drifted})
+
+        check = run.check_brewfiles()
+        assert not check.ok
+        assert str(drifted) in check.detail
+        assert str(layers[0] / 'bootstrap' / 'Brewfile') not in check.detail
+        assert check.fix is not None
+        assert check.fix[:2] == ['bash', '-c']
+        assert 'brew bundle --no-upgrade --file "$brewfile"' in check.fix[2]
+        assert check.fix[-1] == str(drifted)
+
+    def test_probe_is_read_only(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that the check only runs "brew bundle check --no-upgrade" with auto-update disabled
+        """
+        layers = self._layers(tmp_path, with_brewfile=(True,))
+        seen   = self._capture_with(monkeypatch, layers)
+
+        run.check_brewfiles()
+        brewfile = layers[0] / 'bootstrap' / 'Brewfile'
+        assert seen[1:] == [
+            ['env', 'HOMEBREW_NO_AUTO_UPDATE=1', 'brew', 'bundle', 'check', '--no-upgrade', '--file', str(brewfile)],
+        ]
+
+    def test_fails_when_layers_cannot_be_enumerated(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that a broken overlay registry fails the check without probing brew
+        """
+        seen = self._capture_with(monkeypatch, [], layers_rc=1)
+
+        assert not run.check_brewfiles().ok
+        assert len(seen) == 1
+
+    def test_fails_when_brew_is_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that a missing brew is reported rather than raising FileNotFoundError
+        """
+        monkeypatch.setattr(run.shutil, 'which', lambda name: None)
+        assert not run.check_brewfiles().ok
+
+
+class TestDoctorCheckOrder:
+    """
+    Tests for the order and gating of the full doctor check list
+    """
+    def test_full_run_includes_hooks_and_brewfile_checks(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that the slow Brewfile check runs last and the hooks check follows the git version check
+        """
+        for func, name in {
+            'check_tools':       'tools',
+            'check_layers':      'layers',
+            'check_git_version': 'git',
+            'check_hooks':       'hooks',
+            'check_links':       'links',
+            'check_render':      'render',
+            'check_brewfiles':   'brewfile',
+        }.items():
+            monkeypatch.setattr(run, func, lambda name=name: run.DoctorCheck(name, True, 'ok'))
+
+        names = [c.name for c in run.doctor_checks()]
+        assert names == ['tools', 'layers', 'git', 'hooks', 'links', 'render', 'brewfile']

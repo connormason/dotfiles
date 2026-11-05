@@ -66,6 +66,13 @@ python3 run.py clean
 # Run prek (pre-commit) hooks on all files
 python3 run.py pre
 
+# Run hooks on specific hooks/files/refs (names before --files)
+python3 run.py run-hooks mdformat --last-commit
+python3 run.py run-hooks --files README.md
+
+# Prepare the hook environments ahead of the first commit
+python3 run.py prepare-hooks
+
 # Install / remove the prek git hook shims
 python3 run.py install-hooks
 python3 run.py uninstall-hooks
@@ -76,9 +83,10 @@ python3 run.py makefile
 
 ## Layered Dev Environment (`run.py` Dotfiles group)
 
-Wrappers over `stow.sh`, `bootstrap/bootstrap.sh`, and `scripts/dotfiles/render.py`, plus `doctor` (native checks) and
-`test` (pytest through the uv wrapper); see [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. They
-are stdlib-only, so bare `python3 run.py <command>` works (see the note above).
+`bootstrap`, `stow`, and `render` wrap `bootstrap/bootstrap.sh`, `stow.sh`, and `scripts/dotfiles/render.py`; `doctor`
+and `track-claude` run their own logic in `run.py`; `test` runs the suite through the uv wrapper. See
+[`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. They are stdlib-only, so bare
+`python3 run.py <command>` works (see the note above).
 
 ```bash
 # Stages across all layers / simulate every stage / run every stage for real, then run doctor
@@ -93,9 +101,12 @@ python3 run.py stow --backup-conflicts
 # Render settings from per-layer fragments (--diff previews, --check exits 1 on drift)
 python3 run.py render --check
 
-# Verify tools, overlay registry, git version, links, and rendered settings (--fix repairs, then re-checks)
+# Verify tools, overlays, git version and hooks, links, rendered settings, and Brewfiles (--fix asks first; --yes skips)
 python3 run.py doctor
 python3 run.py doctor --fix
+
+# Move local ~/.claude agents/commands/skills/hooks/rules into stow/claude and restow (--dry-run previews)
+python3 run.py track-claude
 
 # Run the test suite through the public-index uv wrapper
 python3 run.py test
