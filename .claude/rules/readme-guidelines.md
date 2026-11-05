@@ -26,7 +26,7 @@ Self-contained conventions for per-directory `README.md` files (does not depend 
 
 ## Repo specifics
 
-- **Markdown is auto-formatted by `mdformat` via the `prek` hook** (`.pre-commit-config.yaml`, priority 30) at the
+- **Markdown is auto-formatted by `mdformat` via the `prek` hook** (`.pre-commit-config.yaml`, priority 35) at the
   **120-char** line width. `.ctx/` and `docs/plans/` are excluded, so those stay hand-maintained. Run
   `prek run mdformat --all-files` (or let the commit hook do it) rather than formatting by hand.
 - Files with 100+ lines and 3+ h2 sections should carry the mdformat-toc anchor block (`<!-- mdformat-toc start ... -->`

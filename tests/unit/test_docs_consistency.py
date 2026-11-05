@@ -1,14 +1,22 @@
 """
 Guardrail tests that keep hand-maintained documentation inventories in sync with the infrastructure they describe
 
-These assert that the bootstrap stage table in ``bootstrap/README.md`` and the package table in ``stow/README.md`` match
-the stage scripts and stow package directories on disk. They exist to catch the drift documented in
-``CLAUDE-LESSONS.md`` ("Enumerated infra inventories in docs drift") the moment a stage or package is added or removed.
+These assert that the bootstrap stage table in ``bootstrap/README.md``, the package table in ``stow/README.md``, the
+roles table in ``roles/README.md``, and the container table in ``services/README.md`` match the stage scripts, stow
+package directories, role directories, and compose files on disk. They also assert that the role order in the playbook
+docs (``roles/README.md``, ``playbooks/README.md``, ``.ctx/ARCHITECTURE.md``) follows ``playbooks/nas_bootstrap.yml``
+and that ``docs/RUN_PY_REFERENCE.md`` documents every command ``run.py`` registers. They exist to catch the drift
+documented in ``CLAUDE-LESSONS.md`` ("Hand-maintained inventories in docs drift: guard each with a test") the moment
+an inventory changes.
 """
 from __future__ import annotations
 
+import importlib
 import re
+import sys
 from pathlib import Path
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -25,6 +33,7 @@ SNIPPET = re.compile(r'`(\d{2}-[A-Za-z0-9_-]+\.zsh)`')
 # ==============================================================================
 # Parsing helpers
 # ==============================================================================
+
 
 def _stage_scripts_on_disk(repo: Path) -> set[str]:
     """
@@ -46,7 +55,7 @@ def _stage_ids_in_readme(repo: Path) -> set[str]:
     :param repo: repository root
     :return: stage ids documented in the stage table
     """
-    text = (repo / 'bootstrap' / 'README.md').read_text(encoding='utf-8')
+    text        = (repo / 'bootstrap' / 'README.md').read_text(encoding='utf-8')
     row_pattern = re.compile(rf'^\|\s*({STAGE_ID})\s*\|', re.MULTILINE)
     return set(row_pattern.findall(text))
 
@@ -113,6 +122,7 @@ def _out_of_sync_message(label_a: str, set_a: set[str], label_b: str, set_b: set
 # Bootstrap stage documentation
 # ==============================================================================
 
+
 class TestBootstrapStageDocs:
     """
     Guardrails tying the bootstrap stage table to the stage scripts
@@ -141,6 +151,7 @@ class TestBootstrapStageDocs:
 # ==============================================================================
 # Stow package documentation
 # ==============================================================================
+
 
 class TestStowPackageDocs:
     """
@@ -212,3 +223,175 @@ class TestRolesReadme:
         Test that every role directory has a table row and every row has a directory
         """
         assert _roles_readme_rows(REPO_ROOT) == _role_dirs(REPO_ROOT)
+
+
+# A services/README.md Quick Reference row: the container name in the first cell (e.g. ``| `caddy` | ...``)
+SERVICE_ROW = re.compile(r'^\|\s*`([a-z0-9_-]+)`\s*\|(.*)$', re.MULTILINE)
+
+
+def _services_readme_rows(repo: Path) -> dict[str, str]:
+    """
+    Return the rows of the ``services/README.md`` Quick Reference table, keyed by container name
+
+    :param repo: repository root
+    :return: mapping of container name to the remainder of its table row
+    """
+    text  = (repo / 'services' / 'README.md').read_text(encoding='utf-8')
+    quick = text.split('## Quick Reference', 1)[1].split('\n## ', 1)[0]
+    return dict(SERVICE_ROW.findall(quick))
+
+
+def _compose_containers(repo: Path) -> dict[str, bool]:
+    """
+    Return every container defined under ``services/`` and whether its compose file is enabled
+
+    :param repo: repository root
+    :return: mapping of container name (``container_name``, else the service key) to True for ``compose.yml`` and
+             False for ``compose.yml.disabled``
+    """
+    found: dict[str, bool] = {}
+    for path in sorted((repo / 'services').glob('*/compose.yml*')):
+        if path.name not in ('compose.yml', 'compose.yml.disabled'):
+            continue
+        for key, service in yaml.safe_load(path.read_text(encoding='utf-8'))['services'].items():
+            found[service.get('container_name', key)] = path.name == 'compose.yml'
+    return found
+
+
+class TestServicesReadme:
+    """
+    Guardrails tying the services/README.md container table to the compose files
+    """
+    def test_container_table_matches_compose_files(self) -> None:
+        """
+        The Quick Reference table lists exactly the containers the compose files define
+        """
+        documented = set(_services_readme_rows(REPO_ROOT))
+        on_disk    = set(_compose_containers(REPO_ROOT))
+        assert documented == on_disk, _out_of_sync_message(
+            'services/README.md Quick Reference', documented, 'services/*/compose.yml*', on_disk,
+        )
+
+    def test_disabled_marker_matches_disabled_compose_files(self) -> None:
+        """
+        A row is marked (**disabled**) exactly when its compose file is compose.yml.disabled
+        """
+        rows    = _services_readme_rows(REPO_ROOT)
+        enabled = _compose_containers(REPO_ROOT)
+
+        mismatches: list[str] = []
+        for name, rest in rows.items():
+            marked_disabled = '(**disabled**)' in rest
+            if name in enabled and marked_disabled == enabled[name]:
+                mismatches.append(f'{name}: marked disabled={marked_disabled}, compose enabled={enabled[name]}')
+
+        assert not mismatches, 'services/README.md disabled markers are out of sync:\n  ' + '\n  '.join(mismatches)
+
+    def test_container_table_is_not_empty(self) -> None:
+        """
+        The container-table parser finds rows (guards against a silently broken regex)
+        """
+        assert _services_readme_rows(REPO_ROOT), 'parsed zero containers from services/README.md'
+
+
+def _playbook_role_order(repo: Path) -> list[str]:
+    """
+    Return the roles ``playbooks/nas_bootstrap.yml`` includes, in play order
+
+    :param repo: repository root
+    :return: role names without the ``roles/`` prefix
+    """
+    key  = 'ansible.builtin.include_role'
+    play = yaml.safe_load((repo / 'playbooks' / 'nas_bootstrap.yml').read_text(encoding='utf-8'))[0]
+    return [task[key]['name'].removeprefix('roles/') for task in play['tasks'] if key in task]
+
+
+def _playbooks_readme_role_order(repo: Path) -> list[str]:
+    """
+    Return the role names bolded in the numbered execution-order list of ``playbooks/README.md``
+
+    :param repo: repository root
+    :return: role names in document order (steps whose bold text is not a role directory, such as the apt refresh, are
+             ignored)
+    """
+    text  = (repo / 'playbooks' / 'README.md').read_text(encoding='utf-8')
+    names = re.findall(r'^\d+\. \*\*([a-z0-9_-]+)\*\*', text, re.MULTILINE)
+    return [name for name in names if name in _role_dirs(repo)]
+
+
+def _roles_readme_role_order(repo: Path) -> list[str]:
+    """
+    Return the role names linked in the first cell of the ``roles/README.md`` table, in table order
+    """
+    text = (repo / 'roles' / 'README.md').read_text(encoding='utf-8')
+    return re.findall(r'^\|\s*\[`([a-z0-9_-]+)`\]\(', text, re.MULTILINE)
+
+
+class TestRoleOrderDocs:
+    """
+    Guardrails tying the documented role order to the playbook
+    """
+    def test_playbooks_readme_follows_the_playbook(self) -> None:
+        """
+        The execution-order list in playbooks/README.md names the roles in the playbook's order
+        """
+        assert _playbooks_readme_role_order(REPO_ROOT) == _playbook_role_order(REPO_ROOT)
+
+    def test_roles_readme_table_follows_the_playbook(self) -> None:
+        """
+        The roles/README.md table lists the roles in the playbook's order
+        """
+        assert _roles_readme_role_order(REPO_ROOT) == _playbook_role_order(REPO_ROOT)
+
+    def test_order_parsers_are_not_empty(self) -> None:
+        """
+        The order parsers find roles (guards against silently broken regexes)
+        """
+        assert _playbook_role_order(REPO_ROOT)
+        assert _playbooks_readme_role_order(REPO_ROOT)
+        assert _roles_readme_role_order(REPO_ROOT)
+
+    def test_architecture_role_list_follows_the_playbook(self) -> None:
+        """
+        The role bullets in .ctx/ARCHITECTURE.md name the roles in the playbook's order
+        """
+        text    = (REPO_ROOT / '.ctx' / 'ARCHITECTURE.md').read_text(encoding='utf-8')
+        section = text.split('## Role System (NAS)', 1)[1].split('\n## ', 1)[0]
+        roles   = re.findall(r'^- `([a-z0-9_-]+)`:', section, re.MULTILINE)
+
+        assert roles == _playbook_role_order(REPO_ROOT)
+
+
+def _registered_commands(repo: Path) -> set[str]:
+    """
+    Return the command names registered in ``run.py``
+
+    :param repo: repository root
+    :return: names in ``run.REGISTERED_COMMANDS``
+    """
+    sys.path.insert(0, str(repo))
+    try:
+        module = importlib.import_module('run')
+    finally:
+        sys.path.remove(str(repo))
+    return set(module.REGISTERED_COMMANDS)
+
+
+class TestRunPyReference:
+    """
+    Guardrails tying docs/RUN_PY_REFERENCE.md to the commands run.py registers
+    """
+    def test_every_registered_command_is_documented(self) -> None:
+        """
+        Every command registered in run.py appears backticked in the reference
+        """
+        text    = (REPO_ROOT / 'docs' / 'RUN_PY_REFERENCE.md').read_text(encoding='utf-8')
+        missing = sorted(name for name in _registered_commands(REPO_ROOT) if f'`{name}`' not in text)
+
+        assert not missing, f'docs/RUN_PY_REFERENCE.md does not document: {missing}'
+
+    def test_registry_is_not_empty(self) -> None:
+        """
+        The registry lookup finds commands (guards against a broken import)
+        """
+        assert _registered_commands(REPO_ROOT)
