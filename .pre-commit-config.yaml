@@ -160,7 +160,7 @@ repos:
 
       # Prevent addition of new submodules
       - id: forbid-new-submodules
-        name: "[check]  no new submodules"
+        name: "[check]  no broke boys, no new submodules"
         groups: [check, local, ci, git]
         stages: [pre-commit, manual]
         priority: 10
@@ -232,6 +232,30 @@ repos:
         priority: 10
         exclude: ^stow/zed/.*\.json$                # JSONC (comments, trailing commas); checked by json5 hook
 
+  - repo: local
+    hooks:
+
+      # Validate JSON5 file syntax (PEP 723 script; pyjson5 resolved at runtime)
+      - id: check-json5
+        name: "[check]  json5 syntax"
+        groups: [check, local, ci, json, json5]
+        stages: [pre-commit, manual]
+        priority: 10
+        entry: scripts/hooks/check-json5.py
+        language: python
+        files: .*\.json5$|^stow/zed/.*\.json$
+
+      # Validate Pkl file syntax via `pkl eval` (no-op if `pkl` is not installed)
+      - id: check-pkl
+        name: "[check]  pkl syntax"
+        groups: [check, local, ci, pkl]
+        stages: [pre-commit, manual]
+        priority: 10
+        entry: scripts/hooks/check-pkl.py
+        language: python
+        files: .*\.pkl$
+        types: [file]
+
   - repo: https://github.com/abravalheri/validate-pyproject
     rev: v0.27
     hooks:
@@ -267,7 +291,7 @@ repos:
 
       # Verify python unit test filenames match pytest expectations
       - id: name-tests-test
-        name: "[check]  unit test filenames"
+        name: "[check]  python unit test filenames"
         groups: [check, local, ci, python]
         stages: [pre-commit, manual]
         priority: 10
@@ -277,32 +301,11 @@ repos:
   - repo: local
     hooks:
 
-      # Validate JSON5 file syntax (PEP 723 script; pyjson5 resolved at runtime)
-      - id: check-json5
-        name: "[check]  json5 syntax"
-        groups: [check, local, ci, json, json5]
-        stages: [pre-commit, manual]
-        priority: 10
-        entry: scripts/hooks/check-json5.py
-        language: python
-        files: .*\.json5$|^stow/zed/.*\.json$
-
-      # Validate Pkl file syntax via `pkl eval` (no-op if `pkl` is not installed)
-      - id: check-pkl
-        name: "[check]  pkl syntax"
-        groups: [check, local, ci, pkl]
-        stages: [pre-commit, manual]
-        priority: 10
-        entry: scripts/hooks/check-pkl.py
-        language: python
-        files: .*\.pkl$
-        types: [file]
-
       # Block employer-internal identifiers in staged content/paths and in the commit identity
       # (public baseline + optional private patterns from ~/.config/dotfiles/leak-patterns.txt).
       # CI scans the full tree separately
       - id: check-leaks
-        name: "[check]  internal identifiers (leak guard)"
+        name: "[check]  internal identifiers in file content/paths"
         groups: [check, local, ci, leaks]
         stages: [pre-commit]
         priority: 10
@@ -453,7 +456,7 @@ repos:
 
       # Format Claude Code settings JSON files
       - id: pretty-format-json
-        name: "[format] json (.claude, indent=2)"
+        name: "[format] json - claude settings"
         groups: [format, local, json, claude]
         stages: [pre-commit]
         priority: 35
@@ -464,6 +467,20 @@ repos:
           - "--indent=2"
           - "--autofix"
           - "--top-keys=id,name,type,matcher,mode,command"
+
+  - repo: local
+    hooks:
+
+      # Sort the VS Code keybindings array by `command`; rewrites the file, so pre-commit only (not run in CI)
+      - id: sort-json-array
+        name: "[format] json - vscode keybindings sort"
+        groups: [format, local, sort, json, vscode]
+        stages: [pre-commit]
+        priority: 35
+        entry: scripts/hooks/sort-json-array.py
+        language: python
+        args: [--key, command]
+        files: ^stow/vscode/Library/Application Support/Code/User/keybindings\.json$
 
   - repo: https://github.com/ComPWA/taplo-pre-commit
     rev: v0.9.3
@@ -489,17 +506,6 @@ repos:
         language: python
         files: .*\.pkl$
         types: [file]
-
-      # Sort the VS Code keybindings array by `command`; rewrites the file, so pre-commit only (not run in CI)
-      - id: sort-json-array
-        name: "[format] json array sort (keybindings)"
-        groups: [format, local, sort, json, vscode]
-        stages: [pre-commit]
-        priority: 35
-        entry: scripts/hooks/sort-json-array.py
-        language: python
-        args: [--key, command]
-        files: ^stow/vscode/Library/Application Support/Code/User/keybindings\.json$
 
   - repo: https://github.com/hukkin/mdformat
     rev: 1.0.0
