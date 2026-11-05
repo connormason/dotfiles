@@ -414,7 +414,7 @@ class TestMakefileCommand:
         Test that regenerating the Makefile reproduces the checked-in file (drift guard)
         """
         generated = tmp_path / 'Makefile'
-        monkeypatch.setattr(run, 'MAKEFILE_PATH', generated)
+        monkeypatch.setattr(run, 'MAKEFILE', generated)
         run.get_commands()['makefile'](argparse.Namespace())
         assert generated.read_text() == (run.DOTFILES_DIR / 'Makefile').read_text()
 
@@ -433,7 +433,7 @@ class TestMakefileCommand:
             f'sys.path.insert(0, {str(run.DOTFILES_DIR)!r}); '
             'import run; '
             'from pathlib import Path; '
-            f'run.MAKEFILE_PATH = Path({str(generated)!r}); '
+            f'run.MAKEFILE = Path({str(generated)!r}); '
             "run.get_commands()['makefile'](argparse.Namespace())"
         )
         subprocess.run([sys.executable, '-c', code], env=env, capture_output=True, text=True, check=True)

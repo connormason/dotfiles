@@ -102,39 +102,19 @@ from typing import overload
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from collections.abc import Mapping
+    from types import ModuleType
 
 
 # ====================================================================================================
 # Constants/configuration
 # ====================================================================================================
 
-
-# Filepaths - All absolute paths relative to script location
-SCRIPT_PATH:    Path = Path(__file__)
-DOTFILES_DIR:   Path = SCRIPT_PATH.parent
-MAKEFILE_PATH:  Path = DOTFILES_DIR  / 'Makefile'
-INVENTORY_DIR:  Path = DOTFILES_DIR  / 'inventory'
-INVENTORY_FILE: Path = INVENTORY_DIR / 'inventory.yml'
-VAULT_PASSWORD: Path = DOTFILES_DIR  / 'vault_password.txt'
-PLAYBOOKS_DIR:  Path = DOTFILES_DIR  / 'playbooks'
-
-# Layered dev-env engine (stow.sh, bootstrap driver, settings renderer)
-STOW_SCRIPT:      Path = DOTFILES_DIR / 'stow.sh'
-BOOTSTRAP_SCRIPT: Path = DOTFILES_DIR / 'bootstrap' / 'bootstrap.sh'
-RENDER_SCRIPT:    Path = DOTFILES_DIR / 'scripts' / 'dotfiles' / 'render.py'
-UV_PUBLIC:        Path = DOTFILES_DIR / 'scripts' / 'hooks' / 'uv-public.sh'
-STOW_DIR:         Path = DOTFILES_DIR / 'stow'
-CLAUDE_STOW_DIR:  Path = STOW_DIR / 'claude' / '.claude'
-
-# NAS provisioning (Ansible playbook, collections) and service deploys (script shared with CI)
-NAS_PLAYBOOK:       Path = PLAYBOOKS_DIR / 'nas_bootstrap.yml'
-NAS_REQUIREMENTS:   Path = DOTFILES_DIR  / 'roles' / 'requirements.yml'
-NAS_DEPLOY_SCRIPT:  Path = DOTFILES_DIR  / 'scripts' / 'nas' / 'deploy-services.sh'
+# Hostname in Ansible inventory for NAS machine
 NAS_INVENTORY_HOST: str  = 'nas'
 
 # Doctor requirements
 REQUIRED_TOOLS:  tuple[str, ...] = ('brew', 'git', 'stow', 'uv', 'zsh')
-MIN_GIT_VERSION: tuple[int, int] = (2, 36)  # includeIf "hasconfig:remote.*.url:" support
+MIN_GIT_VERSION: tuple[int, int] = (2, 36)                              # includeIf "hasconfig:remote.*.url:" support
 
 # Hand-authored Claude Code config that `track-claude` ingests into the `claude` stow package. Machine-managed state
 # (plugins/, projects/, caches) stays untracked; stowed files are symlinks, so a regular file here is local-only.
@@ -211,6 +191,78 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 }
 
 
+# =======================================================================================
+# Dotfiles repo filepaths
+#
+#   dotfiles/                       DOTFILES_DIR
+#     .git/                         GIT_DIR
+#       hooks/                      GIT_HOOKS_DIR
+#         pre-commit                PRE_COMMIT_HOOK
+#     .venv/                        VENV_DIR
+#     bootstrap/                    BOOTSTRAP_DIR
+#       bootstrap.sh                BOOTSTRAP_SCRIPT
+#     docs/                         DOCS_DIR
+#     inventory/                    INVENTORY_DIR
+#       inventory.yml               INVENTORY_FILE
+#     playbooks/                    PLAYBOOKS_DIR
+#       nas_bootstrap.yml           NAS_BOOTSTRAP_PLAYBOOK
+#     profiles/                     PROFILES_DIR
+#       nas/
+#       personal-mac/
+#     render/                       RENDER_DIR
+#       claude.json
+#       vscode.json
+#     roles/                        ROLES_DIR
+#       requirements.yml            ANSIBLE_REQUIREMENTS
+#     scripts/                      SCRIPTS_DIR
+#       dotfiles/
+#         render.py                 RENDER_SCRIPT
+#       hooks/
+#         uv-public.sh              UV_PUBLIC_SCRIPT
+#       nas/
+#         deploy-services.sh        NAS_DEPLOY_SCRIPT
+#       utility/
+#     stow/                         STOW_DIR
+#       claude/
+#         .claude/                  CLAUDE_STOW_DIR
+#         .config/
+#     Makefile                      MAKEFILE
+#     run.py                        SCRIPT_PATH
+#     stow.sh                       STOW_SCRIPT
+#     vault_password.txt            VAULT_PASSWORD
+#
+# =======================================================================================
+
+
+SCRIPT_PATH:            Path = Path(__file__)
+DOTFILES_DIR:           Path = SCRIPT_PATH.parent
+
+GIT_DIR:                Path = DOTFILES_DIR / '.git'
+GIT_HOOKS_DIR:          Path = GIT_DIR / 'hooks'
+PRE_COMMIT_HOOK:        Path = GIT_HOOKS_DIR / 'pre-commit'
+VENV_DIR:               Path = DOTFILES_DIR / '.venv'
+BOOTSTRAP_DIR:          Path = DOTFILES_DIR / 'bootstrap'
+BOOTSTRAP_SCRIPT:       Path = BOOTSTRAP_DIR / 'bootstrap.sh'
+DOCS_DIR:               Path = DOTFILES_DIR / 'docs'
+INVENTORY_DIR:          Path = DOTFILES_DIR / 'inventory'
+INVENTORY_FILE:         Path = INVENTORY_DIR / 'inventory.yml'
+PLAYBOOKS_DIR:          Path = DOTFILES_DIR / 'playbooks'
+PROFILES_DIR:           Path = DOTFILES_DIR / 'profiles'
+RENDER_DIR:             Path = DOTFILES_DIR / 'render'
+NAS_BOOTSTRAP_PLAYBOOK: Path = PLAYBOOKS_DIR / 'nas_bootstrap.yml'
+ROLES_DIR:              Path = DOTFILES_DIR / 'roles'
+ANSIBLE_REQUIREMENTS:   Path = ROLES_DIR / 'requirements.yml'
+SCRIPTS_DIR:            Path = DOTFILES_DIR / 'scripts'
+RENDER_SCRIPT:          Path = SCRIPTS_DIR / 'dotfiles' / 'render.py'
+UV_PUBLIC_SCRIPT:       Path = SCRIPTS_DIR / 'hooks' / 'uv-public.sh'
+NAS_DEPLOY_SCRIPT:      Path = SCRIPTS_DIR / 'nas' / 'deploy-services.sh'
+STOW_DIR:               Path = DOTFILES_DIR / 'stow'
+CLAUDE_STOW_DIR:        Path = STOW_DIR / 'claude' / '.claude'
+MAKEFILE:               Path = DOTFILES_DIR / 'Makefile'
+STOW_SCRIPT:            Path = DOTFILES_DIR / 'stow.sh'
+VAULT_PASSWORD:         Path = DOTFILES_DIR / 'vault_password.txt'
+
+
 # ====================================================================================================
 # Basic types
 # ====================================================================================================
@@ -218,6 +270,7 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 
 F        = TypeVar('F',        bound=Callable[..., Any])
 T_contra = TypeVar('T_contra', contravariant=True)
+ModT     = TypeVar('ModT',     bound='ModuleType')
 
 PathLike   = Union[str, Path]
 StyleColor = Union[int, tuple[int, int, int], str]
@@ -792,7 +845,7 @@ def printf(
     if debug and not RUN_DEBUG:
         return
     if debug:
-        fg   = fg if fg   is not None else 'bright_white'
+        fg   = fg  if fg  is not None else 'bright_white'
         dim  = dim if dim is not None else True
         file = sys.stderr
 
@@ -1039,8 +1092,9 @@ def shell_command(
 
         buffer:     str = ''
         all_output: str = ''
+
         timed_out = False
-        deadline = None if timeout is None else time.monotonic() + timeout
+        deadline  = None if timeout is None else time.monotonic() + timeout
         try:
             while True:
                 # Poll with the remaining budget: a bare blocking read would never notice a hung, silent child
@@ -1209,6 +1263,7 @@ def retry_on_failure(
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_exception: Exception | None = None
+
             for attempt in range(1, max_attempts + 1):
                 try:
                     return func(*args, **kwargs)
@@ -1292,7 +1347,7 @@ def require_vault_password() -> None:
     """
     if not VAULT_PASSWORD.is_file():
         printf('❌ Vault password file not found', fg='red', bold=True)
-        printf(f'   Expected: {folduser(VAULT_PASSWORD)}', indent=3)
+        printf(f'   Expected: {folduser(VAULT_PASSWORD)}',                                                    indent=3)
         printf(f'   Create it with: {style("echo YOUR_PASSWORD > vault_password.txt", fg="bright_magenta")}', indent=3)
         sys.exit(ExitCode.COMMAND_FAILED)
 
@@ -2032,7 +2087,7 @@ class MakefileCommand(Command):
                     target += f' ## {cmd_info.description.splitlines()[0]}'
                 lines.extend([target, f'\t@python3 {SCRIPT_PATH.relative_to(DOTFILES_DIR)} {cmd_name}', ''])
 
-        with MAKEFILE_PATH.open('w') as f:
+        with MAKEFILE.open('w') as f:
             f.write('\n'.join(lines))
         printf('✅ Makefile updated', fg='bright_green')
 
@@ -2056,7 +2111,7 @@ def resolve_nas_target(host: str = NAS_INVENTORY_HOST) -> tuple[str, str]:
     """
     result = shell_command(
         [
-            str(UV_PUBLIC), 'run', 'ansible-inventory',
+            str(UV_PUBLIC_SCRIPT), 'run', 'ansible-inventory',
             '-i', str(INVENTORY_FILE),
             '--vault-password-file', str(VAULT_PASSWORD),
             '--host', host,
@@ -2146,7 +2201,7 @@ def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
     :return: command and arguments
     """
     cmd: list[str] = [
-        str(UV_PUBLIC), 'run', 'ansible-playbook', str(NAS_PLAYBOOK),
+        str(UV_PUBLIC_SCRIPT), 'run', 'ansible-playbook', str(NAS_BOOTSTRAP_PLAYBOOK),
         '-i', str(INVENTORY_FILE),
         '--vault-password-file', str(VAULT_PASSWORD),
     ]
@@ -2265,7 +2320,7 @@ class NasProvisionCommand(Command):
 
         printf('📦 Installing Ansible collections', fg='bright_cyan')
         galaxy = shell_command(
-            [str(UV_PUBLIC), 'run', 'ansible-galaxy', 'collection', 'install', '-r', str(NAS_REQUIREMENTS)],
+            [str(UV_PUBLIC_SCRIPT), 'run', 'ansible-galaxy', 'collection', 'install', '-r', str(ANSIBLE_REQUIREMENTS)],
             check=False,
             cwd=DOTFILES_DIR,
         )
@@ -3027,7 +3082,7 @@ class TestCommand(Command):
     def run(self, args: Args) -> None:
         sys.exit(
             shell_command(
-                [str(UV_PUBLIC), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])],
+                [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])],
                 check=False,
             ).returncode,
         )
