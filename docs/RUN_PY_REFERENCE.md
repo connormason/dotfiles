@@ -770,7 +770,7 @@ StyleColor = Union[int, tuple[int, int, int], str]
 class ExitCode(int, enum.Enum):
     SUCCESS        = 0
     COMMAND_FAILED = 1
-    SETUP_ERROR    = 2   # unknown command
+    SETUP_ERROR    = 2   # unknown command, missing PyYAML (list-hosts)
     USER_CANCELLED = 3   # Ctrl-C
 ```
 
