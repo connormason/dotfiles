@@ -180,6 +180,10 @@ exclude = [
 disable_error_code = ["override"]
 module             = ["run"]
 
+[[tool.mypy.overrides]]
+disable_error_code = ["arg-type"]
+module             = ["tests.unit.scripts.env.test_loadenv"]
+
 # `ruff` global configuration
 # ===========================
 [tool.ruff]
@@ -296,7 +300,7 @@ ignore = [
     # flake8-simplify -------------------------------------------------------------------------------------------------
     "SIM118", # Use `key {operator} dict` instead of `key {operator} dict.keys()`
 
-    # TODO: ??
+    # ruff (built-in) -------------------------------------------------------------------------------------------------
     # "RUF022",   # `__all__` is not sorted
 ]
 
@@ -305,9 +309,12 @@ ignore = [
 # =========================================
 [tool.ruff.lint.per-file-ignores]
 # keep-sorted start
-"run.py"               = ["S112"]
-"stow/**/startup/*.py" = ["INP001"]                # IPython startup scripts are not a package
-"tests/**"             = ["B", "S", "SIM", "PERF"]
+"run.py"                                   = ["S112"]
+"scripts/env/venvshell.py"                 = ["RUF001"]
+"stow/**/startup/*.py"                     = ["INP001"]
+"tests/**"                                 = ["B", "S", "SIM", "PERF"]
+"tests/unit/scripts/env/test_loadenv.py"   = ["E402"]
+"tests/unit/scripts/env/test_venvshell.py" = ["E402"]
 # keep-sorted end
 
 # `ruff check` linter rule group-specific settings

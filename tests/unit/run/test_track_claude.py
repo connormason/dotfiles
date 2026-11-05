@@ -188,7 +188,7 @@ class TestTrackClaudeCommand:
             calls.append(cmd)
             return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
 
-        monkeypatch.setattr(run, '_capture', fake_capture)
+        monkeypatch.setattr(run, 'capture_command', fake_capture)
         return calls
 
     @pytest.fixture(autouse=True)

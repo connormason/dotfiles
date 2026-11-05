@@ -42,15 +42,20 @@ def _option_strings(command: str) -> set[str]:
 
 def _record(monkeypatch: pytest.MonkeyPatch, returncode: int = 0) -> list[Call]:
     """
-    Patch shell_command to record each call (command and keyword args) and exit with ``returncode``
+    Patch the environment setup helpers to no-ops and uv_run to record each call (command and keyword args)
+
+    The recorded call exits with ``returncode``.
     """
     calls: list[Call] = []
 
-    def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+    def fake_uv_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append((cmd, kwargs))
         return subprocess.CompletedProcess(cmd, returncode, stdout='', stderr='')
 
-    monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+    monkeypatch.setattr(run, 'check_python', lambda **_kwargs: None)
+    monkeypatch.setattr(run, 'ensure_uv',    lambda **_kwargs: None)
+    monkeypatch.setattr(run, 'ensure_venv',  lambda **_kwargs: None)
+    monkeypatch.setattr(run, 'uv_run',       fake_uv_run)
     return calls
 
 

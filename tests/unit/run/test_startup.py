@@ -57,14 +57,14 @@ class TestScriptMetadata:
 
     def test_declares_pyyaml(self) -> None:
         """
-        Test that PyYAML (imported lazily by list-hosts) is declared
+        Test that PyYAML (imported lazily by inventory-hosts) is declared
         """
         assert any(dep.lower().startswith('pyyaml') for dep in _script_metadata()['dependencies'])
 
 
-class TestListHostsDependency:
+class TestInventoryHostsDependency:
     """
-    Tests for list-hosts when PyYAML is unavailable
+    Tests for inventory-hosts when PyYAML is unavailable
     """
     def test_missing_yaml_is_reported_as_setup_error(
         self,
@@ -81,7 +81,7 @@ class TestListHostsDependency:
         monkeypatch.setitem(sys.modules, 'yaml', None)      # makes `import yaml` raise ImportError
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['list-hosts'](argparse.Namespace())
+            run.get_commands()['inventory-hosts'](argparse.Namespace())
 
         out = run.unstyle(capsys.readouterr().out)
         assert exc_info.value.code == run.ExitCode.SETUP_ERROR

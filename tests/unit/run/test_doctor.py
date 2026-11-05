@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -30,14 +31,14 @@ class TestDoctorChecks:
         Test that a no-op stow simulation means links are current
         """
         stdout = 'stow: no changes (already current)\nstow: simulated foo (dry-run, no changes written)\n'
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, stdout))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, stdout))
         assert run.check_links().ok
 
     def test_links_ok_with_no_packages(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Test that a repo with no packages yet is not reported as broken
         """
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, 'stow: no packages found\n'))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, 'stow: no packages found\n'))
         assert run.check_links().ok
 
     def test_links_fail_when_stow_would_change(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -50,7 +51,7 @@ class TestDoctorChecks:
             'stow: 2 added, 0 updated, 0 removed\n'
             'stow: simulated foo (dry-run, no changes written)\n'
         )
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, stdout))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, stdout))
 
         check = run.check_links()
         assert not check.ok
@@ -62,7 +63,7 @@ class TestDoctorChecks:
         Test that a blocked stow (exit 1) fails the check, surfaces stderr, and offers the backup fix
         """
         stderr = 'stow: these existing files block linking (nothing was changed):\n  ~/.foorc\n'
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(1, '', stderr))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(1, '', stderr))
 
         check = run.check_links()
         assert not check.ok
@@ -74,7 +75,7 @@ class TestDoctorChecks:
         """
         Test that render --check exit 1 fails the check and offers a fix
         """
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(1))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(1))
 
         check = run.check_render()
         assert not check.ok
@@ -84,14 +85,14 @@ class TestDoctorChecks:
         """
         Test that render --check exit 0 passes the check
         """
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0))
         assert run.check_render().ok
 
     def test_render_check_config_error_has_no_fix(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Test that render exit 2 (config or I/O error) fails without offering a blind re-render
         """
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(2, '', 'render: bad fragment\n'))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(2, '', 'render: bad fragment\n'))
 
         check = run.check_render()
         assert not check.ok
@@ -110,21 +111,21 @@ class TestDoctorChecks:
         """
         Test that git must support includeIf hasconfig (>= 2.36)
         """
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, version_line + '\n'))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, version_line + '\n'))
         assert run.check_git_version().ok is ok
 
     def test_layers_fail_on_registry_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Test that a broken overlay registry fails the layers check
         """
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(1))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(1))
         assert not run.check_layers().ok
 
     def test_layers_count_overlays(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Test that the layers check reports the base layer plus each overlay
         """
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, '/repo\n/overlay\n'))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, '/repo\n/overlay\n'))
 
         check = run.check_layers()
         assert check.ok
@@ -175,7 +176,7 @@ class TestDoctorReadOnly:
             seen.append(cmd)
             return _completed(0, stdout)
 
-        monkeypatch.setattr(run, '_capture', fake_capture)
+        monkeypatch.setattr(run, 'capture_command', fake_capture)
         return seen
 
     def test_links_probe_simulates_stow(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -357,7 +358,7 @@ class TestDoctorCommand:
         Test that every Dotfiles command is registered under the Dotfiles group
         """
         group = run.get_commands(by_group=True)['Dotfiles']
-        assert set(group) == {'bootstrap', 'stow', 'render', 'doctor', 'test', 'track-claude'}
+        assert set(group) == {'stow', 'render', 'track-claude'}
 
 
 class TestForwarding:
@@ -445,7 +446,7 @@ class TestForwarding:
 SHIM = '#!/bin/sh\n# File generated by prek: https://github.com/j178/prek\nexec prek hook-impl "$@"\n'
 
 
-def _write_shims(hooks_dir: Path, hook_types: tuple[str, ...], content: str = SHIM) -> None:
+def _write_shims(hooks_dir: Path, hook_types: Iterable[str], content: str = SHIM) -> None:
     """
     Create hook shim files for the given hook types
     """
@@ -471,7 +472,7 @@ class TestCheckHooks:
         """
         hooks = tmp_path / 'hooks'
         _write_shims(hooks, run.GIT_HOOK_TYPES)
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, f'{hooks}\n'))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, f'{hooks}\n'))
 
         check = run.check_hooks()
         assert check.ok
@@ -483,7 +484,7 @@ class TestCheckHooks:
         """
         hooks = tmp_path / 'hooks'
         _write_shims(hooks, tuple(t for t in run.GIT_HOOK_TYPES if t != 'pre-push'))
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, f'{hooks}\n'))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, f'{hooks}\n'))
 
         check = run.check_hooks()
         assert not check.ok
@@ -496,7 +497,7 @@ class TestCheckHooks:
         """
         hooks = tmp_path / 'hooks'
         _write_shims(hooks, run.GIT_HOOK_TYPES, content='#!/bin/sh\necho custom hook\n')
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(0, f'{hooks}\n'))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, f'{hooks}\n'))
         assert not run.check_hooks().ok
 
     def test_relative_hooks_path_is_resolved_against_the_repo(
@@ -508,8 +509,8 @@ class TestCheckHooks:
         Test that the relative path git prints in a plain checkout is resolved against the repo root
         """
         _write_shims(tmp_path / '.git' / 'hooks', run.GIT_HOOK_TYPES)
-        monkeypatch.setattr(run, 'DOTFILES_DIR', tmp_path)
-        monkeypatch.setattr(run, '_capture',     lambda cmd: _completed(0, '.git/hooks\n'))
+        monkeypatch.setattr(run, 'DOTFILES_DIR',    tmp_path)
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, '.git/hooks\n'))
         assert run.check_hooks().ok
 
     def test_absolute_hooks_path_from_a_linked_worktree(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -518,15 +519,15 @@ class TestCheckHooks:
         """
         common = tmp_path / 'main-checkout' / '.git' / 'hooks'
         _write_shims(common, run.GIT_HOOK_TYPES)
-        monkeypatch.setattr(run, 'DOTFILES_DIR', tmp_path / 'worktree')
-        monkeypatch.setattr(run, '_capture',     lambda cmd: _completed(0, f'{common}\n'))
+        monkeypatch.setattr(run, 'DOTFILES_DIR',    tmp_path / 'worktree')
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(0, f'{common}\n'))
         assert run.check_hooks().ok
 
     def test_fails_outside_a_git_checkout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Test that a failing git probe fails the check with git's message
         """
-        monkeypatch.setattr(run, '_capture', lambda cmd: _completed(128, '', 'fatal: not a git repository\n'))
+        monkeypatch.setattr(run, 'capture_command', lambda cmd: _completed(128, '', 'fatal: not a git repository\n'))
 
         check = run.check_hooks()
         assert not check.ok
@@ -536,8 +537,8 @@ class TestCheckHooks:
         """
         Test that the check offers no fix (and says why) when prek is not on PATH
         """
-        monkeypatch.setattr(run.shutil, 'which',    lambda name: None)
-        monkeypatch.setattr(run,        '_capture', lambda cmd: _completed(0, f'{tmp_path / "hooks"}\n'))
+        monkeypatch.setattr(run.shutil, 'which',           lambda name: None)
+        monkeypatch.setattr(run,        'capture_command', lambda cmd: _completed(0, f'{tmp_path / "hooks"}\n'))
 
         check = run.check_hooks()
         assert not check.ok
@@ -554,7 +555,7 @@ class TestCheckHooks:
             seen.append(cmd)
             return _completed(0, f'{tmp_path}\n')
 
-        monkeypatch.setattr(run, '_capture', fake_capture)
+        monkeypatch.setattr(run, 'capture_command', fake_capture)
         run.check_hooks()
         assert seen == [['git', 'rev-parse', '--git-path', 'hooks']]
 
@@ -606,8 +607,8 @@ class TestCheckBrewfiles:
                 return _completed(layers_rc, stdout)
             return _completed(1 if Path(cmd[-1]) in (unsatisfied or set()) else 0)
 
-        monkeypatch.setattr(run,        '_capture', fake_capture)
-        monkeypatch.setattr(run.shutil, 'which',    lambda name: f'/usr/bin/{name}')
+        monkeypatch.setattr(run,        'capture_command', fake_capture)
+        monkeypatch.setattr(run.shutil, 'which',           lambda name: f'/usr/bin/{name}')
         return seen
 
     def test_ok_when_every_brewfile_is_satisfied(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -685,13 +686,16 @@ class TestDoctorCheckOrder:
     """
     def test_full_run_includes_hooks_and_brewfile_checks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
-        Test that the slow Brewfile check runs last and the hooks check follows the git version check
+        Test that the slow Brewfile check runs last and the python/uv/venv checks join the full list
         """
         for func, name in {
             'check_tools':       'tools',
             'check_layers':      'layers',
+            'check_python_tool': 'python',
+            'check_uv_tool':     'uv',
             'check_git_version': 'git',
             'check_hooks':       'hooks',
+            'check_venv':        'venv',
             'check_links':       'links',
             'check_render':      'render',
             'check_brewfiles':   'brewfile',
@@ -699,4 +703,4 @@ class TestDoctorCheckOrder:
             monkeypatch.setattr(run, func, lambda name=name: run.DoctorCheck(name, True, 'ok'))
 
         names = [c.name for c in run.doctor_checks()]
-        assert names == ['tools', 'layers', 'git', 'hooks', 'links', 'render', 'brewfile']
+        assert names == ['tools', 'layers', 'python', 'uv', 'git', 'hooks', 'venv', 'links', 'render', 'brewfile']

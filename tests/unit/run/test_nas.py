@@ -97,7 +97,7 @@ class TestPrintfFlush:
 
 class TestResolveNasTarget:
     """
-    Tests for resolve_nas_target
+    Tests for resolve_ssh_target_from_inventory_host
     """
     def test_reads_host_and_user_from_the_inventory(self, fake_shell: FakeShell) -> None:
         """
@@ -107,7 +107,7 @@ class TestResolveNasTarget:
             stdout=json.dumps({'ansible_host': 'nas.example.ts.net', 'ansible_user': 'tester'}),
         )
 
-        assert run.resolve_nas_target() == ('nas.example.ts.net', 'tester')
+        assert run.resolve_ssh_target_from_inventory_host('nas') == ('nas.example.ts.net', 'tester')
 
         cmd, kwargs = fake_shell.find('ansible-inventory')
         assert cmd[cmd.index('--host') + 1] == 'nas'
@@ -124,7 +124,7 @@ class TestResolveNasTarget:
         """
         fake_shell.results['ansible-inventory'] = _done(stdout='{}')
         monkeypatch.setattr(run.getpass, 'getuser', lambda: 'local')
-        assert run.resolve_nas_target() == ('nas', 'local')
+        assert run.resolve_ssh_target_from_inventory_host('nas') == ('nas', 'local')
 
     def test_inventory_failure_exits_with_the_error(
         self,
@@ -137,7 +137,7 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(1, stderr='bad vault password')
 
         with pytest.raises(SystemExit) as exc_info:
-            run.resolve_nas_target()
+            run.resolve_ssh_target_from_inventory_host('nas')
 
         assert exc_info.value.code == 1
         assert 'bad vault password' in _output(capsys)
@@ -149,7 +149,7 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(stdout='not json')
 
         with pytest.raises(SystemExit) as exc_info:
-            run.resolve_nas_target()
+            run.resolve_ssh_target_from_inventory_host('nas')
 
         assert exc_info.value.code == 1
         assert 'Unexpected' in _output(capsys)
@@ -167,7 +167,7 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(stdout=stdout)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.resolve_nas_target()
+            run.resolve_ssh_target_from_inventory_host('nas')
 
         assert exc_info.value.code == 1
         assert 'Unexpected ansible-inventory output for host "nas"' in _output(capsys)
@@ -179,7 +179,7 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(stdout=json.dumps({'ansible_host': '{{ nas_ip }}'}))
 
         with pytest.raises(SystemExit) as exc_info:
-            run.resolve_nas_target()
+            run.resolve_ssh_target_from_inventory_host('nas')
 
         assert exc_info.value.code == 1
         assert 'literal' in _output(capsys)
@@ -230,13 +230,13 @@ class TestResolveReachableNas:
         def check_vault() -> None:
             order.append('vault')
 
-        def resolve() -> tuple[str, str]:
+        def resolve(host: str) -> run.SSHTarget:
             order.append('resolve')
-            return 'h', 'u'
+            return run.SSHTarget('h', 'u')
 
-        monkeypatch.setattr(run, 'require_inventory',      check_inventory)
-        monkeypatch.setattr(run, 'require_vault_password', check_vault)
-        monkeypatch.setattr(run, 'resolve_nas_target',     resolve)
+        monkeypatch.setattr(run, 'require_inventory',                      check_inventory)
+        monkeypatch.setattr(run, 'require_vault_password',                 check_vault)
+        monkeypatch.setattr(run, 'resolve_ssh_target_from_inventory_host', resolve)
 
         assert run.resolve_reachable_nas() == ('h', 'u')
         assert order == ['inventory', 'vault', 'resolve']
@@ -259,7 +259,7 @@ class TestNasDeploy:
         Test that nas-deploy is grouped under NAS and kept out of the Makefile (its argument is required)
         """
         cmd = run.REGISTERED_COMMANDS['nas-deploy']
-        assert cmd.group       == 'NAS'
+        assert cmd.group       == 'Bootstrap & Deploy'
         assert cmd.script_only is True
 
     def test_runs_the_shared_script_with_the_resolved_target(self, fake_shell: FakeShell) -> None:
@@ -392,7 +392,7 @@ class TestNasProvision:
         Test that nas-provision is a NAS command that also gets a Makefile target
         """
         cmd = run.REGISTERED_COMMANDS['nas-provision']
-        assert cmd.group       == 'NAS'
+        assert cmd.group       == 'Bootstrap & Deploy'
         assert cmd.script_only is False
 
     def test_installs_collections_then_runs_the_playbook_from_the_repo_root(self, fake_shell: FakeShell) -> None:
@@ -453,7 +453,7 @@ class TestNasProvision:
 
         def probe() -> tuple[str, str]:
             probed.append(True)
-            return 'h', 'u'
+            return run.SSHTarget('h', 'u')
 
         monkeypatch.setattr(run, 'resolve_reachable_nas', probe)
 

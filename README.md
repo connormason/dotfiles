@@ -141,27 +141,28 @@ Configures the home NAS server with:
 
 ### Core Components<a name="core-components"></a>
 
-| Directory / file               | Purpose                                                                         | Documentation                                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`bootstrap/`](bootstrap/)     | Layered stage driver and install manifests (macOS and the NAS)                  | [bootstrap/README.md](bootstrap/README.md)                                                         |
-| [`stow/`](stow/)               | Stow packages linked into `$HOME`                                               | [stow/README.md](stow/README.md)                                                                   |
-| [`profiles/`](profiles/)       | Per-machine overlays                                                            | [profiles/README.md](profiles/README.md)                                                           |
-| [`render/`](render/)           | Settings fragments merged by `render.py`                                        | [scripts/dotfiles/README.md](scripts/dotfiles/README.md)                                           |
-| [`scripts/`](scripts/)         | Render tool, prek hooks, NAS deploy script, utilities                           | [scripts/hooks/README.md](scripts/hooks/README.md), [scripts/nas/README.md](scripts/nas/README.md) |
-| [`scripts/nas/`](scripts/nas/) | Syncs `services/` to the NAS and runs `deploy.sh` (CI and `run.py nas-deploy`)  | [scripts/nas/README.md](scripts/nas/README.md)                                                     |
-| [`playbooks/`](playbooks/)     | NAS Ansible playbook and execution guide                                        | [playbooks/README.md](playbooks/README.md)                                                         |
-| [`roles/`](roles/)             | Ansible roles for the NAS                                                       | [roles/README.md](roles/README.md)                                                                 |
-| [`services/`](services/)       | Docker Compose definitions for the NAS stack                                    | [services/README.md](services/README.md)                                                           |
-| [`vms/`](vms/)                 | Virtual machines on the NAS (Home Assistant OS)                                 | [vms/README.md](vms/README.md)                                                                     |
-| [`archive/`](archive/)         | Frozen reference material (retired Ansible macOS setup and YAML Home Assistant) | [archive/README.md](archive/README.md)                                                             |
-| [`docs/`](docs/)               | Extended documentation, notes, and plans                                        | [docs/README.md](docs/README.md)                                                                   |
-| [`run.py`](run.py)             | Python CLI for repository management                                            | [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md)                                               |
-| `inventory/`                   | Host definitions and encrypted vault files (gitignored)                         | Managed via `run.py update-inventory`                                                              |
+| Directory / file               | Purpose                                                                         | Documentation                                            |
+| ------------------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| [`bootstrap/`](bootstrap/)     | Layered stage driver and install manifests (macOS and the NAS)                  | [bootstrap/README.md](bootstrap/README.md)               |
+| [`stow/`](stow/)               | Stow packages linked into `$HOME`                                               | [stow/README.md](stow/README.md)                         |
+| [`profiles/`](profiles/)       | Per-machine overlays                                                            | [profiles/README.md](profiles/README.md)                 |
+| [`render/`](render/)           | Settings fragments merged by `render.py`                                        | [scripts/dotfiles/README.md](scripts/dotfiles/README.md) |
+| [`scripts/`](scripts/)         | Render tool, prek hooks, tool installers, Python env scripts, NAS deploy script | [scripts/README.md](scripts/README.md)                   |
+| [`scripts/nas/`](scripts/nas/) | Syncs `services/` to the NAS and runs `deploy.sh` (CI and `run.py nas-deploy`)  | [scripts/nas/README.md](scripts/nas/README.md)           |
+| [`playbooks/`](playbooks/)     | NAS Ansible playbook and execution guide                                        | [playbooks/README.md](playbooks/README.md)               |
+| [`roles/`](roles/)             | Ansible roles for the NAS                                                       | [roles/README.md](roles/README.md)                       |
+| [`services/`](services/)       | Docker Compose definitions for the NAS stack                                    | [services/README.md](services/README.md)                 |
+| [`vms/`](vms/)                 | Virtual machines on the NAS (Home Assistant OS)                                 | [vms/README.md](vms/README.md)                           |
+| [`archive/`](archive/)         | Frozen reference material (retired Ansible macOS setup and YAML Home Assistant) | [archive/README.md](archive/README.md)                   |
+| [`docs/`](docs/)               | Extended documentation, notes, and plans                                        | [docs/README.md](docs/README.md)                         |
+| [`run.py`](run.py)             | Python CLI for repository management                                            | [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md)     |
+| `inventory/`                   | Host definitions and encrypted vault files (gitignored)                         | Managed via `run.py update-inventory`                    |
 
 ## Documentation<a name="documentation"></a>
 
-- **[Python CLI Reference](docs/RUN_PY_REFERENCE.md)** - complete `run.py` command reference (inventory management,
-  codebase maintenance, NAS provisioning and service deploys, the layered dev-environment commands)
+- **[Python CLI Reference](docs/RUN_PY_REFERENCE.md)** - complete `run.py` command reference (environment and lock
+  commands, hooks, inventory management, NAS provisioning and service deploys, tool installers, the layered
+  dev-environment commands)
 - **[Bootstrap](bootstrap/README.md)** - stage list, overlay contract, manifests
 - **[Stow packages](stow/README.md)** - what each package configures
 - **[Profiles](profiles/README.md)** - per-machine overlays
@@ -228,15 +229,27 @@ python3 run.py update-inventory --force
 
 ### Repository Management<a name="repository-management"></a>
 
-**Running run.py.** Bare `python3 run.py <command>` is enough for the stdlib-only commands. `list-hosts` needs PyYAML,
-so run it as `scripts/hooks/uv-public.sh run python run.py list-hosts`. The NAS commands (`nas-provision`, `nas-deploy`)
-shell out through uv themselves. The vault commands call `ansible-vault`, which must be on `PATH`. The global
-`-d/--debug` flag turns on debug output and goes before the command: `python3 run.py -d update-inventory`. `--no-debug`
-turns it off even when `DOTFILES_RUN_DEBUG=true`.
+**Running run.py.** Bare `python3 run.py <command>` is enough for the stdlib-only commands. `inventory-hosts` needs
+PyYAML, so run it as `scripts/hooks/uv-public.sh run python run.py inventory-hosts`. The NAS commands (`nas-provision`,
+`nas-deploy`), the environment commands (`install`, `dev`, `lock*`), and the hooks commands (`pre`, `run-hooks`, …)
+install and use uv themselves. The vault commands call `ansible-vault`, which must be on `PATH`. The global `-d/--debug`
+flag turns on debug output and goes before the command: `python3 run.py -d update-inventory`. `--no-debug` turns it off
+even when `DOTFILES_RUN_DEBUG=true`. `--uv-verbose` (or `DOTFILES_UV_VERBOSE=true`) turns on uv's debug logging.
 
 ```bash
+# Create .venv and install dependencies (--dev adds the dev groups, --hooks the prek shims)
+python3 run.py install --dev --hooks
+
+# Environment health: python, uv, hooks, .venv (`doctor` runs the full set of checks)
+python3 run.py status
+
+# Update uv.lock / fail when it is stale / upgrade locked versions
+python3 run.py lock
+python3 run.py lock-check
+python3 run.py lock-upgrade -P ruff
+
 # List available hosts (needs PyYAML: see the note above)
-scripts/hooks/uv-public.sh run python run.py list-hosts
+scripts/hooks/uv-public.sh run python run.py inventory-hosts
 
 # Show the inventory clone's git state
 python3 run.py inventory-status
@@ -264,6 +277,11 @@ python3 run.py prepare-hooks
 python3 run.py install-hooks
 python3 run.py uninstall-hooks
 
+# Install uv / hatch with the bundled installers, or collect a Python environment diagnostic
+python3 run.py install-uv
+python3 run.py install-hatch
+python3 run.py diagnose
+
 # Generate Makefile from run.py commands
 python3 run.py makefile
 ```
@@ -279,7 +297,7 @@ bootstrap/bootstrap.sh
 # Link stow packages into $HOME (-n previews without writing)
 ./stow.sh -n
 
-# Verify tools, overlays, git hooks, links, rendered settings, and Brewfiles
+# Verify tools, python/uv/venv, overlays, git hooks, links, rendered settings, and Brewfiles
 python3 run.py doctor
 
 # Move local ~/.claude agents/commands/skills/hooks/rules into stow/claude and restow (--dry-run previews)
