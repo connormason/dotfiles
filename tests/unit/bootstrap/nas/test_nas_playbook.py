@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 PLAYBOOK  = REPO_ROOT / 'playbooks' / 'nas_bootstrap.yml'
 ROLES     = REPO_ROOT / 'roles'
 LIB       = REPO_ROOT / 'bootstrap' / 'lib.sh'

@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 # A fully-qualified collection module reference at the start of a task key (e.g. ``community.docker.docker_image:``);
 # ``ansible.builtin`` ships with ansible-core and never needs installing
