@@ -106,8 +106,33 @@ if TYPE_CHECKING:
 
 
 # ====================================================================================================
+# Basic types
+# ====================================================================================================
+
+
+F        = TypeVar('F',        bound=Callable[..., Any])
+T_contra = TypeVar('T_contra', contravariant=True)
+ModT     = TypeVar('ModT',     bound='ModuleType')
+
+PathLike         = Union[str, Path]
+StyleColor       = Union[int, tuple[int, int, int], str]
+CommandFunc      = Callable[[argparse.Namespace],      None]
+AddArgumentsFunc = Callable[[argparse.ArgumentParser], None]
+
+
+class SupportsWrite(Protocol[T_contra]):
+    """
+    Protocol for types that support being written to and flushed (what ``print(..., flush=True)`` requires)
+    """
+    def write(self, s: T_contra, /) -> object: ...
+
+    def flush(self) -> object: ...
+
+
+# ====================================================================================================
 # Constants/configuration
 # ====================================================================================================
+
 
 # Hostname in Ansible inventory for NAS machine
 NAS_INVENTORY_HOST: str = 'nas'
@@ -153,6 +178,8 @@ VAULT_FILE_PATTERNS: list[str] = [
 # Spacing between the command name and description columns in the script help text
 SCRIPT_HELP_COL_SPACING: int = 4
 
+# `clean` command configuration
+# -------------------------------------------------------------------
 # Patterns for files/directories to remove during `run.py clean`
 CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
     'package build artifacts': [
@@ -161,6 +188,7 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
         '*.egg-info',
     ],
     'package cache files': [
+        '__pycache__',
         '**/__pycache__',
         '**/*.pyc',
     ],
@@ -186,20 +214,20 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 # =======================================================================================
 
 # Environment variable names
-# --------------------------
+# -------------------------------------------------------------------
 ENVVAR_PREFIX:             str = 'DOTFILES'
 INVENTORY_REPO_URL_ENVVAR: str = f'{ENVVAR_PREFIX}_INVENTORY_REPO_URL'
 RUN_DEBUG_ENVVAR:          str = f'{ENVVAR_PREFIX}_RUN_DEBUG'
 UV_VERBOSE_ENVVAR:         str = f'{ENVVAR_PREFIX}_UV_VERBOSE'
 
 # Environment variable values
-# ---------------------------
+# -------------------------------------------------------------------
 NO_COLOR:   bool = bool(os.getenv('NO_COLOR'))    # https://no-color.org: any non-empty value disables color
 RUN_DEBUG:  bool = os.getenv(RUN_DEBUG_ENVVAR,  'false').lower() == 'true'
 UV_VERBOSE: bool = os.getenv(UV_VERBOSE_ENVVAR, 'false').lower() == 'true'
 
 # Inventory submodule repo
-# ------------------------
+# -------------------------------------------------------------------
 INVENTORY_REPO_URL_DEFAULT: str = 'git@github.com:connormason/dotfiles-inventory.git'
 INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTORY_REPO_URL_DEFAULT)
 
@@ -246,7 +274,6 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 #
 # =======================================================================================
 
-
 SCRIPT_PATH:            Path = Path(__file__)
 DOTFILES_DIR:           Path = SCRIPT_PATH.parent
 
@@ -274,28 +301,6 @@ CLAUDE_STOW_DIR:        Path = STOW_DIR / 'claude' / '.claude'
 MAKEFILE:               Path = DOTFILES_DIR / 'Makefile'
 STOW_SCRIPT:            Path = DOTFILES_DIR / 'stow.sh'
 VAULT_PASSWORD:         Path = DOTFILES_DIR / 'vault_password.txt'
-
-
-# ====================================================================================================
-# Basic types
-# ====================================================================================================
-
-
-F        = TypeVar('F',        bound=Callable[..., Any])
-T_contra = TypeVar('T_contra', contravariant=True)
-ModT     = TypeVar('ModT',     bound='ModuleType')
-
-PathLike   = Union[str, Path]
-StyleColor = Union[int, tuple[int, int, int], str]
-
-
-class SupportsWrite(Protocol[T_contra]):
-    """
-    Protocol for types that support being written to and flushed (what ``print(..., flush=True)`` requires)
-    """
-    def write(self, s: T_contra, /) -> object: ...
-
-    def flush(self) -> object: ...
 
 
 # ====================================================================================================
