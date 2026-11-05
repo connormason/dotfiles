@@ -661,7 +661,9 @@ def resolve_parser(script_path: Path, *, parser_name: str | None = None) -> argp
         if callable(attr):
             result = attr()
             if not isinstance(result, argparse.ArgumentParser):
-                raise RuntimeError(f'{parser_name}() returned {type(result).__name__}, expected ArgumentParser')
+                raise RuntimeError(                                                                     # noqa: TRY004
+                    f'{parser_name}() returned {type(result).__name__}, expected ArgumentParser'
+                )
             return result
 
         if isinstance(attr, argparse.ArgumentParser):

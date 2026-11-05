@@ -110,13 +110,14 @@ fails when this list drifts from the playbook):
 
 **Command categories** (the `group` class attribute of each `Command` subclass):
 
-- **Setup & Environment**: `install`, `dev`, `shell`, `status`, `doctor`, `clean`, `lock`, `lock-check`, `lock-upgrade`, `sync-deps`
+- **Setup & Environment**: `install`, `dev`, `shell`, `status`, `doctor`, `clean`
 - **Bootstrap & Deploy**: `bootstrap`, `nas-provision`, `nas-deploy`
 - **Dotfiles**: `stow`, `render`, `track-claude`
 - **Inventory**: `inventory-hosts`, `inventory-status`, `update-inventory`, `vault-decrypt`, `vault-encrypt`
 - **Tool Installation**: `install-uv`, `install-hatch`
 - **Hooks**: `install-hooks`, `prepare-hooks`, `uninstall-hooks`, `run-hooks`, `pre`
 - **Testing**: `test`
+- **Dependencies**: `lock`, `lock-check`, `lock-upgrade`, `lock-sync`
 - **Utilities**: `makefile`, `diagnose`
 
 Every project-scoped `uv` call is built by `uv_command()` and runs through `scripts/hooks/uv-public.sh`, so `uv.lock`

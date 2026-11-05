@@ -249,7 +249,7 @@ python3 run.py lock-check
 python3 run.py lock-upgrade -P ruff
 
 # Re-sync files derived from uv.lock (requirements.txt, pinned hook versions)
-python3 run.py sync-deps
+python3 run.py lock-sync
 
 # List available hosts (needs PyYAML: see the note above)
 scripts/hooks/uv-public.sh run python run.py inventory-hosts

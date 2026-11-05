@@ -32,6 +32,7 @@ repos:
       # pyproject.toml -> uv.lock
       - id: uv-lock
         name: "[sync]   dependencies (pyproject.toml -> uv.lock)"
+        groups: [sync, local, uv]
         stages: [pre-commit, manual]
         priority: 0
         entry: scripts/hooks/uv-public.sh lock --refresh
@@ -43,6 +44,7 @@ repos:
       # uv.lock -> .venv/
       - id: uv-sync
         name: "[sync]   dependencies (uv.lock -> .venv)"
+        groups: [sync, local, uv]
         stages: [post-checkout, post-merge, post-rewrite]
         priority: 5
         entry: scripts/hooks/uv-public.sh sync --no-active --locked
@@ -54,6 +56,7 @@ repos:
       # uv.lock -> requirements.txt
       - id: uv-export
         name: "[sync]   dependencies (uv.lock -> requirements.txt)"
+        groups: [sync, local, uv, requirements]
         stages: [pre-commit, manual]
         priority: 5
         entry: scripts/hooks/uv-public.sh export
@@ -75,6 +78,7 @@ repos:
       # uv.lock -> .pre-commit-config.yaml
       - id: sync-with-uv
         name: "[sync]   dependencies (uv.lock -> .pre-commit-config.yaml)"
+        groups: [sync, local, uv, requirements]
         stages: [pre-commit, manual]
         priority: 5
 
@@ -86,6 +90,7 @@ repos:
       # .pre-commit-config.yaml -> .pre-commit-config.yaml
       - id: sync-pre-commit-deps
         name: "[sync]   dependencies (.pre-commit-config.yaml -> .pre-commit-config.yaml)"
+        groups: [sync, local, uv, requirements]
         stages: [pre-commit, manual]
         priority: 6
 
@@ -101,24 +106,28 @@ repos:
       # Check for files that would conflict in case-insensitive filesystems
       - id: check-case-conflict
         name: "[check]  filename casing"
+        groups: [check, local, ci]
         stages: [pre-commit, manual]
         priority: 10
 
       # Check for broken symlinks
       - id: check-symlinks
         name: "[check]  symlinks"
+        groups: [check, local, ci, symlink]
         stages: [pre-commit, manual]
         priority: 10
 
       # Detect destroyed symlinks
       - id: destroyed-symlinks
         name: "[check]  destroyed symlinks"
+        groups: [check, local, ci, symlink]
         stages: [pre-commit, manual]
         priority: 10
 
       # Ensures that (non-binary) files with a shebang are executable
       - id: check-shebang-scripts-are-executable
-        name: "[check]  files w/ shebangs are executable"
+        name: "[check]  files with shebangs are executable"
+        groups: [check, local, ci, executable]
         stages: [pre-commit, manual]
         priority: 10
         exclude: \.j2$            # Jinja templates carry a shebang but are rendered, not executed
@@ -126,12 +135,14 @@ repos:
       # Ensures that (non-binary) executables have a shebang
       - id: check-executables-have-shebangs
         name: "[check]  executable files have shebangs"
+        groups: [check, local, ci, executable]
         stages: [pre-commit, manual]
         priority: 10
 
       # Prevent committing large files
       - id: check-added-large-files
         name: "[check]  large files"
+        groups: [check, local, ci, git]
         stages: [pre-commit, manual]
         priority: 10
         exclude: |
@@ -143,18 +154,21 @@ repos:
       # Check for merge conflicts (git merge strings in files)
       - id: check-merge-conflict
         name: "[check]  merge conflicts"
+        groups: [check, local, ci, git]
         stages: [pre-commit, manual]
         priority: 10
 
       # Prevent addition of new submodules
       - id: forbid-new-submodules
-        name: "[check]  no new submodules"
+        name: "[check]  no broke boys, no new submodules"
+        groups: [check, local, ci, git]
         stages: [pre-commit, manual]
         priority: 10
 
       # Check that VCS links are permalinks
       - id: check-vcs-permalinks
         name: "[check]  vcs permalinks"
+        groups: [check, local, ci, docs]
         stages: [pre-commit, manual]
         priority: 10
         types_or: [markdown, rst]
@@ -162,6 +176,7 @@ repos:
       # Detect private keys
       - id: detect-private-key
         name: "[check]  private keys"
+        groups: [check, local, ci, secrets]
         stages: [pre-commit, manual]
         priority: 10
 
@@ -174,6 +189,7 @@ repos:
       #   uvx detect-secrets scan --baseline .secrets.baseline && uvx detect-secrets audit .secrets.baseline
       - id: detect-secrets
         name: "[check]  secrets"
+        groups: [check, local, ci, secrets]
         stages: [pre-commit, manual]
         priority: 10
         args: [--baseline, .secrets.baseline]
@@ -188,40 +204,69 @@ repos:
 
       # Validate TOML file syntax
       - id: check-toml
-        name: "[check]  toml syntax"
+        name: "[check]  syntax - toml"
+        groups: [check, local, ci, toml]
         stages: [pre-commit, manual]
         priority: 10
 
       # Validate XML file syntax
       - id: check-xml
-        name: "[check]  xml syntax"
+        name: "[check]  syntax - xml"
+        groups: [check, local, ci, xml, plist]
         stages: [pre-commit, manual]
         priority: 10
 
       # Validate YAML file syntax
       - id: check-yaml
-        name: "[check]  yaml syntax"
+        name: "[check]  syntax - yaml"
+        groups: [check, local, ci, yaml]
         stages: [pre-commit, manual]
         priority: 10
         exclude: ^services/homeassistant/config/            # Doesn't like !include/!secret macros
 
       # Validate JSON file syntax
       - id: check-json
-        name: "[check]  json syntax"
+        name: "[check]  syntax - json"
+        groups: [check, local, ci, json]
         stages: [pre-commit, manual]
         priority: 10
         exclude: ^stow/zed/.*\.json$                # JSONC (comments, trailing commas); checked by json5 hook
 
+  - repo: local
+    hooks:
+
+      # Validate JSON5 file syntax (PEP 723 script; pyjson5 resolved at runtime)
+      - id: check-json5
+        name: "[check]  syntax - json5"
+        groups: [check, local, ci, json, json5]
+        stages: [pre-commit, manual]
+        priority: 10
+        entry: scripts/hooks/check-json5.py
+        language: python
+        files: .*\.json5$|^stow/zed/.*\.json$
+
+      # Validate Pkl file syntax via `pkl eval` (no-op if `pkl` is not installed)
+      - id: check-pkl
+        name: "[check]  syntax - pkl"
+        groups: [check, local, ci, pkl]
+        stages: [pre-commit, manual]
+        priority: 10
+        entry: scripts/hooks/check-pkl.py
+        language: python
+        files: .*\.pkl$
+        types: [file]
+
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.25
+    rev: v0.27
     hooks:
 
       # Validate pyproject.toml
       - id: validate-pyproject
-        name: "[check]  pyproject.toml syntax/schema"
+        name: "[check]  syntax - pyproject.toml"
+        groups: [check, local, ci, pyproject, toml]
         stages: [pre-commit, manual]
         priority: 10
-        args: ["--disable-plugins", "hatch"]
+        args: ["pyproject.toml", "--disable-plugins", "hatch"]
         additional_dependencies:
           - validate-pyproject[all]
           - validate-pyproject-schema-store
@@ -233,18 +278,21 @@ repos:
       # Verify python source files parse as valid python
       - id: check-ast
         name: "[check]  python ast"
+        groups: [check, local, ci, python]
         stages: [pre-commit, manual]
         priority: 10
 
       # Check for debugger imports and py37+ ``breakpoint()`` calls in python source files
       - id: debug-statements
         name: "[check]  python debug statements"
+        groups: [check, local, ci, python]
         stages: [pre-commit, manual]
         priority: 10
 
       # Verify python unit test filenames match pytest expectations
       - id: name-tests-test
-        name: "[check]  unit test filenames"
+        name: "[check]  python unit test filenames"
+        groups: [check, local, ci, python]
         stages: [pre-commit, manual]
         priority: 10
         args: [--pytest-test-first]
@@ -253,30 +301,12 @@ repos:
   - repo: local
     hooks:
 
-      # Validate JSON5 file syntax (PEP 723 script; pyjson5 resolved at runtime)
-      - id: check-json5
-        name: "[check]  json5 syntax"
-        stages: [pre-commit, manual]
-        priority: 10
-        entry: scripts/hooks/check-json5.py
-        language: python
-        files: .*\.json5$|^stow/zed/.*\.json$
-
-      # Validate Pkl file syntax via `pkl eval` (no-op if `pkl` is not installed)
-      - id: check-pkl
-        name: "[check]  pkl syntax"
-        stages: [pre-commit, manual]
-        priority: 10
-        entry: scripts/hooks/check-pkl.py
-        language: python
-        files: .*\.pkl$
-        types: [file]
-
       # Block employer-internal identifiers in staged content/paths and in the commit identity
       # (public baseline + optional private patterns from ~/.config/dotfiles/leak-patterns.txt).
       # CI scans the full tree separately
       - id: check-leaks
-        name: "[check]  internal identifiers (leak guard)"
+        name: "[check]  internal identifiers in file content/paths"
+        groups: [check, local, ci, leaks]
         stages: [pre-commit]
         priority: 10
         entry: scripts/hooks/check-leaks.py --identity
@@ -288,6 +318,7 @@ repos:
       # Identity is already checked by the pre-commit entry above
       - id: check-leaks-msg
         name: "[check]  internal identifiers in commit message"
+        groups: [check, local, leaks]
         stages: [commit-msg]
         entry: scripts/hooks/check-leaks.py
         language: python
@@ -296,6 +327,7 @@ repos:
       #            (catches content committed with --no-verify)
       - id: check-leaks-push-files
         name: "[check]  internal identifiers in pushed files"
+        groups: [check, local, leaks]
         stages: [pre-push]
         priority: 10
         entry: scripts/hooks/check-leaks.py
@@ -306,6 +338,7 @@ repos:
       #            (cherry-picks/rebases skip commit hooks)
       - id: check-leaks-push-history
         name: "[check]  internal identifiers in pushed commits"
+        groups: [check, local, leaks]
         stages: [pre-push]
         priority: 10
         entry: scripts/hooks/check-leaks-push.sh
@@ -325,18 +358,21 @@ repos:
       # Removes UTF-8 byte order marker
       - id: fix-byte-order-marker
         name: "[fix]    utf-8 byte order marker"
+        groups: [fix, local]
         stages: [pre-commit]
         priority: 20
 
       # Ensures files end in a single newline
       - id: end-of-file-fixer
         name: "[fix]    end-of-file"
+        groups: [fix, local, whitespace]
         stages: [pre-commit]
         priority: 21
 
       # Replaces mixed line ending
       - id: mixed-line-ending
         name: "[fix]    mixed line ending"
+        groups: [fix, local, whitespace]
         stages: [pre-commit]
         priority: 22
         exclude: ^\.gitignore
@@ -344,6 +380,7 @@ repos:
       # Trims trailing whitespace from files
       - id: trailing-whitespace
         name: "[fix]    trailing whitespace"
+        groups: [fix, local, whitespace]
         stages: [pre-commit]
         priority: 23
         exclude: |
@@ -356,7 +393,8 @@ repos:
   # ========================================================================================
   # Formatters/fixers
   #
-  #   - Priority 30    any file type                  keep-sorted
+  #   - Priority 30    any file type                  codespell --write-changes
+  #   - Priority 31    any file type                  keep-sorted
   #   - Priority 35    shell scripts                  shfmt
   #                    json (.claude)                 pretty-format-json
   #                    json (vscode keybindings)      sort-json-array
@@ -367,15 +405,31 @@ repos:
   #
   # ========================================================================================
 
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+
+      # Fix common misspellings in text files
+      - id: codespell
+        name: "[fix]    spelling mistakes"
+        groups: [fix, local, spelling, codespell]
+        stages: [pre-commit]
+        priority: 30
+        pass_filenames: false
+        args: [--write-changes]
+        additional_dependencies:
+          - tomli
+
   - repo: https://github.com/google/keep-sorted
     rev: v0.9.1
     hooks:
 
       # Language-agnostic auto-sorting between two markers
       - id: keep-sorted
-        name: "[format] sorting (keep-sorted)"
+        name: "[format] generic sorting"
+        groups: [format, local, sort]
         stages: [pre-commit]
-        priority: 30
+        priority: 31
 
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.13.1-1
@@ -383,7 +437,8 @@ repos:
 
       # Shell script auto-formatting
       - id: shfmt
-        name: "[format] shell scripts (shfmt)"
+        name: "[format] shell scripts"
+        groups: [format, local, shell]
         stages: [pre-commit]
         priority: 35
         # zsh dotfiles are not POSIX/bash; shfmt mangles them (zsh syntax it does not understand)
@@ -391,8 +446,8 @@ repos:
           (?x)^(
               stow/[^/]+/\.(zshrc|zprofile|zshenv|zlogin)|
               stow/[^/]+/\.config/zsh/.*\.zsh|
-              # vendored from upstream ranger 1.9.4 (GPL-3.0); formatter-exempt
-              stow/os_tools/\.config/ranger/scope\.sh
+              stow/os_tools/\.config/ranger/scope\.sh|
+              ^stow/shell/.profile
           )$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -401,7 +456,8 @@ repos:
 
       # Format Claude Code settings JSON files
       - id: pretty-format-json
-        name: "[format] json (.claude, indent=2)"
+        name: "[format] json - claude settings"
+        groups: [format, local, json, claude]
         stages: [pre-commit]
         priority: 35
         types: [text]
@@ -412,13 +468,28 @@ repos:
           - "--autofix"
           - "--top-keys=id,name,type,matcher,mode,command"
 
+  - repo: local
+    hooks:
+
+      # Sort the VS Code keybindings array by `command`; rewrites the file, so pre-commit only (not run in CI)
+      - id: sort-json-array
+        name: "[format] json - vscode keybindings sort"
+        groups: [format, local, sort, json, vscode]
+        stages: [pre-commit]
+        priority: 35
+        entry: scripts/hooks/sort-json-array.py
+        language: python
+        args: [--key, command]
+        files: ^stow/vscode/Library/Application Support/Code/User/keybindings\.json$
+
   - repo: https://github.com/ComPWA/taplo-pre-commit
     rev: v0.9.3
     hooks:
 
       # TOML file auto-formatting
       - id: taplo-format
-        name: "[format] toml (taplo)"
+        name: "[format] toml"
+        groups: [format, local, toml, taplo]
         stages: [pre-commit]
         priority: 35
 
@@ -427,7 +498,8 @@ repos:
 
       # Pkl file auto-formatting (no-op if `pkl` is not installed); not run in CI
       - id: format-pkl
-        name: "[format] pkl (pkl format)"
+        name: "[format] pkl"
+        groups: [format, local, pkl]
         stages: [pre-commit]
         priority: 35
         entry: scripts/hooks/format-pkl.py
@@ -435,23 +507,14 @@ repos:
         files: .*\.pkl$
         types: [file]
 
-      # Sort the VS Code keybindings array by `command`; rewrites the file, so pre-commit only (not run in CI)
-      - id: sort-json-array
-        name: "[format] json array sort (keybindings)"
-        stages: [pre-commit]
-        priority: 35
-        entry: scripts/hooks/sort-json-array.py
-        language: python
-        args: [--key, command]
-        files: ^stow/vscode/Library/Application Support/Code/User/keybindings\.json$
-
   - repo: https://github.com/hukkin/mdformat
     rev: 1.0.0
     hooks:
 
       # Markdown file auto-formatting
       - id: mdformat
-        name: "[format] markdown (mdformat)"
+        name: "[format] markdown"
+        groups: [format, local, markdown]
         stages: [pre-commit]
         priority: 35
         additional_dependencies:
@@ -470,12 +533,13 @@ repos:
           )$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.21
+    rev: v0.17.4
     hooks:
 
       # Python lint auto-fixes
       - id: ruff
-        name: "[fix]    python lint (ruff check --fix-only)"
+        name: "[fix]    python lint fixes"
+        groups: [fix, local, python, ruff]
         stages: [pre-commit]
         priority: 35
         args: [--fix-only, --exit-non-zero-on-fix]
@@ -487,13 +551,14 @@ repos:
   # ========================================================================================
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.21
+    rev: v0.17.4
     hooks:
 
       # Python lint check (must happen after --fix-only stage above)
       # Check/lint and output errors as junit if running in CI
       - id: ruff
-        name: "[lint]   python lint (ruff check) - junit output"
+        name: "[lint]   python lint - junit output"
+        groups: [lint, ci, python, ruff]
         stages: [manual]
         priority: 40
         args: [--output-format, junit, --output-file, .reports/ruff.xml]
@@ -501,17 +566,19 @@ repos:
       # Python lint check (must happen after --fix-only stage above)
       # Always check/lint (local or CI), output errors to stdout
       - id: ruff
-        name: "[lint]   python lint (ruff check)"
+        name: "[lint]   python lint"
+        groups: [lint, local, ci, python, ruff]
         stages: [pre-commit, manual]
         priority: 40
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.0
+    rev: v2.4.1
     hooks:
 
       # Python static type checking
       - id: mypy
-        name: "[lint]   python typing (mypy)"
+        name: "[lint]   python typing"
+        groups: [lint, local, ci, python, types, mypy]
         stages: [pre-commit, manual]
         priority: 40
         args: [--config-file, pyproject.toml, --junit-xml, .reports/mypy.xml]
@@ -523,7 +590,6 @@ repos:
         exclude: |
           (?x)(
               ^services/homeassistant/config/|
-              # vendored from upstream ranger 1.9.4 (GPL-3.0); lint-exempt
               ^stow/os_tools/\.config/ranger/commands\.py$
           )
 
@@ -534,6 +600,7 @@ repos:
       # Check python code docstring coverage
       - id: interrogate
         name: "[check]  python docstring coverage"
+        groups: [check, local, ci, docs, python, interrogate]
         stages: [pre-commit, manual]
         priority: 40
         pass_filenames: false
@@ -562,6 +629,7 @@ repos:
       # Linting for shell scripts
       - id: shellcheck
         name: "[lint]   shell scripts"
+        groups: [lint, local, ci, shell]
         stages: [pre-commit, manual]
         priority: 40
         # shellcheck does not support zsh: *.zsh files (e.g. stow/shell/.config/zsh/conf.d/*.zsh) and stowed zsh dotfiles
@@ -569,30 +637,32 @@ repos:
           (?x)(
               \.zsh$|
               ^stow/[^/]+/\.(zshrc|zprofile|zshenv|zlogin)$|
-              # vendored from upstream ranger 1.9.4 (GPL-3.0); lint-exempt
-              ^stow/os_tools/\.config/ranger/scope\.sh$
+              ^stow/os_tools/\.config/ranger/scope\.sh$|
+              ^stow/shell/.profile
           )
 
-  # - repo: https://github.com/DavidAnson/markdownlint-cli2
-  #   rev: v0.22.0
-  #   hooks:
-
-  #     # Markdown linting
-  #     - id: markdownlint-cli2
-  #       name: "[lint]   Markdown files"
-  #       stages: [pre-commit, manual]
-  #       priority: 40
-
-  # - repo: https://github.com/ComPWA/taplo-pre-commit
-  #   rev: v0.9.3
-  #   hooks:
-
-  #     # TOML linting
-  #     - id: taplo-lint
-  #       name: "[lint]   toml"
-  #       stages: [pre-commit, manual]
-  #       priority: 40
-  #       exclude: ^archive
+#  - repo: https://github.com/DavidAnson/markdownlint-cli2
+#    rev: v0.22.0
+#    hooks:
+#
+#      # Markdown linting
+#      - id: markdownlint-cli2
+#        name: "[lint]   markdown (markdownlint)"
+#        groups: [lint, local, ci, markdown]
+#        stages: [pre-commit, manual]
+#        priority: 40
+#
+#  - repo: https://github.com/ComPWA/taplo-pre-commit
+#    rev: v0.9.3
+#    hooks:
+#
+#      # TOML linting
+#      - id: taplo-lint
+#        name: "[lint]   toml"
+#        groups: [lint, local, ci, toml, taplo]
+#        stages: [pre-commit, manual]
+#        priority: 40
+#        exclude: ^archive
 
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.38.0
@@ -600,21 +670,23 @@ repos:
 
       # YAML linting
       - id: yamllint
-        name: "[lint]   yaml (yamllint)"
+        name: "[lint]   yaml"
+        groups: [lint, local, ci, yaml]
         stages: [pre-commit, manual]
         priority: 40
 
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.2
+    rev: v2.4.3
     hooks:
 
-      # Fix common misspellings in text files
+      # Check for common misspellings in text files
+      # Only run in CI. When hooks are run locally, we auto-fix misspellings with ``codespell --write-changes`` (above)
       - id: codespell
-        name: "[fix]    spelling mistakes"
-        stages: [pre-commit, manual]
+        name: "[check]  spelling mistakes"
+        groups: [check, ci, spelling, codespell]
+        stages: [manual]
         priority: 40
         pass_filenames: false
-        args: [--write-changes]
         additional_dependencies:
           - tomli
 
@@ -623,7 +695,8 @@ repos:
 
       # Ansible linting of playbooks/ and roles/ (check only; the wrapper supplies a throwaway vault password)
       - id: ansible-lint
-        name: "[lint]   ansible"
+        name: "[lint]   ansible roles/playbooks"
+        groups: [lint, local, ci, yaml, ansible]
         stages: [pre-commit, manual]
         priority: 40
         entry: scripts/hooks/ansible-lint.sh

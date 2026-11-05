@@ -23,7 +23,7 @@ which registers it on class definition and:
 Command Categories
 -----------------
 - **Setup & Environment**: Install and inspect the uv-managed ``.venv`` (install, dev, shell, status), verify the whole
-  environment (doctor), clean artifacts, and manage ``uv.lock`` (lock, lock-check, lock-upgrade, sync-deps)
+  environment (doctor), clean artifacts, and manage ``uv.lock`` (lock, lock-check, lock-upgrade, lock-sync)
 - **Bootstrap & Deploy**: Run the layered bootstrap stages, provision the home NAS and deploy its Compose services
 - **Dotfiles**: Wrap the stow and render tooling and ingest local Claude config (track-claude)
 - **Inventory**: Manage the standalone inventory git repository and its vault files
@@ -230,6 +230,12 @@ CLAUDE_IGNORE_SUFFIXES: set[str]  = {'.pyc'}
 
 # Lines of a failed `stow.sh -n claude` shown by the track-claude preflight
 TRACK_CLAUDE_PREFLIGHT_LINES: int = 8
+
+
+# `lock`/`lock-upgrade`/`lock-sync` command configuration
+# -------------------------------------------------------------------
+#: prek hook ids that regenerate files derived from ``uv.lock`` (run together after any lock change).
+DERIVED_FILE_HOOK_IDS: list[str] = ['uv-export', 'sync-with-uv', 'sync-pre-commit-deps']
 
 
 # =======================================================================================
@@ -4554,17 +4560,48 @@ class PreCommand(RunHooksCommand):
 
 
 # ====================================================================================================
+# Testing commands
+#
+# Commands
+#   - test: Run the test suite through the public-index uv wrapper
+# ====================================================================================================
+
+
+class TestCommand(Command):
+    """
+    Run the test suite via uv (public-index wrapper)
+    """
+    name:  ClassVar[str] = 'test'
+    group: ClassVar[str] = 'Testing'
+
+    class Args(argparse.Namespace):
+        paths: list[str]        # positional arg(s) "PATHS"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'paths',
+            type=str,
+            nargs='*',
+            help='Test paths (default: tests/)',
+        )
+
+    def run(self, args: Args) -> None:
+        result = shell_command(
+            uv_command('run', '--group', 'test', 'pytest', *(args.paths or ['tests'])),
+            check=False,
+        )
+        sys.exit(result.returncode)
+
+
+# ====================================================================================================
 # Dependencies commands
 #
 # Commands:
 #   - lock:         Update uv.lock from pyproject.toml
 #   - lock-check:   Check that uv.lock is up to date
 #   - lock-upgrade: Upgrade locked dependency versions
+#   - lock-sync:    Re-sync dependencies, exported requirements, and hook versions from uv.lock
 # ====================================================================================================
-
-
-#: prek hook ids that regenerate files derived from ``uv.lock`` (run together after any lock change).
-DERIVED_FILE_HOOK_IDS: list[str] = ['uv-export', 'sync-with-uv', 'sync-pre-commit-deps']
 
 
 def regenerate_derived_files(*, indent: int = 0) -> None:
@@ -4659,11 +4696,11 @@ class LockUpgradeCommand(Command):
         sys.exit(result.returncode)
 
 
-class SyncDepsCommand(Command):
+class LockSyncCommand(Command):
     """
     Re-sync dependencies, exported requirements, and hook versions from the committed uv.lock
     """
-    name:  ClassVar[str] = 'sync-deps'
+    name:  ClassVar[str] = 'lock-sync'
     group: ClassVar[str] = 'Dependencies'
 
     def run(self, args: argparse.Namespace) -> None:
@@ -4671,40 +4708,6 @@ class SyncDepsCommand(Command):
         ensure_uv(quiet=True)
         ensure_venv(groups=['lint'], inexact=True, frozen=True)
         regenerate_derived_files()
-
-
-# ====================================================================================================
-# Testing commands
-#
-# Commands
-#   - test: Run the test suite through the public-index uv wrapper
-# ====================================================================================================
-
-
-class TestCommand(Command):
-    """
-    Run the test suite via uv (public-index wrapper)
-    """
-    name:  ClassVar[str] = 'test'
-    group: ClassVar[str] = 'Testing'
-
-    class Args(argparse.Namespace):
-        paths: list[str]        # positional arg(s) "PATHS"
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            'paths',
-            type=str,
-            nargs='*',
-            help='Test paths (default: tests/)',
-        )
-
-    def run(self, args: Args) -> None:
-        result = shell_command(
-            uv_command('run', '--group', 'test', 'pytest', *(args.paths or ['tests'])),
-            check=False,
-        )
-        sys.exit(result.returncode)
 
 
 # ====================================================================================================
