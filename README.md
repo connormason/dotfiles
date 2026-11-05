@@ -71,8 +71,8 @@ machine.
 ### NAS Bootstrapping<a name="nas-bootstrapping"></a>
 
 Prerequisite: [`uv`](https://docs.astral.sh/uv/) on the controlling machine. `run.py` runs Ansible through
-`scripts/hooks/uv-public.sh`, and the macOS Brewfile installs it. `./nas_bootstrap.sh` stops with an install pointer
-when `uv` is missing.
+`scripts/hooks/uv-public.sh`, and [`bootstrap/Brewfile`](bootstrap/Brewfile) installs it on a Mac. `./nas_bootstrap.sh`
+stops with an install pointer when `uv` is missing.
 
 The preflight and the roles also expect:
 
@@ -80,9 +80,12 @@ The preflight and the roles also expect:
   the agent first (`ssh-add`)
 - **Literal connection values**: `ansible_host` and `ansible_user` of the `nas` host are literal in the inventory
   (templated values are refused)
-- **The `br0` LAN bridge** on the NAS: while `br0` has no IPv4 address the `haos` role fails the play, so the run never
-  reaches the `services` role. Create the bridge by hand with `sudo vms/haos/bridge.sh` from the NAS console or `tmux`;
-  the [runbook](vms/haos/README.md#re-bootstrapping-a-wiped-nas) has the sequence
+- **The `br0` LAN bridge** on the NAS, created by hand. While `br0` has no IPv4 address the `haos` role fails the play,
+  so the run never reaches `services`. `vms/haos/bridge.sh` creates it but lives in the NAS clone the `dotfiles` role
+  makes, so a wiped NAS needs two passes: run `nas-provision` (it stops at `haos`), run
+  `sudo ~/dotfiles-personal/vms/haos/bridge.sh` on the NAS from the console or `tmux`, then run `nas-provision` again in
+  full (`--tags haos` alone would not deploy `services`). The [runbook](vms/haos/README.md#re-bootstrapping-a-wiped-nas)
+  has the details
 
 The inventory variables the playbook reads are listed in [`playbooks/README.md`](playbooks/README.md#nas_bootstrapyml).
 
@@ -131,7 +134,8 @@ Configures the home NAS server with:
 - **File sharing**: Samba (SMB/CIFS)
 - **Media stack**: Plex, Jellyfin, Sonarr, Radarr, Transmission, Prowlarr (via Docker Compose)
 - **Network services**: Tailscale with HTTPS served through Caddy; PiHole is disabled
-- **Home automation**: Home Assistant OS (libvirt VM, see [`vms/haos/`](vms/haos/README.md)), Glance dashboard
+- **Home automation**: Home Assistant OS (libvirt VM, see [`vms/haos/`](vms/haos/README.md))
+- **Dashboard**: Glance
 - **Stack deployment**: the `docker` role installs Docker Engine and `deploy.sh`; the `services` role syncs
   [`services/`](services/README.md), renders per-service secrets, and deploys the stack
 
@@ -297,6 +301,9 @@ What each tag selects, including `configfile` and `secrets`, is listed in
 [playbooks/README.md](playbooks/README.md#tags). `nas-deploy` syncs `services/` and runs `deploy.sh` but renders no
 secrets; `--tags services` also renders them.
 
+`--tags configfile` reaches only the `docker` role's `.env` render and `deploy.sh` copy and the `samba` role's
+`smb.conf` task, plus the `always` tasks; it does not run the `dotfiles` role (the stow engine) or any other role.
+
 Running `ansible-playbook` directly skips what `nas-provision` adds: the preflight (inventory, vault password, SSH
 reachability) and the collection install. From the repository root, so `ansible.cfg` applies:
 
@@ -418,7 +425,8 @@ Comprehensive media server and home automation, defined in [`services/`](service
 - **Media services**: Plex, Jellyfin, Sonarr, Radarr, Transmission, Prowlarr, Flaresolverr
 - **Network services**: Caddy reverse proxy serving a subset of the services over Tailscale HTTPS (the PiHole definition
   is disabled)
-- **Automation**: Glance dashboard (Home Assistant runs as a VM; see [`vms/haos/`](vms/haos/README.md))
+- **Dashboard**: Glance
+- **Home automation**: Home Assistant runs as a VM (see [`vms/haos/`](vms/haos/README.md))
 - **Support**: Autoplex (copies completed downloads into the library trees)
 
 ### Python CLI (`run.py`)<a name="python-cli-runpy"></a>
