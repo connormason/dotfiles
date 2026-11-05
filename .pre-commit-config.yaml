@@ -391,6 +391,7 @@ repos:
   # Formatters/fixers
   #
   #   - Priority 30    any file type                  keep-sorted
+  #   - Priority 31    any file type                  codespell
   #   - Priority 35    shell scripts                  shfmt
   #                    json (.claude)                 pretty-format-json
   #                    json (vscode keybindings)      sort-json-array
@@ -411,6 +412,21 @@ repos:
         groups: [format, local, sort]
         stages: [pre-commit]
         priority: 30
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+
+      # Fix common misspellings in text files
+      - id: codespell
+        name: "[fix]    spelling mistakes (codespell --write-changes)"
+        groups: [fix, local, spelling, codespell]
+        stages: [pre-commit]
+        priority: 40
+        pass_filenames: false
+        args: [--write-changes]
+        additional_dependencies:
+          - tomli
 
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.13.1-1
@@ -653,19 +669,17 @@ repos:
         stages: [pre-commit, manual]
         priority: 40
 
-  # TODO: separate into a lint and a fix stage like ruff?
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3
     hooks:
 
       # Fix common misspellings in text files
       - id: codespell
-        name: "[fix]    spelling mistakes (codespell)"
-        groups: [fix, local, ci, spelling]
+        name: "[check]  spelling mistakes (codespell)"
+        groups: [check, local, ci, spelling, codespell]
         stages: [pre-commit, manual]
         priority: 40
         pass_filenames: false
-        args: [--write-changes]
         additional_dependencies:
           - tomli
 
