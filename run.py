@@ -3075,48 +3075,87 @@ class CleanCommand(Command):
 
 
 # ====================================================================================================
-# NAS commands
+# Bootstrap & Deploy commands
 #
-# Provision the home NAS and deploy its Compose services from this machine, over SSH (tailnet or LAN):
+# Commands:
+#   - bootstrap:     Run the layered bootstrap stages on local machine
 #   - nas-provision: Run the Ansible playbook (playbooks/nas_bootstrap.yml) against the inventory's ``nas`` host
 #   - nas-deploy:    Sync services/ to the NAS and run deploy.sh there (scripts/nas/deploy-services.sh, as CI does)
 # ====================================================================================================
 
 
-class NasDeployCommand(Command):
+class BootstrapCommand(Command):
     """
-    Sync services/ to the NAS and run deploy.sh there (the same script CI uses)
+    Run the layered bootstrap stages (bootstrap/bootstrap.sh) on local machine
     """
-    name:        ClassVar[str]  = 'nas-deploy'
-    group:       ClassVar[str]  = 'NAS'
-    script_only: ClassVar[bool] = True
+    name:  ClassVar[str] = 'bootstrap'
+    group: ClassVar[str] = 'Bootstrap & Deploy'
 
     class Args(argparse.Namespace):
-        service: str        # positional arg "SERVICE"
-        dry_run: bool       # --dry-run
+        dry_run:    bool            # --dry-run
+        list:       bool            # --list
+        only:       str | None      # --only
+        from_stage: str | None      # --from
+        resume:     bool            # --resume
+        verify:     bool            # --verify
+        no_log:     bool            # --no-log
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
-            'service',
-            type=str,
-            help="Directory under services/ to deploy, or 'all'",
-        )
-        parser.add_argument(
             '--dry-run',
             action='store_true',
-            help='Preview the rsync and print the remote command without running it',
+            help='Simulate every stage',
+        )
+        parser.add_argument(
+            '--list',
+            action='store_true',
+            help='List stages across layers',
+        )
+        parser.add_argument(
+            '--only',
+            metavar='STAGE',
+            help='Run a single stage',
+        )
+        parser.add_argument(
+            '--from',
+            dest='from_stage',
+            metavar='STAGE',
+            help='Run from STAGE onward',
+        )
+        parser.add_argument(
+            '--resume',
+            action='store_true',
+            help='Continue after the last completed stage',
+        )
+        parser.add_argument(
+            '--verify',
+            action='store_true',
+            help='Run doctor after all stages succeed',
+        )
+        parser.add_argument(
+            '--no-log',
+            action='store_true',
+            help='Do not tee output to the bootstrap log',
         )
 
     def run(self, args: Args) -> None:
-        host, user = resolve_reachable_nas()
-        warn_on_dirty_services()
+        cmd: list[str] = ['bash', str(BOOTSTRAP_SCRIPT)]
+        for flag, enabled in (
+            ('--dry-run', args.dry_run),
+            ('--list',    args.list),
+            ('--resume',  args.resume),
+            ('--verify',  args.verify),
+            ('--no-log',  args.no_log),
+        ):
+            if enabled:
+                cmd.append(flag)
 
-        cmd: list[str] = ['bash', str(NAS_DEPLOY_SCRIPT)]
-        if args.dry_run:
-            cmd.append('--dry-run')
-        cmd.append(args.service)
+        if args.only:
+            cmd.extend(['--only', args.only])
+        if args.from_stage:
+            cmd.extend(['--from', args.from_stage])
 
-        result = shell_command(cmd, env={'NAS_HOST': host, 'NAS_USER': user}, check=False)
+        result = shell_command(cmd, check=False)
         sys.exit(result.returncode)
 
 
@@ -3125,7 +3164,7 @@ class NasProvisionCommand(Command):
     Provision the NAS with the Ansible playbook: system config, the stow engine, then services
     """
     name:  ClassVar[str] = 'nas-provision'
-    group: ClassVar[str] = 'NAS'
+    group: ClassVar[str] = 'Bootstrap & Deploy'
 
     class Args(argparse.Namespace):
         tags:       str | None          # --tags
@@ -3197,91 +3236,51 @@ class NasProvisionCommand(Command):
         sys.exit(result.returncode)
 
 
+class NasDeployCommand(Command):
+    """
+    Sync services/ to the NAS and run deploy.sh there (the same script CI uses)
+    """
+    name:        ClassVar[str]  = 'nas-deploy'
+    group:       ClassVar[str]  = 'Bootstrap & Deploy'
+    script_only: ClassVar[bool] = True
+
+    class Args(argparse.Namespace):
+        service: str        # positional arg "SERVICE"
+        dry_run: bool       # --dry-run
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'service',
+            type=str,
+            help="Directory under services/ to deploy, or 'all'",
+        )
+        parser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Preview the rsync and print the remote command without running it',
+        )
+
+    def run(self, args: Args) -> None:
+        host, user = resolve_reachable_nas()
+        warn_on_dirty_services()
+
+        cmd: list[str] = ['bash', str(NAS_DEPLOY_SCRIPT)]
+        if args.dry_run:
+            cmd.append('--dry-run')
+        cmd.append(args.service)
+
+        result = shell_command(cmd, env={'NAS_HOST': host, 'NAS_USER': user}, check=False)
+        sys.exit(result.returncode)
+
+
 # ====================================================================================================
 # Dotfiles commands
 #
 # Thin wrappers over the layered engine (stow.sh, bootstrap/bootstrap.sh, scripts/dotfiles/render.py)
-#   - bootstrap:    Run the layered bootstrap stages
 #   - stow:         Link stow packages from every layer into $HOME
 #   - render:       Render settings files from per-layer fragments
 #   - track-claude: Ingest local ~/.claude agents/commands/skills/hooks/rules into the ``claude`` stow package
-#   - test:         Run the test suite through the public-index uv wrapper
 # ====================================================================================================
-
-
-class BootstrapCommand(Command):
-    """
-    Run the layered bootstrap stages (bootstrap/bootstrap.sh)
-    """
-    name:  ClassVar[str] = 'bootstrap'
-    group: ClassVar[str] = 'Dotfiles'
-
-    class Args(argparse.Namespace):
-        dry_run:    bool            # --dry-run
-        list:       bool            # --list
-        only:       str | None      # --only
-        from_stage: str | None      # --from
-        resume:     bool            # --resume
-        verify:     bool            # --verify
-        no_log:     bool            # --no-log
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Simulate every stage',
-        )
-        parser.add_argument(
-            '--list',
-            action='store_true',
-            help='List stages across layers',
-        )
-        parser.add_argument(
-            '--only',
-            metavar='STAGE',
-            help='Run a single stage',
-        )
-        parser.add_argument(
-            '--from',
-            dest='from_stage',
-            metavar='STAGE',
-            help='Run from STAGE onward',
-        )
-        parser.add_argument(
-            '--resume',
-            action='store_true',
-            help='Continue after the last completed stage',
-        )
-        parser.add_argument(
-            '--verify',
-            action='store_true',
-            help='Run doctor after all stages succeed',
-        )
-        parser.add_argument(
-            '--no-log',
-            action='store_true',
-            help='Do not tee output to the bootstrap log',
-        )
-
-    def run(self, args: Args) -> None:
-        cmd: list[str] = ['bash', str(BOOTSTRAP_SCRIPT)]
-        for flag, enabled in (
-            ('--dry-run', args.dry_run),
-            ('--list',    args.list),
-            ('--resume',  args.resume),
-            ('--verify',  args.verify),
-            ('--no-log',  args.no_log),
-        ):
-            if enabled:
-                cmd.append(flag)
-
-        if args.only:
-            cmd.extend(['--only', args.only])
-        if args.from_stage:
-            cmd.extend(['--from', args.from_stage])
-
-        result = shell_command(cmd, check=False)
-        sys.exit(result.returncode)
 
 
 class StowCommand(Command):
@@ -3643,115 +3642,6 @@ class TrackClaudeCommand(Command):
         printf('')
         printf(f'✅ Ingested {moved} file(s). Review and commit them:', fg='bright_green', bold=True)
         printf(style('git add stow/claude/.claude && git commit', fg='bright_magenta'), indent=3)
-
-
-class TestCommand(Command):
-    """
-    Run the test suite via uv (public-index wrapper)
-    """
-    name:  ClassVar[str] = 'test'
-    group: ClassVar[str] = 'Dotfiles'
-
-    class Args(argparse.Namespace):
-        paths: list[str]        # positional arg(s) "PATHS"
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            'paths',
-            nargs='*',
-            help='Test paths (default: tests/)',
-        )
-
-    def run(self, args: Args) -> None:
-        result = shell_command(
-            [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])],
-            check=False,
-        )
-        sys.exit(result.returncode)
-
-
-# =======================================================================================
-# Tool installation commands
-# =======================================================================================
-
-
-class _InstallToolCommand(Command, register=False):
-    """
-    Base for tool installer commands that wrap a ``scripts/install/*.py`` installer script.
-
-    Subclasses set :cvar:`tool_name` and :cvar:`installer_script`.
-    """
-    group:            ClassVar[str] = 'Tool Installation'
-    tool_name:        ClassVar[str]
-    installer_script: ClassVar[Path]
-
-    class Args(argparse.Namespace):
-        force:       bool           # --force
-        verbose:     bool           # --verbose
-        retries:     int | None     # --retries
-        retry_delay: int | None     # --retry-delay
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            '-f',
-            '--force',
-            action='store_true',
-            help=f'Force reinstall even if {style(self.tool_name, fg="bright_magenta")} is already installed',
-        )
-        parser.add_argument(
-            '-v',
-            '--verbose',
-            action='store_true',
-            help='Enable verbose output for debugging',
-        )
-        parser.add_argument(
-            '--retries',
-            type=int,
-            metavar='N',
-            help='Maximum number of download retry attempts',
-        )
-        parser.add_argument(
-            '--retry-delay',
-            type=int,
-            metavar='SECONDS',
-            help='Initial delay in seconds between retries with exponential backoff',
-        )
-
-    def run(self, args: Args) -> None:
-        cmd: list[str] = [str(self.installer_script)]
-        if args.force:
-            cmd.append('--force')
-        if args.verbose:
-            cmd.append('--verbose')
-        if args.retries is not None:
-            cmd.extend(['--retries', str(args.retries)])
-        if args.retry_delay is not None:
-            cmd.extend(['--retry-delay', str(args.retry_delay)])
-
-        try:
-            shell_command(cmd)
-        except subprocess.CalledProcessError:
-            sys.exit(1)
-
-
-class InstallUvCommand(_InstallToolCommand):
-    """
-    Install `uv` Python package installer tool
-    """
-    name:             ClassVar[str]  = 'install-uv'
-    description:      ClassVar[str]  = f'Install {style("uv", fg="bright_magenta")} Python package installer tool'
-    tool_name:        ClassVar[str]  = 'uv'
-    installer_script: ClassVar[Path] = SCRIPTS_DIR / 'install' / 'install_uv.py'
-
-
-class InstallHatchCommand(_InstallToolCommand):
-    """
-    Install `hatch` Python project management tool
-    """
-    name:             ClassVar[str]  = 'install-hatch'
-    description:      ClassVar[str]  = f'Install {style("hatch", fg="bright_magenta")} Python project management tool'
-    tool_name:        ClassVar[str]  = 'hatch'
-    installer_script: ClassVar[Path] = SCRIPTS_DIR / 'install' / 'install_hatch.py'
 
 
 # ====================================================================================================
@@ -4149,6 +4039,90 @@ class VaultEncryptCommand(Command):
             printf('✅ All vault files encrypted', fg='bright_green')
 
 
+# =======================================================================================
+# Tool installation commands
+# =======================================================================================
+
+
+class _InstallToolCommand(Command, register=False):
+    """
+    Base for tool installer commands that wrap a ``scripts/install/*.py`` installer script.
+
+    Subclasses set :cvar:`tool_name` and :cvar:`installer_script`.
+    """
+    group:            ClassVar[str] = 'Tool Installation'
+    tool_name:        ClassVar[str]
+    installer_script: ClassVar[Path]
+
+    class Args(argparse.Namespace):
+        force:       bool           # --force
+        verbose:     bool           # --verbose
+        retries:     int | None     # --retries
+        retry_delay: int | None     # --retry-delay
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '-f',
+            '--force',
+            action='store_true',
+            help=f'Force reinstall even if {style(self.tool_name, fg="bright_magenta")} is already installed',
+        )
+        parser.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Enable verbose output for debugging',
+        )
+        parser.add_argument(
+            '--retries',
+            type=int,
+            metavar='N',
+            help='Maximum number of download retry attempts',
+        )
+        parser.add_argument(
+            '--retry-delay',
+            type=int,
+            metavar='SECONDS',
+            help='Initial delay in seconds between retries with exponential backoff',
+        )
+
+    def run(self, args: Args) -> None:
+        cmd: list[str] = [str(self.installer_script)]
+        if args.force:
+            cmd.append('--force')
+        if args.verbose:
+            cmd.append('--verbose')
+        if args.retries is not None:
+            cmd.extend(['--retries', str(args.retries)])
+        if args.retry_delay is not None:
+            cmd.extend(['--retry-delay', str(args.retry_delay)])
+
+        try:
+            shell_command(cmd)
+        except subprocess.CalledProcessError:
+            sys.exit(1)
+
+
+class InstallUvCommand(_InstallToolCommand):
+    """
+    Install `uv` Python package installer tool
+    """
+    name:             ClassVar[str]  = 'install-uv'
+    description:      ClassVar[str]  = f'Install {style("uv", fg="bright_magenta")} Python package installer tool'
+    tool_name:        ClassVar[str]  = 'uv'
+    installer_script: ClassVar[Path] = SCRIPTS_DIR / 'install' / 'install_uv.py'
+
+
+class InstallHatchCommand(_InstallToolCommand):
+    """
+    Install `hatch` Python project management tool
+    """
+    name:             ClassVar[str]  = 'install-hatch'
+    description:      ClassVar[str]  = f'Install {style("hatch", fg="bright_magenta")} Python project management tool'
+    tool_name:        ClassVar[str]  = 'hatch'
+    installer_script: ClassVar[Path] = SCRIPTS_DIR / 'install' / 'install_hatch.py'
+
+
 # ====================================================================================================
 # Hooks commands
 #
@@ -4511,6 +4485,39 @@ class PreCommand(RunHooksCommand):
     def run(self, args: RunHooksCommand.Args) -> None:
         args.all_files = True
         super().run(args)
+
+
+# ====================================================================================================
+# Testing commands
+#
+# Commands
+#   - test: Run the test suite through the public-index uv wrapper
+# ====================================================================================================
+
+
+class TestCommand(Command):
+    """
+    Run the test suite via uv (public-index wrapper)
+    """
+    name:  ClassVar[str] = 'test'
+    group: ClassVar[str] = 'Testing'
+
+    class Args(argparse.Namespace):
+        paths: list[str]        # positional arg(s) "PATHS"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'paths',
+            nargs='*',
+            help='Test paths (default: tests/)',
+        )
+
+    def run(self, args: Args) -> None:
+        result = shell_command(
+            [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])],
+            check=False,
+        )
+        sys.exit(result.returncode)
 
 
 # ====================================================================================================
