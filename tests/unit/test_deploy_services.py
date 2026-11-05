@@ -209,12 +209,8 @@ class TestKeyHandling:
     @pytest.mark.skipif(shutil.which('rsync') is None, reason='rsync not installed')
     def test_real_rsync_hands_a_key_path_with_spaces_to_ssh_as_one_word(self, tmp_path: Path) -> None:
         """
-        Test that rsync's own -e parsing keeps the quoted key path whole (skipped on openrsync, which may differ)
+        Test that rsync's own -e parsing keeps the quoted key path whole
         """
-        version = subprocess.run(['rsync', '--version'], capture_output=True, text=True, check=False).stdout
-        if 'openrsync' in version.lower():
-            pytest.skip('openrsync may split -e differently; GNU rsync is what CI uses')
-
         bin_dir = tmp_path / 'bin'
         bin_dir.mkdir()
         ssh = bin_dir / 'ssh'
@@ -272,7 +268,7 @@ class TestDryRun:
 
     def test_dry_run_escapes_a_key_path_with_spaces(self, env: dict[str, str]) -> None:
         """
-        Test that the printed ssh command escapes a key path containing a space, so it can be pasted into a shell
+        Test that the printed ssh command escapes a key path containing a space, so the words stay distinguishable
         """
         env['NAS_SSH_KEY'] = '/keys/my keys/id'
 

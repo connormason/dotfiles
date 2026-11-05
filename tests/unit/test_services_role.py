@@ -299,6 +299,7 @@ class TestDockerRole:
         code, output = _run_play(tmp_path, play, '-e', f'docker_dir={docker_dir}')
         assert code == 0, output
         assert pihole.is_dir()
+        assert pihole.stat().st_mode & 0o777 == 0o755
         assert 'changed=1' in output, output
 
         pihole.chmod(0o775)  # what a running container may do to its bind mount

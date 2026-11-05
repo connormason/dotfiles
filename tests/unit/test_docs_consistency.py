@@ -6,7 +6,8 @@ roles table in ``roles/README.md``, and the container table in ``services/README
 package directories, role directories, and compose files on disk. They also assert that the role order in the playbook
 docs (``roles/README.md``, ``playbooks/README.md``, ``.ctx/ARCHITECTURE.md``) follows ``playbooks/nas_bootstrap.yml``
 and that ``docs/RUN_PY_REFERENCE.md`` documents every command ``run.py`` registers. They exist to catch the drift
-documented in ``CLAUDE-LESSONS.md`` ("Enumerated infra inventories in docs drift") the moment an inventory changes.
+documented in ``CLAUDE-LESSONS.md`` ("Hand-maintained inventories in docs drift: guard each with a test") the moment
+an inventory changes.
 """
 from __future__ import annotations
 

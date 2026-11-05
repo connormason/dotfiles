@@ -294,6 +294,14 @@ def _includes() -> list[dict[str, Any]]:  # Any: heterogeneous, yaml-loaded task
     return [task for task in play['tasks'] if 'ansible.builtin.include_role' in task]
 
 
+def _apply_tags(include: dict[str, Any]) -> set[str]:  # Any: yaml task
+    """
+    Return the tags an include_role applies to the tasks inside the role, whether written as a string or a list
+    """
+    apply_tags = include['ansible.builtin.include_role']['apply']['tags']
+    return {apply_tags} if isinstance(apply_tags, str) else set(apply_tags)
+
+
 class TestPlaybookTags:
     """
     Tests for the tags on the playbook's role includes
@@ -309,11 +317,25 @@ class TestPlaybookTags:
 
         A tag on include_role selects only the include itself, so a tag that no inner task carries selects nothing
         """
-        spec       = include['ansible.builtin.include_role']
-        name       = spec['name']
-        apply_tags = spec['apply']['tags']
-        reachable  = {apply_tags} if isinstance(apply_tags, str) else set(apply_tags)
-        reachable |= _role_tags(name.removeprefix('roles/'))
+        name      = include['ansible.builtin.include_role']['name']
+        reachable = _apply_tags(include) | _role_tags(name.removeprefix('roles/'))
 
         dead = sorted(set(include['tags']) - reachable)
         assert not dead, f'tags {dead} on the {name} include reach no task'
+
+    @pytest.mark.parametrize(
+        'include',
+        _includes(),
+        ids=lambda include: include['ansible.builtin.include_role']['name'],
+    )
+    def test_every_task_tag_is_selectable_through_the_include(self, include: dict[str, Any]) -> None:  # Any: yaml task
+        """
+        Test that each tag on a task inside a role is on its include or is the apply tag, or is always
+
+        The include is what --tags selects first, so an inner tag the include lacks can never be asked for
+        """
+        name       = include['ansible.builtin.include_role']['name']
+        selectable = set(include['tags']) | _apply_tags(include)
+
+        unreachable = sorted(_role_tags(name.removeprefix('roles/')) - selectable - {'always'})
+        assert not unreachable, f'tags {unreachable} inside {name} cannot be selected through its include'
