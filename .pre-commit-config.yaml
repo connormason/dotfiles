@@ -411,7 +411,7 @@ repos:
 
       # Fix common misspellings in text files
       - id: codespell
-        name: "[fix]    spelling mistakes (codespell --write-changes)"
+        name: "[fix]    spelling mistakes [codespell --write-changes]"
         groups: [fix, local, spelling, codespell]
         stages: [pre-commit]
         priority: 30
@@ -426,7 +426,7 @@ repos:
 
       # Language-agnostic auto-sorting between two markers
       - id: keep-sorted
-        name: "[format] sorting (keep-sorted)"
+        name: "[format] sorting [keep-sorted]"
         groups: [format, local, sort]
         stages: [pre-commit]
         priority: 31
@@ -437,7 +437,7 @@ repos:
 
       # Shell script auto-formatting
       - id: shfmt
-        name: "[format] shell scripts (shfmt)"
+        name: "[format] shell scripts [shfmt]"
         groups: [format, local, shell]
         stages: [pre-commit]
         priority: 35
@@ -488,7 +488,7 @@ repos:
 
       # TOML file auto-formatting
       - id: taplo-format
-        name: "[format] toml (taplo)"
+        name: "[format] toml [taplo]"
         groups: [format, local, toml, taplo]
         stages: [pre-commit]
         priority: 35
@@ -498,7 +498,7 @@ repos:
 
       # Pkl file auto-formatting (no-op if `pkl` is not installed); not run in CI
       - id: format-pkl
-        name: "[format] pkl (pkl format)"
+        name: "[format] pkl [pkl format]"
         groups: [format, local, pkl]
         stages: [pre-commit]
         priority: 35
@@ -513,7 +513,7 @@ repos:
 
       # Markdown file auto-formatting
       - id: mdformat
-        name: "[format] markdown (mdformat)"
+        name: "[format] markdown [mdformat]"
         groups: [format, local, markdown]
         stages: [pre-commit]
         priority: 35
@@ -538,7 +538,7 @@ repos:
 
       # Python lint auto-fixes
       - id: ruff
-        name: "[fix]    python lint (ruff check --fix-only)"
+        name: "[fix]    python lint [ruff check --fix-only]"
         groups: [fix, local, python, ruff]
         stages: [pre-commit]
         priority: 35
@@ -557,7 +557,7 @@ repos:
       # Python lint check (must happen after --fix-only stage above)
       # Check/lint and output errors as junit if running in CI
       - id: ruff
-        name: "[lint]   python lint (ruff check) - junit output"
+        name: "[lint]   python lint [ruff check] - junit output"
         groups: [lint, ci, python, ruff]
         stages: [manual]
         priority: 40
@@ -566,7 +566,7 @@ repos:
       # Python lint check (must happen after --fix-only stage above)
       # Always check/lint (local or CI), output errors to stdout
       - id: ruff
-        name: "[lint]   python lint (ruff check)"
+        name: "[lint]   python lint [ruff check]"
         groups: [lint, local, ci, python, ruff]
         stages: [pre-commit, manual]
         priority: 40
@@ -577,7 +577,7 @@ repos:
 
       # Python static type checking
       - id: mypy
-        name: "[lint]   python typing (mypy)"
+        name: "[lint]   python typing [mypy]"
         groups: [lint, local, ci, python, types, mypy]
         stages: [pre-commit, manual]
         priority: 40
@@ -599,7 +599,7 @@ repos:
 
       # Check python code docstring coverage
       - id: interrogate
-        name: "[check]  python docstring coverage (interrogate)"
+        name: "[check]  python docstring coverage [interrogate]"
         groups: [check, local, ci, docs, python, interrogate]
         stages: [pre-commit, manual]
         priority: 40
@@ -628,7 +628,7 @@ repos:
 
       # Linting for shell scripts
       - id: shellcheck
-        name: "[lint]   shell scripts (shellcheck)"
+        name: "[lint]   shell scripts [shellcheck]"
         groups: [lint, local, ci, shell]
         stages: [pre-commit, manual]
         priority: 40
@@ -670,7 +670,7 @@ repos:
 
       # YAML linting
       - id: yamllint
-        name: "[lint]   yaml (yamllint)"
+        name: "[lint]   yaml [yamllint]"
         groups: [lint, local, ci, yaml]
         stages: [pre-commit, manual]
         priority: 40
@@ -682,7 +682,7 @@ repos:
       # Check for common misspellings in text files
       # Only run in CI. When hooks are run locally, we auto-fix misspellings with ``codespell --write-changes`` (above)
       - id: codespell
-        name: "[check]  spelling mistakes (codespell)"
+        name: "[check]  spelling mistakes [codespell]"
         groups: [check, ci, spelling, codespell]
         stages: [manual]
         priority: 40
@@ -695,7 +695,7 @@ repos:
 
       # Ansible linting of playbooks/ and roles/ (check only; the wrapper supplies a throwaway vault password)
       - id: ansible-lint
-        name: "[lint]   ansible roles/playbooks (ansible-lint)"
+        name: "[lint]   ansible roles/playbooks [ansible-lint]"
         groups: [lint, local, ci, yaml, ansible]
         stages: [pre-commit, manual]
         priority: 40
