@@ -2251,6 +2251,49 @@ def enter_venv(*, verbose: bool = False, indent: int = 0) -> None:
 
 
 # =======================================================================================
+# Ansible vault/inventory utilities
+# =======================================================================================
+
+
+def find_vault_files() -> list[Path]:
+    """
+    Find all vault.yml files in the inventory directory
+
+    :return: sorted list of vault file paths
+    """
+    vault_files: list[Path] = []
+    for pattern in VAULT_FILE_PATTERNS:
+        vault_files.extend(INVENTORY_DIR.glob(pattern))
+    return sorted(vault_files)
+
+
+def require_vault_password() -> None:
+    """
+    Validate that the vault password file exists and exit with an error if not
+
+    :raises SystemExit: if vault password file is missing
+    """
+    if not VAULT_PASSWORD.is_file():
+        printf('❌ Vault password file not found', fg='red', bold=True)
+        printf(f'   Expected: {folduser(VAULT_PASSWORD)}',                                                    indent=3)
+        printf(f'   Create it with: {style("echo YOUR_PASSWORD > vault_password.txt", fg="bright_magenta")}', indent=3)
+        sys.exit(ExitCode.COMMAND_FAILED)
+
+
+def require_inventory() -> None:
+    """
+    Validate that the inventory directory exists and exit with an error if not
+
+    :raises SystemExit: if inventory directory is missing
+    """
+    if not INVENTORY_DIR.exists():
+        printf('❌ Inventory directory not found', fg='red', bold=True)
+        printf(f'   Expected: {folduser(INVENTORY_DIR)}',                                  indent=3)
+        printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
+        sys.exit(ExitCode.COMMAND_FAILED)
+
+
+# =======================================================================================
 # Setup & Environment commands
 #
 # Commands:
@@ -2503,6 +2546,9 @@ class StatusCommand(Command):
             )
 
 
+# TODO: move `doctor` command here
+
+
 class CleanCommand(Command):
     """
     Remove all environments, build artifacts, caches, and temporary files
@@ -2575,44 +2621,6 @@ class CleanCommand(Command):
 #   - vault-decrypt:    Decrypt all inventory vault files for editing
 #   - vault-encrypt:    Re-encrypt all inventory vault files after editing
 # ====================================================================================================
-
-
-def find_vault_files() -> list[Path]:
-    """
-    Find all vault.yml files in the inventory directory
-
-    :return: sorted list of vault file paths
-    """
-    vault_files: list[Path] = []
-    for pattern in VAULT_FILE_PATTERNS:
-        vault_files.extend(INVENTORY_DIR.glob(pattern))
-    return sorted(vault_files)
-
-
-def require_vault_password() -> None:
-    """
-    Validate that the vault password file exists and exit with an error if not
-
-    :raises SystemExit: if vault password file is missing
-    """
-    if not VAULT_PASSWORD.is_file():
-        printf('❌ Vault password file not found', fg='red', bold=True)
-        printf(f'   Expected: {folduser(VAULT_PASSWORD)}',                                                    indent=3)
-        printf(f'   Create it with: {style("echo YOUR_PASSWORD > vault_password.txt", fg="bright_magenta")}', indent=3)
-        sys.exit(ExitCode.COMMAND_FAILED)
-
-
-def require_inventory() -> None:
-    """
-    Validate that the inventory directory exists and exit with an error if not
-
-    :raises SystemExit: if inventory directory is missing
-    """
-    if not INVENTORY_DIR.exists():
-        printf('❌ Inventory directory not found', fg='red', bold=True)
-        printf(f'   Expected: {folduser(INVENTORY_DIR)}', indent=3)
-        printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
-        sys.exit(ExitCode.COMMAND_FAILED)
 
 
 class InventoryHostsCommand(Command):
@@ -3575,7 +3583,6 @@ def _probe_layers() -> subprocess.CompletedProcess[str]:
     """
     Ask bootstrap/lib.sh for the layer directories (base first), one per stdout line
     """
-
     # DOTFILES_REPO is pinned to this checkout so an inherited value from another one cannot redirect the base layer.
     # Anything lib.sh or a layer env.sh prints while loading goes to stderr so it cannot be counted as a layer.
     script = 'export DOTFILES_REPO="$1"; source "$1/bootstrap/lib.sh" >&2 && dotfiles_layers'
