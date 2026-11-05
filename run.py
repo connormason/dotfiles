@@ -1485,9 +1485,9 @@ def parse_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
 #   - list-hosts:       Parse inventory.yml and display available bootstrap targets
 #   - inventory-status: Show git status and metadata for inventory directory
 #   - update-inventory: Clone (if missing) or pull (if exists) inventory repo
-#     - Supports --force flag to reset uncommitted changes before pulling
-#     - Includes retry logic with exponential backoff for network resilience
-#     - Provides SSH error detection and troubleshooting guidance
+#                         - Supports --force flag to reset uncommitted changes before pulling
+#                         - Includes retry logic with exponential backoff for network resilience
+#                         - Provides SSH error detection and troubleshooting guidance
 # ====================================================================================================
 
 
@@ -1907,13 +1907,8 @@ class VaultEncryptCommand(Command):
 # Codebase commands
 #
 # General repository maintenance commands:
-# - clean:    Remove build artifacts, caches, and temporary files
-# - pre:      Run prek hooks on all files
-# - makefile: Generate Makefile targets from registered Command classes
-#               - Parses all registered commands and creates equivalent Make targets
-#               - Organizes targets by command group
-#               - Preserves command descriptions in Make comments
-#               - Auto-generates help target with formatted command listing
+# - clean: Remove build artifacts, caches, and temporary files
+# - pre:   Run prek hooks on all files
 # ====================================================================================================
 
 
@@ -3301,8 +3296,9 @@ class Args(argparse.Namespace):
     """
     Annotated :class:`argparse.Namespace` returned by parsing with :func:`build_parser`
     """
-    command: str | None  # subcommand name
-    debug:   bool        # -d/--debug
+    command:    str | None  # subcommand name
+    debug:      bool        # --debug
+    uv_verbose: bool        # --uv-verbose
 
 
 def build_parser_help_text(*, col_spacing: int = SCRIPT_HELP_COL_SPACING) -> str:
@@ -3392,6 +3388,21 @@ def build_parser() -> argparse.ArgumentParser:
                 ),
             ]),
         )
+        debug_opts.add_argument(
+            '--uv-verbose',
+            action=argparse.BooleanOptionalAction,
+            dest='uv_verbose',
+            default=UV_VERBOSE,
+            help=' '.join([
+                'Enable verbose logging from uv       ',
+                arg_note('env var', UV_VERBOSE_ENVVAR) + '  ',
+                arg_note(
+                    'default',
+                    repr(UV_VERBOSE),
+                    color='bright_green' if UV_VERBOSE else 'bright_red',
+                ),
+            ]),
+        )
 
         # Remove extra default value string from options w/ `action=BooleanOptionalAction` (automatically added somehow)
         for option in debug_opts._group_actions:
@@ -3427,16 +3438,19 @@ def main(argv: Sequence[str] | None = None) -> None:
     global RUN_DEBUG
 
     # Build argument parser and parse command-line args
-    parser = build_parser()
-    args   = parser.parse_args(argv, namespace=Args())
+    parser: argparse.ArgumentParser = build_parser()
+    args:   Args                    = parser.parse_args(argv, namespace=Args())
 
     # Print help text if no command provided
     if not args.command:
         parser.print_help()
         sys.exit(ExitCode.COMMAND_FAILED)
 
-    # Apply -d/--debug/--no-debug (defaults to the DOTFILES_RUN_DEBUG value, so this can also turn debug off)
-    RUN_DEBUG = args.debug
+    # Enable debug logging
+    if args.uv_verbose:
+        RUN_COMMAND_ENVVARS['RUST_LOG'] = 'uv=debug'
+    if args.debug:
+        RUN_DEBUG = True
 
     # Run specified command
     commands = get_commands()
@@ -3451,6 +3465,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             if RUN_DEBUG:
                 traceback.print_exc(file=sys.stderr)
             sys.exit(ExitCode.COMMAND_FAILED)
+
     else:
         printf(f'❓ Unknown command: {args.command}', fg='red', bold=True)
         printf(f'   Available commands: {", ".join(commands.keys())}')
