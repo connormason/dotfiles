@@ -10,7 +10,7 @@ import jinja2
 import pytest
 import yaml
 
-REPO_ROOT    = Path(__file__).resolve().parents[2]
+REPO_ROOT    = Path(__file__).resolve().parents[3]
 SERVICES_DIR = REPO_ROOT / 'services'
 DOCKER_ENV   = REPO_ROOT / 'roles' / 'docker' / 'templates' / 'env.j2'
 
