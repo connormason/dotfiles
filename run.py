@@ -1465,11 +1465,10 @@ def run_installer(tool_name: InstallableTool, *, indent: int = 0) -> bool:
 
 
 # ====================================================================================================
-# Other utility functions
+# Utility decorators
 #
 # Includes:
 #   - retry_on_failure: Decorator for exponential backoff retry logic
-#   - parse_extra_vars: Parse ansible-playbook -e key=value arguments
 # ====================================================================================================
 
 
@@ -1513,29 +1512,6 @@ def retry_on_failure(
 
         return wrapper          # type: ignore[return-value]
     return decorator
-
-
-def parse_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
-    """
-    Parse ``ansible-playbook`` extra variables (-e, --extra-vars) from command line format (key=val)
-
-    :param extra_vars_list: value from argparse
-    :return: mapping from key -> value
-    """
-    extra_vars: dict[str, str] = {}
-    if extra_vars_list:
-        for var_str in extra_vars_list:
-            if '=' not in var_str:
-                printf(
-                    f'❌ {style("Error", fg="red", bold=True)}: Invalid extra var format "{var_str}". '
-                    f'Use key=value format'
-                )
-                sys.exit(ExitCode.COMMAND_FAILED)
-
-            key, value = var_str.split('=', 1)
-            extra_vars[key.strip()] = value.strip()
-
-    return extra_vars
 
 
 # ====================================================================================================
@@ -2357,6 +2333,29 @@ def warn_on_dirty_services() -> None:
         printf('CI redeploys main whenever it changes a service, which supersedes a branch deploy', indent=3, dim=True)
 
 
+def parse_ansible_playbook_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
+    """
+    Parse ``ansible-playbook`` extra variables (-e, --extra-vars) from command line format (key=val)
+
+    :param extra_vars_list: value from argparse
+    :return: mapping from key -> value
+    """
+    extra_vars: dict[str, str] = {}
+    if extra_vars_list:
+        for var_str in extra_vars_list:
+            if '=' not in var_str:
+                printf(
+                    f'❌ {style("Error", fg="red", bold=True)}: Invalid extra var format "{var_str}". '
+                    f'Use key=value format'
+                )
+                sys.exit(ExitCode.COMMAND_FAILED)
+
+            key, value = var_str.split('=', 1)
+            extra_vars[key.strip()] = value.strip()
+
+    return extra_vars
+
+
 def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
     """
     Build the ``ansible-playbook`` command line for nas-provision
@@ -2377,7 +2376,7 @@ def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
         cmd.append('--check')
     if args.diff:
         cmd.append('--diff')
-    for key, value in parse_extra_vars(args.extra_vars).items():
+    for key, value in parse_ansible_playbook_extra_vars(args.extra_vars).items():
         cmd.extend(['-e', f'{key}={value}'])
     if args.verbose:
         cmd.append('-' + 'v' * args.verbose)
