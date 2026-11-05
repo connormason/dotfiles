@@ -41,8 +41,8 @@ QEMU guest-agent channel, autostart on. Override via the environment variables d
 ## Fresh install<a name="fresh-install"></a>
 
 Both scripts are idempotent and accept `--dry-run`, which prints every mutating command without running it (and works
-without sudo). `setup.sh` ends with `haos: changes=N`, the number of changes it made (or, under `--dry-run`, would
-make).
+without sudo). `setup.sh` prints `haos: changes=N` after its last step, the number of changes it made (or, under
+`--dry-run`, would make). A real run then goes on to report the VM's address.
 
 1. **Bridge the uplink.** Run from the local console or inside `tmux`, since the network blips for a few seconds:
 
@@ -143,8 +143,9 @@ mv ~/docker/homeassistant/compose.yml ~/docker/homeassistant/compose.yml.disable
 
 Stop the container **before** onboarding the VM so the two instances don't fight over discovered devices.
 
-An earlier (July 2026) attempt left two `haos` domains behind. `setup.sh` refuses to run while they exist, so remove
-them first:
+An earlier (July 2026) attempt left two `haos` domains behind. `setup.sh` inspects only the `qemu:///system` domain, and
+dies when that domain's disk is not the one it manages (`/var/lib/libvirt/images/haos.qcow2` by default); it never looks
+at `qemu:///session`. Remove the system copy so the script can proceed, and the broken session copy as well:
 
 ```bash
 sudo virsh -c qemu:///system undefine haos --nvram --remove-all-storage   # system VM + haos_ova-18.1.qcow2
@@ -172,7 +173,7 @@ Today the VM is reachable only on the LAN. The planned approach reuses the exist
   address instead of a container name. Expose Home Assistant on a dedicated port (e.g. `:8443`), since it cannot be
   served under a sub-path.
 - In Home Assistant's `configuration.yaml` (via the File editor or Terminal app), set `http.use_x_forwarded_for: true`
-  and add the `nas-network` subnet (`172.19.0.0/16`) to `http.trusted_proxies`.
+  and add the subnet shown by `docker network inspect nas-network` to `http.trusted_proxies`.
 
 The alternative is the official Tailscale app inside HAOS, which makes Home Assistant its own tailnet node with no host
 changes. The trade-off is that its configuration then lives in HA backups rather than in this repo.

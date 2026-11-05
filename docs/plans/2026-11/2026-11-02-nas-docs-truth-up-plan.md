@@ -2445,3 +2445,24 @@ output saved under `$TMPDIR` (or the failing step's text).
 - [ ] **Step 4: Report to the owner** with: commit list, final test count, the open questions above, the rollout runbook
   path, and the reminder that nothing is pushed. Ask before pushing or opening the PR (the worktree is removed after the
   PR, per the owner's standing rule; branch kept).
+
+---
+
+## As built
+
+Deviations from the plan above, recorded after the work landed (the task text is unchanged):
+
+- **Task 3:** the `needs_ansible` constants (`ANSIBLE_PLAYBOOK`, `SERVICES_DIR`, `needs_ansible`) in
+  `tests/unit/test_services_role.py` moved above `TestDockerRole`, where its new `@needs_ansible` test uses them.
+- **Task 9:** the `docker` role has 14 task entries but its README has 13 rows (the PiHole `stat` and `file` tasks share
+  step 9). The autoplex image is built only when it is absent (`source: build`, no `force_source`), so a moved clone
+  does not refresh it.
+- **Task 17:** the link checker had to strip the mdformat-toc `<a name="...">` tags from headings before slugging them,
+  and to skip fenced code blocks.
+- **Merge from `main`:** PR #38 (class-based `run.py` commands) merged first and was merged into the branch (merge
+  commit `f97299d`) instead of rebasing; `run.py` stays identical to `main`.
+- **After the final review:** a consistency-sweep commit (`5d35d04`) reconciled wording across documents, then two fix
+  waves followed. Wave A (`65d2408`, `6b5b3ea`) made the tag guard check tags in both directions and made the samba
+  `Register Samba version` and tailscale `tailscale status` probes run under `--check` (`check_mode: false`), a defect
+  that predates this branch and broke `run.py nas-provision --check --diff`. Wave B applied the independent audit's
+  documentation findings.

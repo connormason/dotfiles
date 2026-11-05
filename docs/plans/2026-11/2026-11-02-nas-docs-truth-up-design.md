@@ -1,7 +1,7 @@
 # NAS Sub-project 4: Docs Truth-up and Hardening (PR A)
 
 **Date:** 2026-11-02
-**Status:** Approved (design); implementation plan pending
+**Status:** Implemented as PR A; see [`2026-11-02-nas-docs-truth-up-plan.md`](2026-11-02-nas-docs-truth-up-plan.md)
 **Parent design:** [`2026-10-31-nas-provisioning-design.md`](../2026-10/2026-10-31-nas-provisioning-design.md)
 (sub-project 4); follows [`2026-11-02-nas-laptop-deploy-design.md`](2026-11-02-nas-laptop-deploy-design.md)
 **Goal:** Make every NAS-related document describe the repository as it is after sub-projects 1-3, close the small code

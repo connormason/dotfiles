@@ -248,7 +248,7 @@ python3 run.py update-inventory
 python3 run.py vault-decrypt
 python3 run.py vault-encrypt
 
-# Clean build artifacts
+# Clean environments, build artifacts, and caches
 python3 run.py clean
 
 # Run prek hooks

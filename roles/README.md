@@ -74,15 +74,18 @@ A role-name tag runs the whole role. The `configfile` and `secrets` tags run onl
 
 5. Add a row to the table above, a step to the execution-order list in [`playbooks/README.md`](../playbooks/README.md),
    and a bullet to the "Role System (NAS)" list in [`.ctx/ARCHITECTURE.md`](../.ctx/ARCHITECTURE.md), all in playbook
-   order. `tests/unit/test_docs_consistency.py` checks all three against the playbook.
+   order. `tests/unit/test_docs_consistency.py` checks all three against the playbook. Two more places list the roles
+   without a test: the `roles/` entries in the Project Structure tree of the root [`README.md`](../README.md), and the
+   role-tag comment under "Running Ansible Playbooks (NAS)" in [`.ctx/BUILD.md`](../.ctx/BUILD.md). Update them too.
 
 Use fully-qualified module names and `become` only on tasks that need it.
 
 ## Variables
 
-Role variables come from role `defaults/` and from the vault-encrypted inventory clone in `inventory/` (`group_vars/`
-and `host_vars/`). Common ones: `dotfiles_repo_dir` (the NAS clone, a play variable), `ansible_user`, and
-`admin_password`.
+Role variables come from each role's `defaults/` (overridable) and `vars/` (fixed values, such as
+`roles/samba/vars/main.yml`), and from the inventory clone in `inventory/` (`group_vars/` and `host_vars/`, which hold
+plain files such as `host_vars/nas/vars.yml` as well as vault-encrypted ones). Common ones: `dotfiles_repo_dir` (the NAS
+clone, a play variable), `ansible_user`, and `admin_password`.
 
 ## Validation
 

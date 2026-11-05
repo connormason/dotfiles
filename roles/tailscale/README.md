@@ -20,7 +20,8 @@ Sets up [Tailscale VPN](https://tailscale.com/) on Debian systems.
 ## Features<a name="features"></a>
 
 - Installs Tailscale from official apt repository
-- Configures Tailscale with idempotent `tailscale set` + `tailscale login`
+- Configures Tailscale with idempotent `tailscale set` + `tailscale login`; the `tailscale status --json` probe that
+  decides whether to log in is read-only and runs under `--check` (`check_mode: false`)
 - Enables Tailscale SSH on Linux hosts (`tailscale_ssh_enabled`; the NAS sets it to `false` so the CI deploy can use
   regular SSH, see [`services/README.md`](../../services/README.md#ci-deploys))
 - Provisions HTTPS certificates via `tailscale cert` (NAS only)
@@ -38,10 +39,15 @@ Sets up [Tailscale VPN](https://tailscale.com/) on Debian systems.
 
 ## Required Variables<a name="required-variables"></a>
 
-Set these in your Ansible Vault (`inventory/group_vars/all/vault.yml`):
+Set the auth key in your Ansible Vault (`inventory/group_vars/all/vault.yml`):
 
 ```yaml
 tailscale_auth_key: tskey-auth-...
+```
+
+Set the tailnet name in the inventory:
+
+```yaml
 tailscale_tailnet_name: tail1234.ts.net
 ```
 
@@ -109,8 +115,8 @@ Plex's `ADVERTISE_IP` needs no manual step: the `docker` role renders `~/docker/
 # Full NAS bootstrap
 ./nas_bootstrap.sh
 
-# Tailscale only
-ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv --tags tailscale
+# Tailscale only (add -vv for more output)
+python3 run.py nas-provision --tags tailscale -vv
 ```
 
 ## Cert Renewal<a name="cert-renewal"></a>

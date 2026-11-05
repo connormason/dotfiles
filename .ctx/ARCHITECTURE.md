@@ -26,8 +26,8 @@ skipped by the lint tooling).
 ## Stow Engine and Bootstrap Stages (macOS + Linux)
 
 Layered: the repo root is the base layer; machine-specific overlays (see `profiles/`) are directories listed in the
-overlays registry (`~/.config/dotfiles/overlays`, or `$DOTFILES_OVERLAYS_FILE`). Layers are ordered base first, then
-overlays in file order. Full contract in [`bootstrap/README.md`](../bootstrap/README.md).
+overlays registry (`~/.config/dotfiles/overlays`, honouring `XDG_CONFIG_HOME`, or `$DOTFILES_OVERLAYS_FILE`). Layers are
+ordered base first, then overlays in file order. Full contract in [`bootstrap/README.md`](../bootstrap/README.md).
 
 - **`bootstrap/bootstrap.sh`**: discovers numbered stage scripts (`NN-*.sh`) in every layer's `bootstrap/` directory,
   merges them by number, and runs each as a separate bash process. Flags: `--dry-run`, `--list`, `--only`, `--from`,

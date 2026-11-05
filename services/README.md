@@ -24,9 +24,11 @@ others as orphans. `up -d` receives the directory name, so the directory name mu
 `compose.yml`. Given a single service, [`scripts/nas/deploy-services.sh`](../scripts/nas/deploy-services.sh) also
 rejects a name outside `^[a-z0-9][a-z0-9_-]*$` and a service without a `services/<name>/compose.yml`.
 
-A service is **disabled** by renaming its `compose.yml` to `compose.yml.disabled`: `deploy.sh`, `deploy-services.sh`,
-and the CI workflow only pick up directories containing a `compose.yml`, and the `services` role renders `env.j2` only
-for those. `pihole` and `homeassistant` are currently disabled.
+A service is **disabled** by renaming its `compose.yml` to `compose.yml.disabled`. `deploy.sh all` on the NAS discovers
+only directories containing a `compose.yml`; `deploy-services.sh <svc>` requires `services/<svc>/compose.yml`, CI push
+detection drops directories without one, and the `services` role renders `env.j2` only for those. In contrast,
+`deploy-services.sh all` still rsyncs the whole `services/` tree, disabled directories included. `pihole` and
+`homeassistant` are currently disabled.
 
 Disabling a service in the repository stops nothing on the NAS. The sync never deletes, so an already-synced
 `~/docker/<svc>/compose.yml` stays, its container keeps running, and `~/docker/deploy.sh all` on the NAS still discovers
@@ -63,23 +65,23 @@ it. Remove the NAS copy by hand; for `homeassistant`, the steps are in the
 All host ports below are bound on the NAS itself. Services without a host port are reachable only from inside the
 `nas-network` bridge.
 
-| Container        | Image                               | Host Port(s)                                  | Purpose                                     |
-| ---------------- | ----------------------------------- | --------------------------------------------- | ------------------------------------------- |
-| `caddy`          | `caddy:2-alpine`                    | `443/tcp`, `32443/tcp`                        | Tailscale HTTPS reverse proxy (see below)   |
-| `glance`         | `glanceapp/glance`                  | `8080/tcp`                                    | Dashboard / homepage                        |
-| `home-assistant` | `homeassistant/home-assistant`      | host networking (image default `8123/tcp`)    | Home automation hub (**disabled**)          |
-| `pihole`         | `pihole/pihole`                     | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80 | DNS, ad-blocking, DHCP (**disabled**)       |
-| `plex`           | `linuxserver/plex`                  | `32400/tcp`                                   | Media streaming server                      |
-| `jellyfin`       | `linuxserver/jellyfin`              | `8096/tcp`, `7359/udp`                        | Media streaming server (Plex alternative)   |
-| `prowlarr`       | `linuxserver/prowlarr`              | `9696/tcp`                                    | Indexer aggregator for Sonarr/Radarr        |
-| `radarr`         | `linuxserver/radarr`                | `7878/tcp`                                    | Movie library management                    |
-| `sonarr`         | `linuxserver/sonarr`                | `8989/tcp`                                    | TV library management                       |
-| `transmission`   | `linuxserver/transmission`          | `9091/tcp`                                    | BitTorrent client (web UI)                  |
-| `flaresolverr`   | `ghcr.io/flaresolverr/flaresolverr` | internal only (image default `8191/tcp`)      | Cloudflare challenge solver for Prowlarr    |
-| `autoplex`       | `danielmmetz/autoplex` (built)      | none                                          | Copies completed downloads into Plex layout |
+| Container        | Image                               | Host Port(s)                                    | Purpose                                     |
+| ---------------- | ----------------------------------- | ----------------------------------------------- | ------------------------------------------- |
+| `caddy`          | `caddy:2-alpine`                    | `443/tcp`, `32443/tcp`                          | Tailscale HTTPS reverse proxy (see below)   |
+| `glance`         | `glanceapp/glance`                  | `8080/tcp`                                      | Dashboard / homepage                        |
+| `home-assistant` | `homeassistant/home-assistant`      | host networking (`8123/tcp`, not declared here) | Home automation hub (**disabled**)          |
+| `pihole`         | `pihole/pihole:latest`              | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80   | DNS, ad-blocking, DHCP (**disabled**)       |
+| `plex`           | `linuxserver/plex`                  | `32400/tcp`                                     | Media streaming server                      |
+| `jellyfin`       | `linuxserver/jellyfin`              | `8096/tcp`, `7359/udp`                          | Media streaming server (Plex alternative)   |
+| `prowlarr`       | `linuxserver/prowlarr`              | `9696/tcp`                                      | Indexer aggregator for Sonarr/Radarr        |
+| `radarr`         | `linuxserver/radarr`                | `7878/tcp`                                      | Movie library management                    |
+| `sonarr`         | `linuxserver/sonarr`                | `8989/tcp`                                      | TV library management                       |
+| `transmission`   | `linuxserver/transmission`          | `9091/tcp`                                      | BitTorrent client (web UI)                  |
+| `flaresolverr`   | `ghcr.io/flaresolverr/flaresolverr` | internal only (`8191/tcp`, not declared here)   | Cloudflare challenge solver for Prowlarr    |
+| `autoplex`       | `danielmmetz/autoplex` (built)      | none                                            | Copies completed downloads into Plex layout |
 
-The compose files declare neither the Home Assistant port `8123` nor the Flaresolverr port `8191`; both are image
-defaults.
+The compose files declare neither the Home Assistant port `8123` nor the Flaresolverr port `8191`; both are upstream
+defaults that nothing in this repository verifies.
 
 LAN access is `http://<nas-host>:<port>` (e.g. `http://nas.local:8989` for Sonarr). While PiHole is disabled, its admin
 UI (`http://<nas-host>:8053/admin`) is not deployed by this repository. Home Assistant now runs as a VM with its own LAN
@@ -90,7 +92,8 @@ address (see [`vms/haos/`](../vms/haos/README.md)).
 `caddy` terminates TLS using certs issued by `tailscale cert` and proxies a subset of the services under a single
 hostname. Configuration is templated by
 [`roles/tailscale/templates/Caddyfile.j2`](../roles/tailscale/templates/Caddyfile.j2) from the `tailscale_services`
-variable in `inventory/host_vars/nas/vars.yml`.
+variable, set in the NAS host variables of the inventory. In the URLs below, `<tailnet>` is the label of
+`tailscale_tailnet_name` before `.ts.net`.
 
 | Service      | External URL                                | Notes                                                                                                     |
 | ------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -171,7 +174,8 @@ The \*arr and download stack (LinuxServer.io images, `PUID=1000/PGID=1000`). Eac
 ### `flaresolverr`<a name="flaresolverr"></a>
 
 Sidecar that solves Cloudflare challenges for Prowlarr. Publishes no port and mounts nothing; other containers on the
-`nas-network` bridge reach it by name as `http://flaresolverr:8191` (`8191` is the image default).
+`nas-network` bridge reach it by name as `http://flaresolverr:8191` (`8191` is not declared here; it is the upstream
+default, unverified in this repository).
 
 ### `autoplex`<a name="autoplex"></a>
 
@@ -241,16 +245,19 @@ Secrets and other per-host values are rendered on the NAS and never copied from 
 
 **Shared `~/docker/.env`.** The `docker` role renders it from
 [`roles/docker/templates/env.j2`](../roles/docker/templates/env.j2) (mode `0600`). It holds only
-`ADVERTISE_IP=https://<host>.<tailnet>.ts.net:32443` (`<tailnet>` is the part of `tailscale_tailnet_name` before
+`ADVERTISE_IP=https://<host>.<tailnet>.ts.net:32443` (`<tailnet>` is the label of `tailscale_tailnet_name` before
 `.ts.net`), which is not a secret. Plex reads it through the bare `ADVERTISE_IP` entry in its `environment`; Glance
 reads it through `env_file: .env`, although no file under `services/glance/` refers to `ADVERTISE_IP`.
 
 **Per-service secrets.** A service that needs a secret ships `services/<svc>/env.j2` and sets `env_file: <svc>/.env` in
 its `compose.yml`. The path is relative to `~/docker`, because `deploy.sh` passes `--project-directory ~/docker`. The
-`services` role renders each `env.j2` to `~/docker/<svc>/.env` (mode `0600`) from vault variables, but only for services
-that have a `compose.yml`. A disabled service therefore needs no vault variable and gets no fresh `.env`. `pihole` is
-the only service with an `env.j2` today and is disabled, so nothing renders `pihole/.env`; a `~/docker/pihole/.env`
-already on the NAS stays in place, since the sync neither ships nor deletes `.env` files.
+`services` role renders each `env.j2` to `~/docker/<svc>/.env` (mode `0600`) from inventory variables, but only for
+services that have a `compose.yml`. A disabled service therefore needs no inventory variable and gets no fresh `.env`.
+`pihole` is the only service with an `env.j2` today and is disabled, so nothing renders `pihole/.env`; a
+`~/docker/pihole/.env` already on the NAS stays in place, since the sync neither ships nor deletes `.env` files. Because
+rsync never deletes, a service disabled after it was deployed keeps its NAS `compose.yml` (so `deploy.sh all` keeps
+deploying it), but its `.env` is no longer re-rendered, since the role checks the `compose.yml` in the controller's
+checkout. Rotate such a service's secret only after removing the NAS copy.
 
 To rotate a secret, change it in the vault, re-render, and redeploy the service:
 
@@ -287,8 +294,9 @@ end. On the NAS itself:
 
 [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) joins the tailnet as `tag:ci` and runs
 `scripts/nas/deploy-services.sh` over SSH. A push to `main` touching `services/<name>/` deploys just that service. A
-change to `compose.base.yml`, or a push whose `before` SHA is null (a new branch), deploys every service that has a
-`compose.yml`, one at a time. A manual `workflow_dispatch` run deploys the named service (default `all`):
+change to `compose.base.yml`, or a push whose `before` SHA is null (the workflow's fallback for a new ref), deploys
+every service that has a `compose.yml`, one at a time. A manual `workflow_dispatch` run deploys the named service
+(default `all`):
 
 ```bash
 gh workflow run deploy.yml -f service=glance
@@ -316,10 +324,13 @@ echo "restrict $(cat ~/.ssh/gha_deploy.pub)" >> ~/.ssh/authorized_keys   # then 
 gh secret set NAS_SSH_PRIVATE_KEY --repo connormason/dotfiles < ~/.ssh/gha_deploy && rm ~/.ssh/gha_deploy
 ```
 
-**Tailscale SSH must stay off on the NAS** (`tailscale_ssh_enabled: false` in the NAS host vars). When enabled it
-intercepts every SSH connection to the tailnet address and ignores the key. Tailscale SSH also never lets a tagged
-device such as `tag:ci` into a user-owned node, so the deploy fails with
-`tailnet policy does not permit you to SSH to this node`.
+**Tailscale SSH must stay off on the NAS** (`tailscale_ssh_enabled: false` in the NAS host variables). As observed when
+CI deploys were set up (see the update note in the
+[2026-03 deploy-pipeline design](../docs/plans/2026-03/2026-03-29-nas-docker-deploy-pipeline-design.md)), Tailscale SSH
+let a tagged device such as `tag:ci` reach only other tagged devices, and the NAS is user-owned; with it on, Tailscale
+also intercepted SSH connections to the tailnet address and ignored the deploy key. That behavior is Tailscale's, not
+something this repository enforces. With the variable `false`, the `tailscale` role leaves `--ssh` off its
+`tailscale set` command ([`configure.yml`](../roles/tailscale/tasks/configure.yml)); it never passes `--ssh=false`.
 
 ## Operations<a name="operations"></a>
 

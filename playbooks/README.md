@@ -67,6 +67,11 @@ The tags listed are the ones on the role's include; [Tags](#tags) explains what 
 - `tailscale_tailnet_name`: the tailnet domain including `.ts.net` (for example `tail1234.ts.net`); read by the `docker`
   role's `.env` template (`ADVERTISE_IP`) and, when `tailscale_https_enabled` is true, by the `tailscale` role's HTTPS
   tasks
+- `ansible_host` and `ansible_user` of the `nas` host: literal values, not templates. The `debian`, `samba` (defaults),
+  and `dotfiles` roles read `ansible_user` with no default, and `run.py` reads both for its SSH preflight and refuses
+  templated values
+- `tailscale_ssh_enabled: false` in the NAS host variables, which CI deploys require (Tailscale SSH blocks the `tag:ci`
+  deploy; see [`services/README.md`](../services/README.md#ci-deploys))
 - Whatever an enabled service's `services/<svc>/env.j2` references. No enabled service has one today: PiHole's `env.j2`
   needs `pihole_web_password`, but PiHole is disabled (`compose.yml.disabled`), so its template is skipped, and
   re-enabling PiHole makes the variable required
@@ -109,10 +114,9 @@ scripts/hooks/uv-public.sh run ansible-playbook playbooks/nas_bootstrap.yml -i i
 scripts/hooks/uv-public.sh run ansible-playbook --syntax-check -i localhost, playbooks/nas_bootstrap.yml
 ```
 
-The syntax check only parses the playbook (the `-i localhost,` inventory contains no `nas` host, so no play runs), but
-Ansible still loads the vault password file first. The check exits 0 when `vault_password.txt` exists in the repository
-root or when `ANSIBLE_VAULT_PASSWORD_FILE` names any existing file; otherwise it fails with
-`The vault password file ... was not found`.
+The syntax check only parses the playbook; it never executes a play. Ansible still loads the vault password file first.
+The check exits 0 when `vault_password.txt` exists in the repository root or when `ANSIBLE_VAULT_PASSWORD_FILE` names
+any existing file; otherwise it fails with `The vault password file ... was not found`.
 
 ### Tags<a name="tags"></a>
 
@@ -135,6 +139,10 @@ python3 run.py nas-provision --tags configfile      # docker .env and deploy.sh,
 python3 run.py nas-provision --tags dotfiles,haos   # the stow engine and the Home Assistant OS VM
 python3 run.py nas-provision --tags secrets         # per-service secret files only
 ```
+
+The two probes that need an installed tool, samba's `Register Samba version` (`smbd --version`) and the `tailscale`
+role's `tailscale status --json`, are read-only and carry `check_mode: false`, like the other roles' probes, so they run
+under `--check` too.
 
 `--tags configfile` assumes `~/docker` exists, because the directory tasks do not carry the tag. On a host without it,
 the run fails (at the `.env` render once samba is installed); run `--tags docker` first. See

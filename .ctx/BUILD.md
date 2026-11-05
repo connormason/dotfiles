@@ -76,12 +76,12 @@ python3 run.py makefile
 
 ## Layered Dev Environment (`run.py` Dotfiles group)
 
-Wrappers over `stow.sh`, `bootstrap/bootstrap.sh`, and `scripts/dotfiles/render.py`; see
-[`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. They are stdlib-only, so bare
-`python3 run.py <command>` works (see the note above).
+Wrappers over `stow.sh`, `bootstrap/bootstrap.sh`, and `scripts/dotfiles/render.py`, plus `doctor` (native checks) and
+`test` (pytest through the uv wrapper); see [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. They
+are stdlib-only, so bare `python3 run.py <command>` works (see the note above).
 
 ```bash
-# Stages across all layers / simulate every stage / run them
+# Stages across all layers / simulate every stage / run every stage for real, then run doctor
 python3 run.py bootstrap --list
 python3 run.py bootstrap --dry-run
 python3 run.py bootstrap --verify

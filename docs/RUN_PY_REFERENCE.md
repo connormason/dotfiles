@@ -71,8 +71,12 @@ Commands for managing the separate inventory repository containing host definiti
 List all bootstrap targets from the inventory file.
 
 ```bash
-python3 run.py list-hosts
+scripts/hooks/uv-public.sh run python run.py list-hosts
 ```
+
+The command imports PyYAML inside its body. Under a bare `python3` that lacks PyYAML it prints
+`Failed to parse inventory file` (`No module named 'yaml'`) and exits 1, which is why the example goes through the uv
+wrapper. `make list-hosts` runs bare `python3 run.py list-hosts`, so that target needs PyYAML in that interpreter.
 
 **Output example:**
 
@@ -392,7 +396,7 @@ A failed probe exits 1 with a remedy.
 | `nas-deploy`    | `scripts/nas/deploy-services.sh`                         | `<service\|all>`, `--dry-run`                                                                                    |
 
 ```bash
-python3 run.py nas-provision --check --diff                  # preview the whole playbook
+python3 run.py nas-provision --check --diff                  # preview the whole playbook (converged host)
 python3 run.py nas-provision --tags dotfiles,haos            # selected roles only
 python3 run.py nas-provision --tags secrets                  # re-render per-service secrets
 python3 run.py nas-deploy glance --dry-run                   # preview the rsync and the remote command
@@ -405,7 +409,10 @@ Runs the preflight, installs the Ansible collections with `ansible-galaxy collec
 then runs `ansible-playbook playbooks/nas_bootstrap.yml` (with the inventory and vault password file) through
 [`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh). A failed collection install prints a warning and the
 playbook still runs with the collections already installed. The exit status is Ansible's. `nas_bootstrap.sh` is a thin
-wrapper that forwards its arguments to this command.
+wrapper that forwards its arguments to this command. `--check --diff` previews the whole playbook on a converged host.
+On a fresh host, where `smbd` or `tailscale` is not installed yet, the Samba version probe fails and the Tailscale
+status probe returns nothing for the next task to parse, so `--check` stops there (the real run installs those tools
+first). Both probes are read-only and carry `check_mode: false`.
 
 #### `nas-deploy`
 
@@ -552,7 +559,7 @@ def network_operation():
 - Attempt 1: Immediate execution
 - Attempt 2: Wait `delay` seconds (2.0s)
 - Attempt 3: Wait `delay * backoff` seconds (4.0s)
-- Attempt N: Wait `delay * (backoff ** (N-1))` seconds
+- Attempt N (N ≥ 2): Wait `delay * (backoff ** (N-2))` seconds, which is the wait after attempt N-1 fails
 
 **Output:**
 
@@ -570,6 +577,9 @@ Used by `update-inventory` for git operations with different parameters:
 ## Configuration<a name="configuration"></a>
 
 ### Constants<a name="constants"></a>
+
+Selected constants from `run.py`. The listings leave out `REQUIRED_TOOLS` and `MIN_GIT_VERSION` (what `doctor` checks),
+`ENVVAR_PREFIX`, and `SCRIPT_HELP_COL_SPACING`.
 
 **File paths:**
 
@@ -608,12 +618,12 @@ VAULT_FILE_PATTERNS = [
 **Environment variables:**
 
 ```python
-# Debug mode toggle
-RUN_DEBUG_ENVVAR = 'DOTFILES_RUN_DEBUG'
+# Debug mode toggle (ENVVAR_PREFIX = 'DOTFILES')
+RUN_DEBUG_ENVVAR = f'{ENVVAR_PREFIX}_RUN_DEBUG'
 RUN_DEBUG = os.getenv(RUN_DEBUG_ENVVAR, 'false').lower() == 'true'
 
 # Inventory repository URL
-INVENTORY_REPO_URL_ENVVAR = 'DOTFILES_INVENTORY_REPO_URL'
+INVENTORY_REPO_URL_ENVVAR = f'{ENVVAR_PREFIX}_INVENTORY_REPO_URL'
 INVENTORY_REPO_URL = os.getenv(
     INVENTORY_REPO_URL_ENVVAR,
     'git@github.com:connormason/dotfiles-inventory.git',
@@ -667,12 +677,12 @@ except subprocess.CalledProcessError as e:
 
 ```
 ❌ Failed to push to remote
-  └─ Exit code: 128
-  └─ Command: git push
-  └─ Error output:
-     fatal: Could not read from remote repository
-     Please make sure you have the correct access rights
-  └─ 💡 Check your SSH keys and network connection
+    └─ Exit code: 128
+    └─ Command: git push
+   └─ Error output:
+      fatal: Could not read from remote repository
+      Please make sure you have the correct access rights
+   └─ 💡 Check your SSH keys and network connection
 ```
 
 ### Exception Types<a name="exception-types"></a>
@@ -691,8 +701,8 @@ except subprocess.CalledProcessError as e:
 ### Basic Command Execution<a name="basic-command-execution"></a>
 
 ```bash
-# List available hosts
-python3 run.py list-hosts
+# List available hosts (PyYAML comes from the uv environment)
+scripts/hooks/uv-public.sh run python run.py list-hosts
 
 # Update inventory with debug output
 python3 run.py --debug update-inventory
@@ -708,7 +718,7 @@ python3 run.py pre
 # Generate Makefile first
 python3 run.py makefile
 
-# Then use make for any command
+# Then use make for any command (make list-hosts needs PyYAML in the python3 that make finds)
 make list-hosts
 make update-inventory
 make clean
@@ -896,11 +906,12 @@ python3 run.py update-inventory
 
 **Symptom:** `list-hosts` fails with "Failed to parse inventory file"
 
-**Solution:**
+**Solution:** If the error text is `No module named 'yaml'`, the `python3` in use lacks PyYAML (which also affects
+`make list-hosts`); run `scripts/hooks/uv-public.sh run python run.py list-hosts` instead. Otherwise, validate the file:
 
 ```bash
 # Validate YAML syntax
-python3 -c "import yaml; yaml.safe_load(open('inventory/inventory.yml'))"
+scripts/hooks/uv-public.sh run python -c "import yaml; yaml.safe_load(open('inventory/inventory.yml'))"
 
 # Check for common issues
 yamllint inventory/inventory.yml
