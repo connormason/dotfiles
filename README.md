@@ -254,6 +254,12 @@ python3 run.py clean
 # Run prek hooks
 python3 run.py pre
 
+# Run hooks on specific hooks, files, or refs (hook names go before --files)
+python3 run.py run-hooks mdformat --last-commit
+
+# Prepare the hook environments ahead of the first commit
+python3 run.py prepare-hooks
+
 # Install / remove the prek git hook shims
 python3 run.py install-hooks
 python3 run.py uninstall-hooks
@@ -275,6 +281,9 @@ bootstrap/bootstrap.sh
 
 # Verify tools, overlays, git hooks, links, rendered settings, and Brewfiles
 python3 run.py doctor
+
+# Move local ~/.claude agents/commands/skills/hooks/rules into stow/claude and restow (--dry-run previews)
+python3 run.py track-claude
 ```
 
 See [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md) for the corresponding `run.py` wrappers.
@@ -486,6 +495,7 @@ The dry run and the other direct invocations are in [playbooks/README.md](playbo
 | `DOTFILES_RUN_DEBUG`          | Enable debug output in run.py                               | `false`                                             |
 | `DOTFILES_INVENTORY_REPO_URL` | Inventory repository URL                                    | `git@github.com:connormason/dotfiles-inventory.git` |
 | `NO_COLOR`                    | Disable ANSI styling in run.py output (any non-empty value) | unset                                               |
+| `DOTFILES_UV_VERBOSE`         | Parsed by run.py into `UV_VERBOSE`; no command reads it yet | `false`                                             |
 
 ## Troubleshooting<a name="troubleshooting"></a>
 

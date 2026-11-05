@@ -74,9 +74,11 @@ List all bootstrap targets from the inventory file.
 scripts/hooks/uv-public.sh run python run.py list-hosts
 ```
 
-The command imports PyYAML inside its body. Under a bare `python3` that lacks PyYAML it prints
-`Failed to parse inventory file` (`No module named 'yaml'`) and exits 1, which is why the example goes through the uv
-wrapper. `make list-hosts` runs bare `python3 run.py list-hosts`, so that target needs PyYAML in that interpreter.
+PyYAML is the one third-party import in `run.py`, and `list-hosts` imports it inside its body. Under a bare `python3`
+that lacks PyYAML the command prints `PyYAML is required to read the inventory` with the uv-wrapper command above and
+exits 2 (a setup error), which is why the example goes through the uv wrapper. `make list-hosts` runs bare
+`python3 run.py list-hosts`, so that target needs PyYAML in that interpreter. The dependency is also declared in the PEP
+723 `# /// script` block at the top of `run.py`.
 
 **Output example:**
 
@@ -305,6 +307,9 @@ See [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) for complete hook co
 
 Prepare the environments of all prek hooks (`prek prepare-hooks`) so the first commit does not pay for it. Accepts a
 `HOOK|PROJECT` filter, `--skip` (repeatable), and `-v/--verbose`.
+
+**Behavior:** Executes `prek prepare-hooks` with live output and exits with prek's return code (unlike `install-hooks`,
+which ignores it).
 
 #### `install-hooks`
 
@@ -555,6 +560,9 @@ style('IMPORTANT', fg='red', bold=True, underline=True)
 - 256-color codes: `0-255`
 - RGB tuples: `(r, g, b)` where each component is `0-255`
 
+**Plain output:** when `NO_COLOR` is set to any non-empty value (the no-color.org convention), `style()` returns its
+text unchanged, so `printf()` prints no escape codes.
+
 **Helper function:**
 
 ```python
@@ -647,24 +655,35 @@ and `SCRIPT_HELP_COL_SPACING`, and show `ENVVAR_PREFIX` only as a comment.
 **File paths:**
 
 ```python
-SCRIPT_PATH     = Path(__file__)
-DOTFILES_DIR    = SCRIPT_PATH.parent
-MAKEFILE_PATH   = DOTFILES_DIR / 'Makefile'
-INVENTORY_DIR   = DOTFILES_DIR / 'inventory'
-INVENTORY_FILE  = INVENTORY_DIR / 'inventory.yml'
-VAULT_PASSWORD  = DOTFILES_DIR / 'vault_password.txt'
-PLAYBOOKS_DIR   = DOTFILES_DIR / 'playbooks'
+SCRIPT_PATH            = Path(__file__)
+DOTFILES_DIR           = SCRIPT_PATH.parent
 
-# Layered dev-env engine
-STOW_SCRIPT      = DOTFILES_DIR / 'stow.sh'
-BOOTSTRAP_SCRIPT = DOTFILES_DIR / 'bootstrap' / 'bootstrap.sh'
-RENDER_SCRIPT    = DOTFILES_DIR / 'scripts' / 'dotfiles' / 'render.py'
-UV_PUBLIC        = DOTFILES_DIR / 'scripts' / 'hooks' / 'uv-public.sh'
+GIT_DIR                = DOTFILES_DIR / '.git'
+GIT_HOOKS_DIR          = GIT_DIR / 'hooks'
+PRE_COMMIT_HOOK        = GIT_HOOKS_DIR / 'pre-commit'
+VENV_DIR               = DOTFILES_DIR / '.venv'
+BOOTSTRAP_DIR          = DOTFILES_DIR / 'bootstrap'
+BOOTSTRAP_SCRIPT       = BOOTSTRAP_DIR / 'bootstrap.sh'
+DOCS_DIR               = DOTFILES_DIR / 'docs'
+INVENTORY_DIR          = DOTFILES_DIR / 'inventory'
+INVENTORY_FILE         = INVENTORY_DIR / 'inventory.yml'
+PLAYBOOKS_DIR          = DOTFILES_DIR / 'playbooks'
+PROFILES_DIR           = DOTFILES_DIR / 'profiles'
+RENDER_DIR             = DOTFILES_DIR / 'render'
+NAS_BOOTSTRAP_PLAYBOOK = PLAYBOOKS_DIR / 'nas_bootstrap.yml'
+ROLES_DIR              = DOTFILES_DIR / 'roles'
+ANSIBLE_REQUIREMENTS   = ROLES_DIR / 'requirements.yml'
+SCRIPTS_DIR            = DOTFILES_DIR / 'scripts'
+RENDER_SCRIPT          = SCRIPTS_DIR / 'dotfiles' / 'render.py'
+UV_PUBLIC_SCRIPT       = SCRIPTS_DIR / 'hooks' / 'uv-public.sh'
+NAS_DEPLOY_SCRIPT      = SCRIPTS_DIR / 'nas' / 'deploy-services.sh'
+STOW_DIR               = DOTFILES_DIR / 'stow'
+CLAUDE_STOW_DIR        = STOW_DIR / 'claude' / '.claude'
+MAKEFILE               = DOTFILES_DIR / 'Makefile'
+STOW_SCRIPT            = DOTFILES_DIR / 'stow.sh'
+VAULT_PASSWORD         = DOTFILES_DIR / 'vault_password.txt'
 
-# NAS provisioning and service deploys
-NAS_PLAYBOOK       = PLAYBOOKS_DIR / 'nas_bootstrap.yml'
-NAS_REQUIREMENTS   = DOTFILES_DIR / 'roles' / 'requirements.yml'
-NAS_DEPLOY_SCRIPT  = DOTFILES_DIR / 'scripts' / 'nas' / 'deploy-services.sh'
+# Hostname in the Ansible inventory for the NAS
 NAS_INVENTORY_HOST = 'nas'
 ```
 
@@ -678,6 +697,38 @@ VAULT_FILE_PATTERNS = [
 ]
 ```
 
+**Claude config ingestion (`track-claude`):**
+
+```python
+CLAUDE_CONFIG_DIR      = Path.home() / '.claude'
+CLAUDE_TRACKED_SUBDIRS = ['agents', 'commands', 'skills', 'hooks', 'rules']
+
+# Never ingested: directories are pruned from the walk by name, files skipped by name or suffix
+CLAUDE_IGNORE_NAMES    = {'.DS_Store'}
+CLAUDE_IGNORE_DIRS     = {'.backups', '__pycache__'}
+CLAUDE_IGNORE_SUFFIXES = {'.pyc'}
+
+# Lines of a failed `stow.sh -n claude` shown by the preflight
+TRACK_CLAUDE_PREFLIGHT_LINES = 8
+```
+
+**Git hook shims (`doctor` `hooks` check):**
+
+```python
+GIT_HOOK_TYPES = (
+    'pre-commit',
+    'commit-msg',
+    'post-checkout',
+    'post-merge',
+    'post-rewrite',
+    'pre-push',
+)
+PREK_SHIM_MARKER = 'generated by prek'
+```
+
+`GIT_HOOK_TYPES` mirrors `default_install_hook_types` in `.pre-commit-config.yaml` (a test keeps the two in sync). A
+shim counts as installed when the file under the git hooks directory contains `PREK_SHIM_MARKER`.
+
 **Environment variables:**
 
 ```python
@@ -685,18 +736,24 @@ VAULT_FILE_PATTERNS = [
 RUN_DEBUG_ENVVAR = f'{ENVVAR_PREFIX}_RUN_DEBUG'
 RUN_DEBUG = os.getenv(RUN_DEBUG_ENVVAR, 'false').lower() == 'true'
 
+# Parsed the same way as RUN_DEBUG; no command reads UV_VERBOSE yet
+UV_VERBOSE_ENVVAR = f'{ENVVAR_PREFIX}_UV_VERBOSE'
+UV_VERBOSE = os.getenv(UV_VERBOSE_ENVVAR, 'false').lower() == 'true'
+
 # Inventory repository URL
 INVENTORY_REPO_URL_ENVVAR = f'{ENVVAR_PREFIX}_INVENTORY_REPO_URL'
-INVENTORY_REPO_URL = os.getenv(
-    INVENTORY_REPO_URL_ENVVAR,
-    'git@github.com:connormason/dotfiles-inventory.git',
-)
+INVENTORY_REPO_URL_DEFAULT = 'git@github.com:connormason/dotfiles-inventory.git'
+INVENTORY_REPO_URL = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTORY_REPO_URL_DEFAULT)
 
 # Disable ANSI styling (any non-empty value)
 NO_COLOR = bool(os.getenv('NO_COLOR'))
 ```
 
 **Clean patterns:** See `CLEAN_PATTERN_GROUPS` dict for complete list of glob patterns removed by `clean` command.
+
+**Script metadata:** `run.py` opens with a PEP 723 `# /// script` block that declares `requires-python = ">=3.9"` and
+the `PyYaml >= 6.0` dependency (the one used by `list-hosts`); a test keeps the dependency in line with
+`pyproject.toml`.
 
 ### Type System<a name="type-system"></a>
 
@@ -973,10 +1030,12 @@ python3 run.py update-inventory
 
 ### YAML Parsing Errors<a name="yaml-parsing-errors"></a>
 
-**Symptom:** `list-hosts` fails with "Failed to parse inventory file"
+**Symptom:** `list-hosts` fails with "PyYAML is required to read the inventory" (exit 2) or "Failed to parse inventory
+file" (exit 1)
 
-**Solution:** If the error text is `No module named 'yaml'`, the `python3` in use lacks PyYAML (which also affects
-`make list-hosts`); run `scripts/hooks/uv-public.sh run python run.py list-hosts` instead. Otherwise, validate the file:
+**Solution:** The first message means the `python3` in use lacks PyYAML (which also affects `make list-hosts`); run
+`scripts/hooks/uv-public.sh run python run.py list-hosts` instead. The second means the file itself failed to parse, so
+validate it:
 
 ```bash
 # Validate YAML syntax

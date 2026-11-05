@@ -45,6 +45,10 @@ ordered base first, then overlays in file order. Full contract in [`bootstrap/RE
 - **`run.py doctor`**: verifies tools, the overlay registry, the git version (>= 2.36, for the per-remote `includeIf`
   identity), the prek hook shims, links, rendered settings, and Brewfiles (`--fix` asks before each repair; `--yes`
   skips the prompts).
+- **`run.py track-claude`**: moves hand-authored files under `~/.claude/{agents,commands,skills,hooks,rules}` into the
+  `claude` stow package (`stow/claude/.claude`) and restows it. A file whose repo path already exists is a conflict and
+  is left untouched; any conflict skips the restow, and without one the restow is simulated before anything moves
+  (`--dry-run` previews).
 - **`profiles/`**: per-machine overlays; see [`profiles/README.md`](../profiles/README.md).
 - **OS support**: `lib.sh` `dotfiles_os` (`darwin`/`linux`, `DOTFILES_OS` override) and `require_os` gate stages;
   `.dotfiles-os` markers scope stow packages; `render.py` `TARGET_OS` scopes render targets; the Brewfile's
@@ -125,6 +129,8 @@ fails when this list drifts from the playbook):
 - `-d/--debug`: global flag with the same effect; it goes before the command (`python3 run.py -d doctor`).
   `--no-debug` overrides `DOTFILES_RUN_DEBUG=true`
 - `DOTFILES_INVENTORY_REPO_URL`: Override inventory repo URL
+- `NO_COLOR`: any non-empty value strips the ANSI styling from the output
+- `DOTFILES_UV_VERBOSE`: parsed like `DOTFILES_RUN_DEBUG` into `UV_VERBOSE`, which no command reads yet
 
 ## Docker Stack (NAS)
 

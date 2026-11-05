@@ -44,7 +44,7 @@ each tag selects is listed in [`playbooks/README.md`](../playbooks/README.md#tag
 so run it as `scripts/hooks/uv-public.sh run python run.py list-hosts`. The NAS commands (`nas-provision`,
 `nas-deploy`) shell out through uv themselves. The global `-d/--debug` flag turns on debug output (so does
 `DOTFILES_RUN_DEBUG=true`, which `--no-debug` overrides); it goes before the command:
-`python3 run.py -d update-inventory`.
+`python3 run.py -d update-inventory`. Setting `NO_COLOR` to any non-empty value strips the ANSI styling from the output.
 
 ```bash
 # List available inventory hosts (needs PyYAML: see the note above)
@@ -160,6 +160,9 @@ python3 run.py pre
 python3 run.py install-hooks
 python3 run.py uninstall-hooks
 ```
+
+`python3 run.py doctor` fails its `hooks` check while any of the six shims is missing (`doctor --fix` then runs
+`prek install`, when `prek` is on `PATH`).
 
 ## Ansible Linting
 
