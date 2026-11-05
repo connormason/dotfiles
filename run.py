@@ -278,7 +278,6 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 #     run.py                        SCRIPT_PATH
 #     stow.sh                       STOW_SCRIPT
 #     vault_password.txt            VAULT_PASSWORD
-#
 # =======================================================================================
 
 SCRIPT_PATH:            Path = Path(__file__)
@@ -1550,9 +1549,9 @@ def parse_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
 #   - list-hosts:       Parse inventory.yml and display available bootstrap targets
 #   - inventory-status: Show git status and metadata for inventory directory
 #   - update-inventory: Clone (if missing) or pull (if exists) inventory repo
-#                         - Supports --force flag to reset uncommitted changes before pulling
-#                         - Includes retry logic with exponential backoff for network resilience
-#                         - Provides SSH error detection and troubleshooting guidance
+#     - Supports --force flag to reset uncommitted changes before pulling
+#     - Includes retry logic with exponential backoff for network resilience
+#     - Provides SSH error detection and troubleshooting guidance
 # ====================================================================================================
 
 
@@ -1972,8 +1971,8 @@ class VaultEncryptCommand(Command):
 # Codebase commands
 #
 # General repository maintenance commands:
-# - clean: Remove build artifacts, caches, and temporary files
-# - pre:   Run prek hooks on all files
+#   - clean: Remove build artifacts, caches, and temporary files
+#   - pre:   Run prek hooks on all files
 # ====================================================================================================
 
 
@@ -3336,12 +3335,12 @@ class InstallHatchCommand(_InstallToolCommand):
 # Utilities commands
 #
 # General repository maintenance commands:
+#   - diagnose: Generate diagnostic report for python environment debug
 #   - makefile: Generate Makefile targets from registered Command classes
-#                 - Parses all registered commands and creates equivalent Make targets
-#                 - Organizes targets by command group
-#                 - Preserves command descriptions in Make comments
-#                 - Auto-generates help target with formatted command listing
-#   - diagnose: Generate
+#     - Parses all registered commands and creates equivalent Make targets
+#     - Organizes targets by command group
+#     - Preserves command descriptions in Make comments
+#     - Auto-generates help target with formatted command listing
 # ====================================================================================================
 
 
