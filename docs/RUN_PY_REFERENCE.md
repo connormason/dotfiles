@@ -91,6 +91,7 @@ Commands that create, inspect, repair, and clean the project's Python environmen
 | `lock`         | Update `uv.lock`                                               | `--refresh`                              |
 | `lock-check`   | Fail if `uv.lock` is stale                                     | none                                     |
 | `lock-upgrade` | Upgrade locked versions                                        | `-P/--package PACKAGE` (repeatable)      |
+| `sync-deps`    | Re-sync derived files from the committed `uv.lock`             | none                                     |
 
 #### `install`
 
@@ -236,6 +237,20 @@ python3 run.py lock-upgrade -P ruff -P pytest       # only these packages
 
 On success it reminds you that the `uv-export` and `sync-with-uv` hooks refresh `requirements.txt` and the hook versions
 on the next commit. Exits with uv's return code.
+
+#### `sync-deps`
+
+Re-sync everything derived from the committed `uv.lock` without touching the lockfile itself. It checks python, ensures
+`uv` is installed, syncs `.venv` with the `lint` dependency group from the lockfile as-is (`--inexact --frozen`), then
+runs the `uv-export`, `sync-with-uv`, and `sync-pre-commit-deps` prek hooks against all files to rewrite
+`requirements.txt` and the pinned hook versions.
+
+```bash
+python3 run.py sync-deps
+```
+
+The hooks are fixers that exit nonzero when they rewrite a file, so their exit status is ignored; review the resulting
+`git diff` instead.
 
 ### Hooks<a name="hooks"></a>
 

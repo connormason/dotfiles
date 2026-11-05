@@ -110,7 +110,7 @@ fails when this list drifts from the playbook):
 
 **Command categories** (the `group` class attribute of each `Command` subclass):
 
-- **Setup & Environment**: `install`, `dev`, `shell`, `status`, `doctor`, `clean`, `lock`, `lock-check`, `lock-upgrade`
+- **Setup & Environment**: `install`, `dev`, `shell`, `status`, `doctor`, `clean`, `lock`, `lock-check`, `lock-upgrade`, `sync-deps`
 - **Bootstrap & Deploy**: `bootstrap`, `nas-provision`, `nas-deploy`
 - **Dotfiles**: `stow`, `render`, `track-claude`
 - **Inventory**: `inventory-hosts`, `inventory-status`, `update-inventory`, `vault-decrypt`, `vault-encrypt`

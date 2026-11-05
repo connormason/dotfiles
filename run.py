@@ -23,7 +23,7 @@ which registers it on class definition and:
 Command Categories
 -----------------
 - **Setup & Environment**: Install and inspect the uv-managed ``.venv`` (install, dev, shell, status), verify the whole
-  environment (doctor), clean artifacts, and manage ``uv.lock`` (lock, lock-check, lock-upgrade)
+  environment (doctor), clean artifacts, and manage ``uv.lock`` (lock, lock-check, lock-upgrade, sync-deps)
 - **Bootstrap & Deploy**: Run the layered bootstrap stages, provision the home NAS and deploy its Compose services
 - **Dotfiles**: Wrap the stow and render tooling and ingest local Claude config (track-claude)
 - **Inventory**: Manage the standalone inventory git repository and its vault files
@@ -4657,6 +4657,20 @@ class LockUpgradeCommand(Command):
             printf('')
             regenerate_derived_files()
         sys.exit(result.returncode)
+
+
+class SyncDepsCommand(Command):
+    """
+    Re-sync dependencies, exported requirements, and hook versions from the committed uv.lock
+    """
+    name:  ClassVar[str] = 'sync-deps'
+    group: ClassVar[str] = 'Dependencies'
+
+    def run(self, args: argparse.Namespace) -> None:
+        check_python(quiet=True)
+        ensure_uv(quiet=True)
+        ensure_venv(groups=['lint'], inexact=True, frozen=True)
+        regenerate_derived_files()
 
 
 # ====================================================================================================
