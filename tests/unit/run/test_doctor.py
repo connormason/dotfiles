@@ -358,7 +358,7 @@ class TestDoctorCommand:
         Test that every Dotfiles command is registered under the Dotfiles group
         """
         group = run.get_commands(by_group=True)['Dotfiles']
-        assert set(group) == {'bootstrap', 'stow', 'render', 'doctor', 'test', 'track-claude'}
+        assert set(group) == {'stow', 'render', 'track-claude'}
 
 
 class TestForwarding:
@@ -686,13 +686,16 @@ class TestDoctorCheckOrder:
     """
     def test_full_run_includes_hooks_and_brewfile_checks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
-        Test that the slow Brewfile check runs last and the hooks check follows the git version check
+        Test that the slow Brewfile check runs last and the python/uv/venv checks join the full list
         """
         for func, name in {
             'check_tools':       'tools',
             'check_layers':      'layers',
+            'check_python_tool': 'python',
+            'check_uv_tool':     'uv',
             'check_git_version': 'git',
             'check_hooks':       'hooks',
+            'check_venv':        'venv',
             'check_links':       'links',
             'check_render':      'render',
             'check_brewfiles':   'brewfile',
@@ -700,4 +703,4 @@ class TestDoctorCheckOrder:
             monkeypatch.setattr(run, func, lambda name=name: run.DoctorCheck(name, True, 'ok'))
 
         names = [c.name for c in run.doctor_checks()]
-        assert names == ['tools', 'layers', 'git', 'hooks', 'links', 'render', 'brewfile']
+        assert names == ['tools', 'layers', 'python', 'uv', 'git', 'hooks', 'venv', 'links', 'render', 'brewfile']

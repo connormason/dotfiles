@@ -110,10 +110,13 @@ class TestCommandRegistration:
         Test that every run.py command is registered, in definition order
         """
         assert list(run.REGISTERED_COMMANDS) == [
-            'list-hosts', 'inventory-status', 'update-inventory', 'vault-decrypt', 'vault-encrypt',
-            'clean', 'run-hooks', 'pre', 'prepare-hooks', 'install-hooks', 'uninstall-hooks', 'makefile',
-            'nas-deploy', 'nas-provision',
-            'doctor', 'bootstrap', 'stow', 'render', 'track-claude', 'test',
+            'install', 'dev', 'shell', 'status', 'doctor', 'clean', 'lock', 'lock-check', 'lock-upgrade',
+            'bootstrap', 'nas-provision', 'nas-deploy',
+            'stow', 'render', 'track-claude',
+            'inventory-hosts', 'inventory-status', 'update-inventory', 'vault-decrypt', 'vault-encrypt',
+            'install-uv', 'install-hatch',
+            'install-hooks', 'prepare-hooks', 'uninstall-hooks', 'run-hooks', 'pre',
+            'test', 'makefile', 'diagnose',
         ]
 
 
@@ -270,6 +273,29 @@ class TestMain:
         run.main(argv)
         assert seen == [expected]
 
+    @pytest.mark.parametrize(
+        ('argv', 'expected'),
+        [
+            (['probe'],                 None),
+            (['--uv-verbose', 'probe'], 'uv=debug'),
+        ],
+    )
+    def test_uv_verbose_sets_rust_log(
+        self,
+        registry: dict[str, run.Command],
+        monkeypatch: pytest.MonkeyPatch,
+        argv: list[str],
+        expected: str | None,
+    ) -> None:
+        """
+        Test that --uv-verbose exports RUST_LOG=uv=debug to every subprocess the command runs
+        """
+        monkeypatch.setattr(run, 'UV_VERBOSE',          False)
+        monkeypatch.setattr(run, 'RUN_COMMAND_ENVVARS', {})
+        _make_command('ProbeCommand')
+        run.main(argv)
+        assert run.RUN_COMMAND_ENVVARS.get('RUST_LOG') == expected
+
     def test_keyboard_interrupt_exits_user_cancelled(self, registry: dict[str, run.Command]) -> None:
         """
         Test that Ctrl-C inside a command exits with USER_CANCELLED
@@ -415,7 +441,7 @@ class TestMakefileCommand:
         """
         generated = tmp_path / 'Makefile'
         monkeypatch.setattr(run, 'MAKEFILE', generated)
-        run.get_commands()['makefile'](argparse.Namespace())
+        run.get_commands()['makefile'](run.build_parser().parse_args(['makefile']))
         assert generated.read_text() == (run.DOTFILES_DIR / 'Makefile').read_text()
 
     @pytest.mark.parametrize('no_color', [None, '1'])
@@ -429,12 +455,12 @@ class TestMakefileCommand:
             env['NO_COLOR'] = no_color
 
         code = (
-            'import argparse, sys; '
+            'import sys; '
             f'sys.path.insert(0, {str(run.DOTFILES_DIR)!r}); '
             'import run; '
             'from pathlib import Path; '
             f'run.MAKEFILE = Path({str(generated)!r}); '
-            "run.get_commands()['makefile'](argparse.Namespace())"
+            "run.get_commands()['makefile'](run.build_parser().parse_args(['makefile']))"
         )
         subprocess.run([sys.executable, '-c', code], env=env, capture_output=True, text=True, check=True)
         assert generated.read_text() == (run.DOTFILES_DIR / 'Makefile').read_text()
