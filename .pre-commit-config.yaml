@@ -569,8 +569,8 @@ repos:
           (?x)(
               \.zsh$|
               ^stow/[^/]+/\.(zshrc|zprofile|zshenv|zlogin)$|
-              # vendored from upstream ranger 1.9.4 (GPL-3.0); lint-exempt
-              ^stow/os_tools/\.config/ranger/scope\.sh$
+              ^stow/os_tools/\.config/ranger/scope\.sh$|
+              ^stow/shell/.profile
           )
 
   # - repo: https://github.com/DavidAnson/markdownlint-cli2
