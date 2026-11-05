@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status clean inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
+.PHONY: help install dev shell status doctor clean inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -18,6 +18,7 @@ help: ## Show this help message
 	@echo "  $(YELLOW)dev                 $(NC) Create .venv, install dependencies + hooks, and enter environment in a subshell"
 	@echo "  $(YELLOW)shell               $(NC) Enter .venv in a subshell"
 	@echo "  $(YELLOW)status              $(NC) Show environment health status"
+	@echo "  $(YELLOW)doctor              $(NC) Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles"
 	@echo "  $(YELLOW)clean               $(NC) Remove all environments, build artifacts, caches, and temporary files"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Inventory:$(NC)"
@@ -38,7 +39,6 @@ help: ## Show this help message
 	@echo "  $(YELLOW)nas-provision       $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Dotfiles:$(NC)"
-	@echo "  $(YELLOW)doctor              $(NC) Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles"
 	@echo "  $(YELLOW)bootstrap           $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh)"
 	@echo "  $(YELLOW)stow                $(NC) Link stow packages from every layer into the home directory (stow.sh)"
 	@echo "  $(YELLOW)render              $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
@@ -66,6 +66,9 @@ shell: ## Enter .venv in a subshell
 
 status: ## Show environment health status
 	@python3 run.py status
+
+doctor: ## Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles
+	@python3 run.py doctor
 
 clean: ## Remove all environments, build artifacts, caches, and temporary files
 	@python3 run.py clean
@@ -107,9 +110,6 @@ nas-provision: ## Provision the NAS with the Ansible playbook: system config, th
 	@python3 run.py nas-provision
 
 # Dotfiles
-doctor: ## Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles
-	@python3 run.py doctor
-
 bootstrap: ## Run the layered bootstrap stages (bootstrap/bootstrap.sh)
 	@python3 run.py bootstrap
 

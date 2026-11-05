@@ -1240,6 +1240,16 @@ def shell_command(
         return subprocess.CompletedProcess(cmd, returncode, stdout=all_output)
 
 
+def capture_command(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    """
+    Run a command quietly and capture its output (patched in tests)
+
+    :param cmd: command and arguments
+    :return: completed process with text stdout/stderr
+    """
+    return subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=DOTFILES_DIR, **kwargs)
+
+
 def detect_ssh_error(e: subprocess.CalledProcessError) -> tuple[bool, str | None]:
     """
     Detect SSH-related errors from git command output
@@ -1330,6 +1340,20 @@ def handle_command_error(e: subprocess.CalledProcessError, context: str, *, sugg
 
     elif suggestion:
         printf(f'   └─ 💡 {suggestion}',                                         fg='yellow')
+
+
+def first_output_line(text: str, default: str) -> str:
+    """
+    Get the first non-empty line of command output with ANSI styling removed
+
+    :param text: command output
+    :param default: value returned when the output has no text
+    :return: first non-empty line, or ``default``
+    """
+    for line in unstyle(text).splitlines():
+        if line.strip():
+            return line.strip()
+    return default
 
 
 # ====================================================================================================
@@ -2294,6 +2318,216 @@ def require_inventory() -> None:
 
 
 # =======================================================================================
+# `doctor` command checks
+# =======================================================================================
+
+
+@dataclasses.dataclass(frozen=True)
+class DoctorCheck:
+    """
+    Result of one doctor check
+
+    :param name: short check name
+    :param ok: whether the check passed
+    :param detail: one-line explanation
+    :param fix: command that repairs the problem, if one exists
+    """
+    name:   str
+    ok:     bool
+    detail: str
+    fix:    list[str] | None = None
+
+
+def _probe_layers() -> subprocess.CompletedProcess[str]:
+    """
+    Ask bootstrap/lib.sh for the layer directories (base first), one per stdout line
+    """
+    # DOTFILES_REPO is pinned to this checkout so an inherited value from another one cannot redirect the base layer.
+    # Anything lib.sh or a layer env.sh prints while loading goes to stderr so it cannot be counted as a layer.
+    script = 'export DOTFILES_REPO="$1"; source "$1/bootstrap/lib.sh" >&2 && dotfiles_layers'
+    return capture_command(['bash', '-c', script, 'doctor', str(DOTFILES_DIR)])
+
+
+def check_layers() -> DoctorCheck:
+    """
+    Check that every registered overlay exists
+    """
+    result = _probe_layers()
+    if result.returncode != 0:
+        return DoctorCheck(name='layers', ok=False, detail=first_output_line(result.stderr, 'overlay registry error'))
+
+    count = len([line for line in result.stdout.splitlines() if line])
+    return DoctorCheck(name='layers', ok=True, detail=f'{count} layer(s): base + {count - 1} overlay(s)')
+
+
+def check_hooks() -> DoctorCheck:
+    """
+    Check that prek's git hook shims are installed for every type in :data:`GIT_HOOK_TYPES`
+
+    The ``pre-push`` shim runs the public-repo leak guard, so a checkout without it pushes unscanned.
+    """
+    result = capture_command(['git', 'rev-parse', '--git-path', 'hooks'])
+    if result.returncode != 0:
+        return DoctorCheck(name='hooks', ok=False, detail=first_output_line(result.stderr, 'not a git checkout'))
+
+    # Relative to the repo root in a plain checkout; the absolute common-dir path inside a linked worktree
+    hooks_dir = DOTFILES_DIR / result.stdout.strip()
+
+    missing: list[str] = []
+    for hook_type in GIT_HOOK_TYPES:
+        try:
+            installed = PREK_SHIM_MARKER in (hooks_dir / hook_type).read_text(encoding='utf-8')
+        except (OSError, UnicodeDecodeError):
+            installed = False
+        if not installed:
+            missing.append(hook_type)
+
+    if not missing:
+        return DoctorCheck(name='hooks', ok=True, detail=f'{len(GIT_HOOK_TYPES)} prek hook shims installed')
+
+    detail = f'missing prek shims: {", ".join(missing)}'
+    if shutil.which('prek') is None:
+        return DoctorCheck(name='hooks', ok=False, detail=f'{detail} (prek not on PATH)')
+
+    return DoctorCheck(name='hooks', ok=False, detail=detail, fix=['prek', 'install'])
+
+
+def check_brewfiles() -> DoctorCheck:
+    """
+    Check that every layer's Brewfile is satisfied: everything it declares is installed (``brew bundle check``)
+
+    Homebrew has no lockfile, so ``brew bundle check`` is the reproducibility signal. ``--no-upgrade`` keeps merely
+    outdated entries from counting as drift (a plain check also flags those, and shells out to ``mas outdated``), and
+    the fix installs the missing entries without upgrading anything. Bootstrap stage 50-brew runs a similar probe
+    without ``--no-upgrade`` and treats a mismatch as non-fatal.
+    """
+    if shutil.which('brew') is None:
+        return DoctorCheck(name='brewfile', ok=False, detail='brew not found')
+
+    layers = _probe_layers()
+    if layers.returncode != 0:
+        return DoctorCheck(name='brewfile', ok=False, detail='cannot enumerate layers (see the layers check)')
+
+    brewfiles: list[Path] = [
+        brewfile for line in layers.stdout.splitlines()
+        if line and (brewfile := Path(line) / 'bootstrap' / 'Brewfile').is_file()
+    ]
+    if not brewfiles:
+        return DoctorCheck(name='brewfile', ok=True, detail='no Brewfiles declared')
+
+    drifted: list[Path] = [
+        brewfile for brewfile in brewfiles
+        if capture_command([
+            'env', 'HOMEBREW_NO_AUTO_UPDATE=1',
+            'brew', 'bundle', 'check', '--no-upgrade', '--file', str(brewfile),
+        ]).returncode != 0
+    ]
+    if not drifted:
+        return DoctorCheck(name='brewfile', ok=True, detail=f'{len(brewfiles)} Brewfile(s) satisfied')
+
+    install = 'for brewfile in "$@"; do brew bundle --no-upgrade --file "$brewfile" || exit 1; done'
+    return DoctorCheck(
+        name='brewfile',
+        ok=False,
+        detail=f'unsatisfied: {", ".join(folduser(brewfile) for brewfile in drifted)}',
+        fix=['bash', '-c', install, 'doctor', *(str(brewfile) for brewfile in drifted)],
+    )
+
+
+def check_links() -> DoctorCheck:
+    """
+    Check that stowing would change nothing
+    """
+    result = capture_command(['bash', str(STOW_SCRIPT), '-n'])
+    if (
+        (result.returncode == 0) and
+        (('stow: no changes' in result.stdout) or ('stow: no packages found' in result.stdout))
+    ):
+        return DoctorCheck(name='links', ok=True, detail='all packages linked')
+
+    fix: list[str] = ['bash', str(STOW_SCRIPT), '--backup-conflicts']
+    if result.returncode != 0:
+        return DoctorCheck(
+            name='links',
+            ok=False,
+            detail=first_output_line(result.stderr or result.stdout, 'stow simulation failed'),
+            fix=fix,
+        )
+
+    summary = next((line for line in result.stdout.splitlines() if re.match(r'stow: \d+ added', line)), '')
+    return DoctorCheck(name='links', ok=False, detail=summary or 'stow reports pending changes', fix=fix)
+
+
+def check_render() -> DoctorCheck:
+    """
+    Check that rendered settings files match their fragments
+    """
+    result = capture_command([sys.executable, str(RENDER_SCRIPT), '--check'])
+    if result.returncode == 0:
+        return DoctorCheck(name='render', ok=True, detail='rendered settings in sync')
+
+    if result.returncode == 1:
+        return DoctorCheck(
+            name='render',
+            ok=False,
+            detail='rendered settings out of sync (see: run.py render --diff)',
+            fix=[sys.executable, str(RENDER_SCRIPT)],
+        )
+
+    # Exit 2 (or anything else): bad fragment/registry or I/O error, which re-rendering cannot repair
+    return DoctorCheck(
+        name='render',
+        ok=False,
+        detail=first_output_line(result.stderr, f'render failed (exit {result.returncode})'),
+    )
+
+
+def check_git_version() -> DoctorCheck:
+    """
+    Check that git supports ``includeIf "hasconfig:remote.*.url:..."`` (git >= 2.36)
+    """
+    result = capture_command(['git', '--version'])
+    match  = re.search(r'(\d+)\.(\d+)', result.stdout)
+    if match is None:
+        return DoctorCheck(name='git', ok=False, detail='could not determine git version')
+
+    version = (int(match.group(1)), int(match.group(2)))
+    want    = '.'.join(map(str, MIN_GIT_VERSION))
+    return DoctorCheck(
+        name='git',
+        ok=version >= MIN_GIT_VERSION,
+        detail=f'git {version[0]}.{version[1]} (need >= {want} for per-remote identity)',
+    )
+
+
+def check_tools() -> DoctorCheck:
+    """
+    Check that required command-line tools are on PATH
+    """
+    if missing := [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]:
+        return DoctorCheck(name='tools', ok=False, detail=f'missing: {", ".join(missing)}')
+    return DoctorCheck(name='tools', ok=True, detail=', '.join(REQUIRED_TOOLS))
+
+
+def doctor_checks() -> list[DoctorCheck]:
+    """
+    Run every doctor check (tools and layers first; the rest depend on them, and the slow Brewfile probe runs last)
+    """
+    first = [check_tools(), check_layers()]
+    if not all(c.ok for c in first):
+        return first
+
+    return [
+        *first,
+        check_git_version(),
+        check_hooks(),
+        check_links(),
+        check_render(),
+        check_brewfiles(),
+    ]
+
+
+# =======================================================================================
 # Setup & Environment commands
 #
 # Commands:
@@ -2301,6 +2535,7 @@ def require_inventory() -> None:
 #   - dev:     Create .venv, install dependencies + hooks, and enter env in a subshell
 #   - shell:   Enter .venv in a subshell
 #   - status:  Show environment health status
+#   - doctor:  Verify the environment (``--fix`` confirms each repair, then re-checks; ``--yes`` skips the prompts)
 #   - clean:   Remove environments, build artifacts, caches, and temporary files
 # =======================================================================================
 
@@ -2546,7 +2781,63 @@ class StatusCommand(Command):
             )
 
 
-# TODO: move `doctor` command here
+# TODO: cleanup formatting
+class DoctorCommand(Command):
+    """
+    Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles
+    """
+    name:  ClassVar[str] = 'doctor'
+    group: ClassVar[str] = 'Setup & Environment'
+
+    class Args(argparse.Namespace):
+        fix: bool       # --fix
+        yes: bool       # --yes
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '-f',
+            '--fix',
+            action='store_true',
+            help=(
+                'Ask before fixing each failing check, then re-check. The fixes are:\n'
+                '  hooks:    prek install\n'
+                '  links:    stow.sh --backup-conflicts (moves blocking files into\n'
+                '            ~/.dotfiles-backup/<timestamp>/)\n'
+                '  render:   render.py (without --force)\n'
+                '  brewfile: brew bundle --no-upgrade --file for each unsatisfied Brewfile'
+            ),
+        )
+        parser.add_argument(
+            '-y',
+            '--yes',
+            action='store_true',
+            help='Apply fixes without prompting for confirmation (implies --fix)',
+        )
+
+    def run(self, args: Args) -> None:
+        checks = doctor_checks()
+
+        if args.fix or args.yes:
+            for check in checks:
+                if check.ok or not check.fix:
+                    continue
+
+                command  = shlex.join(check.fix)
+                question = f'Run {style(command, fg="bright_magenta")} to fix {style(check.name, bold=True)}?'
+                if not args.yes and not confirm(question, indent=3):
+                    printf(f'Skipped {check.name}', dim=True, indent=3)
+                    continue
+
+                printf(f'🔧 {check.name}: {command}', fg='bright_cyan')
+                shell_command(check.fix, indent=3, check=False, cwd=DOTFILES_DIR)
+            checks = doctor_checks()
+
+        for check in checks:
+            emoji = '🟢' if check.ok else '🔴'
+            printf(f'{emoji} {style(check.name, fg="white", bold=True)}  {check.detail}', indent=3)
+
+        if not all(check.ok for check in checks):
+            sys.exit(ExitCode.COMMAND_FAILED)
 
 
 class CleanCommand(Command):
@@ -3529,287 +3820,12 @@ class NasProvisionCommand(Command):
 # Dotfiles commands
 #
 # Thin wrappers over the layered engine (stow.sh, bootstrap/bootstrap.sh, scripts/dotfiles/render.py)
-# plus a doctor that checks tools, overlays, git version and hook shims, links, render drift, and Brewfile drift:
 #   - bootstrap:    Run the layered bootstrap stages
 #   - stow:         Link stow packages from every layer into $HOME
 #   - render:       Render settings files from per-layer fragments
 #   - track-claude: Ingest local ~/.claude agents/commands/skills/hooks/rules into the ``claude`` stow package
-#   - doctor:       Verify the environment (``--fix`` confirms each repair, then re-checks; ``--yes`` skips the prompts)
 #   - test:         Run the test suite through the public-index uv wrapper
 # ====================================================================================================
-
-
-@dataclasses.dataclass(frozen=True)
-class DoctorCheck:
-    """
-    Result of one doctor check
-
-    :param name: short check name
-    :param ok: whether the check passed
-    :param detail: one-line explanation
-    :param fix: command that repairs the problem, if one exists
-    """
-    name:   str
-    ok:     bool
-    detail: str
-    fix:    list[str] | None = None
-
-
-def _capture(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    """
-    Run a command quietly and capture its output (patched in tests)
-
-    :param cmd: command and arguments
-    :return: completed process with text stdout/stderr
-    """
-    return subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=DOTFILES_DIR)
-
-
-def _first_line(text: str, default: str) -> str:
-    """
-    Get the first non-empty line of command output with ANSI styling removed
-
-    :param text: command output
-    :param default: value returned when the output has no text
-    :return: first non-empty line, or ``default``
-    """
-    for line in unstyle(text).splitlines():
-        if line.strip():
-            return line.strip()
-    return default
-
-
-def _probe_layers() -> subprocess.CompletedProcess[str]:
-    """
-    Ask bootstrap/lib.sh for the layer directories (base first), one per stdout line
-    """
-    # DOTFILES_REPO is pinned to this checkout so an inherited value from another one cannot redirect the base layer.
-    # Anything lib.sh or a layer env.sh prints while loading goes to stderr so it cannot be counted as a layer.
-    script = 'export DOTFILES_REPO="$1"; source "$1/bootstrap/lib.sh" >&2 && dotfiles_layers'
-    return _capture(['bash', '-c', script, 'doctor', str(DOTFILES_DIR)])
-
-
-def check_layers() -> DoctorCheck:
-    """
-    Check that every registered overlay exists
-    """
-    result = _probe_layers()
-    if result.returncode != 0:
-        return DoctorCheck('layers', False, _first_line(result.stderr, 'overlay registry error'))
-
-    count = len([line for line in result.stdout.splitlines() if line])
-    return DoctorCheck('layers', True, f'{count} layer(s): base + {count - 1} overlay(s)')
-
-
-def check_hooks() -> DoctorCheck:
-    """
-    Check that prek's git hook shims are installed for every type in :data:`GIT_HOOK_TYPES`
-
-    The ``pre-push`` shim runs the public-repo leak guard, so a checkout without it pushes unscanned.
-    """
-    result = _capture(['git', 'rev-parse', '--git-path', 'hooks'])
-    if result.returncode != 0:
-        return DoctorCheck('hooks', False, _first_line(result.stderr, 'not a git checkout'))
-
-    # Relative to the repo root in a plain checkout; the absolute common-dir path inside a linked worktree
-    hooks_dir = DOTFILES_DIR / result.stdout.strip()
-
-    missing: list[str] = []
-    for hook_type in GIT_HOOK_TYPES:
-        try:
-            installed = PREK_SHIM_MARKER in (hooks_dir / hook_type).read_text(encoding='utf-8')
-        except (OSError, UnicodeDecodeError):
-            installed = False
-        if not installed:
-            missing.append(hook_type)
-
-    if not missing:
-        return DoctorCheck('hooks', True, f'{len(GIT_HOOK_TYPES)} prek hook shims installed')
-
-    detail = f'missing prek shims: {", ".join(missing)}'
-    if shutil.which('prek') is None:
-        return DoctorCheck('hooks', False, f'{detail} (prek not on PATH)')
-    return DoctorCheck('hooks', False, detail, ['prek', 'install'])
-
-
-def check_brewfiles() -> DoctorCheck:
-    """
-    Check that every layer's Brewfile is satisfied: everything it declares is installed (``brew bundle check``)
-
-    Homebrew has no lockfile, so ``brew bundle check`` is the reproducibility signal. ``--no-upgrade`` keeps merely
-    outdated entries from counting as drift (a plain check also flags those, and shells out to ``mas outdated``), and
-    the fix installs the missing entries without upgrading anything. Bootstrap stage 50-brew runs a similar probe
-    without ``--no-upgrade`` and treats a mismatch as non-fatal.
-    """
-    if shutil.which('brew') is None:
-        return DoctorCheck('brewfile', False, 'brew not found')
-
-    layers = _probe_layers()
-    if layers.returncode != 0:
-        return DoctorCheck('brewfile', False, 'cannot enumerate layers (see the layers check)')
-
-    brewfiles = [
-        brewfile
-        for line in layers.stdout.splitlines()
-        if line and (brewfile := Path(line) / 'bootstrap' / 'Brewfile').is_file()
-    ]
-    if not brewfiles:
-        return DoctorCheck('brewfile', True, 'no Brewfiles declared')
-
-    drifted = [
-        brewfile
-        for brewfile in brewfiles
-        if _capture(
-            [
-                'env', 'HOMEBREW_NO_AUTO_UPDATE=1',
-                'brew', 'bundle', 'check', '--no-upgrade', '--file', str(brewfile),
-            ],
-        ).returncode != 0
-    ]
-    if not drifted:
-        return DoctorCheck('brewfile', True, f'{len(brewfiles)} Brewfile(s) satisfied')
-
-    install = 'for brewfile in "$@"; do brew bundle --no-upgrade --file "$brewfile" || exit 1; done'
-    return DoctorCheck(
-        'brewfile',
-        False,
-        f'unsatisfied: {", ".join(folduser(brewfile) for brewfile in drifted)}',
-        ['bash', '-c', install, 'doctor', *(str(brewfile) for brewfile in drifted)],
-    )
-
-
-def check_links() -> DoctorCheck:
-    """
-    Check that stowing would change nothing
-    """
-    result = _capture(['bash', str(STOW_SCRIPT), '-n'])
-    if (
-        (result.returncode == 0) and
-        (('stow: no changes' in result.stdout) or ('stow: no packages found' in result.stdout))
-    ):
-        return DoctorCheck('links', True, 'all packages linked')
-
-    fix: list[str] = ['bash', str(STOW_SCRIPT), '--backup-conflicts']
-    if result.returncode != 0:
-        return DoctorCheck('links', False, _first_line(result.stderr or result.stdout, 'stow simulation failed'), fix)
-
-    summary = next((line for line in result.stdout.splitlines() if re.match(r'stow: \d+ added', line)), '')
-    return DoctorCheck('links', False, summary or 'stow reports pending changes', fix)
-
-
-def check_render() -> DoctorCheck:
-    """
-    Check that rendered settings files match their fragments
-    """
-    result = _capture([sys.executable, str(RENDER_SCRIPT), '--check'])
-    if result.returncode == 0:
-        return DoctorCheck('render', True, 'rendered settings in sync')
-
-    if result.returncode == 1:
-        return DoctorCheck(
-            'render',
-            False,
-            'rendered settings out of sync (see: run.py render --diff)',
-            [sys.executable, str(RENDER_SCRIPT)],
-        )
-
-    # Exit 2 (or anything else): bad fragment/registry or I/O error, which re-rendering cannot repair
-    return DoctorCheck('render', False, _first_line(result.stderr, f'render failed (exit {result.returncode})'))
-
-
-def check_git_version() -> DoctorCheck:
-    """
-    Check that git supports ``includeIf "hasconfig:remote.*.url:..."`` (git >= 2.36)
-    """
-    result = _capture(['git', '--version'])
-    match  = re.search(r'(\d+)\.(\d+)', result.stdout)
-    if match is None:
-        return DoctorCheck('git', False, 'could not determine git version')
-
-    version = (int(match.group(1)), int(match.group(2)))
-    want    = '.'.join(map(str, MIN_GIT_VERSION))
-    return DoctorCheck(
-        'git',
-        version >= MIN_GIT_VERSION,
-        f'git {version[0]}.{version[1]} (need >= {want} for per-remote identity)',
-    )
-
-
-def check_tools() -> DoctorCheck:
-    """
-    Check that required command-line tools are on PATH
-    """
-    if missing := [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]:
-        return DoctorCheck('tools', False, f'missing: {", ".join(missing)}')
-    return DoctorCheck('tools', True, ', '.join(REQUIRED_TOOLS))
-
-
-def doctor_checks() -> list[DoctorCheck]:
-    """
-    Run every doctor check (tools and layers first; the rest depend on them, and the slow Brewfile probe runs last)
-    """
-    first = [check_tools(), check_layers()]
-    if not all(c.ok for c in first):
-        return first
-    return [*first, check_git_version(), check_hooks(), check_links(), check_render(), check_brewfiles()]
-
-
-class DoctorCommand(Command):
-    """
-    Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles
-    """
-    name:  ClassVar[str] = 'doctor'
-    group: ClassVar[str] = 'Dotfiles'
-
-    class Args(argparse.Namespace):
-        fix: bool       # --fix
-        yes: bool       # --yes
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            '-f',
-            '--fix',
-            action='store_true',
-            help=(
-                'Ask before fixing each failing check, then re-check. The fixes are:\n'
-                '  hooks:    prek install\n'
-                '  links:    stow.sh --backup-conflicts (moves blocking files into\n'
-                '            ~/.dotfiles-backup/<timestamp>/)\n'
-                '  render:   render.py (without --force)\n'
-                '  brewfile: brew bundle --no-upgrade --file for each unsatisfied Brewfile'
-            ),
-        )
-        parser.add_argument(
-            '-y',
-            '--yes',
-            action='store_true',
-            help='Apply fixes without prompting for confirmation (implies --fix)',
-        )
-
-    def run(self, args: Args) -> None:
-        checks = doctor_checks()
-
-        if args.fix or args.yes:
-            for check in checks:
-                if check.ok or not check.fix:
-                    continue
-
-                command  = shlex.join(check.fix)
-                question = f'Run {style(command, fg="bright_magenta")} to fix {style(check.name, bold=True)}?'
-                if not args.yes and not confirm(question, indent=3):
-                    printf(f'Skipped {check.name}', dim=True, indent=3)
-                    continue
-
-                printf(f'🔧 {check.name}: {command}', fg='bright_cyan')
-                shell_command(check.fix, indent=3, check=False, cwd=DOTFILES_DIR)
-            checks = doctor_checks()
-
-        for check in checks:
-            emoji = '🟢' if check.ok else '🔴'
-            printf(f'{emoji} {style(check.name, fg="white", bold=True)}  {check.detail}', indent=3)
-
-        if not all(check.ok for check in checks):
-            sys.exit(ExitCode.COMMAND_FAILED)
 
 
 class BootstrapCommand(Command):
@@ -4052,7 +4068,7 @@ class TrackClaudeCommand(Command):
 
         :return: ``None`` when stow would succeed, otherwise the first few lines of its output
         """
-        result = _capture(['bash', str(STOW_SCRIPT), '-n', 'claude'])
+        result = capture_command(['bash', str(STOW_SCRIPT), '-n', 'claude'])
         if result.returncode == 0:
             return None
 
