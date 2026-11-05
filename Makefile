@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev clean list-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
+.PHONY: help install dev shell clean list-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -16,6 +16,7 @@ help: ## Show this help message
 	@echo "$(BRIGHT_WHITE)Setup & Environment:$(NC)"
 	@echo "  $(YELLOW)install             $(NC) Install dependencies into active environment (or .venv if no active environment)"
 	@echo "  $(YELLOW)dev                 $(NC) Create .venv, install dependencies + hooks, and enter environment in a subshell"
+	@echo "  $(YELLOW)shell               $(NC) Enter .venv in a subshell"
 	@echo "  $(YELLOW)clean               $(NC) Remove all project environments, build artifacts, caches, and temporary files"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Inventory:$(NC)"
@@ -58,6 +59,9 @@ install: ## Install dependencies into active environment (or .venv if no active 
 
 dev: ## Create .venv, install dependencies + hooks, and enter environment in a subshell
 	@python3 run.py dev
+
+shell: ## Enter .venv in a subshell
+	@python3 run.py shell
 
 clean: ## Remove all project environments, build artifacts, caches, and temporary files
 	@python3 run.py clean

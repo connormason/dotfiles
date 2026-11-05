@@ -2216,7 +2216,9 @@ def enter_venv(*, verbose: bool = False, indent: int = 0) -> None:
 # Setup & Environment commands
 #
 # Commands:
-#   - clean: Remove project environments, build artifacts, caches, and temporary files
+#   - install: Install dependencies into active/default environment
+#   - dev:     Create .venv, install dependencies + hooks, and enter env in a subshell
+#   - clean:   Remove project environments, build artifacts, caches, and temporary files
 # =======================================================================================
 
 
@@ -2356,6 +2358,19 @@ class DevCommand(InstallCommand):
         printf(f'✅ Environment ready: {pathstyle(VENV_DIR)}', fg='bright_green')
         if not active_venv:
             printf(f'Enter environment with: {style("make shell", fg="bright_magenta")}', fg='bright_white', indent=3)
+
+
+class ShellCommand(Command):
+    """
+    Enter .venv in a subshell
+    """
+    name:  ClassVar[str] = 'shell'
+    group: ClassVar[str] = 'Setup & Environment'
+
+    def run(self, args: argparse.Namespace) -> None:
+        check_python(quiet=True)
+        ensure_uv(quiet=True)
+        enter_venv()
 
 
 class CleanCommand(Command):
