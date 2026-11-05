@@ -110,7 +110,7 @@ if TYPE_CHECKING:
 # ====================================================================================================
 
 # Hostname in Ansible inventory for NAS machine
-NAS_INVENTORY_HOST: str  = 'nas'
+NAS_INVENTORY_HOST: str = 'nas'
 
 # Doctor requirements
 REQUIRED_TOOLS:  tuple[str, ...] = ('brew', 'git', 'stow', 'uv', 'zsh')
@@ -149,18 +149,6 @@ VAULT_FILE_PATTERNS: list[str] = [
     'host_vars/*/vault.yml',
 ]
 
-# Environment variables - All prefixed with DOTFILES_ namespace (except the standard NO_COLOR)
-ENVVAR_PREFIX:             str = 'DOTFILES'
-RUN_DEBUG_ENVVAR:          str = f'{ENVVAR_PREFIX}_RUN_DEBUG'
-INVENTORY_REPO_URL_ENVVAR: str = f'{ENVVAR_PREFIX}_INVENTORY_REPO_URL'
-
-RUN_DEBUG:          bool = os.getenv(RUN_DEBUG_ENVVAR, 'false').lower() == 'true'
-NO_COLOR:           bool = bool(os.getenv('NO_COLOR'))      # https://no-color.org: any non-empty value disables color
-INVENTORY_REPO_URL: str  = os.getenv(
-    INVENTORY_REPO_URL_ENVVAR,
-    'git@github.com:connormason/dotfiles-inventory.git',
-)
-
 # Other static configuration
 # Spacing between the command name and description columns in the script help text
 SCRIPT_HELP_COL_SPACING: int = 4
@@ -189,6 +177,31 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
         '.venv',
     ],
 }
+
+
+# =======================================================================================
+# Configuration vars read from environment
+#
+# All env vars are prefixed with "DOTFILES_" namespace (except standardized "NO_COLOR")
+# =======================================================================================
+
+# Environment variable names
+# --------------------------
+ENVVAR_PREFIX:             str = 'DOTFILES'
+INVENTORY_REPO_URL_ENVVAR: str = f'{ENVVAR_PREFIX}_INVENTORY_REPO_URL'
+RUN_DEBUG_ENVVAR:          str = f'{ENVVAR_PREFIX}_RUN_DEBUG'
+UV_VERBOSE_ENVVAR:         str = f'{ENVVAR_PREFIX}_UV_VERBOSE'
+
+# Environment variable values
+# ---------------------------
+NO_COLOR:   bool = bool(os.getenv('NO_COLOR'))    # https://no-color.org: any non-empty value disables color
+RUN_DEBUG:  bool = os.getenv(RUN_DEBUG_ENVVAR,  'false').lower() == 'true'
+UV_VERBOSE: bool = os.getenv(UV_VERBOSE_ENVVAR, 'false').lower() == 'true'
+
+# Inventory submodule repo
+# ------------------------
+INVENTORY_REPO_URL_DEFAULT: str = 'git@github.com:connormason/dotfiles-inventory.git'
+INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTORY_REPO_URL_DEFAULT)
 
 
 # =======================================================================================
