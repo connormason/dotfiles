@@ -116,8 +116,9 @@ class TestCommandRegistration:
             'inventory-hosts', 'inventory-status', 'update-inventory', 'vault-decrypt', 'vault-encrypt',
             'install-uv', 'install-hatch',
             'install-hooks', 'prepare-hooks', 'uninstall-hooks', 'run-hooks', 'pre',
+            'test',
             'lock', 'lock-check', 'lock-upgrade', 'sync-deps',
-            'test', 'makefile', 'diagnose',
+            'makefile', 'diagnose',
         ]
 
 

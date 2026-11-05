@@ -4554,12 +4554,47 @@ class PreCommand(RunHooksCommand):
 
 
 # ====================================================================================================
+# Testing commands
+#
+# Commands
+#   - test: Run the test suite through the public-index uv wrapper
+# ====================================================================================================
+
+
+class TestCommand(Command):
+    """
+    Run the test suite via uv (public-index wrapper)
+    """
+    name:  ClassVar[str] = 'test'
+    group: ClassVar[str] = 'Testing'
+
+    class Args(argparse.Namespace):
+        paths: list[str]        # positional arg(s) "PATHS"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'paths',
+            type=str,
+            nargs='*',
+            help='Test paths (default: tests/)',
+        )
+
+    def run(self, args: Args) -> None:
+        result = shell_command(
+            uv_command('run', '--group', 'test', 'pytest', *(args.paths or ['tests'])),
+            check=False,
+        )
+        sys.exit(result.returncode)
+
+
+# ====================================================================================================
 # Dependencies commands
 #
 # Commands:
 #   - lock:         Update uv.lock from pyproject.toml
 #   - lock-check:   Check that uv.lock is up to date
 #   - lock-upgrade: Upgrade locked dependency versions
+#   - sync-deps:    Re-sync dependencies, exported requirements, and hook versions from uv.lock
 # ====================================================================================================
 
 
@@ -4671,40 +4706,6 @@ class SyncDepsCommand(Command):
         ensure_uv(quiet=True)
         ensure_venv(groups=['lint'], inexact=True, frozen=True)
         regenerate_derived_files()
-
-
-# ====================================================================================================
-# Testing commands
-#
-# Commands
-#   - test: Run the test suite through the public-index uv wrapper
-# ====================================================================================================
-
-
-class TestCommand(Command):
-    """
-    Run the test suite via uv (public-index wrapper)
-    """
-    name:  ClassVar[str] = 'test'
-    group: ClassVar[str] = 'Testing'
-
-    class Args(argparse.Namespace):
-        paths: list[str]        # positional arg(s) "PATHS"
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            'paths',
-            type=str,
-            nargs='*',
-            help='Test paths (default: tests/)',
-        )
-
-    def run(self, args: Args) -> None:
-        result = shell_command(
-            uv_command('run', '--group', 'test', 'pytest', *(args.paths or ['tests'])),
-            check=False,
-        )
-        sys.exit(result.returncode)
 
 
 # ====================================================================================================
