@@ -18,7 +18,7 @@ import pytest
 if TYPE_CHECKING:
     from types import ModuleType
 
-REPO_ROOT   = Path(__file__).resolve().parents[2]
+REPO_ROOT   = Path(__file__).resolve().parents[4]
 SCRIPT_PATH = REPO_ROOT / 'scripts' / 'dotfiles' / 'render.py'
 
 # Inherited variables that would leak the developer's own configuration into the tests
