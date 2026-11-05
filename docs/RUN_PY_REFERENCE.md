@@ -1,19 +1,24 @@
 # run.py - Command Reference
 
-Python CLI tool for managing the dotfiles repository. Provides commands for inventory management, codebase maintenance,
-NAS provisioning and service deploys, and the layered dev environment (stow, bootstrap, render, doctor, track-claude),
-with ANSI styling and retry logic for robustness.
+Python CLI tool for managing the dotfiles repository. Provides commands for the Python environment (install, status,
+doctor, lock), prek hooks, inventory management, NAS provisioning and service deploys, tool installers, and the layered
+dev environment (stow, bootstrap, render, track-claude), with ANSI styling and retry logic for robustness.
 
 <!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
 
 - [Quick Start](#quick-start)
 - [Command Categories](#command-categories)
-  - [Inventory Management](#inventory-management)
-  - [Codebase Maintenance](#codebase-maintenance)
+  - [Setup & Environment](#setup--environment)
+  - [Hooks](#hooks)
+  - [Bootstrap & Deploy](#bootstrap--deploy)
   - [Dotfiles](#dotfiles)
-  - [NAS](#nas)
+  - [Inventory Management](#inventory-management)
+  - [Tool Installation](#tool-installation)
+  - [Testing](#testing)
+  - [Utilities](#utilities)
 - [Architecture](#architecture)
   - [Command Registration System](#command-registration-system)
+  - [uv helpers](#uv-helpers)
   - [ANSI Styling System](#ansi-styling-system)
   - [Shell Command Execution](#shell-command-execution)
   - [Retry Logic](#retry-logic)
@@ -53,32 +58,400 @@ with ANSI styling and retry logic for robustness.
 # Show all available commands
 python3 run.py --help
 
-# Enable debug output for any command
+# Enable debug output for any command (--no-debug overrides DOTFILES_RUN_DEBUG=true)
 python3 run.py --debug <command>
+
+# Verbose logging from uv (sets RUST_LOG=uv=debug for every subprocess)
+python3 run.py --uv-verbose <command>
 
 # Or use the generated Makefile
 make help
 ```
 
+Commands that set up the environment or run hooks (`install`, `dev`, `lock*`, `run-hooks`, …) install `uv` on demand and
+use it themselves, so they work from a bare `python3`. `inventory-hosts` is the exception that needs PyYAML.
+
 ## Command Categories<a name="command-categories"></a>
+
+### Setup & Environment<a name="setup--environment"></a>
+
+Commands that create, inspect, repair, and clean the project's Python environment (`.venv`, managed with
+[`uv`](https://docs.astral.sh/uv/)) and its lockfile. Every project-scoped `uv` call goes through
+[`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh) so `uv.lock` only references public PyPI (see
+[uv helpers](#uv-helpers)).
+
+| Command        | Purpose                                                        | Options                                  |
+| -------------- | -------------------------------------------------------------- | ---------------------------------------- |
+| `install`      | Install dependencies into the active environment (or `.venv`)  | `-d/--dev`, `--hooks`, `--shell`/`--env` |
+| `dev`          | `install` with dev dependencies and hooks, then enter the venv | `--no-hooks`, `--no-shell`/`--no-env`    |
+| `shell`        | Enter `.venv` in a subshell                                    | none                                     |
+| `status`       | Show environment health                                        | none                                     |
+| `doctor`       | Verify the whole environment                                   | `-f/--fix`, `-y/--yes`                   |
+| `clean`        | Remove environments, build artifacts, caches                   | `--no-envs`/`--no-env`                   |
+| `lock`         | Update `uv.lock`                                               | `--refresh`                              |
+| `lock-check`   | Fail if `uv.lock` is stale                                     | none                                     |
+| `lock-upgrade` | Upgrade locked versions                                        | `-P/--package PACKAGE` (repeatable)      |
+
+#### `install`
+
+Install dependencies into the active environment, or into `.venv` when no environment is active.
+
+```bash
+python3 run.py install                 # runtime dependencies
+python3 run.py install --dev --hooks   # plus the dev groups and the prek git shims
+python3 run.py install --shell         # then enter the environment
+```
+
+**Behavior:**
+
+- Checks python and ensures `uv` is installed (an interactive run asks before installing it; with `CI=true` it installs
+  without asking, via [`scripts/install/install_uv.py`](../scripts/install/install_uv.py))
+- If `$VIRTUAL_ENV` is set, runs `uv sync --active --inexact` into that environment
+- Otherwise recreates `.venv` if its symlinks are broken, runs `uv venv` if it is missing, then `uv sync --inexact`
+- Dev dependency groups are excluded unless `-d/--dev` is given (the project defines no extras, so there is no `--all`)
+- `--hooks` runs `uv run -- prek install -f`; `--shell` (alias `--env`) then enters the environment with
+  [`venvshell.py`](../scripts/env/venvshell.py), otherwise a `make shell` hint is printed
+
+#### `dev`
+
+`install` for day-to-day development: dev groups included, `prek install` run, and the environment entered afterwards.
+Opt out of the last two with `--no-hooks` and `--no-shell` (alias `--no-env`).
+
+#### `shell`
+
+Enter `.venv` in an interactive subshell by running `scripts/env/venvshell.py --path .venv`. Exits 2 when `.venv` does
+not exist (run `install` first); Ctrl-C prints "Exiting virtual environment".
+
+#### `status`
+
+Read-only environment health summary, one line each for `python`, `uv`, `hooks`, and the virtual environment, then a
+summary line. The hooks line is the same `hooks` check `doctor` runs. The virtual environment line describes `.venv`, or
+the externally activated environment when `$VIRTUAL_ENV` points elsewhere, as healthy, missing, not activated, stale
+(`uv sync --check` says it differs from `uv.lock`), or broken. `status` only reports; it always exits 0.
+
+#### `doctor`
+
+Runs one check per line and exits 1 if any check fails. `tools` and `layers` run first; the remaining checks are skipped
+when either fails. The order after that is `python`, `uv`, `git`, `hooks`, `venv`, `links`, `render`, `brewfile`.
+
+| Check      | Passes when                                                                                                                          | Fix (`--fix`)                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| `tools`    | `brew`, `git`, `stow`, `uv`, `zsh` are on `PATH`                                                                                     | none                                           |
+| `layers`   | the overlay registry resolves (`dotfiles_layers` in `bootstrap/lib.sh`) and every overlay exists                                     | none                                           |
+| `python`   | the running python meets `MIN_PYTHON` (unset, so it always passes today)                                                             | none                                           |
+| `uv`       | `uv` is installed (on `PATH` or a common install location)                                                                           | `scripts/install/install_uv.py --ensure`       |
+| `git`      | `git --version` is at least 2.36 (needed for `includeIf "hasconfig:remote.*.url:"`)                                                  | none                                           |
+| `hooks`    | every hook type in `default_install_hook_types` has a prek-generated shim in the git hooks directory                                 | `prek install`                                 |
+| `venv`     | `.venv` (or the externally active venv) exists and matches `uv.lock` (`uv sync --check`); a venv that is merely not activated passes | `run.py install` (project `.venv` only)        |
+| `links`    | `stow.sh -n` reports `no changes` or `no packages found`                                                                             | `stow.sh --backup-conflicts`                   |
+| `render`   | `render.py --check` exits 0 (exit 1 is drift; exit 2 is a config or I/O error with no fix)                                           | `render.py` (without `--force`)                |
+| `brewfile` | `brew bundle check --no-upgrade` passes for every layer's `bootstrap/Brewfile`                                                       | `brew bundle --no-upgrade --file` per Brewfile |
+
+`--fix` asks before running each failing check's fix, then re-runs every check and reports the final state; `-y/--yes`
+applies the fixes without asking (and implies `--fix`). The `links` fix runs `stow.sh --backup-conflicts`, which moves
+any blocking files into `~/.dotfiles-backup/<timestamp>/` before linking. The `brewfile` check passes when every
+declared entry is installed: outdated entries are not drift (`--no-upgrade`), and its fix installs the missing entries
+without upgrading anything. Without `--fix`, every probe is read-only (`stow.sh -n`, `render.py --check`,
+`brew bundle check --no-upgrade`). The `hooks` check resolves the hooks directory with `git rev-parse --git-path hooks`,
+so it is correct in linked worktrees; it matters because `pre-push` runs the public-repo leak guard and no bootstrap
+stage installs hooks. When `prek` is not on `PATH` the check offers no `--fix`; once prek is available, the manual path
+is `python3 run.py install-hooks` (it runs `prek install -f`). `bootstrap --verify` invokes `doctor` after all stages
+succeed, so it fails the `hooks` check until the shims are installed.
+
+#### `clean`
+
+Remove all environments, build artifacts, and caches.
+
+```bash
+python3 run.py clean
+python3 run.py clean --no-envs      # keep the virtual environments (--no-env is an alias)
+```
+
+`--no-envs` skips the **Virtual environments** group below; every other group is still removed.
+
+**Cleaned patterns:**
+
+**Package build artifacts:**
+
+- `build/`
+- `dist/`
+- `*.egg-info`
+
+**Package cache files:**
+
+- `**/__pycache__/`
+- `**/*.pyc`
+
+**Tool cache files:**
+
+- `.mypy_cache`
+- `.pytest_cache`
+- `.ruff_cache`
+- `.tox`
+- `.nox`
+- `.coverage`
+
+**Virtual environments:**
+
+- `venv`
+- `.venv`
+
+**Output:**
+
+```
+🧹 Cleaning project workspace...
+   Cleaning package build artifacts...
+   Cleaning package cache files...
+   Cleaning tool cache files...
+   Cleaning virtual environments...
+✅ Cleanup complete
+```
+
+**Debug mode:** Shows each file/directory removed, then the total count (enable with `--debug` flag).
+
+#### `lock`
+
+Update `uv.lock` from `pyproject.toml` (`uv lock`).
+
+```bash
+python3 run.py lock
+python3 run.py lock --refresh       # refresh cached package metadata first
+```
+
+Exits with uv's return code.
+
+#### `lock-check`
+
+Verify that `uv.lock` is up to date (`uv lock --check`) without writing it. Exits 1 and prints a `make lock` hint when
+the lockfile is stale.
+
+#### `lock-upgrade`
+
+Upgrade locked dependency versions (`uv lock --upgrade`, or `--upgrade-package` once per `-P`).
+
+```bash
+python3 run.py lock-upgrade                         # upgrade everything
+python3 run.py lock-upgrade -P ruff -P pytest       # only these packages
+```
+
+On success it reminds you that the `uv-export` and `sync-with-uv` hooks refresh `requirements.txt` and the hook versions
+on the next commit. Exits with uv's return code.
+
+### Hooks<a name="hooks"></a>
+
+Wrappers over [prek](https://github.com/j178/prek). Each one checks python, ensures `uv` is installed, ensures `.venv`
+exists with the `lint` dependency group (`uv sync --inexact`), and runs prek through `uv run`, so prek does not need to
+be on `PATH`. All five exit with prek's return code.
+
+#### `run-hooks`
+
+Run prek hooks on modified or specified project files.
+
+```bash
+python3 run.py run-hooks                          # hooks on the staged files
+python3 run.py run-hooks mdformat ruff            # only these hooks (names go before --files)
+python3 run.py run-hooks --files README.md docs/README.md
+python3 run.py run-hooks --last-commit            # the files of the last commit
+python3 run.py run-hooks -s main -o HEAD          # the files changed between two refs
+python3 run.py run-hooks --stage pre-push --dry-run
+```
+
+| Option                                                     | Forwards                              |
+| ---------------------------------------------------------- | ------------------------------------- |
+| `HOOK\|PROJECT...`                                         | hook or project filter (placed first) |
+| `-a/--all-files`, `--files`, `-d/--directory`              | file selection                        |
+| `-s/--from-ref`, `-o/--to-ref`, `--last-commit`            | ref range selection                   |
+| `--skip` (repeatable), `--stage`                           | skip hooks, choose the git stage      |
+| `--show-diff-on-failure`, `--fail-fast`, `--dry-run`, `-v` | run behavior                          |
+
+**Behavior:** like every hooks command, it checks python, ensures `uv` is installed, ensures `.venv` exists with the
+`lint` dependency group (`uv sync --inexact`), then runs `prek run …` through `uv run` and exits with prek's return code
+(so `make pre` fails when a hook fails). The hook filter is placed before the options because prek's `--files` is
+greedy.
+
+#### `pre`
+
+Run prek hooks on all project files. This is `run-hooks --all-files`: it accepts the same hook filter and run options,
+but no file or ref selection, because prek rejects `--all-files` combined with `--files`, `--directory`, `--from-ref`,
+`--to-ref`, or `--last-commit`. Use `run-hooks` for those.
+
+```bash
+python3 run.py pre
+python3 run.py pre mdformat               # one hook over every file
+```
+
+**Hooks include:**
+
+- File integrity checks (large files, merge conflicts, private keys, detect-secrets)
+- Leak guard (`check-leaks`: employer-internal identifiers in file contents and paths, and in the commit identity)
+- Python validation (syntax, debug statements, ruff, mypy, interrogate)
+- Data format validation (JSON, YAML, TOML, XML)
+- Formatters (shfmt, taplo, mdformat, ruff --fix-only)
+- Linters (shellcheck, yamllint, ansible-lint) and the codespell spelling fixer
+- Whitespace and line ending fixers
+
+See [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) for complete hook configuration.
+
+#### `prepare-hooks`
+
+Prepare the environments of all prek hooks (`prek prepare-hooks`) so the first commit does not pay for it. Accepts a
+`HOOK|PROJECT` filter, `--skip` (repeatable), and `-v/--verbose`. Exits with prek's return code.
+
+#### `install-hooks`
+
+Install the prek git hook shims.
+
+```bash
+python3 run.py install-hooks
+python3 run.py install-hooks --overwrite --prepare-hooks
+python3 run.py install-hooks -t pre-push
+```
+
+| Option                | Forwards                                         |
+| --------------------- | ------------------------------------------------ |
+| `-f/--overwrite`      | `--overwrite`: replace existing git shims        |
+| `-t/--hook-type TYPE` | `--hook-type`: which shim(s) to install (repeat) |
+| `--prepare-hooks`     | `--prepare-hooks`: also prepare the hook envs    |
+| `-v/--verbose`        | `--verbose`                                      |
+
+**Behavior:** runs `prek install …` through `uv run` (after the same python/uv/`.venv` setup as `run-hooks`) and exits
+with prek's return code. With no `--hook-type`, prek installs the hook types named by `default_install_hook_types` in
+`.pre-commit-config.yaml` (`pre-commit`, `commit-msg`, `post-checkout`, `post-merge`, `post-rewrite`, and `pre-push`
+here).
+
+#### `uninstall-hooks`
+
+Uninstall the prek git hook shims.
+
+```bash
+python3 run.py uninstall-hooks --all
+```
+
+| Option                | Forwards                                       |
+| --------------------- | ---------------------------------------------- |
+| `-a/--all`            | `--all`: uninstall every prek-managed git shim |
+| `-t/--hook-type TYPE` | `--hook-type` (repeatable)                     |
+| `-v/--verbose`        | `--verbose`                                    |
+
+**Behavior:** runs `prek uninstall …` through `uv run` and exits with prek's return code.
+
+### Bootstrap & Deploy<a name="bootstrap--deploy"></a>
+
+Provision machines: `bootstrap` runs the layered stage driver on this Mac, and the two NAS commands provision and deploy
+the home NAS over SSH (tailnet or LAN).
+
+| Command         | Forwards to                      | Options                                                                                   |
+| --------------- | -------------------------------- | ----------------------------------------------------------------------------------------- |
+| `bootstrap`     | `bootstrap/bootstrap.sh`         | `--dry-run`, `--list`, `--only STAGE`, `--from STAGE`, `--resume`, `--verify`, `--no-log` |
+| `nas-provision` | `playbooks/nas_bootstrap.yml`    | see below                                                                                 |
+| `nas-deploy`    | `scripts/nas/deploy-services.sh` | see below                                                                                 |
+
+```bash
+python3 run.py bootstrap --list           # stages across all layers
+python3 run.py bootstrap --dry-run        # simulate every stage
+```
+
+`bootstrap` forwards its flags and exits with the script's return code. `--verify` runs `doctor` after all stages
+succeed.
+
+#### NAS commands
+
+The NAS commands provision the home NAS and deploy its Compose services from this machine. Both commands belong to the
+`Bootstrap & Deploy` group and run the same preflight first: the inventory is present, `vault_password.txt` exists, and
+the `nas` host answers a non-interactive SSH probe (`ConnectTimeout=5`, `BatchMode=yes`) as the user from the inventory.
+A failed probe exits 1 with a remedy.
+
+| Command         | Runs                                                     | Options                                                                                                          |
+| --------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `nas-provision` | `playbooks/nas_bootstrap.yml` through `ansible-playbook` | `--tags TAGS`, `--check`, `--diff`, `--limit HOSTS`, `-e/--extra-vars KEY=VALUE` (repeatable), `-v` (repeatable) |
+| `nas-deploy`    | `scripts/nas/deploy-services.sh`                         | `<service\|all>`, `--dry-run`                                                                                    |
+
+```bash
+python3 run.py nas-provision --check --diff                  # preview the whole playbook (converged host)
+python3 run.py nas-provision --tags dotfiles,haos            # selected roles only
+python3 run.py nas-provision --tags secrets                  # re-render per-service secrets
+python3 run.py nas-deploy glance --dry-run                   # preview the rsync and the remote command
+python3 run.py nas-deploy all
+```
+
+#### `nas-provision`
+
+Runs the preflight, installs the Ansible collections with `ansible-galaxy collection install -r roles/requirements.yml`,
+then runs `ansible-playbook playbooks/nas_bootstrap.yml` (with the inventory and vault password file) through
+[`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh). A failed collection install prints a warning and the
+playbook still runs with the collections already installed. The exit status is Ansible's. `nas_bootstrap.sh` is a thin
+wrapper that forwards its arguments to this command. `--check --diff` previews the whole playbook on a converged host.
+On a fresh host, where `smbd` or `tailscale` is not installed yet, the Samba version probe fails and the Tailscale
+status probe returns nothing for the next task to parse, so `--check` stops there (the real run installs those tools
+first). Both probes are read-only and carry `check_mode: false`.
+
+#### `nas-deploy`
+
+Resolves `ansible_host` and `ansible_user` of the `nas` host with `ansible-inventory` (literal values are required;
+templated values are rejected, and the user falls back to the local login), warns when `services/` has uncommitted
+changes (a deploy ships the working tree), then runs `scripts/nas/deploy-services.sh` with `NAS_HOST` and `NAS_USER` set
+and exits with the script's status. `all` syncs the whole `services/` tree to `~/docker/`; a single service syncs
+`compose.base.yml` plus `services/<svc>/`. Either way the script then runs `~/docker/deploy.sh <svc|all>` on the NAS. A
+`<svc>` outside `^[a-z0-9][a-z0-9_-]*$`, or one without `services/<svc>/compose.yml`, is rejected by the script (exit 2)
+before it syncs anything. It is the same script CI uses (see [`scripts/nas/README.md`](../scripts/nas/README.md)). The
+command declares `script_only = True`, so `run.py makefile` does not generate a Makefile target for it.
+
+### Dotfiles<a name="dotfiles"></a>
+
+Wrappers over the layered dev-env engine: [`stow.sh`](../stow.sh) and
+[`scripts/dotfiles/render.py`](../scripts/dotfiles/render.py), plus `track-claude`, which runs its own logic. `stow` and
+`render` forward their flags and exit with the underlying script's return code.
+
+| Command        | Forwards to                          | Options                                                               |
+| -------------- | ------------------------------------ | --------------------------------------------------------------------- |
+| `stow`         | `stow.sh`                            | `[PACKAGE...]`, `-n/--simulate`, `--backup-conflicts`, `-v/--verbose` |
+| `render`       | `scripts/dotfiles/render.py`         | `[TARGET...]`, `--diff`, `--check`, `--force`, `-v/--verbose`         |
+| `track-claude` | (moves files, then `stow.sh claude`) | `-n/--dry-run`                                                        |
+
+```bash
+python3 run.py stow -n                    # preview links; writes nothing
+python3 run.py render --check             # exit 1 if rendered settings drifted
+```
+
+#### `track-claude`
+
+Moves real files that Claude Code (or you) created under `~/.claude/{agents,commands,skills,hooks,rules}` into
+`stow/claude/.claude`, then restows the `claude` package so the originals become symlinks into the repo.
+
+```bash
+python3 run.py track-claude --dry-run     # list what would be ingested
+python3 run.py track-claude               # confirm, move, restow
+```
+
+A file whose repo counterpart already exists (including a dangling symlink at that path) is reported as a conflict and
+left alone. Because `stow.sh` is all-or-nothing and refuses to run while a local regular file blocks a target, the
+restow is skipped while any conflict remains: the command prints the recovery steps instead (resolve the conflicts, then
+`python3 run.py stow claude`; add `--backup-conflicts` to move the blocking local files to `~/.dotfiles-backup/`). When
+no conflict remains, the command first simulates the restow (`stow.sh -n claude`) and, if that fails, prints the first
+lines of stow's output and exits 1 before prompting or moving anything (under `--dry-run` it only warns). If the real
+restow still fails after the move, the files are in the repo but not linked back into `~/.claude`; fix what stow
+reported and run `python3 run.py stow claude`. Stowed files are symlinks, so any regular file counts as local-only
+(except `.DS_Store`, `.backups/` and `__pycache__/` directories, and `.pyc` files, which are gitignored and skipped);
+`plugins/`, `projects/`, and other state directories are never touched. Review and commit the result with
+`git add stow/claude/.claude && git commit`.
 
 ### Inventory Management<a name="inventory-management"></a>
 
 Commands for managing the separate inventory repository containing host definitions and encrypted vault files.
 
-#### `list-hosts`
+#### `inventory-hosts`
 
 List all bootstrap targets from the inventory file.
 
 ```bash
-scripts/hooks/uv-public.sh run python run.py list-hosts
+scripts/hooks/uv-public.sh run python run.py inventory-hosts
 ```
 
-PyYAML is the one third-party import in `run.py`, and `list-hosts` imports it inside its body. Under a bare `python3`
-that lacks PyYAML the command prints `PyYAML is required to read the inventory` with the uv-wrapper command above and
-exits 2 (a setup error), which is why the example goes through the uv wrapper. `make list-hosts` runs bare
-`python3 run.py list-hosts`, so that target needs PyYAML in that interpreter. The dependency is also declared in the PEP
-723 `# /// script` block at the top of `run.py`.
+PyYAML is the one third-party import in `run.py`, and `inventory-hosts` imports it inside its body. Under a bare
+`python3` that lacks PyYAML the command prints `PyYAML is required to read the inventory` with the uv-wrapper command
+above and exits 2 (a setup error), which is why the example goes through the uv wrapper. `make inventory-hosts` runs
+bare `python3 run.py inventory-hosts`, so that target needs PyYAML in that interpreter. The dependency is also declared
+in the PEP 723 `# /// script` block at the top of `run.py`.
 
 **Output example:**
 
@@ -204,136 +577,41 @@ are reported and exit 1 after the last file.
 ✅ All vault files encrypted
 ```
 
-### Codebase Maintenance<a name="codebase-maintenance"></a>
+### Tool Installation<a name="tool-installation"></a>
 
-Commands for cleaning build artifacts and running code quality checks.
+#### `install-uv` and `install-hatch`
 
-#### `clean`
-
-Remove all environments, build artifacts, and caches.
-
-```bash
-python3 run.py clean
-```
-
-**Cleaned patterns:**
-
-**Package build artifacts:**
-
-- `build/`
-- `dist/`
-- `*.egg-info`
-
-**Package cache files:**
-
-- `**/__pycache__/`
-- `**/*.pyc`
-
-**Tool cache files:**
-
-- `.mypy_cache`
-- `.pytest_cache`
-- `.ruff_cache`
-- `.tox`
-- `.nox`
-- `.coverage`
-
-**Virtual environments:**
-
-- `venv`
-- `.venv`
-
-**Output:**
-
-```
-🧹 Cleaning project workspace...
-   Cleaning package build artifacts...
-   Cleaning package cache files...
-   Cleaning tool cache files...
-   Cleaning virtual environments...
-✅ Cleanup complete
-```
-
-**Debug mode:** Shows each file/directory removed, then the total count (enable with `--debug` flag).
-
-#### `run-hooks`
-
-Run prek hooks on modified or specified project files.
+Run the standalone installers [`scripts/install/install_uv.py`](../scripts/install/install_uv.py) and
+[`scripts/install/install_hatch.py`](../scripts/install/install_hatch.py) with the current interpreter. A missing or
+non-executable script exits 2; otherwise the command exits with the installer's return code.
 
 ```bash
-python3 run.py run-hooks                          # hooks on the staged files
-python3 run.py run-hooks mdformat ruff            # only these hooks (names go before --files)
-python3 run.py run-hooks --files README.md docs/README.md
-python3 run.py run-hooks --last-commit            # the files of the last commit
-python3 run.py run-hooks -s main -o HEAD          # the files changed between two refs
-python3 run.py run-hooks --stage pre-push --dry-run
+python3 run.py install-uv
+python3 run.py install-hatch --force --retries 5
 ```
 
-| Option                                                     | Forwards                              |
-| ---------------------------------------------------------- | ------------------------------------- |
-| `HOOK\|PROJECT...`                                         | hook or project filter (placed first) |
-| `-a/--all-files`, `--files`, `-d/--directory`              | file selection                        |
-| `-s/--from-ref`, `-o/--to-ref`, `--last-commit`            | ref range selection                   |
-| `--skip` (repeatable), `--stage`                           | skip hooks, choose the git stage      |
-| `--show-diff-on-failure`, `--fail-fast`, `--dry-run`, `-v` | run behavior                          |
+| Option                  | Forwards                                            |
+| ----------------------- | --------------------------------------------------- |
+| `-f/--force`            | reinstall even if the tool is present               |
+| `-v/--verbose`          | verbose output                                      |
+| `--retries N`           | maximum download attempts                           |
+| `--retry-delay SECONDS` | initial delay between retries (exponential backoff) |
 
-**Behavior:** runs `prek run …` with inherited stdio and exits with prek's return code (so `make pre` fails when a hook
-fails). The hook filter is placed before the options because prek's `--files` is greedy.
+The installers have more options of their own (`--ensure`, `--print-path`, `--timeout`, `--download-method`); see
+[`scripts/install/README.md`](../scripts/install/README.md).
 
-#### `pre`
+### Testing<a name="testing"></a>
 
-Run prek hooks on all project files. This is `run-hooks --all-files`: it accepts the same hook filter and run options,
-but no file or ref selection, because prek rejects `--all-files` combined with `--files`, `--directory`, `--from-ref`,
-`--to-ref`, or `--last-commit`. Use `run-hooks` for those.
+#### `test`
+
+Run the test suite through the public-index uv wrapper: `scripts/hooks/uv-public.sh run --group test pytest [PATH...]`
+(default path: `tests`). Exits with pytest's return code.
 
 ```bash
-python3 run.py pre
-python3 run.py pre mdformat               # one hook over every file
+python3 run.py test tests/unit/run
 ```
 
-**Hooks include:**
-
-- File integrity checks (large files, merge conflicts, private keys, detect-secrets)
-- Leak guard (`check-leaks`: employer-internal identifiers in file contents and paths, and in the commit identity)
-- Python validation (syntax, debug statements, ruff, mypy, interrogate)
-- Data format validation (JSON, YAML, TOML, XML)
-- Formatters (shfmt, taplo, mdformat, ruff --fix-only)
-- Linters (shellcheck, yamllint, ansible-lint) and the codespell spelling fixer
-- Whitespace and line ending fixers
-
-See [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) for complete hook configuration.
-
-#### `prepare-hooks`
-
-Prepare the environments of all prek hooks (`prek prepare-hooks`) so the first commit does not pay for it. Accepts a
-`HOOK|PROJECT` filter, `--skip` (repeatable), and `-v/--verbose`.
-
-**Behavior:** Executes `prek prepare-hooks` with live output and exits with prek's return code (unlike `install-hooks`,
-which ignores it).
-
-#### `install-hooks`
-
-Install the prek git hook shims, overwriting any existing shims.
-
-```bash
-python3 run.py install-hooks
-```
-
-**Behavior:** Executes `prek install -f` (`-f` is `--overwrite`) with live output, in the current working directory. The
-shims installed are the hook types named by `default_install_hook_types` in `.pre-commit-config.yaml` (`pre-commit`,
-`commit-msg`, `post-checkout`, `post-merge`, `post-rewrite`, and `pre-push` here). Does not fail on prek failures (exit
-code ignored).
-
-#### `uninstall-hooks`
-
-Uninstall the prek git hook shims.
-
-```bash
-python3 run.py uninstall-hooks
-```
-
-**Behavior:** Executes `prek uninstall` with live output, in the current working directory. Does not fail on prek
-failures (exit code ignored).
+### Utilities<a name="utilities"></a>
 
 #### `makefile`
 
@@ -341,7 +619,11 @@ Generate `Makefile` from registered commands in `run.py`.
 
 ```bash
 python3 run.py makefile
+python3 run.py makefile --col-spacing 6
 ```
+
+`-c/--col-spacing COLS` (alias `--spacing`, default 4) sets the width of the gap between the command-name and
+description columns in the generated `make help` output.
 
 **Behavior:**
 
@@ -361,137 +643,45 @@ make help
 make update-inventory
 make clean
 make pre
+make lock-check
 ```
 
 **Auto-generated structure:**
 
 ```makefile
-.PHONY: help list-hosts update-inventory clean ...
+.PHONY: help install dev shell status doctor clean lock ...
+
+# Setup & Environment
+install: ## Install dependencies into active environment (or .venv if no active environment)
+	@python3 run.py install
 
 # Inventory
-list-hosts: ## List available bootstrap targets from inventory
-	@python3 run.py list-hosts
+inventory-hosts: ## List available bootstrap targets from inventory
+	@python3 run.py inventory-hosts
 
 update-inventory: ## Update inventory repo
 	@python3 run.py update-inventory
 ...
 ```
 
-### Dotfiles<a name="dotfiles"></a>
+#### `diagnose`
 
-Wrappers over the layered dev-env engine: [`stow.sh`](../stow.sh),
-[`bootstrap/bootstrap.sh`](../bootstrap/bootstrap.sh), and
-[`scripts/dotfiles/render.py`](../scripts/dotfiles/render.py), plus `test`, which runs the suite through
-[`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh). `bootstrap`, `stow`, `render`, and `test` forward their
-flags and exit with the underlying script's return code; `doctor` and `track-claude` run their own logic (described
-below). All commands belong to the `Dotfiles` group.
-
-| Command        | Forwards to                          | Options                                                                                   |
-| -------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `bootstrap`    | `bootstrap/bootstrap.sh`             | `--dry-run`, `--list`, `--only STAGE`, `--from STAGE`, `--resume`, `--verify`, `--no-log` |
-| `stow`         | `stow.sh`                            | `[PACKAGE...]`, `-n/--simulate`, `--backup-conflicts`, `-v/--verbose`                     |
-| `render`       | `scripts/dotfiles/render.py`         | `[TARGET...]`, `--diff`, `--check`, `--force`, `-v/--verbose`                             |
-| `doctor`       | (runs the checks below)              | `-f/--fix`, `-y/--yes`                                                                    |
-| `track-claude` | (moves files, then `stow.sh claude`) | `-n/--dry-run`                                                                            |
-| `test`         | `scripts/hooks/uv-public.sh`         | `[PATH...]` (default: `tests`)                                                            |
+Gather and print local Python environment information to help triage installation and configuration problems. Runs
+[`scripts/env/python_diagnostic.py`](../scripts/env/python_diagnostic.py) with the current interpreter (exiting 2 if the
+script is missing or not executable) and shows its output.
 
 ```bash
-python3 run.py bootstrap --list           # stages across all layers
-python3 run.py bootstrap --dry-run        # simulate every stage
-python3 run.py stow -n                    # preview links; writes nothing
-python3 run.py render --check             # exit 1 if rendered settings drifted
-python3 run.py test tests/unit/test_run_doctor.py
+python3 run.py diagnose
+python3 run.py diagnose --max-installed-packages 25
+python3 run.py diagnose --json --output diag.json
 ```
 
-#### `doctor`
-
-Runs one check per line and exits 1 if any check fails. `tools` and `layers` run first; the remaining checks are skipped
-when either fails.
-
-| Check      | Passes when                                                                                          | Fix (`--fix`)                                  |
-| ---------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `tools`    | `brew`, `git`, `stow`, `uv`, `zsh` are on `PATH`                                                     | none                                           |
-| `layers`   | the overlay registry resolves (`dotfiles_layers` in `bootstrap/lib.sh`) and every overlay exists     | none                                           |
-| `git`      | `git --version` is at least 2.36 (needed for `includeIf "hasconfig:remote.*.url:"`)                  | none                                           |
-| `hooks`    | every hook type in `default_install_hook_types` has a prek-generated shim in the git hooks directory | `prek install`                                 |
-| `links`    | `stow.sh -n` reports `no changes` or `no packages found`                                             | `stow.sh --backup-conflicts`                   |
-| `render`   | `render.py --check` exits 0 (exit 1 is drift; exit 2 is a config or I/O error with no fix)           | `render.py` (without `--force`)                |
-| `brewfile` | `brew bundle check --no-upgrade` passes for every layer's `bootstrap/Brewfile`                       | `brew bundle --no-upgrade --file` per Brewfile |
-
-`--fix` asks before running each failing check's fix, then re-runs every check and reports the final state; `-y/--yes`
-applies the fixes without asking (and implies `--fix`). The `links` fix runs `stow.sh --backup-conflicts`, which moves
-any blocking files into `~/.dotfiles-backup/<timestamp>/` before linking. The `brewfile` check passes when every
-declared entry is installed: outdated entries are not drift (`--no-upgrade`), and its fix installs the missing entries
-without upgrading anything. Without `--fix`, every probe is read-only (`stow.sh -n`, `render.py --check`,
-`brew bundle check --no-upgrade`). The `hooks` check resolves the hooks directory with `git rev-parse --git-path hooks`,
-so it is correct in linked worktrees; it matters because `pre-push` runs the public-repo leak guard and no bootstrap
-stage installs hooks. When `prek` is not on `PATH` the check offers no `--fix`; once prek is available, the manual path
-is `python3 run.py install-hooks` (it runs `prek install -f`). `bootstrap --verify` invokes `doctor` after all stages
-succeed, so it fails the `hooks` check until the shims are installed.
-
-#### `track-claude`
-
-Moves real files that Claude Code (or you) created under `~/.claude/{agents,commands,skills,hooks,rules}` into
-`stow/claude/.claude`, then restows the `claude` package so the originals become symlinks into the repo.
-
-```bash
-python3 run.py track-claude --dry-run     # list what would be ingested
-python3 run.py track-claude               # confirm, move, restow
-```
-
-A file whose repo counterpart already exists (including a dangling symlink at that path) is reported as a conflict and
-left alone. Because `stow.sh` is all-or-nothing and refuses to run while a local regular file blocks a target, the
-restow is skipped while any conflict remains: the command prints the recovery steps instead (resolve the conflicts, then
-`python3 run.py stow claude`; add `--backup-conflicts` to move the blocking local files to `~/.dotfiles-backup/`). When
-no conflict remains, the command first simulates the restow (`stow.sh -n claude`) and, if that fails, prints the first
-lines of stow's output and exits 1 before prompting or moving anything (under `--dry-run` it only warns). If the real
-restow still fails after the move, the files are in the repo but not linked back into `~/.claude`; fix what stow
-reported and run `python3 run.py stow claude`. Stowed files are symlinks, so any regular file counts as local-only
-(except `.DS_Store`, `.backups/` and `__pycache__/` directories, and `.pyc` files, which are gitignored and skipped);
-`plugins/`, `projects/`, and other state directories are never touched. Review and commit the result with
-`git add stow/claude/.claude && git commit`.
-
-### NAS<a name="nas"></a>
-
-Provision the home NAS and deploy its Compose services from this machine, over SSH (tailnet or LAN). Both commands
-belong to the `NAS` group and run the same preflight first: the inventory is present, `vault_password.txt` exists, and
-the `nas` host answers a non-interactive SSH probe (`ConnectTimeout=5`, `BatchMode=yes`) as the user from the inventory.
-A failed probe exits 1 with a remedy.
-
-| Command         | Runs                                                     | Options                                                                                                          |
-| --------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `nas-provision` | `playbooks/nas_bootstrap.yml` through `ansible-playbook` | `--tags TAGS`, `--check`, `--diff`, `--limit HOSTS`, `-e/--extra-vars KEY=VALUE` (repeatable), `-v` (repeatable) |
-| `nas-deploy`    | `scripts/nas/deploy-services.sh`                         | `<service\|all>`, `--dry-run`                                                                                    |
-
-```bash
-python3 run.py nas-provision --check --diff                  # preview the whole playbook (converged host)
-python3 run.py nas-provision --tags dotfiles,haos            # selected roles only
-python3 run.py nas-provision --tags secrets                  # re-render per-service secrets
-python3 run.py nas-deploy glance --dry-run                   # preview the rsync and the remote command
-python3 run.py nas-deploy all
-```
-
-#### `nas-provision`
-
-Runs the preflight, installs the Ansible collections with `ansible-galaxy collection install -r roles/requirements.yml`,
-then runs `ansible-playbook playbooks/nas_bootstrap.yml` (with the inventory and vault password file) through
-[`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh). A failed collection install prints a warning and the
-playbook still runs with the collections already installed. The exit status is Ansible's. `nas_bootstrap.sh` is a thin
-wrapper that forwards its arguments to this command. `--check --diff` previews the whole playbook on a converged host.
-On a fresh host, where `smbd` or `tailscale` is not installed yet, the Samba version probe fails and the Tailscale
-status probe returns nothing for the next task to parse, so `--check` stops there (the real run installs those tools
-first). Both probes are read-only and carry `check_mode: false`.
-
-#### `nas-deploy`
-
-Resolves `ansible_host` and `ansible_user` of the `nas` host with `ansible-inventory` (literal values are required;
-templated values are rejected, and the user falls back to the local login), warns when `services/` has uncommitted
-changes (a deploy ships the working tree), then runs `scripts/nas/deploy-services.sh` with `NAS_HOST` and `NAS_USER` set
-and exits with the script's status. `all` syncs the whole `services/` tree to `~/docker/`; a single service syncs
-`compose.base.yml` plus `services/<svc>/`. Either way the script then runs `~/docker/deploy.sh <svc|all>` on the NAS. A
-`<svc>` outside `^[a-z0-9][a-z0-9_-]*$`, or one without `services/<svc>/compose.yml`, is rejected by the script (exit 2)
-before it syncs anything. It is the same script CI uses (see [`scripts/nas/README.md`](../scripts/nas/README.md)). The
-command declares `script_only = True`, so `run.py makefile` does not generate a Makefile target for it.
+| Option                         | Forwards                                                         |
+| ------------------------------ | ---------------------------------------------------------------- |
+| `--max-installed-packages NUM` | cap the "INSTALLED PACKAGES" list                                |
+| `-s/--save`                    | write to `python_diagnostic_<timestamp>.txt` instead of printing |
+| `-j/--json`                    | JSON output                                                      |
+| `-o/--output FILEPATH`         | explicit output path                                             |
 
 ## Architecture<a name="architecture"></a>
 
@@ -501,11 +691,11 @@ Commands are classes deriving from the abstract `Command` base. Defining a subcl
 (`Command.__init_subclass__`), so no separate registration call exists:
 
 ```python
-class ListHostsCommand(Command):
+class InventoryHostsCommand(Command):
     """
     List available bootstrap targets from inventory
     """
-    name:  ClassVar[str] = 'list-hosts'
+    name:  ClassVar[str] = 'inventory-hosts'
     group: ClassVar[str] = 'Inventory'
 
     def run(self, args: argparse.Namespace) -> None:
@@ -531,6 +721,24 @@ Override the `help_formatter_type` property to change a subcommand's formatter (
 
 **Registry:** `REGISTERED_COMMANDS` maps `name -> Command` instance. Query it with
 `get_commands(by_group=..., group_order=..., exclude=...)`, which returns commands by name, or by group then name.
+
+### uv helpers<a name="uv-helpers"></a>
+
+`run.py` drives `uv` through a small set of helpers rather than building argv by hand:
+
+| Helper                               | Purpose                                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------- |
+| `find_uv_executable()`               | `uv` on `PATH`, else a common install location (`~/.cargo/bin`, `~/.local/bin`, …)    |
+| `check_uv()` / `ensure_uv()`         | version probe / prompt-or-auto install via `run_installer('uv')` when missing         |
+| `uv_command(*args, public=True)`     | build the argv; `public=True` routes through `scripts/hooks/uv-public.sh`             |
+| `uv_run()`, `uv_sync()`, `uv_lock()` | `uv run`, `uv sync` (full option set), `uv lock` (`check_only`, `refresh`, `upgrade`) |
+| `validate_venv()`, `is_venv_stale()` | classify `.venv` as healthy / missing / broken / not activated / stale                |
+| `ensure_venv()`, `enter_venv()`      | create/repair and sync `.venv`; enter it through `venvshell.py`                       |
+
+`uv-public.sh` neutralizes internal-index configuration (`UV_*` index variables and the user-level `uv.toml`), which is
+what keeps `uv.lock` pointing at public PyPI only. It `exec`s a bare `uv`, so when `uv` was found outside `PATH` (right
+after `install-uv`, before the shell restarts) `uv_command` wraps the call in `env PATH=<uv dir>:$PATH`. Pass
+`public=False` for tool-level calls such as `uv --version`.
 
 ### ANSI Styling System<a name="ansi-styling-system"></a>
 
@@ -658,9 +866,6 @@ and `SCRIPT_HELP_COL_SPACING`, and show `ENVVAR_PREFIX` only as a comment.
 SCRIPT_PATH            = Path(__file__)
 DOTFILES_DIR           = SCRIPT_PATH.parent
 
-GIT_DIR                = DOTFILES_DIR / '.git'
-GIT_HOOKS_DIR          = GIT_DIR / 'hooks'
-PRE_COMMIT_HOOK        = GIT_HOOKS_DIR / 'pre-commit'
 VENV_DIR               = DOTFILES_DIR / '.venv'
 BOOTSTRAP_DIR          = DOTFILES_DIR / 'bootstrap'
 BOOTSTRAP_SCRIPT       = BOOTSTRAP_DIR / 'bootstrap.sh'
@@ -675,8 +880,15 @@ ROLES_DIR              = DOTFILES_DIR / 'roles'
 ANSIBLE_REQUIREMENTS   = ROLES_DIR / 'requirements.yml'
 SCRIPTS_DIR            = DOTFILES_DIR / 'scripts'
 RENDER_SCRIPT          = SCRIPTS_DIR / 'dotfiles' / 'render.py'
+LOADENV_SCRIPT_PATH    = SCRIPTS_DIR / 'env' / 'loadenv.py'
+DIAGNOSTIC_SCRIPT_PATH = SCRIPTS_DIR / 'env' / 'python_diagnostic.py'
+VENVSHELL_SCRIPT_PATH  = SCRIPTS_DIR / 'env' / 'venvshell.py'
 UV_PUBLIC_SCRIPT       = SCRIPTS_DIR / 'hooks' / 'uv-public.sh'
 NAS_DEPLOY_SCRIPT      = SCRIPTS_DIR / 'nas' / 'deploy-services.sh'
+INSTALLER_SCRIPTS      = {                       # keyed by InstallableTool = Literal['hatch', 'uv']
+    'hatch': SCRIPTS_DIR / 'install' / 'install_hatch.py',
+    'uv':    SCRIPTS_DIR / 'install' / 'install_uv.py',
+}
 STOW_DIR               = DOTFILES_DIR / 'stow'
 CLAUDE_STOW_DIR        = STOW_DIR / 'claude' / '.claude'
 MAKEFILE               = DOTFILES_DIR / 'Makefile'
@@ -712,6 +924,16 @@ CLAUDE_IGNORE_SUFFIXES = {'.pyc'}
 TRACK_CLAUDE_PREFLIGHT_LINES = 8
 ```
 
+**Python and uv:**
+
+```python
+# Minimum python for command execution; None skips the check (currently None)
+MIN_PYTHON = None
+
+# Where find_uv_executable() looks when uv is not on PATH
+UV_COMMON_EXECUTABLE_PATHS = [~/.cargo/bin/uv, ~/.local/bin/uv, /usr/local/bin/uv, /usr/bin/uv, /opt/homebrew/bin/uv]
+```
+
 **Git hook shims (`doctor` `hooks` check):**
 
 ```python
@@ -727,7 +949,8 @@ PREK_SHIM_MARKER = 'generated by prek'
 ```
 
 `GIT_HOOK_TYPES` mirrors `default_install_hook_types` in `.pre-commit-config.yaml` (a test keeps the two in sync). A
-shim counts as installed when the file under the git hooks directory contains `PREK_SHIM_MARKER`.
+shim counts as installed when the file under the git hooks directory (from `git rev-parse --git-path hooks`) contains
+`PREK_SHIM_MARKER`.
 
 **Environment variables:**
 
@@ -736,7 +959,8 @@ shim counts as installed when the file under the git hooks directory contains `P
 RUN_DEBUG_ENVVAR = f'{ENVVAR_PREFIX}_RUN_DEBUG'
 RUN_DEBUG = os.getenv(RUN_DEBUG_ENVVAR, 'false').lower() == 'true'
 
-# Parsed the same way as RUN_DEBUG; no command reads UV_VERBOSE yet
+# Parsed the same way as RUN_DEBUG; --uv-verbose / --no-uv-verbose override it. When on, main() puts
+# RUST_LOG=uv=debug into RUN_COMMAND_ENVVARS, which shell_command merges into every subprocess environment
 UV_VERBOSE_ENVVAR = f'{ENVVAR_PREFIX}_UV_VERBOSE'
 UV_VERBOSE = os.getenv(UV_VERBOSE_ENVVAR, 'false').lower() == 'true'
 
@@ -752,7 +976,7 @@ NO_COLOR = bool(os.getenv('NO_COLOR'))
 **Clean patterns:** See `CLEAN_PATTERN_GROUPS` dict for complete list of glob patterns removed by `clean` command.
 
 **Script metadata:** `run.py` opens with a PEP 723 `# /// script` block that declares `requires-python = ">=3.9"` and
-the `PyYaml >= 6.0` dependency (the one used by `list-hosts`); a test keeps the dependency in line with
+the `PyYaml >= 6.0` dependency (the one used by `inventory-hosts`); a test keeps the dependency in line with
 `pyproject.toml`.
 
 ### Type System<a name="type-system"></a>
@@ -770,13 +994,13 @@ StyleColor = Union[int, tuple[int, int, int], str]
 class ExitCode(int, enum.Enum):
     SUCCESS        = 0
     COMMAND_FAILED = 1
-    SETUP_ERROR    = 2   # unknown command, missing PyYAML (list-hosts)
+    SETUP_ERROR    = 2   # unknown command, missing PyYAML (inventory-hosts)
     USER_CANCELLED = 3   # Ctrl-C
 ```
 
-**Parsed arguments:** `main()` parses into the root `Args(argparse.Namespace)` (`command: str | None`, `debug: bool`).
-Commands with options declare a nested `Args(argparse.Namespace)` listing their own fields and annotate
-`run(self, args: Args)` with it.
+**Parsed arguments:** `main()` parses into the root `Args(argparse.Namespace)` (`command: str | None`, `debug: bool`,
+`uv_verbose: bool`). Commands with options declare a nested `Args(argparse.Namespace)` listing their own fields and
+annotate `run(self, args: Args)` with it.
 
 ## Error Handling<a name="error-handling"></a>
 
@@ -825,7 +1049,11 @@ except subprocess.CalledProcessError as e:
 
 ```bash
 # List available hosts (PyYAML comes from the uv environment)
-scripts/hooks/uv-public.sh run python run.py list-hosts
+scripts/hooks/uv-public.sh run python run.py inventory-hosts
+
+# Set up the environment, then check it
+python3 run.py install --dev --hooks
+python3 run.py status
 
 # Update inventory with debug output
 python3 run.py --debug update-inventory
@@ -841,8 +1069,8 @@ python3 run.py pre
 # Generate Makefile first
 python3 run.py makefile
 
-# Then use make for any command (make list-hosts needs PyYAML in the python3 that make finds)
-make list-hosts
+# Then use make for any command (make inventory-hosts needs PyYAML in the python3 that make finds)
+make inventory-hosts
 make update-inventory
 make clean
 make pre
@@ -1030,12 +1258,12 @@ python3 run.py update-inventory
 
 ### YAML Parsing Errors<a name="yaml-parsing-errors"></a>
 
-**Symptom:** `list-hosts` fails with "PyYAML is required to read the inventory" (exit 2) or "Failed to parse inventory
-file" (exit 1)
+**Symptom:** `inventory-hosts` fails with "PyYAML is required to read the inventory" (exit 2) or "Failed to parse
+inventory file" (exit 1)
 
-**Solution:** The first message means the `python3` in use lacks PyYAML (which also affects `make list-hosts`); run
-`scripts/hooks/uv-public.sh run python run.py list-hosts` instead. The second means the file itself failed to parse, so
-validate it:
+**Solution:** The first message means the `python3` in use lacks PyYAML (which also affects `make inventory-hosts`); run
+`scripts/hooks/uv-public.sh run python run.py inventory-hosts` instead. The second means the file itself failed to
+parse, so validate it:
 
 ```bash
 # Validate YAML syntax
@@ -1068,7 +1296,8 @@ python3 run.py pre
 ### Argument Parser Construction<a name="argument-parser-construction"></a>
 
 1. **Main parser:** Built with `build_parser()`; a "Debug Options" group holds `-d/--debug/--no-debug` (default from
-   `DOTFILES_RUN_DEBUG`) and an "Other Options" group holds `-h/--help`
+   `DOTFILES_RUN_DEBUG`) and `--uv-verbose/--no-uv-verbose` (default from `DOTFILES_UV_VERBOSE`), and an "Other Options"
+   group holds `-h/--help`
 2. **Subparsers:** One subparser per registered command, using the command's `help_formatter_type`
 3. **Command arguments:** Added by the command's `add_arguments()`; `-h/--help` follows in an "Other options" group
    unless `add_help = False`

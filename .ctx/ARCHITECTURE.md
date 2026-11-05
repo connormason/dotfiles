@@ -42,9 +42,9 @@ ordered base first, then overlays in file order. Full contract in [`bootstrap/RE
   `~/.dotfiles-backup/<timestamp>/`. Package inventory: [`stow/README.md`](../stow/README.md).
 - **`scripts/dotfiles/render.py`**: renders JSON settings files that apps rewrite at runtime (`render/<target>.json`
   fragments merged across layers, with a drift guard).
-- **`run.py doctor`**: verifies tools, the overlay registry, the git version (>= 2.36, for the per-remote `includeIf`
-  identity), the prek hook shims, links, rendered settings, and Brewfiles (`--fix` asks before each repair; `--yes`
-  skips the prompts).
+- **`run.py doctor`**: verifies tools, the overlay registry, python, uv, the git version (>= 2.36, for the per-remote
+  `includeIf` identity), the prek hook shims, the `.venv`, links, rendered settings, and Brewfiles (`--fix` asks before
+  each repair; `--yes` skips the prompts).
 - **`run.py track-claude`**: moves hand-authored files under `~/.claude/{agents,commands,skills,hooks,rules}` into the
   `claude` stow package (`stow/claude/.claude`) and restows it. A file whose repo path already exists is a conflict and
   is left untouched; any conflict skips the restow, and without one the restow is simulated before anything moves
@@ -110,10 +110,18 @@ fails when this list drifts from the playbook):
 
 **Command categories** (the `group` class attribute of each `Command` subclass):
 
-- **Inventory**: `list-hosts`, `inventory-status`, `update-inventory`, `vault-decrypt`, `vault-encrypt`
-- **Codebase**: `clean`, `run-hooks`, `pre`, `prepare-hooks`, `install-hooks`, `uninstall-hooks`, `makefile`
-- **NAS**: `nas-provision`, `nas-deploy`
-- **Dotfiles** (layered dev environment): `bootstrap`, `stow`, `render`, `doctor`, `track-claude`, `test`
+- **Setup & Environment**: `install`, `dev`, `shell`, `status`, `doctor`, `clean`, `lock`, `lock-check`, `lock-upgrade`
+- **Bootstrap & Deploy**: `bootstrap`, `nas-provision`, `nas-deploy`
+- **Dotfiles**: `stow`, `render`, `track-claude`
+- **Inventory**: `inventory-hosts`, `inventory-status`, `update-inventory`, `vault-decrypt`, `vault-encrypt`
+- **Tool Installation**: `install-uv`, `install-hatch`
+- **Hooks**: `install-hooks`, `prepare-hooks`, `uninstall-hooks`, `run-hooks`, `pre`
+- **Testing**: `test`
+- **Utilities**: `makefile`, `diagnose`
+
+Every project-scoped `uv` call is built by `uv_command()` and runs through `scripts/hooks/uv-public.sh`, so `uv.lock`
+only references public PyPI. Hooks commands and `install`/`dev` call `ensure_uv()` / `ensure_venv()` first, so they work
+from a bare `python3`.
 
 **Key features**:
 
@@ -130,7 +138,8 @@ fails when this list drifts from the playbook):
   `--no-debug` overrides `DOTFILES_RUN_DEBUG=true`
 - `DOTFILES_INVENTORY_REPO_URL`: Override inventory repo URL
 - `NO_COLOR`: any non-empty value strips the ANSI styling from the output
-- `DOTFILES_UV_VERBOSE`: parsed like `DOTFILES_RUN_DEBUG` into `UV_VERBOSE`, which no command reads yet
+- `DOTFILES_UV_VERBOSE` / `--uv-verbose`: parsed like the debug flag; when on, `RUST_LOG=uv=debug` is added to the
+  environment of every subprocess `run.py` starts
 
 ## Docker Stack (NAS)
 

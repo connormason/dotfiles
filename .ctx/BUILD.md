@@ -40,15 +40,30 @@ each tag selects is listed in [`playbooks/README.md`](../playbooks/README.md#tag
 
 ## Python Script Commands (`run.py`)
 
-**Running run.py.** Bare `python3 run.py <command>` is enough for the stdlib-only commands. `list-hosts` needs PyYAML,
-so run it as `scripts/hooks/uv-public.sh run python run.py list-hosts`. The NAS commands (`nas-provision`,
-`nas-deploy`) shell out through uv themselves. The global `-d/--debug` flag turns on debug output (so does
+**Running run.py.** Bare `python3 run.py <command>` is enough for the stdlib-only commands. `inventory-hosts` needs
+PyYAML, so run it as `scripts/hooks/uv-public.sh run python run.py inventory-hosts`. The NAS commands (`nas-provision`,
+`nas-deploy`), the environment commands (`install`, `dev`, `lock*`), and the hooks commands shell out through uv
+themselves (installing it on demand). The global `-d/--debug` flag turns on debug output (so does
 `DOTFILES_RUN_DEBUG=true`, which `--no-debug` overrides); it goes before the command:
-`python3 run.py -d update-inventory`. Setting `NO_COLOR` to any non-empty value strips the ANSI styling from the output.
+`python3 run.py -d update-inventory`. `--uv-verbose` (or `DOTFILES_UV_VERBOSE=true`) sets `RUST_LOG=uv=debug` for every
+subprocess. Setting `NO_COLOR` to any non-empty value strips the ANSI styling from the output.
 
 ```bash
+# Create .venv and install dependencies (--dev adds dev groups, --hooks installs the prek shims, --shell enters the env)
+python3 run.py install --dev --hooks
+python3 run.py dev                      # install + dev groups + hooks + enter the venv
+python3 run.py shell                    # enter .venv in a subshell
+
+# Environment health: python, uv, hooks, .venv
+python3 run.py status
+
+# uv.lock: update / fail when stale / upgrade (all packages, or -P per package)
+python3 run.py lock
+python3 run.py lock-check
+python3 run.py lock-upgrade -P ruff
+
 # List available inventory hosts (needs PyYAML: see the note above)
-scripts/hooks/uv-public.sh run python run.py list-hosts
+scripts/hooks/uv-public.sh run python run.py inventory-hosts
 
 # Show the inventory clone's git state
 python3 run.py inventory-status
@@ -60,7 +75,7 @@ python3 run.py update-inventory
 python3 run.py vault-decrypt
 python3 run.py vault-encrypt
 
-# Clean build artifacts and caches
+# Clean build artifacts and caches (--no-envs keeps .venv)
 python3 run.py clean
 
 # Run prek (pre-commit) hooks on all files
@@ -73,9 +88,14 @@ python3 run.py run-hooks --files README.md
 # Prepare the hook environments ahead of the first commit
 python3 run.py prepare-hooks
 
-# Install / remove the prek git hook shims
+# Install / remove the prek git hook shims (--overwrite, --hook-type TYPE, --prepare-hooks; --all to uninstall)
 python3 run.py install-hooks
 python3 run.py uninstall-hooks
+
+# Install uv / hatch with the bundled installers (scripts/install/), or collect a Python environment diagnostic
+python3 run.py install-uv
+python3 run.py install-hatch
+python3 run.py diagnose
 
 # Generate Makefile from run.py commands
 python3 run.py makefile
@@ -84,7 +104,8 @@ python3 run.py makefile
 ## Layered Dev Environment (`run.py` Dotfiles group)
 
 `bootstrap`, `stow`, and `render` wrap `bootstrap/bootstrap.sh`, `stow.sh`, and `scripts/dotfiles/render.py`; `doctor`
-and `track-claude` run their own logic in `run.py`; `test` runs the suite through the uv wrapper. See
+and `track-claude` run their own logic in `run.py`; `test` runs the suite through the uv wrapper. (`doctor` belongs to
+the Setup & Environment group and `bootstrap` to Bootstrap & Deploy; the grouping is only the help layout.) See
 [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. They are stdlib-only, so bare
 `python3 run.py <command>` works (see the note above).
 
@@ -101,7 +122,8 @@ python3 run.py stow --backup-conflicts
 # Render settings from per-layer fragments (--diff previews, --check exits 1 on drift)
 python3 run.py render --check
 
-# Verify tools, overlays, git version and hooks, links, rendered settings, and Brewfiles (--fix asks first; --yes skips)
+# Verify tools, overlays, python/uv/venv, git version and hooks, links, rendered settings, and Brewfiles
+# (--fix asks first; --yes skips)
 python3 run.py doctor
 python3 run.py doctor --fix
 
