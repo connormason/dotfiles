@@ -1574,6 +1574,36 @@ def check_python(*, quiet: bool = False, indent: int = 0) -> ToolInfo:
 
 
 # =======================================================================================
+# Git hook helpers
+# =======================================================================================
+
+
+class HookStatus(TypedDict):
+    """
+    Hook status info dict (returned by :func:`check_hooks_installed`).
+    """
+    installed: bool
+    detail:    str
+
+
+def check_hooks_installed() -> HookStatus:
+    """
+    Check if pre-commit hooks are installed in the git repository.
+
+    :return: dict with "installed" bool and "detail" string describing hook type
+    """
+    if not PRE_COMMIT_HOOK.is_file():
+        return {'installed': False, 'detail': ''}
+
+    try:
+        content = PRE_COMMIT_HOOK.read_text(encoding='utf-8')
+    except OSError:
+        return {'installed': False, 'detail': ''}
+    else:
+        return {'installed': True, 'detail': 'prek' if 'prek' in content else 'pre-commit'}
+
+
+# =======================================================================================
 # `uv` helpers
 # =======================================================================================
 
@@ -2227,7 +2257,8 @@ def enter_venv(*, verbose: bool = False, indent: int = 0) -> None:
 #   - install: Install dependencies into active/default environment
 #   - dev:     Create .venv, install dependencies + hooks, and enter env in a subshell
 #   - shell:   Enter .venv in a subshell
-#   - clean:   Remove project environments, build artifacts, caches, and temporary files
+#   - status:  Show environment health status
+#   - clean:   Remove environments, build artifacts, caches, and temporary files
 # =======================================================================================
 
 
@@ -2382,9 +2413,99 @@ class ShellCommand(Command):
         enter_venv()
 
 
+class StatusCommand(Command):
+    """
+    Show environment health status
+    """
+    name:  ClassVar[str] = 'status'
+    group: ClassVar[str] = 'Setup & Environment'
+
+    OPTIONAL_TOOLS: ClassVar[list[tuple[str, str]]] = []
+
+    def run(self, args: argparse.Namespace) -> None:
+        printf(f'\n{style("dotfiles", fg="bright_blue")} environment status', fg='bright_white', bold=True)
+        printf(style('─' * 80, dim=True))
+        all_ok = True
+
+        # Python
+        python_info = check_python(quiet=True)
+        status_line('python', python_info['version'], python_info['executable'], ok=True)
+
+        # uv
+        if uv_info := check_uv():
+            status_line('uv', uv_info['version'], uv_info['executable'], ok=True)
+        else:
+            status_line('uv', 'not installed', ok=False)
+            all_ok = False
+
+        # Pre-commit hooks
+        hook_status = check_hooks_installed()
+        if hook_status['installed']:
+            status_line('hooks', f"installed ({hook_status['detail']})", ok=True)
+        else:
+            status_line('hooks', 'not installed (run `make dev`)',       ok=False)
+            all_ok = False
+
+        # Optional tools
+        for tool_name, note in self.OPTIONAL_TOOLS:
+            if shutil.which(tool_name):
+                status_line(tool_name, 'available',     ok=True,  optional=True)
+            else:
+                status_line(tool_name, 'not installed', ok=False, optional=True, note=note)
+
+        # .venv (or external active venv if user manages their own)
+        external_venv = get_external_active_venv()
+        target_venv   = external_venv or VENV_DIR
+        venv_label    = 'active venv' if external_venv else '.venv'
+        venv_path     = external_venv or None
+
+        health = validate_venv(target_venv)
+        if health.status == VenvStatus.HEALTHY:
+            venv_desc = f'Python {health.python_version or "?"}'
+            if health.package_count is not None:
+                venv_desc += f', {health.package_count} packages'
+            if not health.stale:
+                venv_desc += ', synced'
+            status_line(venv_label, venv_desc, venv_path, ok=True)
+
+        elif health.status == VenvStatus.MISSING:
+            if external_venv:
+                # `VIRTUAL_ENV` pointed at a path that disappeared between resolve() and validate()
+                status_line(venv_label, 'active venv vanished',           venv_path, ok=False)
+            else:
+                status_line(venv_label, 'not created (run `make install`)',          ok=False)
+            all_ok = False
+
+        elif health.status == VenvStatus.NOT_ACTIVATED:
+            # An external venv is, by definition, the activated one — only the project's `.venv` can land here when
+            # the shell is running outside it
+            venv_desc = f'Python {health.python_version or "?"}'
+            if health.package_count is not None:
+                venv_desc += f', {health.package_count} packages'
+            venv_desc += ', not activated (run `make shell`)'
+            status_line(venv_label, venv_desc, venv_path,      ok=False, warn=True)
+
+        elif health.status == VenvStatus.STALE_DEPS:
+            status_line(venv_label, health.message, venv_path, ok=False, warn=True)
+
+        else:
+            status_line(venv_label, health.message, venv_path, ok=False)
+            all_ok = False
+
+        # Summary
+        printf(style('─' * 80, dim=True))
+        if all_ok:
+            printf('Environment ready.', fg='bright_green')
+        else:
+            printf(
+                f'Environment has issues. To fix, run {style("make install", fg="bright_magenta")}',
+                fg='bright_yellow',
+            )
+
+
 class CleanCommand(Command):
     """
-    Remove all project environments, build artifacts, caches, and temporary files
+    Remove all environments, build artifacts, caches, and temporary files
     """
     name:  ClassVar[str] = 'clean'
     group: ClassVar[str] = 'Setup & Environment'
@@ -3031,6 +3152,7 @@ class RunHooksCommand(Command):
         if getattr(args, 'all_files', False):
             printf('🕝 Running prek hooks on all project files...', fg='bright_cyan')
         elif files := getattr(args, 'files', None):
+            files = cast('list[str]', files)
             printf(f'🕝 Running prek hooks on {len(files)} file(s)...', fg='bright_cyan')
         else:
             printf('🕝 Running prek hooks...', fg='bright_cyan')
