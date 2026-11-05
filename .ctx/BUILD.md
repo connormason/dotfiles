@@ -43,7 +43,8 @@ each tag selects is listed in [`playbooks/README.md`](../playbooks/README.md#tag
 **Running run.py.** Bare `python3 run.py <command>` is enough for the stdlib-only commands. `list-hosts` needs PyYAML,
 so run it as `scripts/hooks/uv-public.sh run python run.py list-hosts`. The NAS commands (`nas-provision`,
 `nas-deploy`) shell out through uv themselves. The global `-d/--debug` flag turns on debug output (so does
-`DOTFILES_RUN_DEBUG=true`); it goes before the command: `python3 run.py -d update-inventory`.
+`DOTFILES_RUN_DEBUG=true`, which `--no-debug` overrides); it goes before the command:
+`python3 run.py -d update-inventory`.
 
 ```bash
 # List available inventory hosts (needs PyYAML: see the note above)
@@ -76,8 +77,8 @@ python3 run.py makefile
 ## Layered Dev Environment (`run.py` Dotfiles group)
 
 Wrappers over `stow.sh`, `bootstrap/bootstrap.sh`, and `scripts/dotfiles/render.py`; see
-[`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. Prefer `scripts/hooks/uv-public.sh run python`
-over bare `python3` when running them from this repo.
+[`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. They are stdlib-only, so bare
+`python3 run.py <command>` works (see the note above).
 
 ```bash
 # Stages across all layers / simulate every stage / run them
@@ -125,9 +126,9 @@ Hooks run via [prek](https://github.com/j178/prek) (a faster pre-commit reimplem
 
 - **Dependency sync**: `uv-lock`, `uv-sync` (the only hook on the post-checkout / post-merge / post-rewrite stages),
   `uv-export` (requirements.txt), `sync-with-uv`, `sync-pre-commit-deps`
-- **Checks**: filesystem safety, large files, merge conflicts, `check-vcs-permalinks` (Markdown links), private keys,
-  `detect-secrets`, submodule ban, shebang/executable, TOML/XML/YAML/JSON syntax, `check-json5`, `check-pkl`,
-  `validate-pyproject`, Python AST/debug/test-naming
+- **Checks**: filesystem safety, large files, merge conflicts, `check-vcs-permalinks` (VCS links must be permalinks),
+  private keys, `detect-secrets`, submodule ban, shebang/executable, TOML/XML/YAML/JSON syntax, `check-json5`,
+  `check-pkl`, `validate-pyproject`, Python AST/debug/test-naming
 - **Leak guard** (blocks employer-internal identifiers): `check-leaks` (pre-commit, also checks the commit identity),
   `check-leaks-msg` (commit-msg), `check-leaks-push-files` and `check-leaks-push-history` (pre-push)
 - **Formatters**: `keep-sorted` (priority 30); at 35, JSON (`.claude` settings via `pretty-format-json`), VS Code

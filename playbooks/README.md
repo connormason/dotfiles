@@ -122,12 +122,12 @@ inside the role run only if they carry a selected tag, and `apply` gives every o
 role-name tag therefore runs the whole role, whereas `configfile` and `secrets` reach only the few tasks inside those
 roles that carry them.
 
-| Tag                                                                             | Runs                                                                                                                                                                                                       |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debian`, `zfs`, `samba`, `docker`, `tailscale`, `dotfiles`, `haos`, `services` | The whole role                                                                                                                                                                                             |
-| `configfile`                                                                    | In `docker`: the `.env` render and the `deploy.sh` copy. In `samba`: the `smb.conf` task. Only those tasks run, plus the `always` ones; the other roles, including `dotfiles` and `haos`, are not selected |
-| `secrets`                                                                       | In `services`: the three secret tasks (find the `env.j2` templates, create the directories, render the files); not the sync or the deploy                                                                  |
-| `always`                                                                        | Setting the become password and refreshing the apt index on every run, plus samba's `Register Samba version` whenever the `samba` include is selected (so with `configfile`)                               |
+| Tag                                                                             | Runs                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debian`, `zfs`, `samba`, `docker`, `tailscale`, `dotfiles`, `haos`, `services` | The whole role                                                                                                                                                                                                                                                                     |
+| `configfile`                                                                    | In `docker`: the `.env` render and the `deploy.sh` copy. In `samba`: the `smb.conf` task. Only those tasks run, plus the `always` ones and any handler they notify (a changed `smb.conf` still restarts Samba); the other roles, including `dotfiles` and `haos`, are not selected |
+| `secrets`                                                                       | In `services`: the three secret tasks (find the `env.j2` templates, create the directories, render the files); not the sync or the deploy                                                                                                                                          |
+| `always`                                                                        | Setting the become password and refreshing the apt index on every run, plus samba's `Register Samba version` whenever the `samba` include is selected (so with `configfile` or `samba`)                                                                                            |
 
 ```bash
 python3 run.py nas-provision --tags docker          # the whole docker role
@@ -136,8 +136,8 @@ python3 run.py nas-provision --tags dotfiles,haos   # the stow engine and the Ho
 python3 run.py nas-provision --tags secrets         # per-service secret files only
 ```
 
-`--tags configfile` assumes `~/docker` exists, because the directory tasks do not carry the tag. On a host that has
-never run the `docker` role, it fails at the `.env` render; run `--tags docker` first. See
+`--tags configfile` assumes `~/docker` exists, because the directory tasks do not carry the tag. On a host without it,
+the run fails (at the `.env` render once samba is installed); run `--tags docker` first. See
 [`roles/docker/README.md`](../roles/docker/README.md#tags-and-running).
 
 ## Vault<a name="vault"></a>

@@ -86,9 +86,9 @@ inventory/
 Ansible roles, all run by `playbooks/nas_bootstrap.yml`, listed in playbook order (`tests/unit/test_docs_consistency.py`
 fails when this list drifts from the playbook):
 
-- `debian`: base Debian configuration: system packages (including the stow engine's prerequisites), the Linuxbrew
-  prefix, and the systemd sleep targets
-- `zfs`: installs ZFS packages (`contrib` apt component, kernel packages, `zfs-dkms`, `zfsutils-linux`) and manages no
+- `debian`: base Debian configuration, covering system packages (including the stow engine's prerequisites), the
+  Linuxbrew prefix, and the systemd sleep targets
+- `zfs`: adds the `contrib` apt component and installs the kernel packages, `zfs-dkms`, `zfsutils-linux`; manages no
   pools
 - `samba`: Samba file sharing
 - `docker`: Docker Engine and compose plugin, docker-group membership, the `~/docker` skeleton and shared `.env`, the
@@ -121,7 +121,8 @@ fails when this list drifts from the playbook):
 **Environment variables and flags**:
 
 - `DOTFILES_RUN_DEBUG`: enables debug output only when set to `true` (case-insensitive)
-- `-d/--debug`: global flag with the same effect; it goes before the command (`python3 run.py -d doctor`)
+- `-d/--debug`: global flag with the same effect; it goes before the command (`python3 run.py -d doctor`).
+  `--no-debug` overrides `DOTFILES_RUN_DEBUG=true`
 - `DOTFILES_INVENTORY_REPO_URL`: Override inventory repo URL
 
 ## Docker Stack (NAS)

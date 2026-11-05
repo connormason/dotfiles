@@ -72,8 +72,9 @@ python3 run.py nas-provision --tags configfile     # step 3 (and step 2, tagged 
 ```
 
 The playbook include carries the tags `samba` and `configfile`, and `apply` hands `samba` to every task in the role. A
-tag on `include_role` selects only the include itself, so `--tags configfile` reaches just the tasks that carry it. See
-[`docker`](../docker/README.md#tags-and-running) for the other tasks selected by that tag.
+tag on `include_role` selects only the include itself, so `--tags configfile` reaches just the tasks that carry it (plus
+the `always`-tagged step 2). See [`docker`](../docker/README.md#tags-and-running) for the other tasks selected by that
+tag.
 
 ## Known gap
 

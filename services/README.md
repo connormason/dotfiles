@@ -4,9 +4,10 @@
 
 Docker Compose definitions for the home NAS stack. Each subdirectory holds the `compose.yml` of one service;
 `compose.base.yml` provides the shared project name (`nas-stack`) and the `nas-network` bridge that ties them together.
-Besides the compose files, some services need inputs that exist only on the NAS: the shared `~/docker/.env` (Glance and
-Plex; see [Secrets](#secrets)), the locally built `autoplex` image (see [`autoplex`](#autoplex)), Caddy's `Caddyfile`
-and certificates (see [`caddy`](#caddy)), and PiHole's rendered `pihole/.env` (see [`pihole`](#pihole)).
+Besides the compose files, some services need inputs that exist only on the NAS, among them the shared `~/docker/.env`
+(Glance and Plex; see [Secrets](#secrets)), the locally built `autoplex` image (see [`autoplex`](#autoplex)), Caddy's
+`Caddyfile` and certificates (see [`caddy`](#caddy)), and, when re-enabled, PiHole's `pihole/.env` (see
+[`pihole`](#pihole)).
 
 These files reach the NAS at `~/docker/` by three routes (see [Deploying](#deploying)): CI on a push to `main`,
 `run.py nas-deploy` from a laptop, and the [`services`](../roles/services/README.md) Ansible role. Each ends in
@@ -125,9 +126,9 @@ socket (read-only). Its `env_file: .env` resolves against `--project-directory ~
 **Disabled** (`compose.yml.disabled`) in favor of Home Assistant OS running as a libvirt VM, which adds the Supervisor
 (apps, managed backups, OS updates). See [`vms/haos/`](../vms/haos/README.md) for the VM and the cutover steps.
 
-The disabled definition uses `network_mode: host` and mounts `homeassistant/config`, `homeassistant/shared`, and
-`/etc/localtime` (read-only). Its service key is `homeassistant` and its container name is `home-assistant`.
-`homeassistant/config/` and `homeassistant/shared/` hold only a `.gitkeep` in the repository.
+The disabled definition uses `network_mode: host` and mounts `homeassistant/config` and `homeassistant/shared`
+(read-write) and `/etc/localtime` (read-only). Its service key is `homeassistant` and its container name is
+`home-assistant`. `homeassistant/config/` and `homeassistant/shared/` hold only a `.gitkeep` in the repository.
 
 ### `pihole`<a name="pihole"></a>
 
@@ -136,7 +137,7 @@ network runs a `dnsmasq` on `:53`, which blocks PiHole. [`vms/haos/setup.sh`](..
 and disables its autostart; otherwise bind the DNS ports to the NAS's LAN address.
 
 DNS server and DHCP-capable ad-blocker. Binds privileged DNS/DHCP ports on the host; the admin UI is remapped to host
-port `8053` to avoid colliding with other web services. Its state lives in `~/docker/pihole-data/etc-pihole`.
+port `8053` to avoid colliding with other web services. It mounts `~/docker/pihole-data/etc-pihole` at `/etc/pihole`.
 `FTLCONF_webserver_api_password` comes from `pihole/.env`, rendered from [`pihole/env.j2`](pihole/env.j2) (variable
 `pihole_web_password`) and loaded through `env_file`. To re-enable, rename the file back to `compose.yml`, run
 `python3 run.py nas-provision --tags secrets` to render `pihole/.env`, then `python3 run.py nas-deploy pihole`.

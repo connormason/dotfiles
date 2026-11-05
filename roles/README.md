@@ -72,9 +72,9 @@ A role-name tag runs the whole role. The `configfile` and `secrets` tags run onl
 
 4. Update `EXPECTED_ORDER` in `tests/unit/test_nas_playbook.py`.
 
-5. Add a row to the table above and a step to the execution-order list in
-   [`playbooks/README.md`](../playbooks/README.md), both in playbook order. `tests/unit/test_docs_consistency.py` checks
-   both against the playbook.
+5. Add a row to the table above, a step to the execution-order list in [`playbooks/README.md`](../playbooks/README.md),
+   and a bullet to the "Role System (NAS)" list in [`.ctx/ARCHITECTURE.md`](../.ctx/ARCHITECTURE.md), all in playbook
+   order. `tests/unit/test_docs_consistency.py` checks all three against the playbook.
 
 Use fully-qualified module names and `become` only on tasks that need it.
 

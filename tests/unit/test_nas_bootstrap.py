@@ -1,5 +1,8 @@
 """
-Static guardrail tests for the NAS bootstrap entry point and its Ansible collection requirements
+Guardrail tests for the NAS bootstrap entry point and its Ansible collection requirements
+
+Most checks are static (they read the script and role files); one test runs ``nas_bootstrap.sh`` in a subprocess with
+``uv`` missing from ``PATH``.
 """
 from __future__ import annotations
 

@@ -416,7 +416,7 @@ and exits with the script's status. `all` syncs the whole `services/` tree to `~
 `compose.base.yml` plus `services/<svc>/`. Either way the script then runs `~/docker/deploy.sh <svc|all>` on the NAS. A
 `<svc>` outside `^[a-z0-9][a-z0-9_-]*$`, or one without `services/<svc>/compose.yml`, is rejected by the script (exit 2)
 before it syncs anything. It is the same script CI uses (see [`scripts/nas/README.md`](../scripts/nas/README.md)). The
-command is registered `script_only`, so `run.py makefile` does not generate a Makefile target for it.
+command declares `script_only = True`, so `run.py makefile` does not generate a Makefile target for it.
 
 ## Architecture<a name="architecture"></a>
 

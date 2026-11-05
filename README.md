@@ -1,8 +1,8 @@
 # Connor's Dotfiles
 
 Personal dotfiles repository. A layered stow engine plus `bootstrap/` stage scripts configure `$HOME` on macOS and on
-the home NAS (Debian Linux). On the NAS, Ansible adds the system-level setup, hands `$HOME` to that engine, and deploys
-the Docker media-server / home-automation stack.
+the home NAS (Debian Linux). On the NAS, Ansible adds the system-level setup, hands `$HOME` to that engine, provisions
+the Home Assistant OS VM, and deploys the Docker media stack.
 
 <!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
 
@@ -231,7 +231,8 @@ python3 run.py update-inventory --force
 **Running run.py.** Bare `python3 run.py <command>` is enough for the stdlib-only commands. `list-hosts` needs PyYAML,
 so run it as `scripts/hooks/uv-public.sh run python run.py list-hosts`. The NAS commands (`nas-provision`, `nas-deploy`)
 shell out through uv themselves. The vault commands call `ansible-vault`, which must be on `PATH`. The global
-`-d/--debug` flag turns on debug output and goes before the command: `python3 run.py -d update-inventory`.
+`-d/--debug` flag turns on debug output and goes before the command: `python3 run.py -d update-inventory`. `--no-debug`
+turns it off even when `DOTFILES_RUN_DEBUG=true`.
 
 ```bash
 # List available hosts (needs PyYAML: see the note above)
@@ -420,13 +421,13 @@ dotfiles/
 
 ### Docker Media Stack (NAS)<a name="docker-media-stack-nas"></a>
 
-Comprehensive media server and home automation, defined in [`services/`](services/README.md):
+Media server stack, defined in [`services/`](services/README.md):
 
 - **Media services**: Plex, Jellyfin, Sonarr, Radarr, Transmission, Prowlarr, Flaresolverr
 - **Network services**: Caddy reverse proxy serving a subset of the services over Tailscale HTTPS (the PiHole definition
   is disabled)
 - **Dashboard**: Glance
-- **Home automation**: Home Assistant runs as a VM (see [`vms/haos/`](vms/haos/README.md))
+- **Home automation** (outside `services/`): Home Assistant runs as a VM (see [`vms/haos/`](vms/haos/README.md))
 - **Support**: Autoplex (copies completed downloads into the library trees)
 
 ### Python CLI (`run.py`)<a name="python-cli-runpy"></a>

@@ -1,9 +1,12 @@
 """
 Guardrail tests that keep hand-maintained documentation inventories in sync with the infrastructure they describe
 
-These assert that the bootstrap stage table in ``bootstrap/README.md`` and the package table in ``stow/README.md`` match
-the stage scripts and stow package directories on disk. They exist to catch the drift documented in
-``CLAUDE-LESSONS.md`` ("Enumerated infra inventories in docs drift") the moment a stage or package is added or removed.
+These assert that the bootstrap stage table in ``bootstrap/README.md``, the package table in ``stow/README.md``, the
+roles table in ``roles/README.md``, and the container table in ``services/README.md`` match the stage scripts, stow
+package directories, role directories, and compose files on disk. They also assert that the role order in the playbook
+docs (``roles/README.md``, ``playbooks/README.md``, ``.ctx/ARCHITECTURE.md``) follows ``playbooks/nas_bootstrap.yml``
+and that ``docs/RUN_PY_REFERENCE.md`` documents every command ``run.py`` registers. They exist to catch the drift
+documented in ``CLAUDE-LESSONS.md`` ("Enumerated infra inventories in docs drift") the moment an inventory changes.
 """
 from __future__ import annotations
 

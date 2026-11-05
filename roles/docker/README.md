@@ -57,10 +57,11 @@ architecture from step 3.
 | Image `danielmmetz/autoplex`      | tag `latest`            | Built from the clone                                   |
 | `~/docker/deploy.sh`              | `0755`                  | `files/deploy.sh`                                      |
 
-`~/docker/.env` holds only `ADVERTISE_IP=https://<host>.<tailnet>:32443`, which `services/plex/compose.yml` passes to
-Plex through a bare `ADVERTISE_IP` entry in `environment`. Per-service secrets are the `services` role's job. The render
-sets `diff: false` because a host that predates that split still holds a password line in the old file, which
-`--check --diff` would print as removed.
+`~/docker/.env` holds only `ADVERTISE_IP=https://<host>.<tailnet>.ts.net:32443` (`<tailnet>` is the part of
+`tailscale_tailnet_name` before `.ts.net`), which `services/plex/compose.yml` passes to Plex through a bare
+`ADVERTISE_IP` entry in `environment`. Per-service secrets are the `services` role's job. The render sets `diff: false`
+because a host that predates that split still holds a password line in the old file, which `--check --diff` would print
+as removed.
 
 ## Variables<a name="variables"></a>
 
@@ -90,9 +91,10 @@ tag on `include_role` selects only the include itself, so `--tags configfile` re
 (steps 10 and 13); the `samba` include shares the tag, so its one `configfile` task runs too. The `always`-tagged
 playbook tasks (become password, apt index refresh) run either way.
 
-`--tags configfile` assumes `~/docker` exists, because the directory tasks do not carry the tag. On a host that has
-never run the role, the `.env` render fails with `Destination directory ... does not exist`; run `--tags docker` first.
-`tests/unit/test_services_role.py::TestTagSelection` exercises the tag selection against a pre-created directory.
+`--tags configfile` assumes `~/docker` exists, because the directory tasks do not carry the tag. On a host without it,
+the run fails (at the `.env` render, with `Destination directory ... does not exist`, once samba is installed); run
+`--tags docker` first. `tests/unit/test_services_role.py::TestTagSelection` exercises the tag selection against a
+pre-created directory.
 
 ## Autoplex image<a name="autoplex-image"></a>
 
