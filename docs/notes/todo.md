@@ -29,4 +29,5 @@ Remaining manual steps (require NAS/GitHub access):
 
 - Remote access for the HAOS VM (Caddy dedicated port with an `upstream` override, or the Tailscale app) — see
   `vms/haos/README.md` "Remote access"
-- Fold `vms/haos/` scripts into the NAS bootstrap once the broader Ansible → scripts refactor is scoped
+- Fold `vms/haos/bridge.sh` into the NAS bootstrap once the broader Ansible → scripts refactor is scoped (the `haos`
+  role already runs `vms/haos/setup.sh`; `bridge.sh` stays hand-run because it blips the network)

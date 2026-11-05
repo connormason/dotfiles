@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # NAS Docker service deploy script
-# Placed on NAS by Ansible bootstrap. Called by GitHub Actions CI.
+# Placed on NAS by the docker role. Called by scripts/nas/deploy-services.sh (run.py nas-deploy and GitHub Actions CI)
+# and by the services role (deploy.sh all).
 #
 # Usage:
 #   deploy.sh <service> [<service> ...]   Deploy specific services

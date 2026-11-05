@@ -7,7 +7,9 @@ the stage scripts and stow package directories on disk. They exist to catch the 
 """
 from __future__ import annotations
 
+import importlib
 import re
+import sys
 from pathlib import Path
 
 import yaml
@@ -352,3 +354,38 @@ class TestRoleOrderDocs:
         roles   = re.findall(r'^- `([a-z0-9_-]+)`:', section, re.MULTILINE)
 
         assert roles == _playbook_role_order(REPO_ROOT)
+
+
+def _registered_commands(repo: Path) -> set[str]:
+    """
+    Return the command names registered in ``run.py``
+
+    :param repo: repository root
+    :return: names in ``run.REGISTERED_COMMANDS``
+    """
+    sys.path.insert(0, str(repo))
+    try:
+        module = importlib.import_module('run')
+    finally:
+        sys.path.remove(str(repo))
+    return set(module.REGISTERED_COMMANDS)
+
+
+class TestRunPyReference:
+    """
+    Guardrails tying docs/RUN_PY_REFERENCE.md to the commands run.py registers
+    """
+    def test_every_registered_command_is_documented(self) -> None:
+        """
+        Every command registered in run.py appears backticked in the reference
+        """
+        text    = (REPO_ROOT / 'docs' / 'RUN_PY_REFERENCE.md').read_text(encoding='utf-8')
+        missing = sorted(name for name in _registered_commands(REPO_ROOT) if f'`{name}`' not in text)
+
+        assert not missing, f'docs/RUN_PY_REFERENCE.md does not document: {missing}'
+
+    def test_registry_is_not_empty(self) -> None:
+        """
+        The registry lookup finds commands (guards against a broken import)
+        """
+        assert _registered_commands(REPO_ROOT)

@@ -97,7 +97,8 @@ make).
 1. `./nas_bootstrap.sh` (system roles, the stow engine in `$HOME`, and the `haos` role, which stops at the missing `br0`
    with instructions; see the [root README](../../README.md)).
 2. `sudo ~/dotfiles-personal/vms/haos/bridge.sh` from the console or `tmux`, then re-run the playbook with `--tags haos`
-   (or `sudo vms/haos/setup.sh` by hand).
+   (or `sudo vms/haos/setup.sh` by hand). `--tags haos` does not deploy `services`, which the first run never reached,
+   so finish with a full `python3 run.py nas-provision`.
 3. Re-create the router reservation if the router was also reset.
 4. During onboarding choose *Upload backup*. Pick the newest `.tar` from `/storage/backups/homeassistant`, or from
    Google Drive if the pool was lost, and enter the encryption key from the emergency kit.
