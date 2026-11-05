@@ -4132,13 +4132,56 @@ class InstallHooksCommand(Command):
     name:  ClassVar[str] = 'install-hooks'
     group: ClassVar[str] = 'Hooks'
 
-    def run(self, args: argparse.Namespace) -> None:
-        printf('🪝 Installing prek git hook shims...', fg='bright_cyan')
-        shell_command(
-            ['prek', 'install', '-f'],
-            indent=3,
-            check=False,
+    class Args(argparse.Namespace):
+        overwrite:     bool                 # --overwrite
+        hook_type:     list[str] | None     # --hook-type
+        prepare_hooks: bool                 # --prepare-hooks
+        verbose:       bool                 # --verbose
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '-f',
+            '--overwrite',
+            action='store_true',
+            help='Overwrite existing git shims',
         )
+        parser.add_argument(
+            '-t',
+            '--hook-type',
+            action='append',
+            metavar='TYPE',
+            help='Which git shim(s) to install (may be repeated)',
+        )
+        parser.add_argument(
+            '--prepare-hooks',
+            action='store_true',
+            help='Also prepare environments for all hooks after installing',
+        )
+        parser.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Output verbose logging from prek',
+        )
+
+    def run(self, args: Args) -> None:
+        check_python()
+        ensure_uv()
+        ensure_venv(groups=['lint'], inexact=True)
+
+        cmd: list[str] = ['prek', 'install']
+        if args.overwrite:
+            cmd.append('--overwrite')
+        if args.prepare_hooks:
+            cmd.append('--prepare-hooks')
+        for hook_type in (args.hook_type or []):
+            cmd.extend(['--hook-type', hook_type])
+        if args.verbose:
+            cmd.append('--verbose')
+
+        printf('🪝 Installing prek git hook shims...', fg='bright_cyan')
+        result = uv_run(cmd, indent=3, check=False)
+        sys.exit(result.returncode)
 
 
 class PrepareHooksCommand(Command):
