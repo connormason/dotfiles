@@ -422,7 +422,7 @@ repos:
         name: "[fix]    spelling mistakes (codespell --write-changes)"
         groups: [fix, local, spelling, codespell]
         stages: [pre-commit]
-        priority: 40
+        priority: 31
         pass_filenames: false
         args: [--write-changes]
         additional_dependencies:
