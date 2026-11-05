@@ -393,8 +393,8 @@ repos:
   # ========================================================================================
   # Formatters/fixers
   #
-  #   - Priority 30    any file type                  keep-sorted
-  #   - Priority 31    any file type                  codespell
+  #   - Priority 30    any file type                  codespell --write-changes
+  #   - Priority 31    any file type                  keep-sorted
   #   - Priority 35    shell scripts                  shfmt
   #                    json (.claude)                 pretty-format-json
   #                    json (vscode keybindings)      sort-json-array
@@ -405,17 +405,6 @@ repos:
   #
   # ========================================================================================
 
-  - repo: https://github.com/google/keep-sorted
-    rev: v0.9.1
-    hooks:
-
-      # Language-agnostic auto-sorting between two markers
-      - id: keep-sorted
-        name: "[format] sorting (keep-sorted)"
-        groups: [format, local, sort]
-        stages: [pre-commit]
-        priority: 30
-
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3
     hooks:
@@ -425,11 +414,22 @@ repos:
         name: "[fix]    spelling mistakes (codespell --write-changes)"
         groups: [fix, local, spelling, codespell]
         stages: [pre-commit]
-        priority: 31
+        priority: 30
         pass_filenames: false
         args: [--write-changes]
         additional_dependencies:
           - tomli
+
+  - repo: https://github.com/google/keep-sorted
+    rev: v0.9.1
+    hooks:
+
+      # Language-agnostic auto-sorting between two markers
+      - id: keep-sorted
+        name: "[format] sorting (keep-sorted)"
+        groups: [format, local, sort]
+        stages: [pre-commit]
+        priority: 31
 
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.13.1-1
