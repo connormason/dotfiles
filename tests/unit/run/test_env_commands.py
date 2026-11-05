@@ -207,8 +207,7 @@ class TestLockCommands:
         assert self.calls == [{'upgrade': True, 'upgrade_packages': None, 'check': False, 'indent': 3}]
 
         out = run.unstyle(capsys.readouterr().out)
-        assert 'uv-export'    in out
-        assert 'sync-with-uv' in out
+        assert 'Regenerating files derived from uv.lock' in out
 
     def test_lock_upgrade_packages(self) -> None:
         """
