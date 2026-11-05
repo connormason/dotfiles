@@ -110,12 +110,13 @@ class TestCommandRegistration:
         Test that every run.py command is registered, in definition order
         """
         assert list(run.REGISTERED_COMMANDS) == [
-            'install', 'dev', 'shell', 'status', 'doctor', 'clean', 'lock', 'lock-check', 'lock-upgrade',
+            'install', 'dev', 'shell', 'status', 'doctor', 'clean',
             'bootstrap', 'nas-provision', 'nas-deploy',
             'stow', 'render', 'track-claude',
             'inventory-hosts', 'inventory-status', 'update-inventory', 'vault-decrypt', 'vault-encrypt',
             'install-uv', 'install-hatch',
             'install-hooks', 'prepare-hooks', 'uninstall-hooks', 'run-hooks', 'pre',
+            'lock', 'lock-check', 'lock-upgrade',
             'test', 'makefile', 'diagnose',
         ]
 
