@@ -232,6 +232,12 @@ CLAUDE_IGNORE_SUFFIXES: set[str]  = {'.pyc'}
 TRACK_CLAUDE_PREFLIGHT_LINES: int = 8
 
 
+# `lock`/`lock-upgrade`/`sync-deps` command configuration
+# -------------------------------------------------------------------
+#: prek hook ids that regenerate files derived from ``uv.lock`` (run together after any lock change).
+DERIVED_FILE_HOOK_IDS: list[str] = ['uv-export', 'sync-with-uv', 'sync-pre-commit-deps']
+
+
 # =======================================================================================
 # Configuration vars read from environment
 #
@@ -4596,10 +4602,6 @@ class TestCommand(Command):
 #   - lock-upgrade: Upgrade locked dependency versions
 #   - sync-deps:    Re-sync dependencies, exported requirements, and hook versions from uv.lock
 # ====================================================================================================
-
-
-#: prek hook ids that regenerate files derived from ``uv.lock`` (run together after any lock change).
-DERIVED_FILE_HOOK_IDS: list[str] = ['uv-export', 'sync-with-uv', 'sync-pre-commit-deps']
 
 
 def regenerate_derived_files(*, indent: int = 0) -> None:
