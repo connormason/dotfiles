@@ -2218,6 +2218,7 @@ def enter_venv(*, verbose: bool = False, indent: int = 0) -> None:
 # Commands:
 #   - install: Install dependencies into active/default environment
 #   - dev:     Create .venv, install dependencies + hooks, and enter env in a subshell
+#   - shell:   Enter .venv in a subshell
 #   - clean:   Remove project environments, build artifacts, caches, and temporary files
 # =======================================================================================
 
@@ -2681,11 +2682,12 @@ class UpdateInventoryCommand(Command):
 
     @staticmethod
     @retry_on_failure(max_attempts=3, delay=2.0, backoff=2.0)
-    def pull_inventory_repo(*, force: bool = False, **kwargs: Any) -> subprocess.CompletedProcess:
+    def pull_inventory_repo(*, force: bool = False, timeout: float = 30, **kwargs: Any) -> subprocess.CompletedProcess:
         """
         Pull the latest inventory changes, optionally discarding uncommitted local changes first
 
         :param force: reset uncommitted changes before pulling
+        :param timeout: timeout in seconds for ``git pull`` command
         :param kwargs: extra keyword arguments for :func:`shell_command`
         :return: completed ``git pull`` process
         """
@@ -2713,7 +2715,7 @@ class UpdateInventoryCommand(Command):
                 ['git', 'pull', 'origin', 'main'],
                 cwd=INVENTORY_DIR,
                 indent=3,
-                timeout=30,
+                timeout=timeout,
                 **kwargs,
             )
         except subprocess.CalledProcessError as e:
@@ -2725,10 +2727,11 @@ class UpdateInventoryCommand(Command):
 
     @staticmethod
     @retry_on_failure(max_attempts=3, delay=5.0, backoff=2.0)
-    def clone_inventory_repo(**kwargs: Any) -> subprocess.CompletedProcess:
+    def clone_inventory_repo(*, timeout: float = 60, **kwargs: Any) -> subprocess.CompletedProcess:
         """
         Clone the inventory repo into the inventory directory
 
+        :param timeout: timeout in seconds for ``git clone`` command
         :param kwargs: extra keyword arguments for :func:`shell_command`
         :return: completed ``git clone`` process
         """
@@ -2736,7 +2739,7 @@ class UpdateInventoryCommand(Command):
             cp = shell_command(
                 ['git', 'clone', '--no-progress', INVENTORY_REPO_URL, str(INVENTORY_DIR)],
                 indent=3,
-                timeout=60,
+                timeout=timeout,
                 **kwargs,
             )
         except subprocess.CalledProcessError as e:
@@ -2793,10 +2796,8 @@ class VaultDecryptCommand(Command):
                     ['ansible-vault', 'decrypt', str(vault_file)],
                     capture_output=True,
                 )
-                printf(f'  └─ {style(str(relative), fg="green")} decrypted', indent=1)
-
-            # ansible-vault returns error if file is already decrypted
             except subprocess.CalledProcessError as e:
+                # ansible-vault returns error if file is already decrypted
                 stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
                 if ('is not vault encrypted' in stderr) or ('input is not vault encrypted' in stderr):
                     printf(f'  └─ {style(str(relative), fg="yellow")} already decrypted, skipping', indent=1)
@@ -2805,6 +2806,8 @@ class VaultDecryptCommand(Command):
                     if stderr.strip():
                         printf(f'     {stderr.strip()}', indent=1, fg='red')
                     failed += 1
+            else:
+                printf(f'  └─ {style(str(relative), fg="green")} decrypted', indent=1)
 
         if failed:
             printf(f'❌ {failed} file{"s" if failed != 1 else ""} failed to decrypt', fg='red', bold=True)
@@ -2838,8 +2841,6 @@ class VaultEncryptCommand(Command):
                     ['ansible-vault', 'encrypt', str(vault_file)],
                     capture_output=True,
                 )
-                printf(f'  └─ {style(str(relative), fg="green")} encrypted', indent=1)
-
             except subprocess.CalledProcessError as e:
                 stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
                 if 'input is already encrypted' in stderr:
@@ -2849,6 +2850,8 @@ class VaultEncryptCommand(Command):
                     if stderr.strip():
                         printf(f'     {stderr.strip()}', indent=1, fg='red')
                     failed += 1
+            else:
+                printf(f'  └─ {style(str(relative), fg="green")} encrypted', indent=1)
 
         if failed:
             printf(f'❌ {failed} file{"s" if failed != 1 else ""} failed to encrypt', fg='red', bold=True)
