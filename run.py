@@ -94,6 +94,7 @@ from typing import Callable
 from typing import ClassVar
 from typing import Literal
 from typing import Protocol
+from typing import TypedDict
 from typing import TypeVar
 from typing import Union
 from typing import cast
@@ -109,6 +110,12 @@ if TYPE_CHECKING:
 # ====================================================================================================
 # Constants/configuration
 # ====================================================================================================
+
+# Python configuration
+# -------------------------------------------------------------------
+# Minimum required Python version for command execution, checked by :func:`check_python`.
+# Can be 2-element version tuple (major, minor), or None to skip minimum version check
+MIN_PYTHON: tuple[int, int] | None = None
 
 # Ansible inventory/vault configuration
 # -------------------------------------------------------------------
@@ -364,6 +371,14 @@ class SupportsWrite(Protocol[T_contra]):
     def write(self, s: T_contra, /) -> object: ...
 
     def flush(self) -> object: ...
+
+
+class ToolInfo(TypedDict):
+    """
+    Basic metadata about a tool used by this script (like python or uv)
+    """
+    executable: Path
+    version:    str
 
 
 # ====================================================================================================
@@ -1465,10 +1480,7 @@ def run_installer(tool_name: InstallableTool, *, indent: int = 0) -> bool:
 
 
 # ====================================================================================================
-# Utility decorators
-#
-# Includes:
-#   - retry_on_failure: Decorator for exponential backoff retry logic
+# Decorators
 # ====================================================================================================
 
 
@@ -1512,6 +1524,37 @@ def retry_on_failure(
 
         return wrapper          # type: ignore[return-value]
     return decorator
+
+
+# =======================================================================================
+# Python version check
+# =======================================================================================
+
+
+def check_python(*, quiet: bool = False,  indent: int = 0) -> ToolInfo:
+    """
+    Get current python executable path and version.
+
+    Also ensures minimum python version requirement is met (if :attr:`MIN_PYTHON` is set at the top of this script).
+
+    :param quiet: if True, suppress console output unless python version is not supported
+    :param indent: number of spaces to indent logging output by
+    :return: :class:`ToolInfo` with python executable path and installed version
+    """
+    v        = sys.version_info
+    v_str    = f'{v.major}.{v.minor}.{v.micro}'
+    exe      = Path(sys.executable)
+    exe_str  = style(f'@ {folduser(exe)}', dim=True)
+    info_str = f'{style("python", fg="white", bold=True)}  {style(v_str.ljust(8), fg="bright_cyan")} {exe_str}'
+
+    if (MIN_PYTHON is not None) and (v < MIN_PYTHON):
+        printf(f'🔴 {info_str}', indent=indent)
+        printf(f'   Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]}+ required', fg='bright_red', indent=indent)
+        sys.exit(ExitCode.SETUP_ERROR)
+
+    if not quiet:
+        printf(f'⚪ {info_str}', indent=indent)
+    return ToolInfo(executable=exe, version=v_str)
 
 
 # ====================================================================================================
