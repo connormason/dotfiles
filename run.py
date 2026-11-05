@@ -2445,12 +2445,14 @@ class CleanCommand(Command):
 # The inventory is a separate repository cloned into the inventory/ directory by run.py.
 #
 # Key commands:
-#   - list-hosts:       Parse inventory.yml and display available bootstrap targets
+#   - inventory-hosts:  Parse inventory.yml and display available bootstrap targets
 #   - inventory-status: Show git status and metadata for inventory directory
 #   - update-inventory: Clone (if missing) or pull (if exists) inventory repo
 #     - Supports --force flag to reset uncommitted changes before pulling
 #     - Includes retry logic with exponential backoff for network resilience
 #     - Provides SSH error detection and troubleshooting guidance
+#   - vault-decrypt:    Decrypt all inventory vault files for editing
+#   - vault-encrypt:    Re-encrypt all inventory vault files after editing
 # ====================================================================================================
 
 
@@ -2492,11 +2494,11 @@ def require_inventory() -> None:
         sys.exit(ExitCode.COMMAND_FAILED)
 
 
-class ListHostsCommand(Command):
+class InventoryHostsCommand(Command):
     """
     List available bootstrap targets from inventory
     """
-    name:  ClassVar[str] = 'list-hosts'
+    name:  ClassVar[str] = 'inventory-hosts'
     group: ClassVar[str] = 'Inventory'
 
     def run(self, args: argparse.Namespace) -> None:

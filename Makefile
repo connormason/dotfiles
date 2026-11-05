@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell clean list-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
+.PHONY: help install dev shell clean inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -20,7 +20,7 @@ help: ## Show this help message
 	@echo "  $(YELLOW)clean               $(NC) Remove all project environments, build artifacts, caches, and temporary files"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Inventory:$(NC)"
-	@echo "  $(YELLOW)list-hosts          $(NC) List available bootstrap targets from inventory"
+	@echo "  $(YELLOW)inventory-hosts     $(NC) List available bootstrap targets from inventory"
 	@echo "  $(YELLOW)inventory-status    $(NC) Display current status of inventory directory"
 	@echo "  $(YELLOW)update-inventory    $(NC) Update inventory repo"
 	@echo "  $(YELLOW)vault-decrypt       $(NC) Decrypt all inventory vault files for editing"
@@ -67,8 +67,8 @@ clean: ## Remove all project environments, build artifacts, caches, and temporar
 	@python3 run.py clean
 
 # Inventory
-list-hosts: ## List available bootstrap targets from inventory
-	@python3 run.py list-hosts
+inventory-hosts: ## List available bootstrap targets from inventory
+	@python3 run.py inventory-hosts
 
 inventory-status: ## Display current status of inventory directory
 	@python3 run.py inventory-status
