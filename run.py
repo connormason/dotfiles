@@ -93,6 +93,7 @@ from typing import Any
 from typing import Callable
 from typing import ClassVar
 from typing import Literal
+from typing import NamedTuple
 from typing import Protocol
 from typing import TypedDict
 from typing import TypeVar
@@ -276,6 +277,7 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 #       dotfiles/
 #         render.py                 RENDER_SCRIPT
 #       env/
+#         loadenv.py                LOADENV_SCRIPT_PATH
 #         python_diagnostic.py      DIAGNOSTIC_SCRIPT_PATH
 #         venvshell.py              VENVSHELL_SCRIPT_PATH
 #       hooks/
@@ -294,6 +296,8 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 #       bootstrap/                  BOOTSTRAP_TESTS_DIR
 #       integration/                INTEGRATION_TESTS_DIR
 #       unit/                       UNIT_TESTS_DIR
+#     vms/                          VMS_DIR
+#       haos/
 #     Makefile                      MAKEFILE
 #     run.py                        SCRIPT_PATH
 #     stow.sh                       STOW_SCRIPT
@@ -314,6 +318,7 @@ BOOTSTRAP_SCRIPT:       Path = BOOTSTRAP_DIR / 'bootstrap.sh'
 DOCS_DIR:               Path = DOTFILES_DIR / 'docs'
 PROFILES_DIR:           Path = DOTFILES_DIR / 'profiles'
 RENDER_DIR:             Path = DOTFILES_DIR / 'render'
+VMS_DIR:                Path = DOTFILES_DIR / 'vms'
 
 INVENTORY_DIR:          Path = DOTFILES_DIR / 'inventory'
 INVENTORY_FILE:         Path = INVENTORY_DIR / 'inventory.yml'
@@ -324,6 +329,7 @@ ANSIBLE_REQUIREMENTS:   Path = ROLES_DIR / 'requirements.yml'
 
 SCRIPTS_DIR:            Path = DOTFILES_DIR / 'scripts'
 RENDER_SCRIPT:          Path = SCRIPTS_DIR / 'dotfiles' / 'render.py'
+LOADENV_SCRIPT_PATH:    Path = SCRIPTS_DIR / 'env' / 'loadenv.py'
 DIAGNOSTIC_SCRIPT_PATH: Path = SCRIPTS_DIR / 'env' / 'python_diagnostic.py'
 VENVSHELL_SCRIPT_PATH:  Path = SCRIPTS_DIR / 'env' / 'venvshell.py'
 UV_PUBLIC_SCRIPT:       Path = SCRIPTS_DIR / 'hooks' / 'uv-public.sh'
@@ -406,6 +412,14 @@ class ToolInfo(TypedDict):
     """
     executable: Path
     version:    str
+
+
+class SSHTarget(NamedTuple):
+    """
+    SSH target details (host + user)
+    """
+    host: str
+    user: str
 
 
 # ====================================================================================================
@@ -1598,6 +1612,26 @@ def check_python(*, quiet: bool = False, indent: int = 0) -> ToolInfo:
 
 
 # =======================================================================================
+# Git status helpers
+# =======================================================================================
+
+
+def warn_on_dirty_services() -> None:
+    """
+    Warn when services/ has uncommitted changes, since a deploy ships the working tree
+    """
+    result = shell_command(
+        ['git', 'status', '--porcelain', '--', 'services'],
+        capture_output=True,
+        check=False,
+        cwd=DOTFILES_DIR,
+    )
+    if (result.returncode == 0) and result.stdout.strip():
+        printf('🟡 services/ has uncommitted changes; deploying the working tree', fg='bright_yellow')
+        printf('CI redeploys main whenever it changes a service, which supersedes a branch deploy', indent=3, dim=True)
+
+
+# =======================================================================================
 # Git hook helpers
 # =======================================================================================
 
@@ -2275,7 +2309,7 @@ def enter_venv(*, verbose: bool = False, indent: int = 0) -> None:
 
 
 # =======================================================================================
-# Ansible vault/inventory helpers
+# Ansible vault helpers
 # =======================================================================================
 
 
@@ -2304,6 +2338,11 @@ def require_vault_password() -> None:
         sys.exit(ExitCode.COMMAND_FAILED)
 
 
+# =======================================================================================
+# Ansible inventory helpers
+# =======================================================================================
+
+
 def require_inventory() -> None:
     """
     Validate that the inventory directory exists and exit with an error if not
@@ -2315,6 +2354,145 @@ def require_inventory() -> None:
         printf(f'   Expected: {folduser(INVENTORY_DIR)}',                                  indent=3)
         printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
         sys.exit(ExitCode.COMMAND_FAILED)
+
+
+def resolve_ssh_target_from_inventory_host(host: str) -> SSHTarget:
+    """
+    Resolve the SSH host and user of an inventory host through ``ansible-inventory``
+
+    :param host: inventory host name
+    :return: tuple of (``ansible_host``, ``ansible_user``); missing values fall back to the inventory name and the
+             local login, as ssh would
+    """
+    result = shell_command(
+        [
+            str(UV_PUBLIC_SCRIPT), 'run', 'ansible-inventory',
+            '-i',                    str(INVENTORY_FILE),
+            '--vault-password-file', str(VAULT_PASSWORD),
+            '--host',                host,
+        ],
+        capture_output=True,
+        check=False,
+        cwd=DOTFILES_DIR,
+    )
+    if result.returncode != 0:
+        printf(f'❌ Could not read host "{host}" from the inventory', fg='red', bold=True)
+        printf(result.stderr.strip(), indent=3)
+        sys.exit(ExitCode.COMMAND_FAILED)
+
+    variables: dict[str, Any] | None
+    try:
+        variables = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        variables = None
+
+    if not isinstance(variables, dict):
+        printf(f'❌ Unexpected ansible-inventory output for host "{host}"', fg='red', bold=True)
+        sys.exit(ExitCode.COMMAND_FAILED)
+
+    ssh_host = str(variables.get('ansible_host') or host)
+    ssh_user = str(variables.get('ansible_user') or getpass.getuser())
+    if '{{' in (ssh_host + ssh_user):
+        printf(f'❌ ansible_host/ansible_user for "{host}" are templated: {ssh_user}@{ssh_host}', fg='red', bold=True)
+        printf('Host/user values in inventory must be literal values', indent=3)
+        sys.exit(ExitCode.COMMAND_FAILED)
+
+    return SSHTarget(host=ssh_host, user=ssh_user)
+
+
+# =======================================================================================
+# Ansible playbook helpers
+# =======================================================================================
+
+
+def parse_playbook_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
+    """
+    Parse ``ansible-playbook`` extra variables (-e, --extra-vars) from command line format (key=val)
+
+    :param extra_vars_list: value from argparse
+    :return: mapping from key -> value
+    """
+    extra_vars: dict[str, str] = {}
+    if extra_vars_list:
+        for var_str in extra_vars_list:
+            if '=' not in var_str:
+                printf(
+                    f'❌ {style("Error", fg="red", bold=True)}: Invalid extra var format "{var_str}". '
+                    f'Use key=value format'
+                )
+                sys.exit(ExitCode.COMMAND_FAILED)
+
+            key, value = var_str.split('=', 1)
+            extra_vars[key.strip()] = value.strip()
+
+    return extra_vars
+
+
+def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
+    """
+    Build the ``ansible-playbook`` command line for nas-provision
+
+    :param args: parsed nas-provision arguments
+    :return: command and arguments
+    """
+    cmd: list[str] = [
+        str(UV_PUBLIC_SCRIPT), 'run', 'ansible-playbook', str(NAS_BOOTSTRAP_PLAYBOOK),
+        '-i',                    str(INVENTORY_FILE),
+        '--vault-password-file', str(VAULT_PASSWORD),
+    ]
+    if args.tags:
+        cmd.extend(['--tags', args.tags])
+    if args.limit:
+        cmd.extend(['--limit', args.limit])
+    if args.check:
+        cmd.append('--check')
+    if args.diff:
+        cmd.append('--diff')
+    for key, value in parse_playbook_extra_vars(args.extra_vars).items():
+        cmd.extend(['-e', f'{key}={value}'])
+    if args.verbose:
+        cmd.append('-' + 'v' * args.verbose)
+    return cmd
+
+
+# =======================================================================================
+# NAS SSH connection helpers
+# =======================================================================================
+
+
+def require_nas_reachable(host: str, user: str) -> None:
+    """
+    Exit with a remedy unless the NAS answers a non-interactive SSH probe
+
+    :param host: SSH host
+    :param user: SSH user
+    :raises SystemExit: if the probe fails
+    """
+    result = shell_command(
+        ['ssh', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes', f'{user}@{host}', 'true'],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        printf(f'❌ Cannot reach the NAS at {user}@{host} over SSH', fg='red', bold=True)
+        printf('Is Tailscale up? Does the host resolve? Is your SSH key loaded (ssh-add)?',                 indent=3)
+        printf(f'The host comes from ansible_host of "{NAS_INVENTORY_HOST}" in {folduser(INVENTORY_FILE)}', indent=3)
+        printf(f'ssh said: {result.stderr.strip()}', indent=3, dim=True)
+        sys.exit(ExitCode.COMMAND_FAILED)
+
+
+def resolve_reachable_nas() -> SSHTarget:
+    """
+    Check the inventory and vault password, resolve the NAS target, and probe it over SSH
+
+    :return: tuple of (SSH host, SSH user)
+    """
+    require_inventory()
+    require_vault_password()
+
+    target = resolve_ssh_target_from_inventory_host(NAS_INVENTORY_HOST)
+    require_nas_reachable(target.host, target.user)
+    return target
 
 
 # =======================================================================================
@@ -2903,148 +3081,6 @@ class CleanCommand(Command):
 #   - nas-provision: Run the Ansible playbook (playbooks/nas_bootstrap.yml) against the inventory's ``nas`` host
 #   - nas-deploy:    Sync services/ to the NAS and run deploy.sh there (scripts/nas/deploy-services.sh, as CI does)
 # ====================================================================================================
-
-
-def resolve_nas_target(host: str = NAS_INVENTORY_HOST) -> tuple[str, str]:
-    """
-    Resolve the SSH host and user of an inventory host through ``ansible-inventory``
-
-    :param host: inventory host name
-    :return: tuple of (``ansible_host``, ``ansible_user``); missing values fall back to the inventory name and the
-             local login, as ssh would
-    """
-    result = shell_command(
-        [
-            str(UV_PUBLIC_SCRIPT), 'run', 'ansible-inventory',
-            '-i', str(INVENTORY_FILE),
-            '--vault-password-file', str(VAULT_PASSWORD),
-            '--host', host,
-        ],
-        capture_output=True,
-        check=False,
-        cwd=DOTFILES_DIR,
-    )
-    if result.returncode != 0:
-        printf(f'❌ Could not read host "{host}" from the inventory', fg='red', bold=True)
-        printf(result.stderr.strip(), indent=3)
-        sys.exit(ExitCode.COMMAND_FAILED)
-
-    try:
-        variables = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        variables = None
-    if not isinstance(variables, dict):
-        printf(f'❌ Unexpected ansible-inventory output for host "{host}"', fg='red', bold=True)
-        sys.exit(ExitCode.COMMAND_FAILED)
-
-    ssh_host = str(variables.get('ansible_host') or host)
-    ssh_user = str(variables.get('ansible_user') or getpass.getuser())
-    if '{{' in (ssh_host + ssh_user):
-        printf(f'❌ ansible_host/ansible_user for "{host}" are templated: {ssh_user}@{ssh_host}', fg='red', bold=True)
-        printf('The NAS commands need literal values in the inventory', indent=3)
-        sys.exit(ExitCode.COMMAND_FAILED)
-
-    return ssh_host, ssh_user
-
-
-def require_nas_reachable(host: str, user: str) -> None:
-    """
-    Exit with a remedy unless the NAS answers a non-interactive SSH probe
-
-    :param host: SSH host
-    :param user: SSH user
-    :raises SystemExit: if the probe fails
-    """
-    result = shell_command(
-        ['ssh', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes', f'{user}@{host}', 'true'],
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        printf(f'❌ Cannot reach the NAS at {user}@{host} over SSH', fg='red', bold=True)
-        printf('Is Tailscale up? Does the host resolve? Is your SSH key loaded (ssh-add)?',                 indent=3)
-        printf(f'The host comes from ansible_host of "{NAS_INVENTORY_HOST}" in {folduser(INVENTORY_FILE)}', indent=3)
-        printf(f'ssh said: {result.stderr.strip()}', indent=3, dim=True)
-        sys.exit(ExitCode.COMMAND_FAILED)
-
-
-def resolve_reachable_nas() -> tuple[str, str]:
-    """
-    Check the inventory and vault password, resolve the NAS target, and probe it over SSH
-
-    :return: tuple of (SSH host, SSH user)
-    """
-    require_inventory()
-    require_vault_password()
-
-    host, user = resolve_nas_target()
-    require_nas_reachable(host, user)
-    return host, user
-
-
-def warn_on_dirty_services() -> None:
-    """
-    Warn when services/ has uncommitted changes, since a deploy ships the working tree
-    """
-    result = shell_command(
-        ['git', 'status', '--porcelain', '--', 'services'],
-        capture_output=True,
-        check=False,
-        cwd=DOTFILES_DIR,
-    )
-    if (result.returncode == 0) and result.stdout.strip():
-        printf('🟡 services/ has uncommitted changes; deploying the working tree', fg='bright_yellow')
-        printf('CI redeploys main whenever it changes a service, which supersedes a branch deploy', indent=3, dim=True)
-
-
-def parse_ansible_playbook_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
-    """
-    Parse ``ansible-playbook`` extra variables (-e, --extra-vars) from command line format (key=val)
-
-    :param extra_vars_list: value from argparse
-    :return: mapping from key -> value
-    """
-    extra_vars: dict[str, str] = {}
-    if extra_vars_list:
-        for var_str in extra_vars_list:
-            if '=' not in var_str:
-                printf(
-                    f'❌ {style("Error", fg="red", bold=True)}: Invalid extra var format "{var_str}". '
-                    f'Use key=value format'
-                )
-                sys.exit(ExitCode.COMMAND_FAILED)
-
-            key, value = var_str.split('=', 1)
-            extra_vars[key.strip()] = value.strip()
-
-    return extra_vars
-
-
-def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
-    """
-    Build the ``ansible-playbook`` command line for nas-provision
-
-    :param args: parsed nas-provision arguments
-    :return: command and arguments
-    """
-    cmd: list[str] = [
-        str(UV_PUBLIC_SCRIPT), 'run', 'ansible-playbook', str(NAS_BOOTSTRAP_PLAYBOOK),
-        '-i', str(INVENTORY_FILE),
-        '--vault-password-file', str(VAULT_PASSWORD),
-    ]
-    if args.tags:
-        cmd.extend(['--tags', args.tags])
-    if args.limit:
-        cmd.extend(['--limit', args.limit])
-    if args.check:
-        cmd.append('--check')
-    if args.diff:
-        cmd.append('--diff')
-    for key, value in parse_ansible_playbook_extra_vars(args.extra_vars).items():
-        cmd.extend(['-e', f'{key}={value}'])
-    if args.verbose:
-        cmd.append('-' + 'v' * args.verbose)
-    return cmd
 
 
 class NasDeployCommand(Command):
