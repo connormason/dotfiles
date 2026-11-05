@@ -4121,7 +4121,7 @@ class VaultEncryptCommand(Command):
 #   - prepare-hooks:   Prepare the environments of all prek hooks
 #   - uninstall-hooks: Uninstall prek git hook shims
 #   - run-hooks:       Run prek hooks on modified or specified project files
-#   - pre:             Run prek hooks on all files
+#   - pre:             Run prek pre-commit hooks on all files
 # ====================================================================================================
 
 
@@ -4294,13 +4294,13 @@ class RunHooksCommand(Command):
 
     class Args(argparse.Namespace):
         hooks:       list[str] | None   # positional arg(s) "HOOK|PROJECT"
-        skip:        list[str] | None   # --skip
         all_files:   bool               # --all-files
         files:       list[str] | None   # --files
         directory:   str | None         # --directory
         from_ref:    str | None         # --from-ref
         to_ref:      str | None         # --to-ref
         last_commit: bool               # --last-commit
+        skip:        list[str] | None   # --skip
         stage:       str | None         # --stage
         show_diff:   bool               # --show-diff-on-failure
         fail_fast:   bool               # --fail-fast
@@ -4308,15 +4308,17 @@ class RunHooksCommand(Command):
         verbose:     bool               # --verbose
 
     def add_arguments(self, parser: argparse.ArgumentParser, *, include_selection: bool = True) -> None:
-        parser.add_argument(
-            'hooks',
-            nargs='*',
-            default=None,
-            metavar='HOOK|PROJECT',
-            help='Hooks or projects to run (default: all)',
-        )
+        def add_positional_args() -> None:
+            parser.add_argument(
+                'hooks',
+                nargs='*',
+                default=None,
+                metavar='HOOK|PROJECT',
+                help='Hooks or projects to run (default: all)',
+            )
+        add_positional_args()
 
-        if include_selection:
+        def add_file_opts() -> None:
             file_opts = parser.add_argument_group('File selection')
             file_opts.add_argument(
                 '-a',
@@ -4336,7 +4338,10 @@ class RunHooksCommand(Command):
                 metavar='DIR',
                 help='Run on all files in this directory',
             )
+        if include_selection:
+            add_file_opts()
 
+        def add_ref_opts() -> None:
             ref_opts = parser.add_argument_group('Ref selection')
             ref_opts.add_argument(
                 '-s',
@@ -4355,41 +4360,45 @@ class RunHooksCommand(Command):
                 action='store_true',
                 help='Run on the files of the last commit (--from-ref HEAD~1 --to-ref HEAD)',
             )
+        if include_selection:
+            add_ref_opts()
 
-        run_opts = parser.add_argument_group('Run options')
-        run_opts.add_argument(
-            '--skip',
-            action='append',
-            metavar='HOOK|PROJECT',
-            help='Skip this hook or project (repeatable)',
-        )
-        run_opts.add_argument(
-            '--stage',
-            metavar='STAGE',
-            help='The git stage the hooks run for (e.g. pre-push, manual)',
-        )
-        run_opts.add_argument(
-            '--show-diff-on-failure',
-            action='store_true',
-            dest='show_diff',
-            help='Run `git diff` after a hook fails',
-        )
-        run_opts.add_argument(
-            '--fail-fast',
-            action='store_true',
-            help='Stop after the first failing hook',
-        )
-        run_opts.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='List the hooks that would run without running them',
-        )
-        run_opts.add_argument(
-            '-v',
-            '--verbose',
-            action='store_true',
-            help='Show verbose prek output',
-        )
+        def add_run_opts() -> None:
+            run_opts = parser.add_argument_group('Run options')
+            run_opts.add_argument(
+                '--skip',
+                action='append',
+                metavar='HOOK|PROJECT',
+                help='Skip this hook or project (repeatable)',
+            )
+            run_opts.add_argument(
+                '--stage',
+                metavar='STAGE',
+                help='The git stage the hooks run for (e.g. pre-push, manual)',
+            )
+            run_opts.add_argument(
+                '--show-diff-on-failure',
+                action='store_true',
+                dest='show_diff',
+                help='Run `git diff` after a hook fails',
+            )
+            run_opts.add_argument(
+                '--fail-fast',
+                action='store_true',
+                help='Stop after the first failing hook',
+            )
+            run_opts.add_argument(
+                '--dry-run',
+                action='store_true',
+                help='List the hooks that would run without running them',
+            )
+            run_opts.add_argument(
+                '-v',
+                '--verbose',
+                action='store_true',
+                help='Show verbose prek output',
+            )
+        add_run_opts()
 
     @staticmethod
     def build_command(args: Args) -> list[str]:
@@ -4436,6 +4445,12 @@ class RunHooksCommand(Command):
         return cmd
 
     def run(self, args: Args) -> None:
+        check_python()
+        ensure_uv()
+        ensure_venv(groups=['lint'], inexact=True)
+
+        cmd = self.build_command(args)
+
         if getattr(args, 'all_files', False):
             printf('🕝 Running prek hooks on all project files...',     fg='bright_cyan')
         elif files := getattr(args, 'files', None):
@@ -4444,7 +4459,7 @@ class RunHooksCommand(Command):
         else:
             printf('🕝 Running prek hooks...',                          fg='bright_cyan')
 
-        result = shell_command(self.build_command(args), check=False)
+        result = uv_run(cmd, check=False)
         sys.exit(result.returncode)
 
 

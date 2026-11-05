@@ -180,6 +180,10 @@ exclude = [
 disable_error_code = ["override"]
 module             = ["run"]
 
+[[tool.mypy.overrides]]
+disable_error_code = ["arg-type"]
+module             = ["tests.unit.scripts.env.test_loadenv"]
+
 # `ruff` global configuration
 # ===========================
 [tool.ruff]

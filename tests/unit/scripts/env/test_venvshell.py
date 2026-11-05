@@ -823,7 +823,7 @@ class TestVerboseOutput:
         mock_run = MagicMock()
 
         with patch('venvshell.subprocess.run', mock_run):
-            result = launch_venv_shell(fake_venv)
+            result = launch_venv_shell(fake_venv)               # type: ignore[func-returns-value]
         assert result is None
 
     def test_handles_keyboard_interrupt(self, fake_venv: Path, monkeypatch: pytest.MonkeyPatch) -> None:
