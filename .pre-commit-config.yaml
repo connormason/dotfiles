@@ -679,11 +679,12 @@ repos:
     rev: v2.4.3
     hooks:
 
-      # Fix common misspellings in text files
+      # Check for common misspellings in text files
+      # Only run in CI. When hooks are run locally, we auto-fix misspellings with ``codespell --write-changes`` (above)
       - id: codespell
         name: "[check]  spelling mistakes (codespell)"
-        groups: [check, local, ci, spelling, codespell]
-        stages: [pre-commit, manual]
+        groups: [check, ci, spelling, codespell]
+        stages: [manual]
         priority: 40
         pass_filenames: false
         additional_dependencies:
