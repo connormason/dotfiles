@@ -11,6 +11,7 @@ Installer scripts for bootstrapping tools commonly used in development environme
 - [Scripts](#scripts)
   - [install_uv.py](#install_uvpy)
   - [install_hatch.py](#install_hatchpy)
+  - [`run.py` integration](#runpy-integration)
 - [Common Features](#common-features)
   - [Smart Detection](#smart-detection)
   - [Network Resilience](#network-resilience)
@@ -22,6 +23,7 @@ Installer scripts for bootstrapping tools commonly used in development environme
   - [Verification failures](#verification-failures)
 - [Design Philosophy](#design-philosophy)
 - [Adding New Installers](#adding-new-installers)
+- [Re-syncing from the source repository](#re-syncing-from-the-source-repository)
 - [References](#references)
 
 <!-- mdformat-toc end -->
@@ -54,10 +56,15 @@ backoff for unreliable networks and shell-specific PATH guidance when the binary
 
 **Options:**
 
-- `--force` — reinstall even if uv is already present
+- `-f, --force` — reinstall even if uv is already present
+- `-e, --ensure` — install only if uv is missing, otherwise exit quietly with no output (what `run.py` uses)
+- `-p, --print-path` — print the path to the uv executable and exit (does not install)
+- `-t, --timeout SECONDS` — download timeout (default: 30.0)
+- `-r, --retries NUM` — max download retry attempts (default: 3)
+- `-d, --retry-delay SECONDS` — initial delay between retries with exponential backoff (default: 2)
+- `-m, --download-method METHOD [METHOD ...]` — ordered download methods, highest priority first (`curl`, `urllib`;
+  default: `curl urllib`)
 - `-v, --verbose` — verbose output for debugging
-- `--retries N` — max download retry attempts (default: 3)
-- `--retry-delay SECONDS` — initial delay between retries with exponential backoff (default: 2)
 
 **What it does:**
 
@@ -68,8 +75,8 @@ backoff for unreliable networks and shell-specific PATH guidance when the binary
 5. Verifies the installation and prints PATH setup instructions if needed
 6. Cleans up temporary files
 
-**Exit codes:** `0` success; `2` download failed; `3` installation failed; `4` verification failed; `5` unsupported
-platform; `6` Python version too old.
+**Exit codes:** `0` success (or already installed); `1` invalid parameters; `2` download failed; `3` installation
+failed; `4` verification failed; `5` unsupported platform; `6` Python version too old; `7` not found (`--print-path`).
 
 ### install_hatch.py<a name="install_hatchpy"></a>
 
@@ -85,12 +92,7 @@ universal installer from GitHub releases. Cross-platform with the same retry log
 ./scripts/install/install_hatch.py --retries 5 --retry-delay 3
 ```
 
-**Options:**
-
-- `--force` — reinstall even if hatch is already present
-- `-v, --verbose` — verbose output for debugging
-- `--retries N` — max download retry attempts (default: 3)
-- `--retry-delay SECONDS` — initial delay between retries with exponential backoff (default: 2)
+**Options:** the same as `install_uv.py` (`-f`, `-e`, `-p`, `-t`, `-r`, `-d`, `-m`, `-v`), applied to hatch.
 
 **What it does:**
 
@@ -100,8 +102,12 @@ universal installer from GitHub releases. Cross-platform with the same retry log
 4. Runs the installer using the current Python interpreter
 5. Verifies installation and provides shell-specific PATH setup instructions
 
-**Exit codes:** `0` success; `2` download failed; `3` installation failed; `4` verification failed; `5` unsupported
-platform; `6` Python version incompatible.
+**Exit codes:** the same as `install_uv.py`.
+
+### `run.py` integration<a name="runpy-integration"></a>
+
+`python3 run.py install-uv` and `python3 run.py install-hatch` run these scripts (options `--force`, `--verbose`,
+`--retries`, `--retry-delay`). `run.py`'s `ensure_uv()` runs `install_uv.py --ensure` when uv is missing.
 
 ## Common Features<a name="common-features"></a>
 
@@ -188,6 +194,21 @@ Follow the established pattern:
 4. **Verification** — do not trust; verify after installation
 5. **PATH guidance** — detect shell and print the right command
 6. **Exit codes** — use a typed `ExitCode` enum
+
+## Re-syncing from the source repository<a name="re-syncing-from-the-source-repository"></a>
+
+These scripts are copied from the author's other dotfiles repository, with a scrub pass so nothing environment-specific
+reaches this public repo (`install_uv.py`, `install_hatch.py`). To re-sync, copy the newer file over the local one and
+re-apply the same pass:
+
+- Header: keep the author name; drop the email, any provenance lines that name an internal tool, and its version
+- Remove any internal bug-tracker link comments (keep the explanation of the workaround they annotate)
+- Reword employer-specific phrasing in explanations (for example, about native trust stores) to "corporate CAs/hosts"
+- Verify with the repository leak guard (`python3 run.py run-hooks check-leaks --all-files`) and a `--help` smoke test
+  per script
+
+The scrub rules come from the work-parity design,
+[`docs/plans/2026-11/2026-11-02-work-parity-design.md`](../../docs/plans/2026-11/2026-11-02-work-parity-design.md).
 
 ## References<a name="references"></a>
 

@@ -29,6 +29,8 @@ making them safe to run without a pre-activated environment.
   - [Behavior](#behavior-2)
   - [Exit Codes](#exit-codes-2)
   - [Usage Examples](#usage-examples-2)
+- [`run.py` integration](#runpy-integration)
+- [Re-syncing from the source repository](#re-syncing-from-the-source-repository)
 
 <!-- mdformat-toc end -->
 
@@ -123,6 +125,7 @@ python3 scripts/env/python_diagnostic.py [OPTIONS]
 | Flag                               | Description                                           | Default                             |
 | ---------------------------------- | ----------------------------------------------------- | ----------------------------------- |
 | `--max-installed-packages NUM`     | Truncate the installed-packages list to `NUM` entries | no limit                            |
+| `--no-color`                       | Disable ANSI colors (`NO_COLOR` has the same effect)  | off                                 |
 | `-s`, `--save`                     | Save output to a timestamped file instead of printing | off                                 |
 | `-j`, `--json`                     | Output raw JSON instead of formatted text             | off                                 |
 | `-o FILEPATH`, `--output FILEPATH` | Explicit output file path (implies `--save`)          | `python_diagnostic_<timestamp>.txt` |
@@ -263,3 +266,29 @@ python3 scripts/env/venvshell.py --verbose
 export VENVSHELL_PATH=~/projects/myapp/.venv
 python3 scripts/env/venvshell.py
 ```
+
+---
+
+## `run.py` integration<a name="runpy-integration"></a>
+
+| `run.py` command | Script                 | Notes                                                               |
+| ---------------- | ---------------------- | ------------------------------------------------------------------- |
+| `diagnose`       | `python_diagnostic.py` | forwards `--max-installed-packages`, `--save`, `--json`, `--output` |
+| `shell`, `dev`   | `venvshell.py`         | runs it with `--path .venv`                                         |
+
+`loadenv.py` is not called by `run.py`.
+
+## Re-syncing from the source repository<a name="re-syncing-from-the-source-repository"></a>
+
+These scripts are copied from the author's other dotfiles repository, with a scrub pass so nothing environment-specific
+reaches this public repo (`python_diagnostic.py`, `venvshell.py`; `loadenv.py` follows the same header convention). To
+re-sync, copy the newer file over the local one and re-apply the same pass:
+
+- Header: keep the author name; drop the email, any provenance lines that name an internal tool, and its version
+- Remove any internal bug-tracker link comments (keep the explanation of the workaround they annotate)
+- Reword employer-specific phrasing in explanations (for example, about native trust stores) to "corporate CAs/hosts"
+- Verify with the repository leak guard (`python3 run.py run-hooks check-leaks --all-files`) and a `--help` smoke test
+  per script
+
+The scrub rules come from the work-parity design,
+[`docs/plans/2026-11/2026-11-02-work-parity-design.md`](../../docs/plans/2026-11/2026-11-02-work-parity-design.md).
