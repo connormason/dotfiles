@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks makefile nas-provision doctor bootstrap stow render track-claude test
+.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test makefile
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -27,7 +27,6 @@ help: ## Show this help message
 	@echo "  $(YELLOW)prepare-hooks       $(NC) Prepare the environments of all prek hooks"
 	@echo "  $(YELLOW)install-hooks       $(NC) Install prek git hook shims (overwrites any existing shims)"
 	@echo "  $(YELLOW)uninstall-hooks     $(NC) Uninstall prek git hook shims"
-	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)NAS:$(NC)"
 	@echo "  $(YELLOW)nas-provision       $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
@@ -39,6 +38,9 @@ help: ## Show this help message
 	@echo "  $(YELLOW)render              $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
 	@echo "  $(YELLOW)track-claude        $(NC) Ingest new ~/.claude agents, commands, skills, hooks, and rules into the repo"
 	@echo "  $(YELLOW)test                $(NC) Run the test suite via uv (public-index wrapper)"
+	@echo ""
+	@echo "$(BRIGHT_WHITE)Utilities:$(NC)"
+	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
 	@echo ""
 
 # Inventory
@@ -76,9 +78,6 @@ install-hooks: ## Install prek git hook shims (overwrites any existing shims)
 uninstall-hooks: ## Uninstall prek git hook shims
 	@python3 run.py uninstall-hooks
 
-makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
-	@python3 run.py makefile
-
 # NAS
 nas-provision: ## Provision the NAS with the Ansible playbook: system config, the stow engine, then services
 	@python3 run.py nas-provision
@@ -101,3 +100,7 @@ track-claude: ## Ingest new ~/.claude agents, commands, skills, hooks, and rules
 
 test: ## Run the test suite via uv (public-index wrapper)
 	@python3 run.py test
+
+# Utilities
+makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
+	@python3 run.py makefile
