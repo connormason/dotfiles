@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help clean list-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
+.PHONY: help install dev clean list-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -14,7 +14,9 @@ help: ## Show this help message
 	@echo "$(BRIGHT_GREEN)Runner script for Connor's dotfiles$(NC)"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Setup & Environment:$(NC)"
-	@echo "  $(YELLOW)clean               $(NC) Remove all environments, build artifacts, and caches"
+	@echo "  $(YELLOW)install             $(NC) Install dependencies into active environment (or .venv if no active environment)"
+	@echo "  $(YELLOW)dev                 $(NC) Create .venv, install dependencies + hooks, and enter environment in a subshell"
+	@echo "  $(YELLOW)clean               $(NC) Remove all project environments, build artifacts, caches, and temporary files"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Inventory:$(NC)"
 	@echo "  $(YELLOW)list-hosts          $(NC) List available bootstrap targets from inventory"
@@ -51,7 +53,13 @@ help: ## Show this help message
 	@echo ""
 
 # Setup & Environment
-clean: ## Remove all environments, build artifacts, and caches
+install: ## Install dependencies into active environment (or .venv if no active environment)
+	@python3 run.py install
+
+dev: ## Create .venv, install dependencies + hooks, and enter environment in a subshell
+	@python3 run.py dev
+
+clean: ## Remove all project environments, build artifacts, caches, and temporary files
 	@python3 run.py clean
 
 # Inventory

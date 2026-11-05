@@ -2216,13 +2216,151 @@ def enter_venv(*, verbose: bool = False, indent: int = 0) -> None:
 # Setup & Environment commands
 #
 # Commands:
-#   - clean: Remove build artifacts, caches, and temporary files
+#   - clean: Remove project environments, build artifacts, caches, and temporary files
 # =======================================================================================
+
+
+class InstallCommand(Command):
+    """
+    Install dependencies into active environment (or .venv if no active environment)
+    """
+    name:  ClassVar[str] = 'install'
+    group: ClassVar[str] = 'Setup & Environment'
+
+    class Args(argparse.Namespace):
+        all:   bool     # --all
+        dev:   bool     # --dev
+        hooks: bool     # --hooks/--no-hooks
+        shell: bool     # --shell/--no-shell
+
+    def add_arguments(
+        self,
+        parser: argparse.ArgumentParser,
+        *,
+        all: bool = True,
+        dev: bool = True,
+        hooks: bool | None = True,
+        shell: bool | None = True,
+    ) -> None:
+        if all:
+            parser.add_argument(
+                '-a',
+                '--all',
+                action='store_true',
+                help='Install all optional project dependencies',
+            )
+        if dev:
+            parser.add_argument(
+                '-d',
+                '--dev',
+                action='store_true',
+                help='Install development dependencies',
+            )
+
+        if (hooks is not None) and hooks:
+            parser.add_argument(
+                '--hooks',
+                action='store_true',
+                help='Install pre-commit (prek) git hooks',
+            )
+        elif hooks is not None:
+            parser.add_argument(
+                '--no-hooks',
+                dest='hooks',
+                action='store_false',
+                help='Skip pre-commit (prek) hook installation',
+            )
+
+        if (shell is not None) and shell:
+            parser.add_argument(
+                '--shell',
+                '--env',
+                dest='shell',
+                action='store_true',
+                help='Enter the environment in subshell after installation (if not already active)',
+            )
+        elif shell is not None:
+            parser.add_argument(
+                '--no-shell',
+                '--no-env',
+                dest='shell',
+                action='store_false',
+                help='Skip entering the environment in subshell after installation',
+            )
+
+    def run(self, args: Args) -> None:
+        check_python()
+        ensure_uv()
+
+        if active_venv := os.environ.get('VIRTUAL_ENV'):
+            printf(f'📦 Installing dependencies into active environment: {pathstyle(active_venv)}', fg='bright_cyan')
+            uv_sync(
+                active=True,
+                inexact=True,
+                no_dev=not getattr(args, 'dev', False),
+                all_extras=getattr(args, 'all', False),
+                indent=3,
+            )
+            printf('')
+        else:
+            ensure_venv(
+                inexact=True,
+                no_dev=not getattr(args, 'dev', False),
+                all_extras=getattr(args, 'all', False),
+            )
+
+        if args.hooks:
+            printf('💿 Installing pre-commit hooks...', fg='bright_cyan')
+            uv_run(['prek', 'install', '-f'], active=active_venv is not None, indent=3)
+            printf('')
+
+        if args.shell:
+            enter_venv()
+            return
+
+        printf(f'✅ Environment ready: {pathstyle(VENV_DIR)}', fg='bright_green')
+        if not active_venv:
+            printf(f'Enter environment with: {style("make shell", fg="bright_magenta")}', fg='bright_white', indent=3)
+
+
+class DevCommand(InstallCommand):
+    """
+    Create .venv, install dependencies + hooks, and enter environment in a subshell
+    """
+    name:  ClassVar[str] = 'dev'
+    group: ClassVar[str] = 'Setup & Environment'
+
+    def add_arguments(self, parser: argparse.ArgumentParser, **kwargs: Any) -> None:
+        super().add_arguments(parser, dev=False, hooks=False, shell=False, **kwargs)
+
+    def run(self, args: InstallCommand.Args) -> None:
+        check_python()
+        ensure_uv()
+
+        if active_venv := os.environ.get('VIRTUAL_ENV'):
+            printf(f'📦 Installing dependencies into active environment: {pathstyle(active_venv)}', fg='bright_cyan')
+            uv_sync(active=True, inexact=True, all_extras=getattr(args, 'all', False), indent=3)
+            printf('')
+        else:
+            ensure_venv(inexact=True, all_extras=getattr(args, 'all', False))
+
+        if args.hooks:
+            printf('💿 Installing pre-commit hooks...', fg='bright_cyan')
+            uv_run(['prek', 'install'], active=active_venv is not None, indent=3)
+            printf('')
+
+        if args.shell:
+            enter_venv()
+            return
+
+        printf(f'✅ Environment ready: {pathstyle(VENV_DIR)}', fg='bright_green')
+        if not active_venv:
+            printf(f'Enter environment with: {style("make shell", fg="bright_magenta")}', fg='bright_white', indent=3)
 
 
 class CleanCommand(Command):
     """
-    Remove all environments, build artifacts, and caches
+    Remove all project environments, build artifacts, caches, and temporary files
     """
     name:  ClassVar[str] = 'clean'
     group: ClassVar[str] = 'Setup & Environment'
