@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 STAGES    = REPO_ROOT / 'bootstrap'
 
 # Inherited variables that would leak the developer's own configuration into the tests

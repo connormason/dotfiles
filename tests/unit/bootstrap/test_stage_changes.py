@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 _SCRUBBED_VARS: tuple[str, ...] = (
     'BOOTSTRAP_CHANGES_FILE',

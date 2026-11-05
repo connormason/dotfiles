@@ -15,7 +15,7 @@ import pytest
 from tests.golden import GOLDEN_DIR
 from tests.golden import check_golden
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 BREWFILE  = REPO_ROOT / 'bootstrap' / 'Brewfile'
 BREW      = shutil.which('brew')
 

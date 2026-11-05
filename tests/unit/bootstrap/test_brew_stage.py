@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 STAGE     = REPO_ROOT / 'bootstrap' / '50-brew.sh'
 
 # Stands in for the downloaded Homebrew installer: records that it ran (and whether NONINTERACTIVE was set) and installs
