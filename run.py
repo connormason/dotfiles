@@ -2162,7 +2162,8 @@ class RunHooksCommand(Command):
         else:
             printf('🕝 Running prek hooks...', fg='bright_cyan')
 
-        sys.exit(shell_command(self.build_command(args), check=False).returncode)
+        result = shell_command(self.build_command(args), check=False)
+        sys.exit(result.returncode)
 
 
 class PreCommand(RunHooksCommand):
@@ -2220,7 +2221,8 @@ class PrepareHooksCommand(Command):
             cmd.append('--verbose')
 
         printf('⏬ Preparing prek hook environments...', fg='bright_cyan')
-        sys.exit(shell_command(cmd, indent=3, check=False).returncode)
+        result = shell_command(cmd, indent=3, check=False)
+        sys.exit(result.returncode)
 
 
 class InstallHooksCommand(Command):
@@ -2416,9 +2418,8 @@ class NasDeployCommand(Command):
             cmd.append('--dry-run')
         cmd.append(args.service)
 
-        sys.exit(
-            shell_command(cmd, env={'NAS_HOST': host, 'NAS_USER': user}, check=False).returncode
-        )
+        result = shell_command(cmd, env={'NAS_HOST': host, 'NAS_USER': user}, check=False)
+        sys.exit(result.returncode)
 
 
 class NasProvisionCommand(Command):
@@ -2494,9 +2495,8 @@ class NasProvisionCommand(Command):
                 fg='bright_yellow',
             )
 
-        sys.exit(
-            shell_command(playbook_cmd, check=False, cwd=DOTFILES_DIR).returncode
-        )
+        result = shell_command(playbook_cmd, check=False, cwd=DOTFILES_DIR)
+        sys.exit(result.returncode)
 
 
 # ====================================================================================================
@@ -2858,9 +2858,8 @@ class BootstrapCommand(Command):
         if args.from_stage:
             cmd.extend(['--from', args.from_stage])
 
-        sys.exit(
-            shell_command(cmd, check=False).returncode
-        )
+        result = shell_command(cmd, check=False)
+        sys.exit(result.returncode)
 
 
 class StowCommand(Command):
@@ -2909,9 +2908,8 @@ class StowCommand(Command):
         if args.verbose:
             cmd.append('--verbose')
 
-        sys.exit(
-            shell_command([*cmd, *args.packages], check=False).returncode,
-        )
+        result = shell_command([*cmd, *args.packages], check=False)
+        sys.exit(result.returncode)
 
 
 class RenderCommand(Command):
@@ -2967,9 +2965,8 @@ class RenderCommand(Command):
             if enabled:
                 cmd.append(flag)
 
-        sys.exit(
-            shell_command(cmd, check=False).returncode,
-        )
+        result = shell_command(cmd, check=False)
+        sys.exit(result.returncode)
 
 
 def find_untracked_claude_files() -> list[Path]:
@@ -3244,12 +3241,11 @@ class TestCommand(Command):
         )
 
     def run(self, args: Args) -> None:
-        sys.exit(
-            shell_command(
-                [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])],
-                check=False,
-            ).returncode,
+        result = shell_command(
+            [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])],
+            check=False,
         )
+        sys.exit(result.returncode)
 
 
 # =======================================================================================
@@ -3318,7 +3314,7 @@ class _InstallToolCommand(Command, register=False):
 
 class InstallUvCommand(_InstallToolCommand):
     """
-    Install `uv` Python package manager
+    Install `uv` Python package installer tool
     """
     name:             ClassVar[str]  = 'install-uv'
     description:      ClassVar[str]  = f'Install {style("uv", fg="bright_magenta")} Python package installer tool'
@@ -3328,7 +3324,7 @@ class InstallUvCommand(_InstallToolCommand):
 
 class InstallHatchCommand(_InstallToolCommand):
     """
-    Install `hatch` Python project manager
+    Install `hatch` Python project management tool
     """
     name:             ClassVar[str]  = 'install-hatch'
     description:      ClassVar[str]  = f'Install {style("hatch", fg="bright_magenta")} Python project management tool'
