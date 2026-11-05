@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean pre install-hooks uninstall-hooks makefile nas-provision doctor bootstrap stow render test
+.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks makefile nas-provision doctor bootstrap stow render track-claude test
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -22,19 +22,22 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Codebase:$(NC)"
 	@echo "  $(YELLOW)clean           $(NC) Remove all environments, build artifacts, and caches"
+	@echo "  $(YELLOW)run-hooks       $(NC) Run prek hooks on modified or specified project files"
 	@echo "  $(YELLOW)pre             $(NC) Run prek (pre-commit) hooks on all project files"
+	@echo "  $(YELLOW)prepare-hooks   $(NC) Prepare the environments of all prek hooks"
 	@echo "  $(YELLOW)install-hooks   $(NC) Install prek git hook shims (overwrites any existing shims)"
 	@echo "  $(YELLOW)uninstall-hooks $(NC) Uninstall prek git hook shims"
-	@echo "  $(YELLOW)makefile        $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
+	@echo "  $(YELLOW)makefile        $(NC) Generate Makefile from project management script commands (run.py)"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)NAS:$(NC)"
 	@echo "  $(YELLOW)nas-provision   $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Dotfiles:$(NC)"
-	@echo "  $(YELLOW)doctor          $(NC) Check overlay registry, links, rendered settings, git version, and tools"
+	@echo "  $(YELLOW)doctor          $(NC) Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles"
 	@echo "  $(YELLOW)bootstrap       $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh)"
 	@echo "  $(YELLOW)stow            $(NC) Link stow packages from every layer into the home directory (stow.sh)"
 	@echo "  $(YELLOW)render          $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
+	@echo "  $(YELLOW)track-claude    $(NC) Ingest new ~/.claude agents, commands, skills, hooks, and rules into the repo"
 	@echo "  $(YELLOW)test            $(NC) Run the test suite via uv (public-index wrapper)"
 	@echo ""
 
@@ -58,8 +61,14 @@ vault-encrypt: ## Re-encrypt all inventory vault files after editing
 clean: ## Remove all environments, build artifacts, and caches
 	@python3 run.py clean
 
+run-hooks: ## Run prek hooks on modified or specified project files
+	@python3 run.py run-hooks
+
 pre: ## Run prek (pre-commit) hooks on all project files
 	@python3 run.py pre
+
+prepare-hooks: ## Prepare the environments of all prek hooks
+	@python3 run.py prepare-hooks
 
 install-hooks: ## Install prek git hook shims (overwrites any existing shims)
 	@python3 run.py install-hooks
@@ -67,7 +76,7 @@ install-hooks: ## Install prek git hook shims (overwrites any existing shims)
 uninstall-hooks: ## Uninstall prek git hook shims
 	@python3 run.py uninstall-hooks
 
-makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
+makefile: ## Generate Makefile from project management script commands (run.py)
 	@python3 run.py makefile
 
 # NAS
@@ -75,7 +84,7 @@ nas-provision: ## Provision the NAS with the Ansible playbook: system config, th
 	@python3 run.py nas-provision
 
 # Dotfiles
-doctor: ## Check overlay registry, links, rendered settings, git version, and tools
+doctor: ## Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles
 	@python3 run.py doctor
 
 bootstrap: ## Run the layered bootstrap stages (bootstrap/bootstrap.sh)
@@ -86,6 +95,9 @@ stow: ## Link stow packages from every layer into the home directory (stow.sh)
 
 render: ## Render settings files from per-layer fragments (scripts/dotfiles/render.py)
 	@python3 run.py render
+
+track-claude: ## Ingest new ~/.claude agents, commands, skills, hooks, and rules into the repo
+	@python3 run.py track-claude
 
 test: ## Run the test suite via uv (public-index wrapper)
 	@python3 run.py test

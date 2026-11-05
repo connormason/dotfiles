@@ -23,6 +23,9 @@ bootstrap/bootstrap.sh [--dry-run] [--list] [--only STAGE] [--from STAGE] [--res
 | `--no-log`     | Do not tee the run to a logfile                                                                          |
 | `-h`, `--help` | Show usage (served before the overlay registry is read, so it works with a broken registry)              |
 
+`--verify` runs `run.py doctor`, whose `hooks` check fails until the git hook shims are installed
+(`python3 run.py install-hooks`); no stage installs them.
+
 Run state lives in `${BOOTSTRAP_LOG_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-bootstrap}`: one timestamped
 logfile per run and a `last-completed-stage` file that `--resume` reads. Dry runs write nothing and never prompt for
 sudo. Outside dry-run, sudo is primed once by the driver (macOS only) and kept alive for the whole run. Every run ends

@@ -49,15 +49,19 @@ python3 run.py clean
 # Run prek (pre-commit) hooks on all files
 python3 run.py pre
 
+# Run hooks on specific hooks/files/refs (names before --files)
+python3 run.py run-hooks mdformat --last-commit
+python3 run.py run-hooks --files README.md
+
 # Generate Makefile from run.py commands
 python3 run.py makefile
 ```
 
 ## Layered Dev Environment (`run.py` Dotfiles group)
 
-Wrappers over `stow.sh`, `bootstrap/bootstrap.sh`, and `scripts/dotfiles/render.py`; see
-[`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. Prefer `scripts/hooks/uv-public.sh run python`
-over bare `python3` when running them from this repo.
+`bootstrap`, `stow`, and `render` wrap `bootstrap/bootstrap.sh`, `stow.sh`, and `scripts/dotfiles/render.py`; `doctor`
+and `track-claude` run their own logic in `run.py`. See [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for
+options. Prefer `scripts/hooks/uv-public.sh run python` over bare `python3` when running them from this repo.
 
 ```bash
 # Stages across all layers / simulate every stage / run them
@@ -72,9 +76,12 @@ python3 run.py stow --backup-conflicts
 # Render settings from per-layer fragments (--diff previews, --check exits 1 on drift)
 python3 run.py render --check
 
-# Verify tools, overlay registry, git version, links, and rendered settings (--fix repairs, then re-checks)
+# Verify tools, overlays, git version and hooks, links, rendered settings, and Brewfiles (--fix asks first; --yes skips)
 python3 run.py doctor
 python3 run.py doctor --fix
+
+# Move local ~/.claude agents/commands/skills/hooks/rules into stow/claude and restow (--dry-run previews)
+python3 run.py track-claude
 
 # Run the test suite through the public-index uv wrapper
 python3 run.py test

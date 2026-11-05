@@ -1,8 +1,8 @@
 # run.py - Command Reference
 
 Python CLI tool for managing the dotfiles repository. Provides commands for inventory management, codebase maintenance,
-NAS provisioning and service deploys, and the layered dev environment (stow, bootstrap, render, doctor), with ANSI
-styling and retry logic for robustness.
+NAS provisioning and service deploys, and the layered dev environment (stow, bootstrap, render, doctor, track-claude),
+with ANSI styling and retry logic for robustness.
 
 ## Quick Start
 
@@ -126,15 +126,40 @@ python3 run.py clean
 
 **Debug mode:** Shows each file/directory removed (enable with `--debug` flag).
 
+#### `run-hooks`
+
+Run prek hooks on modified or specified project files.
+
+```bash
+python3 run.py run-hooks                          # hooks on the staged files
+python3 run.py run-hooks mdformat ruff            # only these hooks (names go before --files)
+python3 run.py run-hooks --files README.md docs/README.md
+python3 run.py run-hooks --last-commit            # the files of the last commit
+python3 run.py run-hooks -s main -o HEAD          # the files changed between two refs
+python3 run.py run-hooks --stage pre-push --dry-run
+```
+
+| Option                                                     | Forwards                              |
+| ---------------------------------------------------------- | ------------------------------------- |
+| `HOOK\|PROJECT...`                                         | hook or project filter (placed first) |
+| `-a/--all-files`, `--files`, `-d/--directory`              | file selection                        |
+| `-s/--from-ref`, `-o/--to-ref`, `--last-commit`            | ref range selection                   |
+| `--skip` (repeatable), `--stage`                           | skip hooks, choose the git stage      |
+| `--show-diff-on-failure`, `--fail-fast`, `--dry-run`, `-v` | run behavior                          |
+
+**Behavior:** runs `prek run …` with inherited stdio and exits with prek's return code (so `make pre` fails when a hook
+fails). The hook filter is placed before the options because prek's `--files` is greedy.
+
 #### `pre`
 
-Run prek hooks on all project files.
+Run prek hooks on all project files. This is `run-hooks --all-files`: it accepts the same hook filter and run options,
+but no file or ref selection, because prek rejects `--all-files` combined with `--files`, `--directory`, `--from-ref`,
+`--to-ref`, or `--last-commit`. Use `run-hooks` for those.
 
 ```bash
 python3 run.py pre
+python3 run.py pre mdformat               # one hook over every file
 ```
-
-**Behavior:** Executes `prek run --all-files` with live output. Does not fail on hook failures (exit code ignored).
 
 **Hooks include:**
 
@@ -146,6 +171,11 @@ python3 run.py pre
 - Whitespace and line ending fixers
 
 See [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) for complete hook configuration.
+
+#### `prepare-hooks`
+
+Prepare the environments of all prek hooks (`prek prepare-hooks`) so the first commit does not pay for it. Accepts a
+`HOOK|PROJECT` filter, `--skip` (repeatable), and `-v/--verbose`.
 
 #### `makefile`
 
@@ -191,18 +221,21 @@ update-inventory: ## Update inventory repo
 
 ### Dotfiles
 
-Thin wrappers over the layered dev-env engine: [`stow.sh`](../stow.sh),
+Wrappers over the layered dev-env engine: [`stow.sh`](../stow.sh),
 [`bootstrap/bootstrap.sh`](../bootstrap/bootstrap.sh), and
-[`scripts/dotfiles/render.py`](../scripts/dotfiles/render.py). Each wrapper forwards its flags and exits with the
-underlying script's return code. All commands belong to the `Dotfiles` group.
+[`scripts/dotfiles/render.py`](../scripts/dotfiles/render.py), plus `test`, which runs the suite through
+[`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh). `bootstrap`, `stow`, `render`, and `test` forward their
+flags and exit with the underlying script's return code; `doctor` and `track-claude` run their own logic (described
+below). All commands belong to the `Dotfiles` group.
 
-| Command     | Forwards to                  | Options                                                                                   |
-| ----------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
-| `bootstrap` | `bootstrap/bootstrap.sh`     | `--dry-run`, `--list`, `--only STAGE`, `--from STAGE`, `--resume`, `--verify`, `--no-log` |
-| `stow`      | `stow.sh`                    | `[PACKAGE...]`, `-n/--simulate`, `--backup-conflicts`, `-v/--verbose`                     |
-| `render`    | `scripts/dotfiles/render.py` | `[TARGET...]`, `--diff`, `--check`, `--force`, `-v/--verbose`                             |
-| `doctor`    | (runs the checks below)      | `-f/--fix`                                                                                |
-| `test`      | `scripts/hooks/uv-public.sh` | `[PATH...]` (default: `tests`)                                                            |
+| Command        | Forwards to                          | Options                                                                                   |
+| -------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `bootstrap`    | `bootstrap/bootstrap.sh`             | `--dry-run`, `--list`, `--only STAGE`, `--from STAGE`, `--resume`, `--verify`, `--no-log` |
+| `stow`         | `stow.sh`                            | `[PACKAGE...]`, `-n/--simulate`, `--backup-conflicts`, `-v/--verbose`                     |
+| `render`       | `scripts/dotfiles/render.py`         | `[TARGET...]`, `--diff`, `--check`, `--force`, `-v/--verbose`                             |
+| `doctor`       | (runs the checks below)              | `-f/--fix`, `-y/--yes`                                                                    |
+| `track-claude` | (moves files, then `stow.sh claude`) | `-n/--dry-run`                                                                            |
+| `test`         | `scripts/hooks/uv-public.sh`         | `[PATH...]` (default: `tests`)                                                            |
 
 ```bash
 python3 run.py bootstrap --list           # stages across all layers
@@ -217,18 +250,48 @@ python3 run.py test tests/unit/test_run_doctor.py
 Runs one check per line and exits 1 if any check fails. `tools` and `layers` run first; the remaining checks are skipped
 when either fails.
 
-| Check    | Passes when                                                                                      | Fix (`--fix`)                   |
-| -------- | ------------------------------------------------------------------------------------------------ | ------------------------------- |
-| `tools`  | `brew`, `git`, `stow`, `uv`, `zsh` are on `PATH`                                                 | none                            |
-| `layers` | the overlay registry resolves (`dotfiles_layers` in `bootstrap/lib.sh`) and every overlay exists | none                            |
-| `git`    | `git --version` is at least 2.36 (needed for `includeIf "hasconfig:remote.*.url:"`)              | none                            |
-| `links`  | `stow.sh -n` reports `no changes` or `no packages found`                                         | `stow.sh --backup-conflicts`    |
-| `render` | `render.py --check` exits 0 (exit 1 is drift; exit 2 is a config or I/O error with no fix)       | `render.py` (without `--force`) |
+| Check      | Passes when                                                                                          | Fix (`--fix`)                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `tools`    | `brew`, `git`, `stow`, `uv`, `zsh` are on `PATH`                                                     | none                                           |
+| `layers`   | the overlay registry resolves (`dotfiles_layers` in `bootstrap/lib.sh`) and every overlay exists     | none                                           |
+| `git`      | `git --version` is at least 2.36 (needed for `includeIf "hasconfig:remote.*.url:"`)                  | none                                           |
+| `hooks`    | every hook type in `default_install_hook_types` has a prek-generated shim in the git hooks directory | `prek install`                                 |
+| `links`    | `stow.sh -n` reports `no changes` or `no packages found`                                             | `stow.sh --backup-conflicts`                   |
+| `render`   | `render.py --check` exits 0 (exit 1 is drift; exit 2 is a config or I/O error with no fix)           | `render.py` (without `--force`)                |
+| `brewfile` | `brew bundle check --no-upgrade` passes for every layer's `bootstrap/Brewfile`                       | `brew bundle --no-upgrade --file` per Brewfile |
 
-`--fix` runs the fix command of each failing check, then re-runs every check and reports the final state. The `links`
-fix runs `stow.sh --backup-conflicts`, which moves any blocking files into `~/.dotfiles-backup/<timestamp>/` before
-linking. Without `--fix`, every probe is read-only (`stow.sh -n`, `render.py --check`). `bootstrap --verify` invokes
-`doctor` after all stages succeed.
+`--fix` asks before running each failing check's fix, then re-runs every check and reports the final state; `-y/--yes`
+applies the fixes without asking (and implies `--fix`). The `links` fix runs `stow.sh --backup-conflicts`, which moves
+any blocking files into `~/.dotfiles-backup/<timestamp>/` before linking. The `brewfile` check passes when every
+declared entry is installed: outdated entries are not drift (`--no-upgrade`), and its fix installs the missing entries
+without upgrading anything. Without `--fix`, every probe is read-only (`stow.sh -n`, `render.py --check`,
+`brew bundle check --no-upgrade`). The `hooks` check resolves the hooks directory with `git rev-parse --git-path hooks`,
+so it is correct in linked worktrees; it matters because `pre-push` runs the public-repo leak guard and no bootstrap
+stage installs hooks. When `prek` is not on `PATH` the check offers no `--fix`; once prek is available, the manual path
+is `python3 run.py install-hooks` (it runs `prek install -f`). `bootstrap --verify` invokes `doctor` after all stages
+succeed, so it fails the `hooks` check until the shims are installed.
+
+#### `track-claude`
+
+Moves real files that Claude Code (or you) created under `~/.claude/{agents,commands,skills,hooks,rules}` into
+`stow/claude/.claude`, then restows the `claude` package so the originals become symlinks into the repo.
+
+```bash
+python3 run.py track-claude --dry-run     # list what would be ingested
+python3 run.py track-claude               # confirm, move, restow
+```
+
+A file whose repo counterpart already exists (including a dangling symlink at that path) is reported as a conflict and
+left alone. Because `stow.sh` is all-or-nothing and refuses to run while a local regular file blocks a target, the
+restow is skipped while any conflict remains: the command prints the recovery steps instead (resolve the conflicts, then
+`python3 run.py stow claude`; add `--backup-conflicts` to move the blocking local files to `~/.dotfiles-backup/`). When
+no conflict remains, the command first simulates the restow (`stow.sh -n claude`) and, if that fails, prints the first
+lines of stow's output and exits 1 before prompting or moving anything (under `--dry-run` it only warns). If the real
+restow still fails after the move, the files are in the repo but not linked back into `~/.claude`; fix what stow
+reported and run `python3 run.py stow claude`. Stowed files are symlinks, so any regular file counts as local-only
+(except `.DS_Store`, `.backups/` and `__pycache__/` directories, and `.pyc` files, which are gitignored and skipped);
+`plugins/`, `projects/`, and other state directories are never touched. Review and commit the result with
+`git add stow/claude/.claude && git commit`.
 
 ### NAS
 
@@ -443,6 +506,9 @@ INVENTORY_REPO_URL = os.getenv(
     INVENTORY_REPO_URL_ENVVAR,
     'git@github.com:connormason/dotfiles-inventory.git',
 )
+
+# Disable ANSI styling (any non-empty value)
+NO_COLOR = bool(os.getenv('NO_COLOR'))
 ```
 
 **Clean patterns:** See `CLEAN_PATTERN_GROUPS` dict for complete list of glob patterns removed by `clean` command.
@@ -550,6 +616,9 @@ python3 run.py update-inventory
 # Use custom inventory repository
 export DOTFILES_INVENTORY_REPO_URL=git@github.com:myuser/my-inventory.git
 python3 run.py update-inventory
+
+# Plain output (also useful when piping to a file)
+export NO_COLOR=1
 ```
 
 ### Programmatic Usage

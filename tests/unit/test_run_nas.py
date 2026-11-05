@@ -315,7 +315,7 @@ class TestBuildNasProvisionCommand:
     Tests for build_nas_provision_command
     """
     BASE: ClassVar[list[str]] = [
-        str(run.UV_PUBLIC), 'run', 'ansible-playbook', str(run.NAS_PLAYBOOK),
+        str(run.UV_PUBLIC_SCRIPT), 'run', 'ansible-playbook', str(run.NAS_BOOTSTRAP_PLAYBOOK),
         '-i', str(run.INVENTORY_FILE),
         '--vault-password-file', str(run.VAULT_PASSWORD),
     ]
@@ -390,7 +390,7 @@ class TestNasProvision:
         assert [call[0][2] for call in fake_shell.calls] == ['ansible-galaxy', 'ansible-playbook']
 
         galaxy, galaxy_kwargs = fake_shell.find('ansible-galaxy')
-        assert galaxy[-2:] == ['-r', str(run.NAS_REQUIREMENTS)]
+        assert galaxy[-2:] == ['-r', str(run.ANSIBLE_REQUIREMENTS)]
 
         _playbook, playbook_kwargs = fake_shell.find('ansible-playbook')
         assert galaxy_kwargs['cwd'] == playbook_kwargs['cwd'] == run.DOTFILES_DIR

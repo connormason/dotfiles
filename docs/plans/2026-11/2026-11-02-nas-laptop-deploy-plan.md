@@ -998,7 +998,7 @@ class TestBuildNasProvisionCommand:
     BASE = [
         str(run.UV_PUBLIC), 'run', 'ansible-playbook', str(run.NAS_PLAYBOOK),
         '-i', str(run.INVENTORY_FILE),
-        '--vault-password-file', str(run.VAULT_PASSWORD),
+        '--vault-password-file', str(run.VAULT_PASSWORD_PATH),
     ]
 
     def test_defaults_run_the_whole_playbook(self) -> None:
@@ -1038,6 +1038,7 @@ class TestNasProvision:
     """
     Tests for the nas-provision command
     """
+
     @pytest.fixture(autouse=True)
     def _target(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -1070,7 +1071,7 @@ class TestNasProvision:
         assert galaxy_kwargs['cwd'] == playbook_kwargs['cwd'] == run.DOTFILES_DIR
 
     def test_collection_install_failure_warns_and_continues(
-        self, fake_shell: FakeShell, capsys: pytest.CaptureFixture[str],
+            self, fake_shell: FakeShell, capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that an offline collection install does not block a run with collections already installed
@@ -1088,6 +1089,7 @@ class TestNasProvision:
         """
         Test that a failed preflight exits without installing collections or running the playbook
         """
+
         def unreachable() -> tuple[str, str]:
             raise SystemExit(1)
 

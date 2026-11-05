@@ -38,7 +38,8 @@ overlays in file order. Full contract in [`bootstrap/README.md`](../bootstrap/RE
   `~/.dotfiles-backup/<timestamp>/`. Package inventory: [`stow/README.md`](../stow/README.md).
 - **`scripts/dotfiles/render.py`**: renders JSON settings files that apps rewrite at runtime (`render/<target>.json`
   fragments merged across layers, with a drift guard).
-- **`run.py doctor`**: verifies tools, overlay registry, links, and rendered settings.
+- **`run.py doctor`**: verifies tools, overlay registry, git version and hook shims, links, rendered settings, and
+  Brewfiles (`--fix` asks before each repair; `--yes` skips the prompts).
 - **`profiles/`**: per-machine overlays; see [`profiles/README.md`](../profiles/README.md).
 - **OS support**: `lib.sh` `dotfiles_os` (`darwin`/`linux`, `DOTFILES_OS` override) and `require_os` gate stages;
   `.dotfiles-os` markers scope stow packages; `render.py` `TARGET_OS` scopes render targets; the Brewfile's
@@ -94,9 +95,9 @@ In playbook order:
 **Command categories**:
 
 - **Inventory**: `list-hosts`, `update-inventory`
-- **Codebase**: `clean`, `pre`, `makefile`
+- **Codebase**: `clean`, `run-hooks`, `pre`, `prepare-hooks`, `install-hooks`, `uninstall-hooks`, `makefile`
 - **NAS**: `nas-provision`, `nas-deploy`
-- **Layered dev environment**: `bootstrap`, `stow`, `render`, `doctor`, `test`
+- **Layered dev environment**: `bootstrap`, `stow`, `render`, `doctor`, `track-claude`, `test`
 
 **Key features**:
 
