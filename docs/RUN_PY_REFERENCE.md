@@ -308,7 +308,7 @@ python3 run.py makefile
 
 - Reads every registered `Command` in `run.py`
 - Generates `Makefile` with targets for each command
-- Excludes commands marked `script_only=True`
+- Excludes commands with `script_only = True`
 - Organizes targets by command groups
 - Includes color-coded help text
 
@@ -937,7 +937,7 @@ python3 run.py pre
 
 ### Makefile Generation<a name="makefile-generation"></a>
 
-1. **Filters commands:** Excludes `script_only=True` commands
+1. **Filters commands:** Excludes commands with `script_only = True`
 2. **Groups targets:** Organizes by `group` attribute with section headers
 3. **Generates help:** Color-coded help target using Make variables
 4. **Phony targets:** All targets marked `.PHONY` (no file dependencies)

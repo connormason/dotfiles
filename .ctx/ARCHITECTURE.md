@@ -103,7 +103,7 @@ fails when this list drifts from the playbook):
 
 `run.py` provides a CLI interface to repository operations.
 
-**Command categories** (the `group=` of each `@command`):
+**Command categories** (the `group` class attribute of each `Command` subclass):
 
 - **Inventory**: `list-hosts`, `inventory-status`, `update-inventory`, `vault-decrypt`, `vault-encrypt`
 - **Codebase**: `clean`, `pre`, `install-hooks`, `uninstall-hooks`, `makefile`
