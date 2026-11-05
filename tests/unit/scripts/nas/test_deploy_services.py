@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT    = Path(__file__).resolve().parents[2]
+REPO_ROOT    = Path(__file__).resolve().parents[4]
 SCRIPT       = REPO_ROOT / 'scripts' / 'nas' / 'deploy-services.sh'
 SERVICES_DIR = REPO_ROOT / 'services'
-BASH         = '/bin/bash'  # macOS ships bash 3.2 here, the oldest interpreter the script must run under
+BASH         = '/bin/bash'              # macOS ships bash 3.2 here, the oldest interpreter the script must run under
 
 pytestmark = pytest.mark.skipif(not Path(BASH).exists(), reason='/bin/bash not available')
 
