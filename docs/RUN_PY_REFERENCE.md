@@ -4,7 +4,50 @@ Python CLI tool for managing the dotfiles repository. Provides commands for inve
 NAS provisioning and service deploys, and the layered dev environment (stow, bootstrap, render, doctor, track-claude),
 with ANSI styling and retry logic for robustness.
 
-## Quick Start
+<!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
+
+- [Quick Start](#quick-start)
+- [Command Categories](#command-categories)
+  - [Inventory Management](#inventory-management)
+  - [Codebase Maintenance](#codebase-maintenance)
+  - [Dotfiles](#dotfiles)
+  - [NAS](#nas)
+- [Architecture](#architecture)
+  - [Command Registration System](#command-registration-system)
+  - [ANSI Styling System](#ansi-styling-system)
+  - [Shell Command Execution](#shell-command-execution)
+  - [Retry Logic](#retry-logic)
+- [Configuration](#configuration)
+  - [Constants](#constants)
+  - [Type System](#type-system)
+- [Error Handling](#error-handling)
+  - [Formatted Error Display](#formatted-error-display)
+  - [Exception Types](#exception-types)
+- [Usage Examples](#usage-examples)
+  - [Basic Command Execution](#basic-command-execution)
+  - [Using Make Targets](#using-make-targets)
+  - [Environment Variable Configuration](#environment-variable-configuration)
+  - [Programmatic Usage](#programmatic-usage)
+- [Extension Guide](#extension-guide)
+  - [Adding New Commands](#adding-new-commands)
+  - [Adding New Command Groups](#adding-new-command-groups)
+  - [Custom Clean Patterns](#custom-clean-patterns)
+- [Best Practices](#best-practices)
+  - [Command Implementation](#command-implementation)
+  - [Shell Command Execution](#shell-command-execution-1)
+  - [Styling Guidelines](#styling-guidelines)
+- [Troubleshooting](#troubleshooting)
+  - [Inventory Update Failures](#inventory-update-failures)
+  - [YAML Parsing Errors](#yaml-parsing-errors)
+  - [Pre-commit Hook Failures](#pre-commit-hook-failures)
+- [Implementation Details](#implementation-details)
+  - [Argument Parser Construction](#argument-parser-construction)
+  - [Makefile Generation](#makefile-generation)
+  - [Live Output via PTY](#live-output-via-pty)
+
+<!-- mdformat-toc end -->
+
+## Quick Start<a name="quick-start"></a>
 
 ```bash
 # Show all available commands
@@ -17,9 +60,9 @@ python3 run.py --debug <command>
 make help
 ```
 
-## Command Categories
+## Command Categories<a name="command-categories"></a>
 
-### Inventory Management
+### Inventory Management<a name="inventory-management"></a>
 
 Commands for managing the separate inventory repository containing host definitions and encrypted vault files.
 
@@ -28,8 +71,14 @@ Commands for managing the separate inventory repository containing host definiti
 List all bootstrap targets from the inventory file.
 
 ```bash
-python3 run.py list-hosts
+scripts/hooks/uv-public.sh run python run.py list-hosts
 ```
+
+PyYAML is the one third-party import in `run.py`, and `list-hosts` imports it inside its body. Under a bare `python3`
+that lacks PyYAML the command prints `PyYAML is required to read the inventory` with the uv-wrapper command above and
+exits 2 (a setup error), which is why the example goes through the uv wrapper. `make list-hosts` runs bare
+`python3 run.py list-hosts`, so that target needs PyYAML in that interpreter. The dependency is also declared in the PEP
+723 `# /// script` block at the top of `run.py`.
 
 **Output example:**
 
@@ -39,11 +88,11 @@ Available Bootstrap Targets
 
 macos:
   └─ connors-macbook
-     (connects to: localhost)
+        (connects to: localhost)
 
 servers:
   └─ nas
-     (connects to: 192.168.1.100)
+        (connects to: 192.168.1.100)
 
 ============================================================
 Total hosts: 2
@@ -55,13 +104,37 @@ Total hosts: 2
 - Validates YAML structure
 - Suggests running `update-inventory` if missing
 
+#### `inventory-status`
+
+Show the state of the inventory clone.
+
+```bash
+python3 run.py inventory-status
+```
+
+**Reports:**
+
+- Whether `inventory/` exists (if not, says so and suggests `update-inventory`)
+- Whether it is a git repository (if not, says so and suggests `update-inventory`)
+- The `origin` remote URL (`No remote configured` when absent), the current branch, and the last commit
+  (`git log -1 --format='%h - %s (%cr)'`)
+- Uncommitted changes: a warning plus the first five lines of `git status --porcelain`
+- Whether `inventory/inventory.yml` exists
+
 #### `update-inventory`
 
 Update (or clone) the inventory repository from remote.
 
 ```bash
 python3 run.py update-inventory
+python3 run.py update-inventory --force
 ```
+
+**Options:**
+
+- `-f`, `--force`: before pulling, discard uncommitted local changes in the clone. When `git status --porcelain` is not
+  empty it runs `git reset --hard HEAD` (which leaves untracked files alone), then pulls. It only affects the pull case
+  below
 
 **Behavior:**
 
@@ -80,13 +153,64 @@ python3 run.py update-inventory
 - Repository URL: `DOTFILES_INVENTORY_REPO_URL` environment variable
 - Default: `git@github.com:connormason/dotfiles-inventory.git`
 
-### Codebase Maintenance
+#### `vault-decrypt`
+
+Decrypt all inventory vault files in place for editing.
+
+```bash
+python3 run.py vault-decrypt
+```
+
+**Behavior:**
+
+- Requires `vault_password.txt` and the `inventory/` directory; exits 1 with a remedy when either is missing
+- Finds the vault files under `inventory/` that match `group_vars/*/vault.yml` and `host_vars/*/vault.yml` (warns and
+  stops when none are found)
+- Runs `ansible-vault decrypt` on each file with its output captured. The command passes no password option, so
+  `ansible-vault` takes the password from `vault_password_file` in `ansible.cfg`: run it from the repository root, with
+  `ansible-vault` on `PATH`
+- A file that is already decrypted is reported and skipped; any other failure is reported with its error text. Exits 1
+  after the last file when any failed
+
+**Output example:**
+
+```
+🔓 Decrypting vault files...
+   └─ group_vars/all/vault.yml decrypted
+   └─ host_vars/nas/vault.yml already decrypted, skipping
+✅ All vault files decrypted
+```
+
+Decrypted files stay decrypted in the inventory clone until `vault-encrypt` runs.
+
+#### `vault-encrypt`
+
+Re-encrypt all inventory vault files in place after editing.
+
+```bash
+python3 run.py vault-encrypt
+```
+
+**Behavior:** The same checks, file discovery, and password handling as `vault-decrypt`, running `ansible-vault encrypt`
+on each file. A file that is already encrypted is reported and skipped (`already encrypted, skipping`); other failures
+are reported and exit 1 after the last file.
+
+**Output example:**
+
+```
+🔒 Encrypting vault files...
+   └─ group_vars/all/vault.yml encrypted
+   └─ host_vars/nas/vault.yml encrypted
+✅ All vault files encrypted
+```
+
+### Codebase Maintenance<a name="codebase-maintenance"></a>
 
 Commands for cleaning build artifacts and running code quality checks.
 
 #### `clean`
 
-Remove all build artifacts, caches, and generated files.
+Remove all environments, build artifacts, and caches.
 
 ```bash
 python3 run.py clean
@@ -114,6 +238,11 @@ python3 run.py clean
 - `.nox`
 - `.coverage`
 
+**Virtual environments:**
+
+- `venv`
+- `.venv`
+
 **Output:**
 
 ```
@@ -121,10 +250,11 @@ python3 run.py clean
    Cleaning package build artifacts...
    Cleaning package cache files...
    Cleaning tool cache files...
+   Cleaning virtual environments...
 ✅ Cleanup complete
 ```
 
-**Debug mode:** Shows each file/directory removed (enable with `--debug` flag).
+**Debug mode:** Shows each file/directory removed, then the total count (enable with `--debug` flag).
 
 #### `run-hooks`
 
@@ -164,10 +294,11 @@ python3 run.py pre mdformat               # one hook over every file
 **Hooks include:**
 
 - File integrity checks (large files, merge conflicts, private keys, detect-secrets)
+- Leak guard (`check-leaks`: employer-internal identifiers in file contents and paths, and in the commit identity)
 - Python validation (syntax, debug statements, ruff, mypy, interrogate)
 - Data format validation (JSON, YAML, TOML, XML)
 - Formatters (shfmt, taplo, mdformat, ruff --fix-only)
-- Linters (shellcheck, yamllint, codespell)
+- Linters (shellcheck, yamllint, ansible-lint) and the codespell spelling fixer
 - Whitespace and line ending fixers
 
 See [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) for complete hook configuration.
@@ -176,6 +307,33 @@ See [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) for complete hook co
 
 Prepare the environments of all prek hooks (`prek prepare-hooks`) so the first commit does not pay for it. Accepts a
 `HOOK|PROJECT` filter, `--skip` (repeatable), and `-v/--verbose`.
+
+**Behavior:** Executes `prek prepare-hooks` with live output and exits with prek's return code (unlike `install-hooks`,
+which ignores it).
+
+#### `install-hooks`
+
+Install the prek git hook shims, overwriting any existing shims.
+
+```bash
+python3 run.py install-hooks
+```
+
+**Behavior:** Executes `prek install -f` (`-f` is `--overwrite`) with live output, in the current working directory. The
+shims installed are the hook types named by `default_install_hook_types` in `.pre-commit-config.yaml` (`pre-commit`,
+`commit-msg`, `post-checkout`, `post-merge`, `post-rewrite`, and `pre-push` here). Does not fail on prek failures (exit
+code ignored).
+
+#### `uninstall-hooks`
+
+Uninstall the prek git hook shims.
+
+```bash
+python3 run.py uninstall-hooks
+```
+
+**Behavior:** Executes `prek uninstall` with live output, in the current working directory. Does not fail on prek
+failures (exit code ignored).
 
 #### `makefile`
 
@@ -189,7 +347,7 @@ python3 run.py makefile
 
 - Reads every registered `Command` in `run.py`
 - Generates `Makefile` with targets for each command
-- Excludes commands marked `script_only=True`
+- Excludes commands with `script_only = True`
 - Organizes targets by command groups
 - Includes color-coded help text
 
@@ -219,7 +377,7 @@ update-inventory: ## Update inventory repo
 ...
 ```
 
-### Dotfiles
+### Dotfiles<a name="dotfiles"></a>
 
 Wrappers over the layered dev-env engine: [`stow.sh`](../stow.sh),
 [`bootstrap/bootstrap.sh`](../bootstrap/bootstrap.sh), and
@@ -293,7 +451,7 @@ reported and run `python3 run.py stow claude`. Stowed files are symlinks, so any
 `plugins/`, `projects/`, and other state directories are never touched. Review and commit the result with
 `git add stow/claude/.claude && git commit`.
 
-### NAS
+### NAS<a name="nas"></a>
 
 Provision the home NAS and deploy its Compose services from this machine, over SSH (tailnet or LAN). Both commands
 belong to the `NAS` group and run the same preflight first: the inventory is present, `vault_password.txt` exists, and
@@ -306,7 +464,7 @@ A failed probe exits 1 with a remedy.
 | `nas-deploy`    | `scripts/nas/deploy-services.sh`                         | `<service\|all>`, `--dry-run`                                                                                    |
 
 ```bash
-python3 run.py nas-provision --check --diff                  # preview the whole playbook
+python3 run.py nas-provision --check --diff                  # preview the whole playbook (converged host)
 python3 run.py nas-provision --tags dotfiles,haos            # selected roles only
 python3 run.py nas-provision --tags secrets                  # re-render per-service secrets
 python3 run.py nas-deploy glance --dry-run                   # preview the rsync and the remote command
@@ -319,19 +477,25 @@ Runs the preflight, installs the Ansible collections with `ansible-galaxy collec
 then runs `ansible-playbook playbooks/nas_bootstrap.yml` (with the inventory and vault password file) through
 [`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh). A failed collection install prints a warning and the
 playbook still runs with the collections already installed. The exit status is Ansible's. `nas_bootstrap.sh` is a thin
-wrapper that forwards its arguments to this command.
+wrapper that forwards its arguments to this command. `--check --diff` previews the whole playbook on a converged host.
+On a fresh host, where `smbd` or `tailscale` is not installed yet, the Samba version probe fails and the Tailscale
+status probe returns nothing for the next task to parse, so `--check` stops there (the real run installs those tools
+first). Both probes are read-only and carry `check_mode: false`.
 
 #### `nas-deploy`
 
 Resolves `ansible_host` and `ansible_user` of the `nas` host with `ansible-inventory` (literal values are required;
 templated values are rejected, and the user falls back to the local login), warns when `services/` has uncommitted
-changes (a deploy ships the working tree), then runs `scripts/nas/deploy-services.sh` with `NAS_HOST` and `NAS_USER`
-set. The script rsyncs `services/` to `~/docker/` and runs `~/docker/deploy.sh` on the NAS; it is the same script CI
-uses. The command is registered `script_only`, so `run.py makefile` does not generate a Makefile target for it.
+changes (a deploy ships the working tree), then runs `scripts/nas/deploy-services.sh` with `NAS_HOST` and `NAS_USER` set
+and exits with the script's status. `all` syncs the whole `services/` tree to `~/docker/`; a single service syncs
+`compose.base.yml` plus `services/<svc>/`. Either way the script then runs `~/docker/deploy.sh <svc|all>` on the NAS. A
+`<svc>` outside `^[a-z0-9][a-z0-9_-]*$`, or one without `services/<svc>/compose.yml`, is rejected by the script (exit 2)
+before it syncs anything. It is the same script CI uses (see [`scripts/nas/README.md`](../scripts/nas/README.md)). The
+command declares `script_only = True`, so `run.py makefile` does not generate a Makefile target for it.
 
-## Architecture
+## Architecture<a name="architecture"></a>
 
-### Command Registration System
+### Command Registration System<a name="command-registration-system"></a>
 
 Commands are classes deriving from the abstract `Command` base. Defining a subclass registers an instance of it
 (`Command.__init_subclass__`), so no separate registration call exists:
@@ -368,7 +532,7 @@ Override the `help_formatter_type` property to change a subcommand's formatter (
 **Registry:** `REGISTERED_COMMANDS` maps `name -> Command` instance. Query it with
 `get_commands(by_group=..., group_order=..., exclude=...)`, which returns commands by name, or by group then name.
 
-### ANSI Styling System
+### ANSI Styling System<a name="ansi-styling-system"></a>
 
 The `style()` function provides rich terminal formatting:
 
@@ -396,13 +560,16 @@ style('IMPORTANT', fg='red', bold=True, underline=True)
 - 256-color codes: `0-255`
 - RGB tuples: `(r, g, b)` where each component is `0-255`
 
+**Plain output:** when `NO_COLOR` is set to any non-empty value (the no-color.org convention), `style()` returns its
+text unchanged, so `printf()` prints no escape codes.
+
 **Helper function:**
 
 ```python
 printf('Styled output', fg='green', bold=True, indent=4, debug=True)
 ```
 
-### Shell Command Execution
+### Shell Command Execution<a name="shell-command-execution"></a>
 
 The `shell_command()` function provides robust subprocess execution:
 
@@ -447,7 +614,7 @@ shell_command(
 2. `RUN_COMMAND_ENVVARS` (global script environment)
 3. `env` parameter (command-specific overrides)
 
-### Retry Logic
+### Retry Logic<a name="retry-logic"></a>
 
 The `@retry_on_failure` decorator provides exponential backoff:
 
@@ -463,7 +630,7 @@ def network_operation():
 - Attempt 1: Immediate execution
 - Attempt 2: Wait `delay` seconds (2.0s)
 - Attempt 3: Wait `delay * backoff` seconds (4.0s)
-- Attempt N: Wait `delay * (backoff ** (N-1))` seconds
+- Attempt N (N ≥ 2): Wait `delay * (backoff ** (N-2))` seconds, which is the wait after attempt N-1 fails
 
 **Output:**
 
@@ -478,34 +645,105 @@ Used by `update-inventory` for git operations with different parameters:
 - Pull: 3 attempts, 2s initial delay, 2x backoff
 - Clone: 3 attempts, 5s initial delay, 2x backoff
 
-## Configuration
+## Configuration<a name="configuration"></a>
 
-### Constants
+### Constants<a name="constants"></a>
+
+Selected constants from `run.py`. The listings leave out `REQUIRED_TOOLS` and `MIN_GIT_VERSION` (what `doctor` checks)
+and `SCRIPT_HELP_COL_SPACING`, and show `ENVVAR_PREFIX` only as a comment.
 
 **File paths:**
 
 ```python
-SCRIPT_PATH     = Path(__file__)
-DOTFILES_DIR    = SCRIPT_PATH.parent
-MAKEFILE_PATH   = DOTFILES_DIR / 'Makefile'
-INVENTORY_DIR   = DOTFILES_DIR / 'inventory'
-INVENTORY_FILE  = INVENTORY_DIR / 'inventory.yml'
-PLAYBOOKS_DIR   = DOTFILES_DIR / 'playbooks'
+SCRIPT_PATH            = Path(__file__)
+DOTFILES_DIR           = SCRIPT_PATH.parent
+
+GIT_DIR                = DOTFILES_DIR / '.git'
+GIT_HOOKS_DIR          = GIT_DIR / 'hooks'
+PRE_COMMIT_HOOK        = GIT_HOOKS_DIR / 'pre-commit'
+VENV_DIR               = DOTFILES_DIR / '.venv'
+BOOTSTRAP_DIR          = DOTFILES_DIR / 'bootstrap'
+BOOTSTRAP_SCRIPT       = BOOTSTRAP_DIR / 'bootstrap.sh'
+DOCS_DIR               = DOTFILES_DIR / 'docs'
+INVENTORY_DIR          = DOTFILES_DIR / 'inventory'
+INVENTORY_FILE         = INVENTORY_DIR / 'inventory.yml'
+PLAYBOOKS_DIR          = DOTFILES_DIR / 'playbooks'
+PROFILES_DIR           = DOTFILES_DIR / 'profiles'
+RENDER_DIR             = DOTFILES_DIR / 'render'
+NAS_BOOTSTRAP_PLAYBOOK = PLAYBOOKS_DIR / 'nas_bootstrap.yml'
+ROLES_DIR              = DOTFILES_DIR / 'roles'
+ANSIBLE_REQUIREMENTS   = ROLES_DIR / 'requirements.yml'
+SCRIPTS_DIR            = DOTFILES_DIR / 'scripts'
+RENDER_SCRIPT          = SCRIPTS_DIR / 'dotfiles' / 'render.py'
+UV_PUBLIC_SCRIPT       = SCRIPTS_DIR / 'hooks' / 'uv-public.sh'
+NAS_DEPLOY_SCRIPT      = SCRIPTS_DIR / 'nas' / 'deploy-services.sh'
+STOW_DIR               = DOTFILES_DIR / 'stow'
+CLAUDE_STOW_DIR        = STOW_DIR / 'claude' / '.claude'
+MAKEFILE               = DOTFILES_DIR / 'Makefile'
+STOW_SCRIPT            = DOTFILES_DIR / 'stow.sh'
+VAULT_PASSWORD         = DOTFILES_DIR / 'vault_password.txt'
+
+# Hostname in the Ansible inventory for the NAS
+NAS_INVENTORY_HOST = 'nas'
 ```
+
+**Vault files:** `VAULT_FILE_PATTERNS` lists the globs (relative to `inventory/`) that `vault-decrypt` and
+`vault-encrypt` operate on:
+
+```python
+VAULT_FILE_PATTERNS = [
+    'group_vars/*/vault.yml',
+    'host_vars/*/vault.yml',
+]
+```
+
+**Claude config ingestion (`track-claude`):**
+
+```python
+CLAUDE_CONFIG_DIR      = Path.home() / '.claude'
+CLAUDE_TRACKED_SUBDIRS = ['agents', 'commands', 'skills', 'hooks', 'rules']
+
+# Never ingested: directories are pruned from the walk by name, files skipped by name or suffix
+CLAUDE_IGNORE_NAMES    = {'.DS_Store'}
+CLAUDE_IGNORE_DIRS     = {'.backups', '__pycache__'}
+CLAUDE_IGNORE_SUFFIXES = {'.pyc'}
+
+# Lines of a failed `stow.sh -n claude` shown by the preflight
+TRACK_CLAUDE_PREFLIGHT_LINES = 8
+```
+
+**Git hook shims (`doctor` `hooks` check):**
+
+```python
+GIT_HOOK_TYPES = (
+    'pre-commit',
+    'commit-msg',
+    'post-checkout',
+    'post-merge',
+    'post-rewrite',
+    'pre-push',
+)
+PREK_SHIM_MARKER = 'generated by prek'
+```
+
+`GIT_HOOK_TYPES` mirrors `default_install_hook_types` in `.pre-commit-config.yaml` (a test keeps the two in sync). A
+shim counts as installed when the file under the git hooks directory contains `PREK_SHIM_MARKER`.
 
 **Environment variables:**
 
 ```python
-# Debug mode toggle
-RUN_DEBUG_ENVVAR = 'DOTFILES_RUN_DEBUG'
+# Debug mode toggle (ENVVAR_PREFIX = 'DOTFILES')
+RUN_DEBUG_ENVVAR = f'{ENVVAR_PREFIX}_RUN_DEBUG'
 RUN_DEBUG = os.getenv(RUN_DEBUG_ENVVAR, 'false').lower() == 'true'
 
+# Parsed the same way as RUN_DEBUG; no command reads UV_VERBOSE yet
+UV_VERBOSE_ENVVAR = f'{ENVVAR_PREFIX}_UV_VERBOSE'
+UV_VERBOSE = os.getenv(UV_VERBOSE_ENVVAR, 'false').lower() == 'true'
+
 # Inventory repository URL
-INVENTORY_REPO_URL_ENVVAR = 'DOTFILES_INVENTORY_REPO_URL'
-INVENTORY_REPO_URL = os.getenv(
-    INVENTORY_REPO_URL_ENVVAR,
-    'git@github.com:connormason/dotfiles-inventory.git',
-)
+INVENTORY_REPO_URL_ENVVAR = f'{ENVVAR_PREFIX}_INVENTORY_REPO_URL'
+INVENTORY_REPO_URL_DEFAULT = 'git@github.com:connormason/dotfiles-inventory.git'
+INVENTORY_REPO_URL = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTORY_REPO_URL_DEFAULT)
 
 # Disable ANSI styling (any non-empty value)
 NO_COLOR = bool(os.getenv('NO_COLOR'))
@@ -513,7 +751,11 @@ NO_COLOR = bool(os.getenv('NO_COLOR'))
 
 **Clean patterns:** See `CLEAN_PATTERN_GROUPS` dict for complete list of glob patterns removed by `clean` command.
 
-### Type System
+**Script metadata:** `run.py` opens with a PEP 723 `# /// script` block that declares `requires-python = ">=3.9"` and
+the `PyYaml >= 6.0` dependency (the one used by `list-hosts`); a test keeps the dependency in line with
+`pyproject.toml`.
+
+### Type System<a name="type-system"></a>
 
 **Key type aliases:**
 
@@ -528,7 +770,7 @@ StyleColor = Union[int, tuple[int, int, int], str]
 class ExitCode(int, enum.Enum):
     SUCCESS        = 0
     COMMAND_FAILED = 1
-    SETUP_ERROR    = 2   # unknown command
+    SETUP_ERROR    = 2   # unknown command, missing PyYAML (list-hosts)
     USER_CANCELLED = 3   # Ctrl-C
 ```
 
@@ -536,9 +778,9 @@ class ExitCode(int, enum.Enum):
 Commands with options declare a nested `Args(argparse.Namespace)` listing their own fields and annotate
 `run(self, args: Args)` with it.
 
-## Error Handling
+## Error Handling<a name="error-handling"></a>
 
-### Formatted Error Display
+### Formatted Error Display<a name="formatted-error-display"></a>
 
 The `handle_command_error()` function provides rich error output:
 
@@ -558,15 +800,15 @@ except subprocess.CalledProcessError as e:
 
 ```
 ❌ Failed to push to remote
-  └─ Exit code: 128
-  └─ Command: git push
-  └─ Error output:
-     fatal: Could not read from remote repository
-     Please make sure you have the correct access rights
-  └─ 💡 Check your SSH keys and network connection
+    └─ Exit code: 128
+    └─ Command: git push
+   └─ Error output:
+      fatal: Could not read from remote repository
+      Please make sure you have the correct access rights
+   └─ 💡 Check your SSH keys and network connection
 ```
 
-### Exception Types
+### Exception Types<a name="exception-types"></a>
 
 **ShellCommandError:** Raised by `shell_command()` when subprocess exits with non-zero code and `check=True`. Extends
 `subprocess.CalledProcessError` with formatted `__str__()` that includes stdout/stderr.
@@ -577,13 +819,13 @@ except subprocess.CalledProcessError as e:
 - `subprocess.TimeoutExpired`: Command exceeded timeout
 - `KeyboardInterrupt`: User cancelled operation (caught in `main()`, exits `ExitCode.USER_CANCELLED` = 3)
 
-## Usage Examples
+## Usage Examples<a name="usage-examples"></a>
 
-### Basic Command Execution
+### Basic Command Execution<a name="basic-command-execution"></a>
 
 ```bash
-# List available hosts
-python3 run.py list-hosts
+# List available hosts (PyYAML comes from the uv environment)
+scripts/hooks/uv-public.sh run python run.py list-hosts
 
 # Update inventory with debug output
 python3 run.py --debug update-inventory
@@ -593,20 +835,20 @@ python3 run.py clean
 python3 run.py pre
 ```
 
-### Using Make Targets
+### Using Make Targets<a name="using-make-targets"></a>
 
 ```bash
 # Generate Makefile first
 python3 run.py makefile
 
-# Then use make for any command
+# Then use make for any command (make list-hosts needs PyYAML in the python3 that make finds)
 make list-hosts
 make update-inventory
 make clean
 make pre
 ```
 
-### Environment Variable Configuration
+### Environment Variable Configuration<a name="environment-variable-configuration"></a>
 
 ```bash
 # Enable debug output globally
@@ -621,7 +863,7 @@ python3 run.py update-inventory
 export NO_COLOR=1
 ```
 
-### Programmatic Usage
+### Programmatic Usage<a name="programmatic-usage"></a>
 
 While primarily a CLI tool, you can import and use components:
 
@@ -642,9 +884,9 @@ def flaky_operation():
     pass
 ```
 
-## Extension Guide
+## Extension Guide<a name="extension-guide"></a>
 
-### Adding New Commands
+### Adding New Commands<a name="adding-new-commands"></a>
 
 1. **Subclass `Command`** (the docstring becomes the help description; defining the class registers it):
 
@@ -691,7 +933,7 @@ python3 run.py makefile
 
 `tests/unit/test_run_commands.py` fails if the checked-in `Makefile` drifts from the generated one.
 
-### Adding New Command Groups
+### Adding New Command Groups<a name="adding-new-command-groups"></a>
 
 Groups are created by the `group` class attribute:
 
@@ -716,7 +958,7 @@ class RollbackCommand(Command):
 
 Both commands (`deploy`, `rollback`) will appear under "Deployment" in help output.
 
-### Custom Clean Patterns
+### Custom Clean Patterns<a name="custom-clean-patterns"></a>
 
 Add new patterns to `CLEAN_PATTERN_GROUPS`:
 
@@ -734,9 +976,9 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 }
 ```
 
-## Best Practices
+## Best Practices<a name="best-practices"></a>
 
-### Command Implementation
+### Command Implementation<a name="command-implementation"></a>
 
 1. **Use printf for output:** Consistent styling and debug support
 2. **Handle errors gracefully:** Use `handle_command_error()` for subprocess failures
@@ -744,14 +986,14 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 4. **Support debug mode:** Add debug output with `printf(..., debug=True)`
 5. **Return appropriate exit codes:** Use `sys.exit(ExitCode.COMMAND_FAILED)` on failure
 
-### Shell Command Execution
+### Shell Command Execution<a name="shell-command-execution-1"></a>
 
 1. **Use shell_command:** Don't call `subprocess.run()` directly
 2. **Set appropriate timeouts:** Prevent hanging on network operations
 3. **Capture when needed:** Use `capture_output=True` for parsing, live output for user feedback
 4. **Check return codes:** Use `check=True` (default) unless failure is expected
 
-### Styling Guidelines
+### Styling Guidelines<a name="styling-guidelines"></a>
 
 1. **Success:** `fg='bright_green'`, checkmark emoji ✅
 2. **Error:** `fg='red'`, bold, X emoji ❌
@@ -760,9 +1002,9 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 5. **Debug:** `dim=True`, `debug=True` parameter
 6. **Highlights:** `fg='bright_magenta'` for commands/files
 
-## Troubleshooting
+## Troubleshooting<a name="troubleshooting"></a>
 
-### Inventory Update Failures
+### Inventory Update Failures<a name="inventory-update-failures"></a>
 
 **Symptom:** `update-inventory` fails with SSH errors
 
@@ -786,21 +1028,24 @@ export DOTFILES_INVENTORY_REPO_URL=https://github.com/connormason/dotfiles-inven
 python3 run.py update-inventory
 ```
 
-### YAML Parsing Errors
+### YAML Parsing Errors<a name="yaml-parsing-errors"></a>
 
-**Symptom:** `list-hosts` fails with "Failed to parse inventory file"
+**Symptom:** `list-hosts` fails with "PyYAML is required to read the inventory" (exit 2) or "Failed to parse inventory
+file" (exit 1)
 
-**Solution:**
+**Solution:** The first message means the `python3` in use lacks PyYAML (which also affects `make list-hosts`); run
+`scripts/hooks/uv-public.sh run python run.py list-hosts` instead. The second means the file itself failed to parse, so
+validate it:
 
 ```bash
 # Validate YAML syntax
-python3 -c "import yaml; yaml.safe_load(open('inventory/inventory.yml'))"
+scripts/hooks/uv-public.sh run python -c "import yaml; yaml.safe_load(open('inventory/inventory.yml'))"
 
 # Check for common issues
 yamllint inventory/inventory.yml
 ```
 
-### Pre-commit Hook Failures
+### Pre-commit Hook Failures<a name="pre-commit-hook-failures"></a>
 
 **Symptom:** `pre` command shows hook failures
 
@@ -818,9 +1063,9 @@ prek prepare-hooks
 python3 run.py pre
 ```
 
-## Implementation Details
+## Implementation Details<a name="implementation-details"></a>
 
-### Argument Parser Construction
+### Argument Parser Construction<a name="argument-parser-construction"></a>
 
 1. **Main parser:** Built with `build_parser()`; a "Debug Options" group holds `-d/--debug/--no-debug` (default from
    `DOTFILES_RUN_DEBUG`) and an "Other Options" group holds `-h/--help`
@@ -829,14 +1074,14 @@ python3 run.py pre
    unless `add_help = False`
 4. **Help text:** Custom formatted using `style()` for colors, organized by groups
 
-### Makefile Generation
+### Makefile Generation<a name="makefile-generation"></a>
 
-1. **Filters commands:** Excludes `script_only=True` commands
+1. **Filters commands:** Excludes commands with `script_only = True`
 2. **Groups targets:** Organizes by `group` attribute with section headers
 3. **Generates help:** Color-coded help target using Make variables
 4. **Phony targets:** All targets marked `.PHONY` (no file dependencies)
 
-### Live Output via PTY
+### Live Output via PTY<a name="live-output-via-pty"></a>
 
 For real-time command output (when `indent` specified and `capture_output=False`):
 
@@ -847,21 +1092,3 @@ For real-time command output (when `indent` specified and `capture_output=False`
 5. Handles timeout and cleanup gracefully
 
 This provides better UX than `subprocess.PIPE` for long-running commands.
-
-## Future Enhancements
-
-**Potential improvements tracked in code:**
-
-```python
-# TODO: some commands have dependency on `yaml`. Maybe we should add `uv` metadata to top of script?
-# TODO: implement bootstrap command(s)
-```
-
-**Suggested additions:**
-
-- Bootstrap commands to run full playbook workflows
-- Ansible playbook execution wrappers with tag support
-- Vault password management helpers
-- Role dependency visualization
-- Configuration validation commands
-- Host SSH connectivity checks

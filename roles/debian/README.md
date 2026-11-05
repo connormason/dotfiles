@@ -7,11 +7,11 @@ the Linuxbrew prefix, and the systemd sleep targets.
 
 ## Tasks
 
-| Task             | Effect                                                                                                                                         |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sleep targets    | Masks or unmasks `sleep`, `suspend`, `hibernate`, `hybrid-sleep`; reads each state first (idempotent)                                          |
-| apt packages     | `debian_engine_packages` + `debian_apt_packages`                                                                                               |
-| Linuxbrew prefix | `/home/linuxbrew` (root, 0755) and `debian_linuxbrew_prefix` owned by `ansible_user`, so the engine's `50-brew` installs Homebrew without sudo |
+| Task             | Effect                                                                                                                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sleep targets    | Masks or unmasks `sleep`, `suspend`, `hibernate`, `hybrid-sleep`; reads each state first (idempotent)                                                                                              |
+| apt packages     | `debian_engine_packages` + `debian_apt_packages`                                                                                                                                                   |
+| Linuxbrew prefix | The parent of `debian_linuxbrew_prefix` (`/home/linuxbrew` by default; root, 0755) and `debian_linuxbrew_prefix` owned by `ansible_user`, so the engine's `50-brew` installs Homebrew without sudo |
 
 ## Variables
 

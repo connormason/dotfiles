@@ -26,9 +26,10 @@ jobs:
 
       - name: Detect changed services
         id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
         run: |
-          BEFORE="${{ github.event.before }}"
-
           # Fallback for force pushes or new branches (null SHA)
           if [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
             echo "Null SHA detected (force push or new branch) — deploying all services"
@@ -39,7 +40,7 @@ jobs:
           fi
 
           # Check if compose.base.yml changed — if so, deploy everything
-          if git diff --name-only "$BEFORE".."${{ github.sha }}" | grep -q "^services/compose.base.yml$"; then
+          if git diff --name-only "$BEFORE".."$SHA" | grep -q "^services/compose.base.yml$"; then
             echo "compose.base.yml changed — deploying all services"
             SERVICES=$(ls -d services/*/compose.yml 2>/dev/null | xargs -I{} dirname {} | xargs -I{} basename {} | jq -R . | jq -cs .)
             echo "services=${SERVICES}" >> "$GITHUB_OUTPUT"
@@ -52,7 +53,7 @@ jobs:
           # top-level files like services/README.md or services/compose.base.yml
           # do not get picked up as service names. Directories without a compose.yml
           # (removed or disabled services) are dropped.
-          CHANGED_SERVICES=$(git diff --name-only "$BEFORE".."${{ github.sha }}" \
+          CHANGED_SERVICES=$(git diff --name-only "$BEFORE".."$SHA" \
             | grep -E "^services/[^/]+/" \
             | cut -d'/' -f2 \
             | sort -u \
@@ -88,11 +89,14 @@ jobs:
           tags: tag:ci
 
       - name: Set up SSH key
+        env:
+          NAS_SSH_PRIVATE_KEY: ${{ secrets.NAS_SSH_PRIVATE_KEY }}
+          NAS_HOST: ${{ secrets.NAS_TAILSCALE_HOST }}
         run: |
+          umask 077
           mkdir -p ~/.ssh
-          echo "${{ secrets.NAS_SSH_PRIVATE_KEY }}" > ~/.ssh/id_nas
-          chmod 600 ~/.ssh/id_nas
-          ssh-keyscan -H ${{ secrets.NAS_TAILSCALE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          printf '%s\n' "$NAS_SSH_PRIVATE_KEY" > ~/.ssh/id_nas
+          ssh-keyscan -H "$NAS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Deploy service
         env:
@@ -115,11 +119,14 @@ jobs:
           tags: tag:ci
 
       - name: Set up SSH key
+        env:
+          NAS_SSH_PRIVATE_KEY: ${{ secrets.NAS_SSH_PRIVATE_KEY }}
+          NAS_HOST: ${{ secrets.NAS_TAILSCALE_HOST }}
         run: |
+          umask 077
           mkdir -p ~/.ssh
-          echo "${{ secrets.NAS_SSH_PRIVATE_KEY }}" > ~/.ssh/id_nas
-          chmod 600 ~/.ssh/id_nas
-          ssh-keyscan -H ${{ secrets.NAS_TAILSCALE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          printf '%s\n' "$NAS_SSH_PRIVATE_KEY" > ~/.ssh/id_nas
+          ssh-keyscan -H "$NAS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Deploy
         env:

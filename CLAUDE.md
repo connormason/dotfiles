@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 Personal dotfiles repository. macOS is configured by a layered **stow engine** plus numbered `bootstrap/` stage scripts;
-the home NAS (Debian Linux, with a media-server / home-automation stack) is configured by **Ansible**.
+the home NAS (Debian Linux, with a media-server / home-automation stack) is configured by **Ansible**, which also hands
+the user's home directory to the same stow engine (the `dotfiles` role applies the `profiles/nas` overlay).
 
 For detailed reference, load on-demand:
 
@@ -15,17 +16,21 @@ For detailed reference, load on-demand:
 
 ## Entry Points
 
-1. **`bootstrap/bootstrap.sh`** — personal Mac configuration (stow packages in `stow/`, overlays in `profiles/`).
+1. **`bootstrap/bootstrap.sh`** — personal Mac configuration (stow packages in `stow/`, overlays in `profiles/`). It
+   also runs on the NAS, where the `dotfiles` role applies the `profiles/nas` overlay.
 2. **`run.py nas-provision`** (wrapped by `nas_bootstrap.sh`) → `playbooks/nas_bootstrap.yml` — home NAS / server
-   configuration; **`run.py nas-deploy`** deploys Compose services.
-3. **`run.py`** — repository-management CLI (inventory pull, codebase chores, wrappers for the macOS engine). `Makefile`
-   wraps these (`make help`). Full command reference in [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
+   configuration; **`run.py nas-deploy`** deploys Compose services. CI does the same on pushes to `main` that touch
+   `services/`: `.github/workflows/deploy.yml` calls `scripts/nas/deploy-services.sh`, the script behind `nas-deploy`.
+3. **`run.py`** — repository-management CLI (inventory and vault helpers, codebase chores and prek hook management
+   (`run-hooks`, `prepare-hooks`, `install-hooks`), NAS provisioning and deploy, wrappers for the stow engine, and
+   `track-claude` for ingesting local Claude config). `Makefile` wraps these (`make help`). Full command reference in
+   [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 
 `nas_bootstrap.sh` validates the repo, then hands off to `run.py nas-provision`, which checks the inventory, vault
 password, and SSH reachability before running the NAS playbook in the uv environment. The Home Assistant OS VM is
-outside Ansible: [`vms/haos/`](vms/haos/README.md) holds its hand-run scripts and runbook. See
-[`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flows and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation (stage
-flags / tags / extra-vars).
+provisioned by the playbook's `haos` role, which runs `vms/haos/setup.sh`; only `bridge.sh` is hand-run
+([`vms/haos/`](vms/haos/README.md) has the runbook). See [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flows
+and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation (stage flags / tags / extra-vars).
 
 ## Inventory
 
@@ -35,7 +40,7 @@ secrets. See [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) "Inventory Managemen
 
 ## Vault Password
 
-All secrets are `ansible-vault`-encrypted in the `inventory/` clone. The password lives in `vault_password.txt`
+All Ansible secrets are `ansible-vault`-encrypted in the `inventory/` clone. The password lives in `vault_password.txt`
 (gitignored, created manually; referenced by `ansible.cfg`'s `vault_password_file`). Never commit the vault password or
 decrypted secrets.
 

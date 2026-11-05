@@ -56,3 +56,35 @@ Each lesson follows this pattern:
   on the intentional no-op `Command.add_arguments`, so the hook also stripped its now-"unused" `# noqa: B027` (RUF100).
 - **Rule**: In multi-step Python refactors, add an import in the same edit as (or after) its first use, and after any
   edit that leaves the file temporarily broken, re-check that `noqa` comments and imports survived before moving on.
+
+### Hand-maintained inventories in docs drift: guard each with a test
+
+- **Context**: READMEs and `.ctx/` files list stages, packages, roles, containers, and `run.py` commands.
+  `tests/unit/test_docs_consistency.py` already cites this lesson in its docstring, but it was never written down.
+- **Mistake**: After NAS sub-projects 1-3 the root README still listed retired roles, five registered commands were
+  missing from the reference, and `--tags docker` was documented as the way to update the stack.
+- **Rule**: When a doc enumerates something the code defines, add a parse-the-table test beside it (and a "parsed zero
+  rows" companion). Add the guard in the same change that adds the inventory.
+
+### String-matching Ansible YAML is not verification: run the role
+
+- **Context**: NAS sub-project 3 added per-service secret rendering. Unit tests that read the role's YAML passed.
+- **Mistake**: Two real bugs shipped past them: `lookup('fileglob', '.../*/env.j2')` matched nothing (so no secret was
+  rendered) and a template used a variable another role defines.
+- **Rule**: Exercise role tasks against localhost with `ansible-playbook` and assert on the result
+  (`tests/unit/test_services_role.py`). Structural tests only pin wiring, never behavior.
+
+### `--check --diff` of a template prints the old file
+
+- **Context**: A secrets template whose target already holds secrets, run with `--check --diff`.
+- **Mistake**: Check mode diffs the current file against the new one, so it prints the existing secret values.
+- **Rule**: Set `diff: false` on any task whose target holds secrets, and `no_log` where values could print.
+
+### A tag on `include_role` selects only the include
+
+- **Context**: Every role include in the NAS play carried `configfile`, and `playbooks/README.md` said
+  `--tags configfile` ran the whole stow engine.
+- **Mistake**: Tasks inside an included role see only its `apply:` tags plus their own, so a tag nothing inside the role
+  carries selects the include and nothing else. Only three tasks carried `configfile`.
+- **Rule**: Every tag on an include must be the apply tag or be carried by a task in the role
+  (`tests/unit/test_nas_playbook.py::TestPlaybookTags`). Prove tag semantics with a real run before documenting them.
