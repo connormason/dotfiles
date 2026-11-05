@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT    = Path(__file__).resolve().parents[4]
+REPO_ROOT    = Path(__file__).resolve().parents[3]
 SCRIPT       = REPO_ROOT / 'scripts' / 'nas' / 'deploy-services.sh'
 SERVICES_DIR = REPO_ROOT / 'services'
 BASH         = '/bin/bash'              # macOS ships bash 3.2 here, the oldest interpreter the script must run under

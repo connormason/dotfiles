@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW  = REPO_ROOT / '.github' / 'workflows' / 'deploy.yml'
 SCRIPT    = 'scripts/nas/deploy-services.sh'
 
