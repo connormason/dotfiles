@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 SCRIPT    = REPO_ROOT / 'scripts' / 'hooks' / 'check-leaks-push.sh'
 
 # Built at runtime so this file never contains the literal identifier it exercises

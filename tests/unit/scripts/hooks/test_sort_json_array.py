@@ -17,7 +17,7 @@ import yaml
 if TYPE_CHECKING:
     from types import ModuleType
 
-REPO_ROOT   = Path(__file__).resolve().parents[2]
+REPO_ROOT   = Path(__file__).resolve().parents[4]
 SCRIPT_PATH = REPO_ROOT / 'scripts' / 'hooks' / 'sort-json-array.py'
 CONFIG_PATH = REPO_ROOT / '.pre-commit-config.yaml'
 KEYBINDINGS = 'stow/vscode/Library/Application Support/Code/User/keybindings.json'

@@ -13,7 +13,7 @@ import pytest
 if TYPE_CHECKING:
     from types import ModuleType
 
-SCRIPT_PATH = Path(__file__).resolve().parents[2] / 'scripts' / 'hooks' / 'check-leaks.py'
+SCRIPT_PATH = Path(__file__).resolve().parents[4] / 'scripts' / 'hooks' / 'check-leaks.py'
 
 # Built at runtime so this file never contains the literal identifiers it exercises
 CORP_DOMAIN = 'apple' + '.com'
