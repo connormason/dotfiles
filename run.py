@@ -97,6 +97,7 @@ from typing import Protocol
 from typing import TypeVar
 from typing import Union
 from typing import cast
+from typing import get_args
 from typing import overload
 
 if TYPE_CHECKING:
@@ -1425,6 +1426,43 @@ def import_script_module(
 
     else:
         return module
+
+
+def run_installer(tool_name: InstallableTool, *, indent: int = 0) -> bool:
+    """
+    Run an installer script from ``scripts/install/`` and return True on success.
+
+    Uses ``--ensure`` mode which suppresses the installer's banner and installs only if the tool is missing.
+    Output is streamed in real-time with indentation via :func:`shell_command`.
+
+    :param tool_name: name of tool to run installer script for ("uv")
+    :param indent: number of spaces to indent output by
+    :raises ValueError: if `tool_name` is not a tool we have an installer script for
+    :return: True if installation succeeded, False otherwise
+    """
+    try:
+        script_path = INSTALLER_SCRIPTS[tool_name]
+    except KeyError as e:
+        raise ValueError(
+            f'No installer script available for tool {tool_name!r}. '
+            f'Available tool installers: {", ".join(get_args(InstallableTool))}'
+        ) from e
+
+    check_script_validity(script_path, f'{tool_name} installer script', indent=indent)
+
+    printf(f'💿 Installing {style(tool_name, fg="white", bold=True)}...', fg='bright_cyan', indent=indent)
+    try:
+        shell_command([sys.executable, str(script_path), '--ensure'], indent=indent + 2)
+    except ShellCommandError as e:
+        printf(
+            f'❌ {style(tool_name, fg="white", bold=True)} installation failed (exit code {e.returncode})',
+            fg='bright_red',
+            indent=indent,
+        )
+        if e.stderr:
+            printf(str(e.stderr).strip(), indent=indent + 3, debug=True)
+        return False
+    return True
 
 
 # ====================================================================================================
@@ -3212,6 +3250,90 @@ class TestCommand(Command):
                 check=False,
             ).returncode,
         )
+
+
+# =======================================================================================
+# Tool installation commands
+# =======================================================================================
+
+
+class _InstallToolCommand(Command, register=False):
+    """
+    Base for tool installer commands that wrap a ``scripts/install/*.py`` installer script.
+
+    Subclasses set :cvar:`tool_name` and :cvar:`installer_script`.
+    """
+    group:            ClassVar[str] = 'Tool Installation'
+    tool_name:        ClassVar[str]
+    installer_script: ClassVar[Path]
+
+    class Args(argparse.Namespace):
+        force:       bool           # --force
+        verbose:     bool           # --verbose
+        retries:     int | None     # --retries
+        retry_delay: int | None     # --retry-delay
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '-f',
+            '--force',
+            action='store_true',
+            help=f'Force reinstall even if {style(self.tool_name, fg="bright_magenta")} is already installed',
+        )
+        parser.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Enable verbose output for debugging',
+        )
+        parser.add_argument(
+            '--retries',
+            type=int,
+            metavar='N',
+            help='Maximum number of download retry attempts',
+        )
+        parser.add_argument(
+            '--retry-delay',
+            type=int,
+            metavar='SECONDS',
+            help='Initial delay in seconds between retries with exponential backoff',
+        )
+
+    def run(self, args: Args) -> None:
+        cmd: list[str] = [str(self.installer_script)]
+        if args.force:
+            cmd.append('--force')
+        if args.verbose:
+            cmd.append('--verbose')
+        if args.retries is not None:
+            cmd.extend(['--retries', str(args.retries)])
+        if args.retry_delay is not None:
+            cmd.extend(['--retry-delay', str(args.retry_delay)])
+
+        try:
+            shell_command(cmd)
+        except subprocess.CalledProcessError:
+            sys.exit(1)
+
+
+class InstallUvCommand(_InstallToolCommand):
+    """
+    Install `uv` Python package manager
+    """
+    name:             ClassVar[str]  = 'install-uv'
+    description:      ClassVar[str]  = f'Install {style("uv", fg="bright_magenta")} Python package installer tool'
+    tool_name:        ClassVar[str]  = 'uv'
+    installer_script: ClassVar[Path] = SCRIPTS_DIR / 'install' / 'install_uv.py'
+
+
+class InstallHatchCommand(_InstallToolCommand):
+    """
+    Install `hatch` Python project manager
+    """
+    name:             ClassVar[str]  = 'install-hatch'
+    description:      ClassVar[str]  = f'Install {style("hatch", fg="bright_magenta")} Python project management tool'
+    tool_name:        ClassVar[str]  = 'hatch'
+    installer_script: ClassVar[Path] = SCRIPTS_DIR / 'install' / 'install_hatch.py'
 
 
 # ====================================================================================================

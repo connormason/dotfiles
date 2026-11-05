@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test makefile diagnose
+.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -38,6 +38,10 @@ help: ## Show this help message
 	@echo "  $(YELLOW)render              $(NC) Render settings files from per-layer fragments (scripts/dotfiles/render.py)"
 	@echo "  $(YELLOW)track-claude        $(NC) Ingest new ~/.claude agents, commands, skills, hooks, and rules into the repo"
 	@echo "  $(YELLOW)test                $(NC) Run the test suite via uv (public-index wrapper)"
+	@echo ""
+	@echo "$(BRIGHT_WHITE)Tool Installation:$(NC)"
+	@echo "  $(YELLOW)install-uv          $(NC) Install [95muv[0m Python package installer tool"
+	@echo "  $(YELLOW)install-hatch       $(NC) Install [95mhatch[0m Python project management tool"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Utilities:$(NC)"
 	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
@@ -101,6 +105,13 @@ track-claude: ## Ingest new ~/.claude agents, commands, skills, hooks, and rules
 
 test: ## Run the test suite via uv (public-index wrapper)
 	@python3 run.py test
+
+# Tool Installation
+install-uv: ## Install [95muv[0m Python package installer tool
+	@python3 run.py install-uv
+
+install-hatch: ## Install [95mhatch[0m Python project management tool
+	@python3 run.py install-hatch
 
 # Utilities
 makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
