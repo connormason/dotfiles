@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean bootstrap nas-provision stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test makefile diagnose
+.PHONY: help install dev shell status doctor clean bootstrap nas-provision stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre lock lock-check lock-upgrade test makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -18,7 +18,7 @@ help: ## Show this help message
 	@echo "  $(YELLOW)dev                 $(NC) Create .venv, install dependencies + hooks, and enter environment in a subshell"
 	@echo "  $(YELLOW)shell               $(NC) Enter .venv in a subshell"
 	@echo "  $(YELLOW)status              $(NC) Show environment health status"
-	@echo "  $(YELLOW)doctor              $(NC) Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles"
+	@echo "  $(YELLOW)doctor              $(NC) Check tools, python/uv/venv, overlays, git version and hooks, links, rendered settings, and Brewfiles"
 	@echo "  $(YELLOW)clean               $(NC) Remove all environments, build artifacts, caches, and temporary files"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Bootstrap & Deploy:$(NC)"
@@ -38,21 +38,26 @@ help: ## Show this help message
 	@echo "  $(YELLOW)vault-encrypt       $(NC) Re-encrypt all inventory vault files after editing"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Tool Installation:$(NC)"
-	@echo "  $(YELLOW)install-uv          $(NC) Install [95muv[0m Python package installer tool"
-	@echo "  $(YELLOW)install-hatch       $(NC) Install [95mhatch[0m Python project management tool"
+	@echo "  $(YELLOW)install-uv          $(NC) Install uv Python package installer tool"
+	@echo "  $(YELLOW)install-hatch       $(NC) Install hatch Python project management tool"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Hooks:$(NC)"
-	@echo "  $(YELLOW)install-hooks       $(NC) Install prek git hook shims (overwrites any existing shims)"
+	@echo "  $(YELLOW)install-hooks       $(NC) Install prek git hook shims"
 	@echo "  $(YELLOW)prepare-hooks       $(NC) Prepare the environments of all prek hooks"
 	@echo "  $(YELLOW)uninstall-hooks     $(NC) Uninstall prek git hook shims"
 	@echo "  $(YELLOW)run-hooks           $(NC) Run prek hooks on modified or specified project files"
 	@echo "  $(YELLOW)pre                 $(NC) Run prek (pre-commit) hooks on all project files"
 	@echo ""
+	@echo "$(BRIGHT_WHITE)Dependencies:$(NC)"
+	@echo "  $(YELLOW)lock                $(NC) Update uv.lock from pyproject.toml"
+	@echo "  $(YELLOW)lock-check          $(NC) Check that uv.lock is up to date with pyproject.toml"
+	@echo "  $(YELLOW)lock-upgrade        $(NC) Upgrade locked dependency versions in uv.lock"
+	@echo ""
 	@echo "$(BRIGHT_WHITE)Testing:$(NC)"
 	@echo "  $(YELLOW)test                $(NC) Run the test suite via uv (public-index wrapper)"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Utilities:$(NC)"
-	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
+	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands (run.py)"
 	@echo "  $(YELLOW)diagnose            $(NC) Gather and output local Python environment information to help triage installation/configuration issues"
 	@echo ""
 
@@ -69,7 +74,7 @@ shell: ## Enter .venv in a subshell
 status: ## Show environment health status
 	@python3 run.py status
 
-doctor: ## Check tools, overlays, git version and hooks, links, rendered settings, and Brewfiles
+doctor: ## Check tools, python/uv/venv, overlays, git version and hooks, links, rendered settings, and Brewfiles
 	@python3 run.py doctor
 
 clean: ## Remove all environments, build artifacts, caches, and temporary files
@@ -109,14 +114,14 @@ vault-encrypt: ## Re-encrypt all inventory vault files after editing
 	@python3 run.py vault-encrypt
 
 # Tool Installation
-install-uv: ## Install [95muv[0m Python package installer tool
+install-uv: ## Install uv Python package installer tool
 	@python3 run.py install-uv
 
-install-hatch: ## Install [95mhatch[0m Python project management tool
+install-hatch: ## Install hatch Python project management tool
 	@python3 run.py install-hatch
 
 # Hooks
-install-hooks: ## Install prek git hook shims (overwrites any existing shims)
+install-hooks: ## Install prek git hook shims
 	@python3 run.py install-hooks
 
 prepare-hooks: ## Prepare the environments of all prek hooks
@@ -131,12 +136,22 @@ run-hooks: ## Run prek hooks on modified or specified project files
 pre: ## Run prek (pre-commit) hooks on all project files
 	@python3 run.py pre
 
+# Dependencies
+lock: ## Update uv.lock from pyproject.toml
+	@python3 run.py lock
+
+lock-check: ## Check that uv.lock is up to date with pyproject.toml
+	@python3 run.py lock-check
+
+lock-upgrade: ## Upgrade locked dependency versions in uv.lock
+	@python3 run.py lock-upgrade
+
 # Testing
 test: ## Run the test suite via uv (public-index wrapper)
 	@python3 run.py test
 
 # Utilities
-makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
+makefile: ## Generate Makefile from project management script commands (run.py)
 	@python3 run.py makefile
 
 diagnose: ## Gather and output local Python environment information to help triage installation/configuration issues
