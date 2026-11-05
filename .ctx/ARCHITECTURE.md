@@ -114,7 +114,7 @@ fails when this list drifts from the playbook):
 
 - Type-annotated with full typing support
 - ANSI styling via a custom `style()` function
-- Command registration via the `@command` decorator
+- Command registration via `Command` subclasses (auto-registered by `__init_subclass__`)
 - Auto-generates the `Makefile` from registered commands; script-only commands (`nas-deploy`) get no target
 - Retry logic with exponential backoff, applied only to the `update-inventory` git pull and clone (3 attempts each)
 

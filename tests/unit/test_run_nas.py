@@ -258,9 +258,9 @@ class TestNasDeploy:
         """
         Test that nas-deploy is grouped under NAS and kept out of the Makefile (its argument is required)
         """
-        info = run.REGISTERED_COMMANDS['nas-deploy']
-        assert info.group       == 'NAS'
-        assert info.script_only is True
+        cmd = run.REGISTERED_COMMANDS['nas-deploy']
+        assert cmd.group       == 'NAS'
+        assert cmd.script_only is True
 
     def test_runs_the_shared_script_with_the_resolved_target(self, fake_shell: FakeShell) -> None:
         """
@@ -269,7 +269,7 @@ class TestNasDeploy:
         fake_shell.results['bash'] = _done(3)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.cmd_nas_deploy(argparse.Namespace(service='glance', dry_run=False))
+            run.get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
 
         cmd, kwargs = fake_shell.find('bash')
         assert exc_info.value.code == 3
@@ -282,7 +282,7 @@ class TestNasDeploy:
         Test that --dry-run is forwarded ahead of the service name
         """
         with pytest.raises(SystemExit):
-            run.cmd_nas_deploy(argparse.Namespace(service='all', dry_run=True))
+            run.get_commands()['nas-deploy'](argparse.Namespace(service='all', dry_run=True))
 
         assert fake_shell.find('bash')[0] == ['bash', str(run.NAS_DEPLOY_SCRIPT), '--dry-run', 'all']
 
@@ -297,7 +297,7 @@ class TestNasDeploy:
         fake_shell.results['git'] = _done(stdout=' M services/glance/compose.yml\n')
 
         with pytest.raises(SystemExit) as exc_info:
-            run.cmd_nas_deploy(argparse.Namespace(service='glance', dry_run=False))
+            run.get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
 
         assert exc_info.value.code == 0
         assert 'uncommitted' in _output(capsys)
@@ -308,7 +308,7 @@ class TestNasDeploy:
         Test that a clean services/ tree produces no warning
         """
         with pytest.raises(SystemExit):
-            run.cmd_nas_deploy(argparse.Namespace(service='glance', dry_run=False))
+            run.get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
         assert 'uncommitted' not in _output(capsys)
 
 
@@ -391,9 +391,9 @@ class TestNasProvision:
         """
         Test that nas-provision is a NAS command that also gets a Makefile target
         """
-        info = run.REGISTERED_COMMANDS['nas-provision']
-        assert info.group       == 'NAS'
-        assert info.script_only is False
+        cmd = run.REGISTERED_COMMANDS['nas-provision']
+        assert cmd.group       == 'NAS'
+        assert cmd.script_only is False
 
     def test_installs_collections_then_runs_the_playbook_from_the_repo_root(self, fake_shell: FakeShell) -> None:
         """
@@ -402,7 +402,7 @@ class TestNasProvision:
         fake_shell.results['ansible-playbook'] = _done(4)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.cmd_nas_provision(_provision_args(tags='services'))
+            run.get_commands()['nas-provision'](_provision_args(tags='services'))
 
         assert exc_info.value.code == 4
         assert [call[0][2] for call in fake_shell.calls] == ['ansible-galaxy', 'ansible-playbook']
@@ -424,7 +424,7 @@ class TestNasProvision:
         fake_shell.results['ansible-galaxy'] = _done(1)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.cmd_nas_provision(_provision_args())
+            run.get_commands()['nas-provision'](_provision_args())
 
         assert exc_info.value.code == 0
         assert 'Collection install failed' in _output(capsys)
@@ -440,7 +440,7 @@ class TestNasProvision:
         monkeypatch.setattr(run, 'resolve_reachable_nas', unreachable)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.cmd_nas_provision(_provision_args())
+            run.get_commands()['nas-provision'](_provision_args())
 
         assert exc_info.value.code == 1
         assert fake_shell.calls == []
@@ -458,6 +458,6 @@ class TestNasProvision:
         monkeypatch.setattr(run, 'resolve_reachable_nas', probe)
 
         with pytest.raises(SystemExit):
-            run.cmd_nas_provision(_provision_args(extra_vars=['oops']))
+            run.get_commands()['nas-provision'](_provision_args(extra_vars=['oops']))
 
         assert probed == []

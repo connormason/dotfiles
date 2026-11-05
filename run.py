@@ -7,8 +7,9 @@ and codebase maintenance tasks.
 
 Architecture
 -----------
-The script uses a decorator-based command registration system (@command) that:
-- Automatically builds argparse subparsers from registered functions
+The script uses a class-based command registration system: each command subclasses the abstract ``Command`` base,
+which registers it on class definition and:
+- Automatically builds argparse subparsers from registered commands
 - Organizes commands by group for help text
 - Supports generating Makefile targets from registered commands
 - Allows commands to be script-only or makefile-only
@@ -17,6 +18,8 @@ Command Categories
 -----------------
 - **Inventory**: Manage the standalone inventory git repository
 - **Codebase**: Clean build artifacts, run prek hooks, generate Makefile
+- **NAS**: Provision the home NAS and deploy its Compose services
+- **Dotfiles**: Wrap the layered engine (doctor, bootstrap, stow, render, test)
 
 Key Features
 -----------
@@ -53,8 +56,10 @@ See Also
 """
 from __future__ import annotations
 
+import abc
 import argparse
 import dataclasses
+import enum
 import errno
 import getpass
 import inspect
@@ -69,12 +74,14 @@ import subprocess
 import sys
 import textwrap
 import time
+import traceback
 from functools import partial
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Callable
+from typing import ClassVar
 from typing import Literal
 from typing import Protocol
 from typing import TypeVar
@@ -85,6 +92,7 @@ from typing import overload
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from collections.abc import Mapping
+    from collections.abc import Sequence
 
 
 # TODO: some commands have dependency on `yaml`. Maybe we should add `uv` metadata to top of script?
@@ -138,6 +146,9 @@ INVENTORY_REPO_URL: str  = os.getenv(
 )
 
 # Other static configuration
+# Spacing between the command name and description columns in the script help text
+SCRIPT_HELP_COL_SPACING: int = 4
+
 # Patterns for files/directories to remove during `run.py clean`
 CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
     'package build artifacts': [
@@ -172,10 +183,8 @@ CLEAN_PATTERN_GROUPS: dict[str, list[str]] = {
 F        = TypeVar('F',        bound=Callable[..., Any])
 T_contra = TypeVar('T_contra', contravariant=True)
 
-PathLike         = Union[str, Path]
-StyleColor       = Union[int, tuple[int, int, int], str]
-CommandFunc      = Callable[[argparse.Namespace],      None]
-AddArgumentsFunc = Callable[[argparse.ArgumentParser], None]
+PathLike   = Union[str, Path]
+StyleColor = Union[int, tuple[int, int, int], str]
 
 
 class SupportsWrite(Protocol[T_contra]):
@@ -188,150 +197,219 @@ class SupportsWrite(Protocol[T_contra]):
 
 
 # ====================================================================================================
+# Exit codes
+# ====================================================================================================
+
+
+class ExitCode(int, enum.Enum):
+    """
+    Script exit codes
+    """
+    SUCCESS        = 0
+    COMMAND_FAILED = 1
+    SETUP_ERROR    = 2
+    USER_CANCELLED = 3
+
+
+# ====================================================================================================
 # Command registration
 #
-# The @command decorator provides a declarative way to register command functions:
-#   - Extracts command name from function name (strips 'cmd_' or 'command_' prefix)
-#   - Automatically builds argparse subparsers with help text from docstrings
-#   - Supports optional argument addition via add_arguments callback
-#   - Allows grouping commands for organized help text
-#   - Enables filtering commands for script-only or Makefile-only visibility
+# Commands are classes deriving from the abstract Command base:
+#   - Subclasses register on definition via __init_subclass__ (pass `register=False` for intermediate bases)
+#   - The name defaults to the class name minus its "Command" suffix, lowercased; multi-word commands set `name`
+#   - The description defaults to the class docstring and drives subparser, script, and Makefile help text
+#   - add_arguments() adds command options; a nested Args(argparse.Namespace) types the parsed result
+#   - group / script_only / makefile_only control help organization and Makefile generation
 #
 # Example::
 #
-#     @command(group='Inventory', add_arguments=add_custom_args)
-#     def cmd_update_inventory(args: argparse.Namespace) -> None:
-#         '''Update inventory from remote repository'''
-#         # Implementation here
+#     class UpdateInventoryCommand(Command):
+#         '''
+#         Update inventory repo
+#         '''
+#         name:  ClassVar[str] = 'update-inventory'
+#         group: ClassVar[str] = 'Inventory'
+#
+#         class Args(argparse.Namespace):
+#             force: bool
+#
+#         def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+#             parser.add_argument('-f', '--force', action='store_true', help='Discard local changes first')
+#
+#         def run(self, args: Args) -> None:
+#             ...
 #
 # ====================================================================================================
 
 
-@dataclasses.dataclass
-class CommandInfo:
+def get_default_help_formatter_cls(
+    *,
+    indent_increment: int = 2,
+    max_help_position: int = 50,
+    width: int | None = None,
+) -> type[argparse.HelpFormatter]:
     """
-    Script command + metadata, registered via the ``@command`` decorator below
+    Get HelpFormatter class to use for main script parser and default for subcommand parsers,
+    unless :attr:`Command.help_formatter_type` overridden to return a different formatter type.
 
-    :param name: command name
-    :param func: command callback (decorated function)
-    :param add_arguments: optional function to add command-specific arguments to the subparser
-    :param description: command description (defaults to docstring of wrapped function)
-    :param epilog: command parser epilog
-    :param formatter_class: :class:`argparse.HelpFormatter` for command subparser
-    :param group: command group name for help organization
-    :param script_only: if True, don't include command in Makefile targets generated by `makefile` command
-    :param makefile_only: if True, don't include command in help text of script when called directly
+    :param indent_increment: number of spaces representing a single indentation level in help text
+    :param max_help_position: max width of first column (command/parameter names) in help text
+    :param width: max width of help text. If None (default), fill entire width available in the terminal
+    :return: :class:`argparse.HelpFormatter` type
     """
-    name:            str
-    func:            CommandFunc
-    add_arguments:   AddArgumentsFunc | None      = None
-    description:     str | None                   = None
-    epilog:          str | None                   = None
-    formatter_class: type[argparse.HelpFormatter] = argparse.RawDescriptionHelpFormatter
-    group:           str | None                   = None
-    script_only:     bool                         = False
-    makefile_only:   bool                         = False
+    return cast(
+        'type[argparse.HelpFormatter]',
+        partial(
+            argparse.RawTextHelpFormatter,
+            indent_increment=indent_increment,
+            max_help_position=max_help_position,
+            width=width,
+        ),
+    )
 
 
-REGISTERED_COMMANDS: dict[str, CommandInfo] = {}
+REGISTERED_COMMANDS: dict[str, Command] = {}
+
+
+class Command(metaclass=abc.ABCMeta):
+    """
+    Abstract base class for script commands.
+
+    Subclasses define a command by setting class attributes and implementing :meth:`run`.
+    Commands are auto-registered upon class definition via :meth:`__init_subclass__`.
+
+    Class attributes:
+
+    :cvar name: command name (used as subcommand on CLI). Defaults to class name lowercased with
+                trailing "Command" stripped and underscores replaced with dashes
+    :cvar description: command description shown in help text. Defaults to class docstring
+    :cvar epilog: epilog text appended after help text
+    :cvar group: command group name for help organization
+    :cvar add_help: add --help/-h help option to command subparser (help option is added after parameters added by
+                    :meth:`add_arguments` to an "Other options" group)
+    :cvar script_only: if True, don't include command in Makefile targets generated by ``makefile`` command
+    :cvar makefile_only: if True, don't include command in help text of script when called directly
+    """
+    name:          ClassVar[str | None] = None
+    description:   ClassVar[str | None] = None
+    epilog:        ClassVar[str | None] = None
+    group:         ClassVar[str | None] = None
+    add_help:      ClassVar[bool]       = True
+    script_only:   ClassVar[bool]       = False
+    makefile_only: ClassVar[bool]       = False
+
+    def __init_subclass__(cls, register: bool = True, **kwargs: Any) -> None:
+        """
+        Register the command subclass in the global command registry.
+
+        Derives the command name from the class name (stripping a ``Command`` suffix and lowercasing) and populates
+        the description from the class docstring if not explicitly set.
+
+        :param register: if False, skip registration (useful for abstract intermediate base classes)
+        :raises ValueError: if both ``script_only`` and ``makefile_only`` are set
+        """
+        super().__init_subclass__(**kwargs)
+        if not register:
+            return
+
+        if cls.script_only and cls.makefile_only:
+            raise ValueError(f'{cls.__name__}: only one of `script_only` and `makefile_only` may be True')
+
+        if cls.name is None:
+            cls.name = cls.__name__.removesuffix('Command').replace('_', '-').lower()
+        if 'description' not in cls.__dict__:
+            cls.description = inspect.getdoc(cls)
+
+        REGISTERED_COMMANDS[cls.name] = cls()
+
+    def __call__(self, args: argparse.Namespace) -> None:
+        return self.run(args)
+
+    @property
+    def help_formatter_type(self) -> type[argparse.HelpFormatter]:
+        """
+        :class:`argparse.HelpFormatter` type to use for command subparser help text.
+        """
+        return get_default_help_formatter_cls()
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:  # noqa: B027  (intentional no-op default)
+        """
+        Add command-specific arguments to the subparser.
+
+        Override in subclasses to define CLI arguments. Default implementation is a no-op.
+
+        :param parser: the argparse subparser for this command
+        """
+        pass
+
+    @abc.abstractmethod
+    def run(self, args: argparse.Namespace) -> None:
+        """
+        Execute the command.
+
+        :param args: parsed command-line arguments
+        """
+        raise NotImplementedError
 
 
 @overload
-def command(func_or_name: CommandFunc) -> CommandFunc: ...
+def get_commands(*, exclude: Iterable[str] | None = None) -> dict[str, Command]: ...
 
 @overload
-def command(
+def get_commands(
     *,
-    name: str | None = ...,
-    add_arguments: AddArgumentsFunc | None = ...,
-    description: str | None = ...,
-    epilog: str | None = ...,
-    formatter_class: type[argparse.HelpFormatter] = ...,
-    group: str | None = ...,
-    script_only: bool = ...,
-    makefile_only: bool = ...,
-) -> Callable[[CommandFunc], CommandFunc]: ...
+    by_group: Literal[True],
+    group_order: Sequence[str] | None = ...,
+    exclude: Iterable[str] | None = ...,
+) -> dict[str, dict[str, Command]]: ...
 
-def command(
-    func_or_name: CommandFunc | str | None = None,
+@overload
+def get_commands(
     *,
-    name: str | None = None,
-    add_arguments: AddArgumentsFunc | None = None,
-    description: str | None = None,
-    epilog: str | None = None,
-    formatter_class: type[argparse.HelpFormatter] = argparse.RawDescriptionHelpFormatter,
-    group: str | None = None,
-    script_only: bool = False,
-    makefile_only: bool = False,
-) -> Callable[[CommandFunc], CommandFunc] | CommandFunc:
+    by_group: Literal[False] = ...,
+    exclude: Iterable[str] | None = ...,
+) -> dict[str, Command]: ...
+
+def get_commands(
+    *,
+    by_group: bool = False,
+    group_order: Sequence[str] | None = None,
+    exclude: Iterable[str] | None = None,
+) -> dict[str, Command] | dict[str, dict[str, Command]]:
     """
-    Decorator to register a function as a command
+    Get all registered commands.
 
-    :param func_or_name: function to decorate (when used without parens) or command name
-    :param name: command name
-    :param add_arguments: optional function to add command-specific arguments to the subparser
-    :param description: command description (defaults to docstring of wrapped function)
-    :param epilog: command parser epilog
-    :param formatter_class: :class:`argparse.HelpFormatter` for command subparser
-    :param group: command group name for help organization
-    :param script_only: if True, don't include command in Makefile targets generated by `makefile` command
-    :param makefile_only: if True, don't include command in help text of script when called directly
-    :return: decorated function or decorator function
-    """
-    if script_only and makefile_only:
-        raise ValueError('Only one of `script_only` and `makefile_only` may be True')
-
-    def decorator(func: CommandFunc) -> CommandFunc:
-        if name is not None:
-            cmd_name = name
-        elif isinstance(func_or_name, str):
-            cmd_name = func_or_name
-        else:
-            cmd_name = func.__name__.removeprefix('cmd_').removeprefix('command_').replace('_', '-')
-
-        REGISTERED_COMMANDS[cmd_name] = CommandInfo(
-            name=cmd_name,
-            func=func,
-            add_arguments=add_arguments,
-            description=description or inspect.getdoc(func),
-            epilog=epilog,
-            formatter_class=formatter_class,
-            group=group,
-            script_only=script_only,
-            makefile_only=makefile_only,
-        )
-        return func
-
-    if callable(func_or_name):
-        return decorator(func_or_name)
-    return decorator
-
-
-def get_command_functions() -> dict[str, CommandFunc]:
-    """
-    Get all registered command functions
-
-    :return: mapping from command name -> command func
-    """
-    return {name: cmd_info.func for name, cmd_info in REGISTERED_COMMANDS.items()}
-
-
-def get_command_groups(exclude: Iterable[str] | None = None) -> dict[str, dict[str, CommandInfo]]:
-    """
-    Get command info by associated group
-
+    :param by_group: if True, get commands by group - then name. If False, get commands by name
+    :param group_order: explicit ordering of group names when ``by_group=True``. Groups not in this list appear at the
+                        end in insertion order. If None, groups are returned in insertion order
     :param exclude: command names to exclude
-    :return: mapping from group name -> command name -> :class:`CommandInfo`
+    :return: mapping from command name -> :class:`Command`,
+             or mapping from group name -> command name -> :class:`Command` (if `by_group=True`)
     """
     exclude_cmds: set[str] = set(exclude) if exclude is not None else set()
 
-    command_groups: dict[str, dict[str, CommandInfo]] = {}
-    for cmd_name, cmd_info in REGISTERED_COMMANDS.items():
-        if cmd_name not in exclude_cmds:
+    commands: dict[str, Command] = {
+        cmd_name: cmd_info
+        for cmd_name, cmd_info in REGISTERED_COMMANDS.items()
+        if cmd_name not in exclude_cmds
+    }
+    if by_group:
+        command_groups: dict[str, dict[str, Command]] = {}
+        for cmd_name, cmd_info in get_commands(exclude=exclude).items():
             group_name = cmd_info.group or 'Other commands'
             command_groups.setdefault(group_name, {})[cmd_name] = cmd_info
 
-    return command_groups
+        # Sort groups by explicit ordering; unlisted groups go at the end in insertion order
+        if group_order:
+            ordered: dict[str, dict[str, Command]] = {}
+            for group_name in group_order:
+                if group_name in command_groups:
+                    ordered[group_name] = command_groups.pop(group_name)
+            ordered.update(command_groups)
+            return ordered
+
+        return command_groups
+    return commands
 
 
 # ====================================================================================================
@@ -717,7 +795,6 @@ def shell_command(
                 print(f'{indent_str}{buffer}', end='')
         finally:
             os.close(master_fd)
-            # No `return`/`raise` here: either would replace an exception already propagating from the read loop
             if not timed_out:
                 try:
                     returncode = process.wait(timeout=None if deadline is None else max(deadline - time.monotonic(), 0))
@@ -728,8 +805,8 @@ def shell_command(
                 process.wait()
 
         if timed_out:
-            printf(f'❌ Command timed out after {timeout}s', fg='red', bold=True, indent=indent or 0)
-            printf(f'  └─ Command: {shlex.join(cmd)}',        fg='red',           indent=(indent or 0) + 1)
+            printf(f'❌ Command timed out after {timeout}s',  fg='red', bold=True, indent=indent or 0)
+            printf(f'  └─ Command: {shlex.join(cmd)}',        fg='red',            indent=(indent or 0) + 1)
             if check:
                 raise subprocess.TimeoutExpired(cmd, cast('float', timeout), output=all_output)
             return subprocess.CompletedProcess(cmd, -1, stdout=all_output)
@@ -896,7 +973,7 @@ def parse_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
                     f'❌ {style("Error", fg="red", bold=True)}: Invalid extra var format "{var_str}". '
                     f'Use key=value format'
                 )
-                sys.exit(1)
+                sys.exit(ExitCode.COMMAND_FAILED)
 
             key, value = var_str.split('=', 1)
             extra_vars[key.strip()] = value.strip()
@@ -909,207 +986,256 @@ def parse_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
 #
 # Commands for managing the standalone inventory git repository
 #
-# The inventory is NOT a git submodule - it's a separate repository cloned into the inventory/ directory by run.py.
+# The inventory is a separate repository cloned into the inventory/ directory by run.py.
 #
 # Key commands:
-# - list-hosts:       Parse inventory.yml and display available bootstrap targets
-# - inventory-status: Show git status and metadata for inventory directory
-# - update-inventory: Clone (if missing) or pull (if exists) inventory repo
-#   - Supports --force flag to reset uncommitted changes before pulling
-#   - Includes retry logic with exponential backoff for network resilience
-#   - Provides SSH error detection and troubleshooting guidance
+#   - list-hosts:       Parse inventory.yml and display available bootstrap targets
+#   - inventory-status: Show git status and metadata for inventory directory
+#   - update-inventory: Clone (if missing) or pull (if exists) inventory repo
+#     - Supports --force flag to reset uncommitted changes before pulling
+#     - Includes retry logic with exponential backoff for network resilience
+#     - Provides SSH error detection and troubleshooting guidance
 # ====================================================================================================
 
 
-@command(group='Inventory')
-def cmd_list_hosts(args: argparse.Namespace) -> None:
+def find_vault_files() -> list[Path]:
+    """
+    Find all vault.yml files in the inventory directory
+
+    :return: sorted list of vault file paths
+    """
+    vault_files: list[Path] = []
+    for pattern in VAULT_FILE_PATTERNS:
+        vault_files.extend(INVENTORY_DIR.glob(pattern))
+    return sorted(vault_files)
+
+
+def require_vault_password() -> None:
+    """
+    Validate that the vault password file exists and exit with an error if not
+
+    :raises SystemExit: if vault password file is missing
+    """
+    if not VAULT_PASSWORD.is_file():
+        printf('❌ Vault password file not found', fg='red', bold=True)
+        printf(f'   Expected: {folduser(VAULT_PASSWORD)}', indent=3)
+        printf(f'   Create it with: {style("echo YOUR_PASSWORD > vault_password.txt", fg="bright_magenta")}', indent=3)
+        sys.exit(ExitCode.COMMAND_FAILED)
+
+
+def require_inventory() -> None:
+    """
+    Validate that the inventory directory exists and exit with an error if not
+
+    :raises SystemExit: if inventory directory is missing
+    """
+    if not INVENTORY_DIR.exists():
+        printf('❌ Inventory directory not found', fg='red', bold=True)
+        printf(f'   Expected: {folduser(INVENTORY_DIR)}', indent=3)
+        printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
+        sys.exit(ExitCode.COMMAND_FAILED)
+
+
+class ListHostsCommand(Command):
     """
     List available bootstrap targets from inventory
     """
-    printf('Available Bootstrap Targets', bold=True, fg='bright_white')
-    printf('=' * 60,                      bold=True)
+    name:  ClassVar[str] = 'list-hosts'
+    group: ClassVar[str] = 'Inventory'
 
-    # Check that inventory file exists
-    if not INVENTORY_FILE.exists():
-        printf('')
-        printf('❌ Inventory file not found', fg='red', bold=True)
-        printf(f'   Expected: {folduser(INVENTORY_FILE)}',                                 indent=3)
-        printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
-        sys.exit(1)
+    def run(self, args: argparse.Namespace) -> None:
+        printf('Available Bootstrap Targets', bold=True, fg='bright_white')
+        printf('=' * 60,                      bold=True)
 
-    # Parse inventory file
-    try:
-        import yaml
-        with INVENTORY_FILE.open() as f:
-            inventory = yaml.safe_load(f)
-    except Exception as e:
-        printf('')
-        printf('❌ Failed to parse inventory file', fg='red', bold=True)
-        printf(f'   Error: {e}', indent=3)
-        sys.exit(1)
-
-    # Display all groups and hosts
-    if (not inventory) or ('all' not in inventory):
-        printf('')
-        printf('⚠️  No hosts found in inventory', fg='yellow')
-        sys.exit(0)
-
-    all_hosts: set[str] = set()
-    if 'children' in inventory.get('all', {}):
-        printf('')
-        for group_name, group_data in inventory['all']['children'].items():
-            printf(f'{group_name}:', fg='cyan', bold=True)
-            if 'hosts' in group_data:
-                for host_name, host_data in group_data['hosts'].items():
-                    all_hosts.add(host_name)
-                    ansible_host = host_data.get('ansible_host', host_name) if host_data else host_name
-                    printf(f'  └─ {style(host_name, fg="green")}')
-                    if ansible_host != host_name:
-                        printf(f'     (connects to: {style(ansible_host, dim=True)})', indent=3)
-            else:
-                printf('  └─ (no hosts)', dim=True)
+        # Check that inventory file exists
+        if not INVENTORY_FILE.exists():
             printf('')
+            printf('❌ Inventory file not found', fg='red', bold=True)
+            printf(f'   Expected: {folduser(INVENTORY_FILE)}',                                 indent=3)
+            printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
+            sys.exit(ExitCode.COMMAND_FAILED)
 
-    # Show total
-    printf('=' * 60,                         bold=True)
-    printf(f'Total hosts: {len(all_hosts)}', bold=True)
+        # Parse inventory file
+        try:
+            import yaml
+            with INVENTORY_FILE.open() as f:
+                inventory = yaml.safe_load(f)
+        except Exception as e:
+            printf('')
+            printf('❌ Failed to parse inventory file', fg='red', bold=True)
+            printf(f'   Error: {e}', indent=3)
+            sys.exit(ExitCode.COMMAND_FAILED)
+
+        # Display all groups and hosts
+        if (not inventory) or ('all' not in inventory):
+            printf('')
+            printf('⚠️  No hosts found in inventory', fg='yellow')
+            sys.exit(ExitCode.SUCCESS)
+
+        all_hosts: set[str] = set()
+        if 'children' in inventory.get('all', {}):
+            printf('')
+            for group_name, group_data in inventory['all']['children'].items():
+                printf(f'{group_name}:', fg='cyan', bold=True)
+                if 'hosts' in group_data:
+                    for host_name, host_data in group_data['hosts'].items():
+                        all_hosts.add(host_name)
+                        ansible_host = host_data.get('ansible_host', host_name) if host_data else host_name
+                        printf(f'  └─ {style(host_name, fg="green")}')
+                        if ansible_host != host_name:
+                            printf(f'     (connects to: {style(ansible_host, dim=True)})', indent=3)
+                else:
+                    printf('  └─ (no hosts)', dim=True)
+                printf('')
+
+        # Show total
+        printf('=' * 60,                         bold=True)
+        printf(f'Total hosts: {len(all_hosts)}', bold=True)
 
 
 # TODO: cleanup formatting
-@command(group='Inventory')
-def cmd_inventory_status(args: argparse.Namespace) -> None:
+class InventoryStatusCommand(Command):
     """
     Display current status of inventory directory
     """
-    printf('Inventory Status', bold=True, fg='bright_white')
-    printf('=' * 60, bold=True)
-    printf('')
+    name:  ClassVar[str] = 'inventory-status'
+    group: ClassVar[str] = 'Inventory'
 
-    # Check if inventory directory exists
-    if not INVENTORY_DIR.exists():
+    def run(self, args: argparse.Namespace) -> None:
+        printf('Inventory Status', bold=True, fg='bright_white')
+        printf('=' * 60, bold=True)
+        printf('')
+
+        # Check if inventory directory exists
+        if not INVENTORY_DIR.exists():
+            printf('Status:   ', fg='bright_white', bold=True, reset=False)
+            printf('Not found',  fg='red',          bold=True)
+            printf(f'Path:     {style(folduser(INVENTORY_DIR), fg="magenta", dim=True)}', dim=True)
+            printf('')
+            printf(
+                f'💡 Run {style("python3 run.py update-inventory", fg="bright_magenta")} to clone the inventory',
+                fg='yellow',
+            )
+            return
+
         printf('Status:   ', fg='bright_white', bold=True, reset=False)
-        printf('Not found',  fg='red',          bold=True)
+        printf('Found',      fg='green',        bold=True)
         printf(f'Path:     {style(folduser(INVENTORY_DIR), fg="magenta", dim=True)}', dim=True)
         printf('')
-        printf(
-            f'💡 Run {style("python3 run.py update-inventory", fg="bright_magenta")} to clone the inventory',
-            fg='yellow',
-        )
-        return
 
-    printf('Status:   ', fg='bright_white', bold=True, reset=False)
-    printf('Found',      fg='green',        bold=True)
-    printf(f'Path:     {style(folduser(INVENTORY_DIR), fg="magenta", dim=True)}', dim=True)
-    printf('')
-
-    # Check if it's a git repository
-    git_dir = INVENTORY_DIR / '.git'
-    if not git_dir.exists():
-        printf('Type:     ', fg='bright_white', bold=True, reset=False)
-        printf('Not a git repository', fg='yellow', bold=True)
-        printf('')
-        printf('⚠️  Inventory exists but is not a git repository', fg='yellow')
-        printf(f'   Run {style("python3 run.py update-inventory",  fg="bright_magenta")} to fix', indent=3)
-        return
-
-    printf('Type:     ',     fg='bright_white', bold=True, reset=False)
-    printf('Git repository', fg='green',        bold=True)
-    printf('')
-
-    # Get git remote information
-    try:
-        result = shell_command(
-            ['git', 'remote', 'get-url', 'origin'],
-            cwd=INVENTORY_DIR,
-            capture_output=True,
-        )
-        remote_url = result.stdout.strip()
-        printf('Remote:   ',           fg='bright_white', bold=True, reset=False)
-        printf(remote_url,             fg='cyan')
-    except subprocess.CalledProcessError:
-        printf('Remote:   ',           fg='bright_white', bold=True, reset=False)
-        printf('No remote configured', fg='yellow')
-
-    # Get current branch
-    try:
-        result = shell_command(
-            ['git', 'branch', '--show-current'],
-            cwd=INVENTORY_DIR,
-            capture_output=True,
-        )
-        branch = result.stdout.strip()
-        printf('Branch:   ', fg='bright_white', bold=True, reset=False)
-        printf(branch,       fg='cyan')
-    except subprocess.CalledProcessError:
-        printf('Branch:   ', fg='bright_white', bold=True, reset=False)
-        printf('Unknown',    fg='yellow')
-
-    # Get last commit info
-    try:
-        result = shell_command(
-            ['git', 'log', '-1', '--format=%h - %s (%cr)'],
-            cwd=INVENTORY_DIR,
-            capture_output=True,
-        )
-        last_commit = result.stdout.strip()
-        printf('Commit:   ', fg='bright_white', bold=True, reset=False)
-        printf(last_commit,  dim=True)
-    except subprocess.CalledProcessError:
-        pass
-
-    # Check for uncommitted changes
-    try:
-        result = shell_command(
-            ['git', 'status', '--porcelain'],
-            cwd=INVENTORY_DIR,
-            capture_output=True,
-        )
-        if result.stdout.strip():
+        # Check if it's a git repository
+        git_dir = INVENTORY_DIR / '.git'
+        if not git_dir.exists():
+            printf('Type:     ', fg='bright_white', bold=True, reset=False)
+            printf('Not a git repository', fg='yellow', bold=True)
             printf('')
-            printf('⚠️  Uncommitted changes detected', fg='yellow', bold=True)
-            for line in result.stdout.strip().split('\n')[:5]:
-                printf(f'   {line}', indent=3, fg='yellow')
-    except subprocess.CalledProcessError:
-        pass
+            printf('⚠️  Inventory exists but is not a git repository', fg='yellow')
+            printf(f'   Run {style("python3 run.py update-inventory",  fg="bright_magenta")} to fix', indent=3)
+            return
 
-    # Check if inventory.yml file exists
-    printf('')
-    if INVENTORY_FILE.exists():
-        printf('Inventory file:', fg='bright_white', bold=True, reset=False)
-        printf(' Found',          fg='green',        bold=True)
-        printf(f'   {style(folduser(INVENTORY_FILE), fg="magenta", dim=True)}', indent=3)
-    else:
-        printf('Inventory file:', fg='bright_white', bold=True, reset=False)
-        printf(' Not found',      fg='red',          bold=True)
-        printf(f'   Expected: {style(folduser(INVENTORY_FILE), fg="magenta", dim=True)}', indent=3)
+        printf('Type:     ',     fg='bright_white', bold=True, reset=False)
+        printf('Git repository', fg='green',        bold=True)
+        printf('')
+
+        # Get git remote information
+        try:
+            result = shell_command(
+                ['git', 'remote', 'get-url', 'origin'],
+                cwd=INVENTORY_DIR,
+                capture_output=True,
+            )
+            remote_url = result.stdout.strip()
+            printf('Remote:   ',           fg='bright_white', bold=True, reset=False)
+            printf(remote_url,             fg='cyan')
+        except subprocess.CalledProcessError:
+            printf('Remote:   ',           fg='bright_white', bold=True, reset=False)
+            printf('No remote configured', fg='yellow')
+
+        # Get current branch
+        try:
+            result = shell_command(
+                ['git', 'branch', '--show-current'],
+                cwd=INVENTORY_DIR,
+                capture_output=True,
+            )
+            branch = result.stdout.strip()
+            printf('Branch:   ', fg='bright_white', bold=True, reset=False)
+            printf(branch,       fg='cyan')
+        except subprocess.CalledProcessError:
+            printf('Branch:   ', fg='bright_white', bold=True, reset=False)
+            printf('Unknown',    fg='yellow')
+
+        # Get last commit info
+        try:
+            result = shell_command(
+                ['git', 'log', '-1', '--format=%h - %s (%cr)'],
+                cwd=INVENTORY_DIR,
+                capture_output=True,
+            )
+            last_commit = result.stdout.strip()
+            printf('Commit:   ', fg='bright_white', bold=True, reset=False)
+            printf(last_commit,  dim=True)
+        except subprocess.CalledProcessError:
+            pass
+
+        # Check for uncommitted changes
+        try:
+            result = shell_command(
+                ['git', 'status', '--porcelain'],
+                cwd=INVENTORY_DIR,
+                capture_output=True,
+            )
+            if result.stdout.strip():
+                printf('')
+                printf('⚠️  Uncommitted changes detected', fg='yellow', bold=True)
+                for line in result.stdout.strip().split('\n')[:5]:
+                    printf(f'   {line}', indent=3, fg='yellow')
+        except subprocess.CalledProcessError:
+            pass
+
+        # Check if inventory.yml file exists
+        printf('')
+        if INVENTORY_FILE.exists():
+            printf('Inventory file:', fg='bright_white', bold=True, reset=False)
+            printf(' Found',          fg='green',        bold=True)
+            printf(f'   {style(folduser(INVENTORY_FILE), fg="magenta", dim=True)}', indent=3)
+        else:
+            printf('Inventory file:', fg='bright_white', bold=True, reset=False)
+            printf(' Not found',      fg='red',          bold=True)
+            printf(f'   Expected: {style(folduser(INVENTORY_FILE), fg="magenta", dim=True)}', indent=3)
 
 
-def add_update_inventory_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    Add arguments for update-inventory command
-
-    :param parser: argument parser
-    """
-    parser.add_argument(
-        '-f',
-        '--force',
-        action='store_true',
-        help='Force update by discarding any uncommitted local changes',
-    )
-
-
-@command(group='Inventory', add_arguments=add_update_inventory_arguments)
-def cmd_update_inventory(args: argparse.Namespace) -> None:
+class UpdateInventoryCommand(Command):
     """
     Update inventory repo
     """
-    printf('🔄 Updating inventory...', fg='bright_white')
+    name:  ClassVar[str] = 'update-inventory'
+    group: ClassVar[str] = 'Inventory'
 
+    class Args(argparse.Namespace):
+        force: bool     # --force
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '-f',
+            '--force',
+            action='store_true',
+            help='Force update by discarding any uncommitted local changes',
+        )
+
+    @staticmethod
     @retry_on_failure(max_attempts=3, delay=2.0, backoff=2.0)
-    def pull_inventory_repo(**kwargs: Any) -> subprocess.CompletedProcess:
+    def pull_inventory_repo(*, force: bool = False, **kwargs: Any) -> subprocess.CompletedProcess:
+        """
+        Pull the latest inventory changes, optionally discarding uncommitted local changes first
+
+        :param force: reset uncommitted changes before pulling
+        :param kwargs: extra keyword arguments for :func:`shell_command`
+        :return: completed ``git pull`` process
+        """
 
         # If --force flag provided, reset any uncommitted changes before pulling
-        if args.force:
+        if force:
             try:
                 result = shell_command(
                     ['git', 'status', '--porcelain'],
@@ -1141,8 +1267,15 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
             printf('✅ Inventory updated', fg='bright_green')
             return cp
 
+    @staticmethod
     @retry_on_failure(max_attempts=3, delay=5.0, backoff=2.0)
     def clone_inventory_repo(**kwargs: Any) -> subprocess.CompletedProcess:
+        """
+        Clone the inventory repo into the inventory directory
+
+        :param kwargs: extra keyword arguments for :func:`shell_command`
+        :return: completed ``git clone`` process
+        """
         try:
             cp = shell_command(
                 ['git', 'clone', '--no-progress', INVENTORY_REPO_URL, str(INVENTORY_DIR)],
@@ -1157,145 +1290,115 @@ def cmd_update_inventory(args: argparse.Namespace) -> None:
             printf('✅ Inventory cloned', fg='bright_green')
             return cp
 
-    try:
+    def run(self, args: Args) -> None:
+        printf('🔄 Updating inventory...', fg='bright_white')
+        try:
 
-        # Case 1: Inventory directory exists and is a git repo - pull latest changes
-        if INVENTORY_DIR.exists() and (INVENTORY_DIR / '.git').exists():
-            pull_inventory_repo()
+            # Case 1: Inventory directory exists and is a git repo - pull latest changes
+            if INVENTORY_DIR.exists() and (INVENTORY_DIR / '.git').exists():
+                self.pull_inventory_repo(force=args.force)
 
-        # Case 2: Inventory directory exists but isn't a git repo - remove and re-clone
-        elif INVENTORY_DIR.exists():
-            shutil.rmtree(INVENTORY_DIR)
-            clone_inventory_repo()
+            # Case 2: Inventory directory exists but isn't a git repo - remove and re-clone
+            elif INVENTORY_DIR.exists():
+                shutil.rmtree(INVENTORY_DIR)
+                self.clone_inventory_repo()
 
-        # Case 3: Inventory directory does not exist - clone from remote
-        else:
-            clone_inventory_repo()
+            # Case 3: Inventory directory does not exist - clone from remote
+            else:
+                self.clone_inventory_repo()
 
-    except Exception:
-        printf('❌ Failed to update inventory after multiple attempts', fg='red', bold=True)
-        sys.exit(1)
-
-
-def find_vault_files() -> list[Path]:
-    """
-    Find all vault.yml files in the inventory directory
-
-    :return: sorted list of vault file paths
-    """
-    vault_files: list[Path] = []
-    for pattern in VAULT_FILE_PATTERNS:
-        vault_files.extend(INVENTORY_DIR.glob(pattern))
-    return sorted(vault_files)
+        except Exception:
+            printf('❌ Failed to update inventory after multiple attempts', fg='red', bold=True)
+            sys.exit(ExitCode.COMMAND_FAILED)
 
 
-def require_vault_password() -> None:
-    """
-    Validate that the vault password file exists and exit with an error if not
-
-    :raises SystemExit: if vault password file is missing
-    """
-    if not VAULT_PASSWORD.is_file():
-        printf('❌ Vault password file not found', fg='red', bold=True)
-        printf(f'   Expected: {folduser(VAULT_PASSWORD)}', indent=3)
-        printf(f'   Create it with: {style("echo YOUR_PASSWORD > vault_password.txt", fg="bright_magenta")}', indent=3)
-        sys.exit(1)
-
-
-def require_inventory() -> None:
-    """
-    Validate that the inventory directory exists and exit with an error if not
-
-    :raises SystemExit: if inventory directory is missing
-    """
-    if not INVENTORY_DIR.exists():
-        printf('❌ Inventory directory not found', fg='red', bold=True)
-        printf(f'   Expected: {folduser(INVENTORY_DIR)}', indent=3)
-        printf(f'   Run: {style("python3 run.py update-inventory", fg="bright_magenta")}', indent=3)
-        sys.exit(1)
-
-
-@command(group='Inventory')
-def cmd_vault_decrypt(args: argparse.Namespace) -> None:
+class VaultDecryptCommand(Command):
     """
     Decrypt all inventory vault files for editing
     """
-    require_vault_password()
-    require_inventory()
+    name:  ClassVar[str] = 'vault-decrypt'
+    group: ClassVar[str] = 'Inventory'
 
-    vault_files = find_vault_files()
-    if not vault_files:
-        printf('⚠️  No vault files found in inventory', fg='yellow')
-        return
+    def run(self, args: argparse.Namespace) -> None:
+        require_vault_password()
+        require_inventory()
 
-    printf('🔓 Decrypting vault files...', fg='bright_white')
-    failed = 0
-    for vault_file in vault_files:
-        relative = vault_file.relative_to(INVENTORY_DIR)
-        try:
-            shell_command(
-                ['ansible-vault', 'decrypt', str(vault_file)],
-                capture_output=True,
-            )
-            printf(f'  └─ {style(str(relative), fg="green")} decrypted', indent=1)
+        vault_files = find_vault_files()
+        if not vault_files:
+            printf('⚠️  No vault files found in inventory', fg='yellow')
+            return
 
-        # ansible-vault returns error if file is already decrypted
-        except subprocess.CalledProcessError as e:
-            stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
-            if ('is not vault encrypted' in stderr) or ('input is not vault encrypted' in stderr):
-                printf(f'  └─ {style(str(relative), fg="yellow")} already decrypted, skipping', indent=1)
-            else:
-                printf(f'  └─ {style(str(relative), fg="red")} failed to decrypt', indent=1)
-                if stderr.strip():
-                    printf(f'     {stderr.strip()}', indent=1, fg='red')
-                failed += 1
+        printf('🔓 Decrypting vault files...', fg='bright_white')
+        failed = 0
+        for vault_file in vault_files:
+            relative = vault_file.relative_to(INVENTORY_DIR)
+            try:
+                shell_command(
+                    ['ansible-vault', 'decrypt', str(vault_file)],
+                    capture_output=True,
+                )
+                printf(f'  └─ {style(str(relative), fg="green")} decrypted', indent=1)
 
-    if failed:
-        printf(f'❌ {failed} file{"s" if failed != 1 else ""} failed to decrypt', fg='red', bold=True)
-        sys.exit(1)
-    else:
-        printf('✅ All vault files decrypted', fg='bright_green')
+            # ansible-vault returns error if file is already decrypted
+            except subprocess.CalledProcessError as e:
+                stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
+                if ('is not vault encrypted' in stderr) or ('input is not vault encrypted' in stderr):
+                    printf(f'  └─ {style(str(relative), fg="yellow")} already decrypted, skipping', indent=1)
+                else:
+                    printf(f'  └─ {style(str(relative), fg="red")} failed to decrypt', indent=1)
+                    if stderr.strip():
+                        printf(f'     {stderr.strip()}', indent=1, fg='red')
+                    failed += 1
+
+        if failed:
+            printf(f'❌ {failed} file{"s" if failed != 1 else ""} failed to decrypt', fg='red', bold=True)
+            sys.exit(ExitCode.COMMAND_FAILED)
+        else:
+            printf('✅ All vault files decrypted', fg='bright_green')
 
 
-@command(group='Inventory')
-def cmd_vault_encrypt(args: argparse.Namespace) -> None:
+class VaultEncryptCommand(Command):
     """
     Re-encrypt all inventory vault files after editing
     """
-    require_vault_password()
-    require_inventory()
+    name:  ClassVar[str] = 'vault-encrypt'
+    group: ClassVar[str] = 'Inventory'
 
-    vault_files = find_vault_files()
-    if not vault_files:
-        printf('⚠️  No vault files found in inventory', fg='yellow')
-        return
+    def run(self, args: argparse.Namespace) -> None:
+        require_vault_password()
+        require_inventory()
 
-    printf('🔒 Encrypting vault files...', fg='bright_white')
-    failed = 0
-    for vault_file in vault_files:
-        relative = vault_file.relative_to(INVENTORY_DIR)
-        try:
-            shell_command(
-                ['ansible-vault', 'encrypt', str(vault_file)],
-                capture_output=True,
-            )
-            printf(f'  └─ {style(str(relative), fg="green")} encrypted', indent=1)
+        vault_files = find_vault_files()
+        if not vault_files:
+            printf('⚠️  No vault files found in inventory', fg='yellow')
+            return
 
-        except subprocess.CalledProcessError as e:
-            stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
-            if 'input is already encrypted' in stderr:
-                printf(f'  └─ {style(str(relative), fg="yellow")} already encrypted, skipping', indent=1)
-            else:
-                printf(f'  └─ {style(str(relative), fg="red")} failed to encrypt', indent=1)
-                if stderr.strip():
-                    printf(f'     {stderr.strip()}', indent=1, fg='red')
-                failed += 1
+        printf('🔒 Encrypting vault files...', fg='bright_white')
+        failed = 0
+        for vault_file in vault_files:
+            relative = vault_file.relative_to(INVENTORY_DIR)
+            try:
+                shell_command(
+                    ['ansible-vault', 'encrypt', str(vault_file)],
+                    capture_output=True,
+                )
+                printf(f'  └─ {style(str(relative), fg="green")} encrypted', indent=1)
 
-    if failed:
-        printf(f'❌ {failed} file{"s" if failed != 1 else ""} failed to encrypt', fg='red', bold=True)
-        sys.exit(1)
-    else:
-        printf('✅ All vault files encrypted', fg='bright_green')
+            except subprocess.CalledProcessError as e:
+                stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode() if e.stderr else '')
+                if 'input is already encrypted' in stderr:
+                    printf(f'  └─ {style(str(relative), fg="yellow")} already encrypted, skipping', indent=1)
+                else:
+                    printf(f'  └─ {style(str(relative), fg="red")} failed to encrypt', indent=1)
+                    if stderr.strip():
+                        printf(f'     {stderr.strip()}', indent=1, fg='red')
+                    failed += 1
+
+        if failed:
+            printf(f'❌ {failed} file{"s" if failed != 1 else ""} failed to encrypt', fg='red', bold=True)
+            sys.exit(ExitCode.COMMAND_FAILED)
+        else:
+            printf('✅ All vault files encrypted', fg='bright_green')
 
 
 # ====================================================================================================
@@ -1304,7 +1407,7 @@ def cmd_vault_encrypt(args: argparse.Namespace) -> None:
 # General repository maintenance commands:
 # - clean:    Remove build artifacts, caches, and temporary files
 # - pre:      Run prek hooks on all files
-# - makefile: Generate Makefile targets from @command-registered functions
+# - makefile: Generate Makefile targets from registered Command classes
 #   - Parses all registered commands and creates equivalent Make targets
 #   - Organizes targets by command group
 #   - Preserves command descriptions in Make comments
@@ -1312,131 +1415,144 @@ def cmd_vault_encrypt(args: argparse.Namespace) -> None:
 # ====================================================================================================
 
 
-@command(group='Codebase')
-def cmd_clean(args: argparse.Namespace) -> None:
+class CleanCommand(Command):
     """
     Remove all environments, build artifacts, and caches
     """
-    printf('🧹 Cleaning project workspace...', fg='bright_cyan')
+    name:  ClassVar[str] = 'clean'
+    group: ClassVar[str] = 'Codebase'
 
-    cleaned = 0
-    for group, patterns in CLEAN_PATTERN_GROUPS.items():
-        printf(f'Cleaning {group}...', indent=3)
-        for pattern in patterns:
-            for path in DOTFILES_DIR.glob(pattern):
-                path = cast('Path', path)
-                if path.is_dir():
-                    printf(f'Removing {path}', debug=True, indent=5)
-                    shutil.rmtree(path)
-                    cleaned += 1
-                elif path.is_file():
-                    printf(f'Removing {path}', debug=True, indent=5)
-                    path.unlink()
-                    cleaned += 1
+    def run(self, args: argparse.Namespace) -> None:
+        printf('🧹 Cleaning project workspace...', fg='bright_cyan')
 
-    printf(f'{cleaned} file{"s" if cleaned != 1 else ""} removed', debug=True, indent=3)
-    printf('✅ Cleanup complete\n', fg='bright_green')
+        cleaned = 0
+        for group, patterns in CLEAN_PATTERN_GROUPS.items():
+            printf(f'Cleaning {group}...', indent=3)
+            for pattern in patterns:
+                for path in DOTFILES_DIR.glob(pattern):
+                    path = cast('Path', path)
+                    if path.is_dir():
+                        printf(f'Removing {path}', debug=True, indent=5)
+                        shutil.rmtree(path)
+                        cleaned += 1
+                    elif path.is_file():
+                        printf(f'Removing {path}', debug=True, indent=5)
+                        path.unlink()
+                        cleaned += 1
+
+        printf(f'{cleaned} file{"s" if cleaned != 1 else ""} removed', debug=True, indent=3)
+        printf('✅ Cleanup complete\n', fg='bright_green')
 
 
-@command(group='Codebase')
-def cmd_pre(args: argparse.Namespace) -> None:
+class PreCommand(Command):
     """
     Run prek (pre-commit) hooks on all project files
     """
-    printf('🕝 Running prek hooks on all project files...', fg='bright_cyan')
-    shell_command(
-        ['prek', 'run', '--all-files'],
-        indent=3,
-        check=False,
-    )
+    name:  ClassVar[str] = 'pre'
+    group: ClassVar[str] = 'Codebase'
+
+    def run(self, args: argparse.Namespace) -> None:
+        printf('🕝 Running prek hooks on all project files...', fg='bright_cyan')
+        shell_command(
+            ['prek', 'run', '--all-files'],
+            indent=3,
+            check=False,
+        )
 
 
-@command(group='Codebase')
-def cmd_install_hooks(args: argparse.Namespace) -> None:
+class InstallHooksCommand(Command):
     """
     Install prek git hook shims (overwrites any existing shims)
     """
-    printf('🪝 Installing prek git hook shims...', fg='bright_cyan')
-    shell_command(
-        ['prek', 'install', '-f'],
-        indent=3,
-        check=False,
-    )
+    name:  ClassVar[str] = 'install-hooks'
+    group: ClassVar[str] = 'Codebase'
+
+    def run(self, args: argparse.Namespace) -> None:
+        printf('🪝 Installing prek git hook shims...', fg='bright_cyan')
+        shell_command(
+            ['prek', 'install', '-f'],
+            indent=3,
+            check=False,
+        )
 
 
-@command(group='Codebase')
-def cmd_uninstall_hooks(args: argparse.Namespace) -> None:
+class UninstallHooksCommand(Command):
     """
     Uninstall prek git hook shims
     """
-    printf('🪝 Uninstalling prek git hook shims...', fg='bright_cyan')
-    shell_command(
-        ['prek', 'uninstall'],
-        indent=3,
-        check=False,
-    )
+    name:  ClassVar[str] = 'uninstall-hooks'
+    group: ClassVar[str] = 'Codebase'
+
+    def run(self, args: argparse.Namespace) -> None:
+        printf('🪝 Uninstalling prek git hook shims...', fg='bright_cyan')
+        shell_command(
+            ['prek', 'uninstall'],
+            indent=3,
+            check=False,
+        )
 
 
-@command(
-    group='Codebase',
-    description=' '.join([
-        'Generate Makefile from project management script commands',
-        style(f'({Path(__file__).name})', dim=True),
-    ]),
-)
-def cmd_makefile(args: argparse.Namespace) -> None:
+class MakefileCommand(Command):
     """
     Generate Makefile from project management script commands
     """
-    command_groups: dict[str, dict[str, CommandInfo]] = {}
-    command_names:  list[str]                         = []
+    name:        ClassVar[str] = 'makefile'
+    group:       ClassVar[str] = 'Codebase'
+    description: ClassVar[str] = ' '.join([
+        'Generate Makefile from project management script commands',
+        style(f'({Path(__file__).name})', dim=True),
+    ])
 
-    for group_name, commands in get_command_groups().items():
-        for cmd_name, cmd_info in commands.items():
-            if not cmd_info.script_only:
-                command_groups.setdefault(group_name, {})[cmd_name] = cmd_info
-                command_names.append(cmd_name)
+    def run(self, args: argparse.Namespace) -> None:
+        command_groups: dict[str, dict[str, Command]] = {}
+        command_names:  list[str]                     = []
 
-    lines: list[str] = [
-        '#',
-        "# Makefile for Connor's dotfiles",
-        '#',
-        f'# Auto-generated via `{Path(__file__).name} makefile`',
-        '#',
-        f'.PHONY: help {" ".join(command_names)}',
-        '',
-        'BRIGHT_GREEN := \\033[0;92m',
-        'BRIGHT_WHITE := \\033[0;97m',
-        'YELLOW := \\033[0;33m',
-        'NC := \\033[0m',
-        '',
-        'help: ## Show this help message',
-        '\t@echo "$(BRIGHT_GREEN)Runner script for Connor\'s dotfiles$(NC)"',
-        '\t@echo ""',
-    ]
+        for group_name, commands in get_commands(by_group=True).items():
+            for cmd_name, cmd_info in commands.items():
+                if not cmd_info.script_only:
+                    command_groups.setdefault(group_name, {})[cmd_name] = cmd_info
+                    command_names.append(cmd_name)
 
-    # Add grouped help display
-    col1_width = len(max(command_names, key=len))
-    for group_name, commands in command_groups.items():
-        lines.append(f'\t@echo "$(BRIGHT_WHITE){group_name}:$(NC)"')
-        for cmd_name, cmd_info in commands.items():
-            description = cmd_info.description.splitlines()[0] if cmd_info.description else f'Run {cmd_name} command'
-            lines.append(f'\t@echo "  $(YELLOW){cmd_name:<{col1_width}}$(NC) {description}"')
-        lines.append('\t@echo ""')
-    lines.append('')
+        lines: list[str] = [
+            '#',
+            "# Makefile for Connor's dotfiles",
+            '#',
+            f'# Auto-generated via `{Path(__file__).name} makefile`',
+            '#',
+            f'.PHONY: help {" ".join(command_names)}',
+            '',
+            'BRIGHT_GREEN := \\033[0;92m',
+            'BRIGHT_WHITE := \\033[0;97m',
+            'YELLOW := \\033[0;33m',
+            'NC := \\033[0m',
+            '',
+            'help: ## Show this help message',
+            '\t@echo "$(BRIGHT_GREEN)Runner script for Connor\'s dotfiles$(NC)"',
+            '\t@echo ""',
+        ]
 
-    # Add targets grouped by section
-    for group_name, commands in command_groups.items():
-        lines.append(f'# {group_name}')
-        for cmd_name, cmd_info in commands.items():
-            target = f'{cmd_name}:'
-            if cmd_info.description:
-                target += f' ## {cmd_info.description.splitlines()[0]}'
-            lines.extend([target, f'\t@python3 {SCRIPT_PATH.relative_to(DOTFILES_DIR)} {cmd_name}', ''])
+        # Add grouped help display
+        col1_width = len(max(command_names, key=len))
+        for group_name, commands in command_groups.items():
+            lines.append(f'\t@echo "$(BRIGHT_WHITE){group_name}:$(NC)"')
+            for cmd_name, cmd_info in commands.items():
+                desc = cmd_info.description.splitlines()[0] if cmd_info.description else f'Run {cmd_name} command'
+                lines.append(f'\t@echo "  $(YELLOW){cmd_name:<{col1_width}}$(NC) {desc}"')
+            lines.append('\t@echo ""')
+        lines.append('')
 
-    with MAKEFILE_PATH.open('w') as f:
-        f.write('\n'.join(lines))
-    printf('✅ Makefile updated', fg='bright_green')
+        # Add targets grouped by section
+        for group_name, commands in command_groups.items():
+            lines.append(f'# {group_name}')
+            for cmd_name, cmd_info in commands.items():
+                target = f'{cmd_name}:'
+                if cmd_info.description:
+                    target += f' ## {cmd_info.description.splitlines()[0]}'
+                lines.extend([target, f'\t@python3 {SCRIPT_PATH.relative_to(DOTFILES_DIR)} {cmd_name}', ''])
+
+        with MAKEFILE_PATH.open('w') as f:
+            f.write('\n'.join(lines))
+        printf('✅ Makefile updated', fg='bright_green')
 
 
 # ====================================================================================================
@@ -1470,7 +1586,7 @@ def resolve_nas_target(host: str = NAS_INVENTORY_HOST) -> tuple[str, str]:
     if result.returncode != 0:
         printf(f'❌ Could not read host "{host}" from the inventory', fg='red', bold=True)
         printf(result.stderr.strip(), indent=3)
-        sys.exit(1)
+        sys.exit(ExitCode.COMMAND_FAILED)
 
     try:
         variables = json.loads(result.stdout)
@@ -1478,14 +1594,14 @@ def resolve_nas_target(host: str = NAS_INVENTORY_HOST) -> tuple[str, str]:
         variables = None
     if not isinstance(variables, dict):
         printf(f'❌ Unexpected ansible-inventory output for host "{host}"', fg='red', bold=True)
-        sys.exit(1)
+        sys.exit(ExitCode.COMMAND_FAILED)
 
     ssh_host = str(variables.get('ansible_host') or host)
     ssh_user = str(variables.get('ansible_user') or getpass.getuser())
     if '{{' in (ssh_host + ssh_user):
         printf(f'❌ ansible_host/ansible_user for "{host}" are templated: {ssh_user}@{ssh_host}', fg='red', bold=True)
         printf('The NAS commands need literal values in the inventory', indent=3)
-        sys.exit(1)
+        sys.exit(ExitCode.COMMAND_FAILED)
 
     return ssh_host, ssh_user
 
@@ -1508,7 +1624,7 @@ def require_nas_reachable(host: str, user: str) -> None:
         printf('Is Tailscale up? Does the host resolve? Is your SSH key loaded (ssh-add)?',                 indent=3)
         printf(f'The host comes from ansible_host of "{NAS_INVENTORY_HOST}" in {folduser(INVENTORY_FILE)}', indent=3)
         printf(f'ssh said: {result.stderr.strip()}', indent=3, dim=True)
-        sys.exit(1)
+        sys.exit(ExitCode.COMMAND_FAILED)
 
 
 def resolve_reachable_nas() -> tuple[str, str]:
@@ -1540,79 +1656,6 @@ def warn_on_dirty_services() -> None:
         printf('CI redeploys main whenever it changes a service, which supersedes a branch deploy', indent=3, dim=True)
 
 
-def add_nas_deploy_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    Register nas-deploy options
-    """
-    parser.add_argument(
-        'service',
-        help="Directory under services/ to deploy, or 'all'",
-    )
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Preview the rsync and print the remote command without running it',
-    )
-
-
-@command(group='NAS', add_arguments=add_nas_deploy_arguments, script_only=True)
-def cmd_nas_deploy(args: argparse.Namespace) -> None:
-    """
-    Sync services/ to the NAS and run deploy.sh there (the same script CI uses)
-    """
-    host, user = resolve_reachable_nas()
-    warn_on_dirty_services()
-
-    cmd: list[str] = ['bash', str(NAS_DEPLOY_SCRIPT)]
-    if args.dry_run:
-        cmd.append('--dry-run')
-    cmd.append(args.service)
-
-    sys.exit(
-        shell_command(cmd, env={'NAS_HOST': host, 'NAS_USER': user}, check=False).returncode
-    )
-
-
-def add_nas_provision_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    Register nas-provision options
-    """
-    parser.add_argument(
-        '--tags',
-        metavar='TAGS',
-        help='Only run tasks with these comma-separated tags (e.g. debian,dotfiles,haos,services,secrets)',
-    )
-    parser.add_argument(
-        '--limit',
-        metavar='HOSTS',
-        help='Limit the run to these inventory hosts',
-    )
-    parser.add_argument(
-        '--check',
-        action='store_true',
-        help='Predict changes without making them',
-    )
-    parser.add_argument(
-        '--diff',
-        action='store_true',
-        help='Show file and template differences',
-    )
-    parser.add_argument(
-        '-e',
-        '--extra-vars',
-        action='append',
-        metavar='KEY=VALUE',
-        help='Extra playbook variable (repeatable), e.g. -e dotfiles_repo_version=my-branch',
-    )
-    parser.add_argument(
-        '-v',
-        '--verbose',
-        action='count',
-        default=0,
-        help='Increase Ansible verbosity (-v, -vv, ...)',
-    )
-
-
 def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
     """
     Build the ``ansible-playbook`` command line for nas-provision
@@ -1640,26 +1683,119 @@ def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
     return cmd
 
 
-@command(group='NAS', add_arguments=add_nas_provision_arguments)
-def cmd_nas_provision(args: argparse.Namespace) -> None:
+class NasDeployCommand(Command):
+    """
+    Sync services/ to the NAS and run deploy.sh there (the same script CI uses)
+    """
+    name:        ClassVar[str]  = 'nas-deploy'
+    group:       ClassVar[str]  = 'NAS'
+    script_only: ClassVar[bool] = True
+
+    class Args(argparse.Namespace):
+        service: str        # positional arg "SERVICE"
+        dry_run: bool       # --dry-run
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'service',
+            help="Directory under services/ to deploy, or 'all'",
+        )
+        parser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Preview the rsync and print the remote command without running it',
+        )
+
+    def run(self, args: Args) -> None:
+        host, user = resolve_reachable_nas()
+        warn_on_dirty_services()
+
+        cmd: list[str] = ['bash', str(NAS_DEPLOY_SCRIPT)]
+        if args.dry_run:
+            cmd.append('--dry-run')
+        cmd.append(args.service)
+
+        sys.exit(
+            shell_command(cmd, env={'NAS_HOST': host, 'NAS_USER': user}, check=False).returncode
+        )
+
+
+class NasProvisionCommand(Command):
     """
     Provision the NAS with the Ansible playbook: system config, the stow engine, then services
     """
-    playbook_cmd = build_nas_provision_command(args)
-    resolve_reachable_nas()
+    name:  ClassVar[str] = 'nas-provision'
+    group: ClassVar[str] = 'NAS'
 
-    printf('📦 Installing Ansible collections', fg='bright_cyan')
-    galaxy = shell_command(
-        [str(UV_PUBLIC), 'run', 'ansible-galaxy', 'collection', 'install', '-r', str(NAS_REQUIREMENTS)],
-        check=False,
-        cwd=DOTFILES_DIR,
-    )
-    if galaxy.returncode != 0:
-        printf('🟡 Collection install failed; continuing with the collections already installed', fg='bright_yellow')
+    class Args(argparse.Namespace):
+        tags:       str | None          # --tags
+        limit:      str | None          # --limit
+        check:      bool                # --check
+        diff:       bool                # --diff
+        extra_vars: list[str] | None    # --extra-vars
+        verbose:    int                 # --verbose
 
-    sys.exit(
-        shell_command(playbook_cmd, check=False, cwd=DOTFILES_DIR).returncode
-    )
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '--tags',
+            metavar='TAGS',
+            help=(
+                'Only run tasks with these comma-separated tags\n'
+                '(e.g. debian,dotfiles,haos,services,secrets)'
+            ),
+        )
+        parser.add_argument(
+            '--limit',
+            metavar='HOSTS',
+            help='Limit the run to these inventory hosts',
+        )
+        parser.add_argument(
+            '--check',
+            action='store_true',
+            help='Predict changes without making them',
+        )
+        parser.add_argument(
+            '--diff',
+            action='store_true',
+            help='Show file and template differences',
+        )
+        parser.add_argument(
+            '-e',
+            '--extra-vars',
+            action='append',
+            metavar='KEY=VALUE',
+            help=(
+                'Extra playbook variable (repeatable),\n'
+                'e.g. -e dotfiles_repo_version=my-branch'
+            ),
+        )
+        parser.add_argument(
+            '-v',
+            '--verbose',
+            action='count',
+            default=0,
+            help='Increase Ansible verbosity (-v, -vv, ...)',
+        )
+
+    def run(self, args: Args) -> None:
+        playbook_cmd = build_nas_provision_command(args)
+        resolve_reachable_nas()
+
+        printf('📦 Installing Ansible collections', fg='bright_cyan')
+        galaxy = shell_command(
+            [str(UV_PUBLIC), 'run', 'ansible-galaxy', 'collection', 'install', '-r', str(NAS_REQUIREMENTS)],
+            check=False,
+            cwd=DOTFILES_DIR,
+        )
+        if galaxy.returncode != 0:
+            printf(
+                '🟡 Collection install failed; continuing with the collections already installed',
+                fg='bright_yellow',
+            )
+
+        sys.exit(
+            shell_command(playbook_cmd, check=False, cwd=DOTFILES_DIR).returncode
+        )
 
 
 # ====================================================================================================
@@ -1742,7 +1878,7 @@ def check_links() -> DoctorCheck:
     ):
         return DoctorCheck('links', True, 'all packages linked')
 
-    fix = ['bash', str(STOW_SCRIPT), '--backup-conflicts']
+    fix: list[str] = ['bash', str(STOW_SCRIPT), '--backup-conflicts']
     if result.returncode != 0:
         return DoctorCheck('links', False, _first_line(result.stderr or result.stdout, 'stow simulation failed'), fix)
 
@@ -1807,258 +1943,294 @@ def doctor_checks() -> list[DoctorCheck]:
     return [*first, check_git_version(), check_links(), check_render()]
 
 
-def add_doctor_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    Register doctor options
-    """
-    parser.add_argument(
-        '-f',
-        '--fix',
-        action='store_true',
-        help=(
-            'Run the fix for each failing check, then re-check '
-            '(links: stow.sh --backup-conflicts, which moves blocking files into ~/.dotfiles-backup/<timestamp>/)'
-        ),
-    )
-
-
-@command(group='Dotfiles', add_arguments=add_doctor_arguments)
-def cmd_doctor(args: argparse.Namespace) -> None:
+class DoctorCommand(Command):
     """
     Check overlay registry, links, rendered settings, git version, and tools
     """
-    checks = doctor_checks()
+    name:  ClassVar[str] = 'doctor'
+    group: ClassVar[str] = 'Dotfiles'
 
-    if args.fix:
-        for check in checks:
-            if not check.ok and check.fix:
-                printf(f'🔧 {check.name}: {shlex.join(check.fix)}', fg='bright_cyan')
-                shell_command(check.fix, indent=3, check=False)
+    class Args(argparse.Namespace):
+        fix: bool       # --fix
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '-f',
+            '--fix',
+            action='store_true',
+            help=(
+                'Run the fix for each failing check, then re-check\n'
+                '(links: stow.sh --backup-conflicts, which moves blocking files\n'
+                'into ~/.dotfiles-backup/<timestamp>/)'
+            ),
+        )
+
+    def run(self, args: Args) -> None:
         checks = doctor_checks()
 
-    for check in checks:
-        emoji = '🟢' if check.ok else '🔴'
-        printf(f'{emoji} {style(check.name, fg="white", bold=True)}  {check.detail}', indent=3)
+        if args.fix:
+            for check in checks:
+                if not check.ok and check.fix:
+                    printf(f'🔧 {check.name}: {shlex.join(check.fix)}', fg='bright_cyan')
+                    shell_command(check.fix, indent=3, check=False)
+            checks = doctor_checks()
 
-    if not all(check.ok for check in checks):
-        sys.exit(1)
+        for check in checks:
+            emoji = '🟢' if check.ok else '🔴'
+            printf(f'{emoji} {style(check.name, fg="white", bold=True)}  {check.detail}', indent=3)
 
-
-def add_bootstrap_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    Register bootstrap driver options
-    """
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Simulate every stage',
-    )
-    parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List stages across layers',
-    )
-    parser.add_argument(
-        '--only',
-        metavar='STAGE',
-        help='Run a single stage',
-    )
-    parser.add_argument(
-        '--from',
-        dest='from_stage',
-        metavar='STAGE',
-        help='Run from STAGE onward',
-    )
-    parser.add_argument(
-        '--resume',
-        action='store_true',
-        help='Continue after the last completed stage',
-    )
-    parser.add_argument(
-        '--verify',
-        action='store_true',
-        help='Run doctor after all stages succeed',
-    )
-    parser.add_argument(
-        '--no-log',
-        action='store_true',
-        help='Do not tee output to the bootstrap log',
-    )
+        if not all(check.ok for check in checks):
+            sys.exit(ExitCode.COMMAND_FAILED)
 
 
-@command(group='Dotfiles', add_arguments=add_bootstrap_arguments)
-def cmd_bootstrap(args: argparse.Namespace) -> None:
+class BootstrapCommand(Command):
     """
     Run the layered bootstrap stages (bootstrap/bootstrap.sh)
     """
-    cmd: list[str] = ['bash', str(BOOTSTRAP_SCRIPT)]
-    for flag, enabled in (
-        ('--dry-run', args.dry_run),
-        ('--list',    args.list),
-        ('--resume',  args.resume),
-        ('--verify',  args.verify),
-        ('--no-log',  args.no_log),
-    ):
-        if enabled:
-            cmd.append(flag)
+    name:  ClassVar[str] = 'bootstrap'
+    group: ClassVar[str] = 'Dotfiles'
 
-    if args.only:
-        cmd.extend(['--only', args.only])
-    if args.from_stage:
-        cmd.extend(['--from', args.from_stage])
+    class Args(argparse.Namespace):
+        dry_run:    bool            # --dry-run
+        list:       bool            # --list
+        only:       str | None      # --only
+        from_stage: str | None      # --from
+        resume:     bool            # --resume
+        verify:     bool            # --verify
+        no_log:     bool            # --no-log
 
-    sys.exit(
-        shell_command(cmd, check=False).returncode
-    )
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Simulate every stage',
+        )
+        parser.add_argument(
+            '--list',
+            action='store_true',
+            help='List stages across layers',
+        )
+        parser.add_argument(
+            '--only',
+            metavar='STAGE',
+            help='Run a single stage',
+        )
+        parser.add_argument(
+            '--from',
+            dest='from_stage',
+            metavar='STAGE',
+            help='Run from STAGE onward',
+        )
+        parser.add_argument(
+            '--resume',
+            action='store_true',
+            help='Continue after the last completed stage',
+        )
+        parser.add_argument(
+            '--verify',
+            action='store_true',
+            help='Run doctor after all stages succeed',
+        )
+        parser.add_argument(
+            '--no-log',
+            action='store_true',
+            help='Do not tee output to the bootstrap log',
+        )
+
+    def run(self, args: Args) -> None:
+        cmd: list[str] = ['bash', str(BOOTSTRAP_SCRIPT)]
+        for flag, enabled in (
+            ('--dry-run', args.dry_run),
+            ('--list',    args.list),
+            ('--resume',  args.resume),
+            ('--verify',  args.verify),
+            ('--no-log',  args.no_log),
+        ):
+            if enabled:
+                cmd.append(flag)
+
+        if args.only:
+            cmd.extend(['--only', args.only])
+        if args.from_stage:
+            cmd.extend(['--from', args.from_stage])
+
+        sys.exit(
+            shell_command(cmd, check=False).returncode
+        )
 
 
-def add_stow_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    Register stow options
-    """
-    parser.add_argument(
-        'packages',
-        nargs='*',
-        help='Packages to stow (default: all, across layers)',
-    )
-    parser.add_argument(
-        '-n',
-        '--simulate',
-        action='store_true',
-        help='Preview without changing $HOME',
-    )
-    parser.add_argument(
-        '--backup-conflicts',
-        action='store_true',
-        help='Move blocking files to ~/.dotfiles-backup',
-    )
-    parser.add_argument(
-        '-v',
-        '--verbose',
-        action='store_true',
-        help='Show the raw stow log',
-    )
-
-
-@command(group='Dotfiles', add_arguments=add_stow_arguments)
-def cmd_stow(args: argparse.Namespace) -> None:
+class StowCommand(Command):
     """
     Link stow packages from every layer into the home directory (stow.sh)
     """
-    cmd: list[str] = ['bash', str(STOW_SCRIPT)]
-    if args.simulate:
-        cmd.append('-n')
-    if args.backup_conflicts:
-        cmd.append('--backup-conflicts')
-    if args.verbose:
-        cmd.append('--verbose')
+    name:  ClassVar[str] = 'stow'
+    group: ClassVar[str] = 'Dotfiles'
 
-    sys.exit(
-        shell_command([*cmd, *args.packages], check=False).returncode,
-    )
+    class Args(argparse.Namespace):
+        packages:         list[str]     # positional arg(s) "PACKAGES"
+        simulate:         bool          # --simulate
+        backup_conflicts: bool          # --backup-conflicts
+        verbose:          bool          # --verbose
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'packages',
+            nargs='*',
+            help='Packages to stow (default: all, across layers)',
+        )
+        parser.add_argument(
+            '-n',
+            '--simulate',
+            action='store_true',
+            help='Preview without changing $HOME',
+        )
+        parser.add_argument(
+            '--backup-conflicts',
+            action='store_true',
+            help='Move blocking files to ~/.dotfiles-backup',
+        )
+        parser.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Show the raw stow log',
+        )
+
+    def run(self, args: Args) -> None:
+        cmd: list[str] = ['bash', str(STOW_SCRIPT)]
+        if args.simulate:
+            cmd.append('-n')
+        if args.backup_conflicts:
+            cmd.append('--backup-conflicts')
+        if args.verbose:
+            cmd.append('--verbose')
+
+        sys.exit(
+            shell_command([*cmd, *args.packages], check=False).returncode,
+        )
 
 
-def add_render_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    Register render options
-    """
-    parser.add_argument(
-        'targets',
-        nargs='*',
-        help='Targets (default: all)',
-    )
-    parser.add_argument(
-        '--diff',
-        action='store_true',
-        help='Preview differences; write nothing',
-    )
-    parser.add_argument(
-        '--check',
-        action='store_true',
-        help='Exit 1 if out of sync; write nothing',
-    )
-    parser.add_argument(
-        '--force',
-        action='store_true',
-        help='Overwrite in-app edits after backing them up',
-    )
-    parser.add_argument(
-        '-v',
-        '--verbose',
-        action='store_true',
-        help='Report skipped/current targets',
-    )
-
-
-@command(group='Dotfiles', add_arguments=add_render_arguments)
-def cmd_render(args: argparse.Namespace) -> None:
+class RenderCommand(Command):
     """
     Render settings files from per-layer fragments (scripts/dotfiles/render.py)
     """
-    cmd: list[str] = [sys.executable, str(RENDER_SCRIPT), *args.targets]
-    for flag, enabled in (
-        ('--diff',  args.diff),
-        ('--check', args.check),
-        ('--force', args.force),
-        ('-v',      args.verbose),
-    ):
-        if enabled:
-            cmd.append(flag)
+    name:  ClassVar[str] = 'render'
+    group: ClassVar[str] = 'Dotfiles'
 
-    sys.exit(
-        shell_command(cmd, check=False).returncode,
-    )
+    class Args(argparse.Namespace):
+        targets: list[str]      # positional arg(s) "TARGETS"
+        diff:    bool           # --diff
+        check:   bool           # --check
+        force:   bool           # --force
+        verbose: bool           # --verbose
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'targets',
+            nargs='*',
+            help='Targets (default: all)',
+        )
+        parser.add_argument(
+            '--diff',
+            action='store_true',
+            help='Preview differences; write nothing',
+        )
+        parser.add_argument(
+            '--check',
+            action='store_true',
+            help='Exit 1 if out of sync; write nothing',
+        )
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help='Overwrite in-app edits after backing them up',
+        )
+        parser.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Report skipped/current targets',
+        )
+
+    def run(self, args: Args) -> None:
+        cmd: list[str] = [sys.executable, str(RENDER_SCRIPT), *args.targets]
+        for flag, enabled in (
+            ('--diff',  args.diff),
+            ('--check', args.check),
+            ('--force', args.force),
+            ('-v',      args.verbose),
+        ):
+            if enabled:
+                cmd.append(flag)
+
+        sys.exit(
+            shell_command(cmd, check=False).returncode,
+        )
 
 
-def add_test_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    Register test options
-    """
-    parser.add_argument('paths', nargs='*', help='Test paths (default: tests/)')
-
-
-@command(group='Dotfiles', add_arguments=add_test_arguments)
-def cmd_test(args: argparse.Namespace) -> None:
+class TestCommand(Command):
     """
     Run the test suite via uv (public-index wrapper)
     """
-    cmd: list[str] = [str(UV_PUBLIC), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])]
-    sys.exit(
-        shell_command(cmd, check=False).returncode,
-    )
+    name:  ClassVar[str] = 'test'
+    group: ClassVar[str] = 'Dotfiles'
+
+    class Args(argparse.Namespace):
+        paths: list[str]        # positional arg(s) "PATHS"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'paths',
+            nargs='*',
+            help='Test paths (default: tests/)',
+        )
+
+    def run(self, args: Args) -> None:
+        sys.exit(
+            shell_command(
+                [str(UV_PUBLIC), 'run', '--group', 'test', 'pytest', *(args.paths or ['tests'])],
+                check=False,
+            ).returncode,
+        )
 
 
 # ====================================================================================================
-# Core runner entry point logic
+# Command-line argument parsing / entry point
 #
-# The main() function handles:
-#   1. Building the argument parser from registered commands
-#   2. Parsing command-line arguments
-#   3. Enabling debug mode if requested
-#   4. Dispatching to the appropriate command function
-#   5. Handling keyboard interrupts and unexpected errors gracefully
+# build_parser() creates the root parser (help text organized by command group, plus Debug Options and Other Options
+# groups) and one subparser per registered Command, each with its -h/--help in a trailing "Other options" group.
 #
-# The build_parser() function:
-#   - Creates main parser with custom help text organized by command group
-#   - Registers subparsers for each @command-decorated function
-#   - Integrates command-specific argument handlers via add_arguments callbacks
+# main() parses args into the typed root Args namespace, enables debug mode if requested, dispatches to the selected
+# command, and maps Ctrl-C / unexpected errors to ExitCode values.
 # ====================================================================================================
 
 
-def build_parser_help_text(col1_width: int = 30) -> str:
+class Args(argparse.Namespace):
+    """
+    Annotated :class:`argparse.Namespace` returned by parsing with :func:`build_parser`
+    """
+    command: str | None  # subcommand name
+    debug:   bool        # -d/--debug
+
+
+def build_parser_help_text(*, col_spacing: int = SCRIPT_HELP_COL_SPACING) -> str:
     """
     Build help text for argument parser with commands listed by group
 
-    :param col1_width: width of col1 of help text
+    :param col_spacing: width of spacing between command name and command description columns in script help text
     :return: help text string
     """
+    col1_width = len(max(get_commands(), key=len))
+
     help_text = style("Runner script for Connor's dotfiles", fg='bright_green') + '\n\n'
-    for group_name, commands in get_command_groups().items():
-        help_text += f'{style(group_name, fg="bright_white")}:\n'
+    help_text += style('Commands:', fg='bright_white', bold=True) + '\n\n'
+    for group_name, commands in get_commands(by_group=True).items():
+        help_text += f'  {style(group_name, fg="bright_white")}\n'
         for cmd_name, cmd_info in commands.items():
             if not cmd_info.makefile_only:
                 description = cmd_info.description or f'Run {cmd_name} command'
-                help_text += f'  {style(cmd_name, fg="yellow").ljust(col1_width)} {description.splitlines()[0]}\n'
+                help_text += f'    {style(cmd_name.ljust(col1_width + col_spacing), fg="yellow")} '
+                help_text += f'{description.splitlines()[0]}\n'
         help_text += '\n'
     return help_text
 
@@ -2069,78 +2241,130 @@ def build_parser() -> argparse.ArgumentParser:
 
     :return: :class:`argparse.ArgumentParser`
     """
+
+    # Build root parser
     parser = argparse.ArgumentParser(
         description=build_parser_help_text(),
-        formatter_class=partial(argparse.RawDescriptionHelpFormatter, max_help_position=80),
+        formatter_class=get_default_help_formatter_cls(),
         add_help=False,
     )
-    parser.add_argument(
-        '-d',
-        '--debug',
-        action='store_true',
-        help=f'Enable script debug logging {arg_note("env var", RUN_DEBUG_ENVVAR)}',
-    )
-    parser.add_argument(
-        '-h',
-        '--help',
-        action='help',
-        default=argparse.SUPPRESS,
-        help='Show this help message and exit',
-    )
 
-    subparsers = parser.add_subparsers(
-        dest='command',
-        metavar='COMMAND',
-        help=argparse.SUPPRESS,
-    )
-    for cmd in REGISTERED_COMMANDS.values():
-        subparser = subparsers.add_parser(
-            cmd.name,
-            description=cmd.description or f'Run {cmd.name} command',
-            help=cmd.description        or f'Run {cmd.name} command',
-            epilog=cmd.epilog,
-            formatter_class=cmd.formatter_class,
+    def add_subcommand_parsers() -> None:
+        """
+        Register all command subparsers from the ``REGISTERED_COMMANDS`` registry
+        """
+        subparsers = parser.add_subparsers(
+            dest='command',
+            metavar='COMMAND',
+            help=argparse.SUPPRESS,
         )
-        if cmd.add_arguments:
+        for cmd_name, cmd in REGISTERED_COMMANDS.items():
+            subparser = subparsers.add_parser(
+                cmd_name,
+                description=cmd.description or f'Run {cmd_name} command',
+                help=cmd.description        or f'Run {cmd_name} command',
+                epilog=cmd.epilog,
+                formatter_class=cmd.help_formatter_type,
+                add_help=False,
+            )
             cmd.add_arguments(subparser)
+            if cmd.add_help:
+                cmd_other_opts = subparser.add_argument_group('Other options')
+                cmd_other_opts.add_argument(
+                    '-h',
+                    '--help',
+                    action='help',
+                    default=argparse.SUPPRESS,
+                    help='Show this help message and exit',
+                )
+    add_subcommand_parsers()
+
+    def add_debug_opts() -> None:
+        """
+        Add the debug argument group to the root parser
+        """
+        debug_opts = parser.add_argument_group(
+            title=style('Debug Options', fg='bright_white', bold=True),
+        )
+        debug_opts.add_argument(
+            '-d',
+            '--debug',
+            action=argparse.BooleanOptionalAction,
+            dest='debug',
+            default=RUN_DEBUG,
+            help=' '.join([
+                'Enable script debug logging          ',
+                arg_note('env var', RUN_DEBUG_ENVVAR) + '   ',
+                arg_note(
+                    'default',
+                    repr(RUN_DEBUG),
+                    color='bright_green' if RUN_DEBUG else 'bright_red',
+                ),
+            ]),
+        )
+
+        # Remove extra default value string from options w/ `action=BooleanOptionalAction` (automatically added somehow)
+        for option in debug_opts._group_actions:
+            if option.help:
+                option.help = option.help.split('(default: ', 1)[0]
+    add_debug_opts()
+
+    def add_other_opts() -> None:
+        """
+        Add the help option and other miscellaneous options group to the root parser
+        """
+        other_opts = parser.add_argument_group(
+            title=style('Other Options', fg='bright_white', bold=True),
+        )
+        other_opts.add_argument(
+            '-h',
+            '--help',
+            action='help',
+            default=argparse.SUPPRESS,
+            help='Show this help message and exit',
+        )
+    add_other_opts()
 
     return parser
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     """
     Main entry point
+
+    :param argv: argument list to parse. Defaults to ``sys.argv[1:]``
     """
     global RUN_DEBUG
 
     # Build argument parser and parse command-line args
     parser = build_parser()
-    args   = parser.parse_args()
+    args   = parser.parse_args(argv, namespace=Args())
 
     # Print help text if no command provided
     if not args.command:
         parser.print_help()
-        sys.exit(1)
+        sys.exit(ExitCode.COMMAND_FAILED)
 
-    # Enable debug logging
-    if args.debug:
-        RUN_DEBUG = True
+    # Apply -d/--debug/--no-debug (defaults to the DOTFILES_RUN_DEBUG value, so this can also turn debug off)
+    RUN_DEBUG = args.debug
 
     # Run specified command
-    commands = get_command_functions()
+    commands = get_commands()
     if cmd := commands.get(args.command):
         try:
             cmd(args)
         except KeyboardInterrupt:
             printf('⚠️ Operation cancelled by user', fg='yellow')
-            sys.exit(1)
+            sys.exit(ExitCode.USER_CANCELLED)
         except Exception as e:
             printf(f'❌ Unexpected error: {e!s}', fg='red', bold=True)
-            sys.exit(1)
+            if RUN_DEBUG:
+                traceback.print_exc(file=sys.stderr)
+            sys.exit(ExitCode.COMMAND_FAILED)
     else:
         printf(f'❓ Unknown command: {args.command}', fg='red', bold=True)
         printf(f'   Available commands: {", ".join(commands.keys())}')
-        sys.exit(1)
+        sys.exit(ExitCode.SETUP_ERROR)
 
 
 if __name__ == '__main__':

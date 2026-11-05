@@ -433,7 +433,7 @@ Comprehensive media server and home automation, defined in [`services/`](service
 
 Feature-rich command-line interface:
 
-- **Command registration** via decorator pattern
+- **Command registration** via auto-registering `Command` classes
 - **ANSI styling** for rich terminal output
 - **Retry logic** with exponential backoff for network operations
 - **Shell command execution** with live output via PTY
