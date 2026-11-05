@@ -4218,6 +4218,10 @@ class PrepareHooksCommand(Command):
         )
 
     def run(self, args: Args) -> None:
+        check_python()
+        ensure_uv()
+        ensure_venv(groups=['lint'], inexact=True)
+
         cmd: list[str] = ['prek', 'prepare-hooks', *(args.hooks or [])]
         for skip in (args.skip or []):
             cmd.extend(['--skip', skip])
@@ -4225,7 +4229,7 @@ class PrepareHooksCommand(Command):
             cmd.append('--verbose')
 
         printf('⏬ Preparing prek hook environments...', fg='bright_cyan')
-        result = shell_command(cmd, indent=3, check=False)
+        result = uv_run(cmd, indent=3, check=False)
         sys.exit(result.returncode)
 
 
@@ -4236,13 +4240,49 @@ class UninstallHooksCommand(Command):
     name:  ClassVar[str] = 'uninstall-hooks'
     group: ClassVar[str] = 'Hooks'
 
-    def run(self, args: argparse.Namespace) -> None:
-        printf('🪝 Uninstalling prek git hook shims...', fg='bright_cyan')
-        shell_command(
-            ['prek', 'uninstall'],
-            indent=3,
-            check=False,
+    class Args(argparse.Namespace):
+        all:       bool                 # --all
+        hook_type: list[str] | None     # --hook-type
+        verbose:   bool                 # --verbose
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '-a',
+            '--all',
+            action='store_true',
+            dest='all',
+            help='Uninstall all prek-managed Git shims',
         )
+        parser.add_argument(
+            '-t',
+            '--hook-type',
+            action='append',
+            metavar='TYPE',
+            help='Which Git shim(s) to uninstall (may be repeated)',
+        )
+        parser.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Output verbose logging from prek',
+        )
+
+    def run(self, args: Args) -> None:
+        check_python()
+        ensure_uv()
+        ensure_venv(groups=['lint'], inexact=True)
+
+        cmd: list[str] = ['prek', 'uninstall']
+        if args.all:
+            cmd.append('--all')
+        for hook_type in (args.hook_type or []):
+            cmd.extend(['--hook-type', hook_type])
+        if args.verbose:
+            cmd.append('--verbose')
+
+        printf('🧹 Uninstalling prek git hook shims...', fg='bright_cyan')
+        result = uv_run(cmd, indent=3, check=False)
+        sys.exit(result.returncode)
 
 
 class RunHooksCommand(Command):
