@@ -254,8 +254,14 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 #     scripts/                      SCRIPTS_DIR
 #       dotfiles/
 #         render.py                 RENDER_SCRIPT
+#       env/
+#         python_diagnostic.py      DIAGNOSTIC_SCRIPT_PATH
+#         venvshell.py              VENVSHELL_SCRIPT_PATH
 #       hooks/
 #         uv-public.sh              UV_PUBLIC_SCRIPT
+#       install/
+#         install_hatch.py          INSTALLER_SCRIPTS['hatch']
+#         install_uv.py             INSTALLER_SCRIPTS['uv']
 #       nas/
 #         deploy-services.sh        NAS_DEPLOY_SCRIPT
 #       utility/
@@ -263,6 +269,10 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 #       claude/
 #         .claude/                  CLAUDE_STOW_DIR
 #         .config/
+#     tests/                        TESTS_DIR
+#       bootstrap/                  BOOTSTRAP_TESTS_DIR
+#       integration/                INTEGRATION_TESTS_DIR
+#       unit/                       UNIT_TESTS_DIR
 #     Makefile                      MAKEFILE
 #     run.py                        SCRIPT_PATH
 #     stow.sh                       STOW_SCRIPT
@@ -277,23 +287,41 @@ GIT_DIR:                Path = DOTFILES_DIR / '.git'
 GIT_HOOKS_DIR:          Path = GIT_DIR / 'hooks'
 PRE_COMMIT_HOOK:        Path = GIT_HOOKS_DIR / 'pre-commit'
 VENV_DIR:               Path = DOTFILES_DIR / '.venv'
+
 BOOTSTRAP_DIR:          Path = DOTFILES_DIR / 'bootstrap'
 BOOTSTRAP_SCRIPT:       Path = BOOTSTRAP_DIR / 'bootstrap.sh'
+
 DOCS_DIR:               Path = DOTFILES_DIR / 'docs'
+PROFILES_DIR:           Path = DOTFILES_DIR / 'profiles'
+RENDER_DIR:             Path = DOTFILES_DIR / 'render'
+
 INVENTORY_DIR:          Path = DOTFILES_DIR / 'inventory'
 INVENTORY_FILE:         Path = INVENTORY_DIR / 'inventory.yml'
 PLAYBOOKS_DIR:          Path = DOTFILES_DIR / 'playbooks'
-PROFILES_DIR:           Path = DOTFILES_DIR / 'profiles'
-RENDER_DIR:             Path = DOTFILES_DIR / 'render'
 NAS_BOOTSTRAP_PLAYBOOK: Path = PLAYBOOKS_DIR / 'nas_bootstrap.yml'
 ROLES_DIR:              Path = DOTFILES_DIR / 'roles'
 ANSIBLE_REQUIREMENTS:   Path = ROLES_DIR / 'requirements.yml'
+
 SCRIPTS_DIR:            Path = DOTFILES_DIR / 'scripts'
 RENDER_SCRIPT:          Path = SCRIPTS_DIR / 'dotfiles' / 'render.py'
+DIAGNOSTIC_SCRIPT_PATH: Path = SCRIPTS_DIR / 'env' / 'python_diagnostic.py'
+VENVSHELL_SCRIPT_PATH:  Path = SCRIPTS_DIR / 'env' / 'venvshell.py'
 UV_PUBLIC_SCRIPT:       Path = SCRIPTS_DIR / 'hooks' / 'uv-public.sh'
 NAS_DEPLOY_SCRIPT:      Path = SCRIPTS_DIR / 'nas' / 'deploy-services.sh'
+
+InstallableTool = Literal['hatch', 'uv']
+INSTALLER_SCRIPTS: dict[InstallableTool, Path] = {
+    'hatch': SCRIPTS_DIR / 'install' / 'install_hatch.py',
+    'uv':    SCRIPTS_DIR / 'install' / 'install_uv.py',
+}
+
 STOW_DIR:               Path = DOTFILES_DIR / 'stow'
 CLAUDE_STOW_DIR:        Path = STOW_DIR / 'claude' / '.claude'
+
+TESTS_DIR:              Path = DOTFILES_DIR / 'tests'
+INTEGRATION_TESTS_DIR:  Path = TESTS_DIR / 'integration'
+UNIT_TESTS_DIR:         Path = TESTS_DIR / 'unit'
+
 MAKEFILE:               Path = DOTFILES_DIR / 'Makefile'
 STOW_SCRIPT:            Path = DOTFILES_DIR / 'stow.sh'
 VAULT_PASSWORD:         Path = DOTFILES_DIR / VAULT_PASSWORD_FILENAME
@@ -1144,7 +1172,6 @@ def shell_command(
                 try:
                     output = os.read(master_fd, 1024).decode()
                 except OSError as e:
-                    # Linux raises EIO (macOS returns b'') once the child closes its end of the pty
                     if e.errno == errno.EIO:
                         break
                     raise
@@ -3196,6 +3223,7 @@ class TestCommand(Command):
 #                 - Organizes targets by command group
 #                 - Preserves command descriptions in Make comments
 #                 - Auto-generates help target with formatted command listing
+#   - diagnose: Generate
 # ====================================================================================================
 
 
@@ -3279,6 +3307,67 @@ class MakefileCommand(Command):
         with MAKEFILE.open('w') as f:
             f.write('\n'.join(lines))
         printf('✅ Makefile updated', fg='bright_green')
+
+
+class DiagnoseCommand(Command):
+    """
+    Gather and output local Python environment information to help triage installation/configuration issues
+    """
+    name:  ClassVar[str] = 'diagnose'
+    group: ClassVar[str] = 'Utilities'
+
+    class Args(argparse.Namespace):
+        max_installed_packages: int | None      # --max-installed-packages
+        save:                   bool            # --save
+        json:                   bool            # --json
+        output:                 Path | None     # --output
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        def add_console_out_opts() -> None:
+            console_out_opts = parser.add_argument_group('Console output options')
+            console_out_opts.add_argument(
+                '--max-installed-packages',
+                metavar='NUM',
+                type=int,
+                help='Max number of installed python packages to list under "INSTALLED PACKAGES"',
+            )
+        add_console_out_opts()
+
+        def add_file_out_opts() -> None:
+            file_out_opts = parser.add_argument_group('File output options')
+            file_out_opts.add_argument(
+                '-s',
+                '--save',
+                action='store_true',
+                help='Save output to file instead of printing',
+            )
+            file_out_opts.add_argument(
+                '-j',
+                '--json',
+                action='store_true',
+                help='Output as JSON format',
+            )
+            file_out_opts.add_argument(
+                '-o',
+                '--output',
+                type=Path,
+                metavar='FILEPATH',
+                help='Output file path (default: python_diagnostic_<timestamp>.txt)',
+            )
+        add_file_out_opts()
+
+    def run(self, args: Args) -> None:
+        check_script_validity(DIAGNOSTIC_SCRIPT_PATH, 'python diagnostic script')
+
+        printf('🔧 Running python diagnostic script...', fg='bright_cyan')
+        shell_command([
+            sys.executable,
+            str(DIAGNOSTIC_SCRIPT_PATH),
+            *(['--max-installed-packages', str(args.max_installed_packages)] if args.max_installed_packages else []),
+            *(['--save']                                                     if args.save                   else []),
+            *(['--json']                                                     if args.json                   else []),
+            *(['--output', str(args.output)]                                 if args.output                 else []),
+        ], indent=3)
 
 
 # ====================================================================================================

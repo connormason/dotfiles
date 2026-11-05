@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test makefile
+.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -41,6 +41,7 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Utilities:$(NC)"
 	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
+	@echo "  $(YELLOW)diagnose            $(NC) Gather and output local Python environment information to help triage installation/configuration issues"
 	@echo ""
 
 # Inventory
@@ -104,3 +105,6 @@ test: ## Run the test suite via uv (public-index wrapper)
 # Utilities
 makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m
 	@python3 run.py makefile
+
+diagnose: ## Gather and output local Python environment information to help triage installation/configuration issues
+	@python3 run.py diagnose
