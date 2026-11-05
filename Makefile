@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
+.PHONY: help install dev shell status doctor clean inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt nas-provision bootstrap stow render track-claude test install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -28,13 +28,6 @@ help: ## Show this help message
 	@echo "  $(YELLOW)vault-decrypt       $(NC) Decrypt all inventory vault files for editing"
 	@echo "  $(YELLOW)vault-encrypt       $(NC) Re-encrypt all inventory vault files after editing"
 	@echo ""
-	@echo "$(BRIGHT_WHITE)Codebase:$(NC)"
-	@echo "  $(YELLOW)run-hooks           $(NC) Run prek hooks on modified or specified project files"
-	@echo "  $(YELLOW)pre                 $(NC) Run prek (pre-commit) hooks on all project files"
-	@echo "  $(YELLOW)prepare-hooks       $(NC) Prepare the environments of all prek hooks"
-	@echo "  $(YELLOW)install-hooks       $(NC) Install prek git hook shims (overwrites any existing shims)"
-	@echo "  $(YELLOW)uninstall-hooks     $(NC) Uninstall prek git hook shims"
-	@echo ""
 	@echo "$(BRIGHT_WHITE)NAS:$(NC)"
 	@echo "  $(YELLOW)nas-provision       $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
 	@echo ""
@@ -48,6 +41,13 @@ help: ## Show this help message
 	@echo "$(BRIGHT_WHITE)Tool Installation:$(NC)"
 	@echo "  $(YELLOW)install-uv          $(NC) Install [95muv[0m Python package installer tool"
 	@echo "  $(YELLOW)install-hatch       $(NC) Install [95mhatch[0m Python project management tool"
+	@echo ""
+	@echo "$(BRIGHT_WHITE)Hooks:$(NC)"
+	@echo "  $(YELLOW)install-hooks       $(NC) Install prek git hook shims (overwrites any existing shims)"
+	@echo "  $(YELLOW)prepare-hooks       $(NC) Prepare the environments of all prek hooks"
+	@echo "  $(YELLOW)uninstall-hooks     $(NC) Uninstall prek git hook shims"
+	@echo "  $(YELLOW)run-hooks           $(NC) Run prek hooks on modified or specified project files"
+	@echo "  $(YELLOW)pre                 $(NC) Run prek (pre-commit) hooks on all project files"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Utilities:$(NC)"
 	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands [2m(run.py)[0m"
@@ -89,22 +89,6 @@ vault-decrypt: ## Decrypt all inventory vault files for editing
 vault-encrypt: ## Re-encrypt all inventory vault files after editing
 	@python3 run.py vault-encrypt
 
-# Codebase
-run-hooks: ## Run prek hooks on modified or specified project files
-	@python3 run.py run-hooks
-
-pre: ## Run prek (pre-commit) hooks on all project files
-	@python3 run.py pre
-
-prepare-hooks: ## Prepare the environments of all prek hooks
-	@python3 run.py prepare-hooks
-
-install-hooks: ## Install prek git hook shims (overwrites any existing shims)
-	@python3 run.py install-hooks
-
-uninstall-hooks: ## Uninstall prek git hook shims
-	@python3 run.py uninstall-hooks
-
 # NAS
 nas-provision: ## Provision the NAS with the Ansible playbook: system config, the stow engine, then services
 	@python3 run.py nas-provision
@@ -131,6 +115,22 @@ install-uv: ## Install [95muv[0m Python package installer tool
 
 install-hatch: ## Install [95mhatch[0m Python project management tool
 	@python3 run.py install-hatch
+
+# Hooks
+install-hooks: ## Install prek git hook shims (overwrites any existing shims)
+	@python3 run.py install-hooks
+
+prepare-hooks: ## Prepare the environments of all prek hooks
+	@python3 run.py prepare-hooks
+
+uninstall-hooks: ## Uninstall prek git hook shims
+	@python3 run.py uninstall-hooks
+
+run-hooks: ## Run prek hooks on modified or specified project files
+	@python3 run.py run-hooks
+
+pre: ## Run prek (pre-commit) hooks on all project files
+	@python3 run.py pre
 
 # Utilities
 makefile: ## Generate Makefile from project management script commands [2m(run.py)[0m

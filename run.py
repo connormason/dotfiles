@@ -2830,6 +2830,7 @@ class DoctorCommand(Command):
 
                 printf(f'🔧 {check.name}: {command}', fg='bright_cyan')
                 shell_command(check.fix, indent=3, check=False, cwd=DOTFILES_DIR)
+
             checks = doctor_checks()
 
         for check in checks:
@@ -3288,267 +3289,6 @@ class VaultEncryptCommand(Command):
             sys.exit(ExitCode.COMMAND_FAILED)
         else:
             printf('✅ All vault files encrypted', fg='bright_green')
-
-
-# ====================================================================================================
-# Codebase commands
-#
-# Commands:
-#   - TODO: other hook commands
-#   - pre:   Run prek hooks on all files
-# ====================================================================================================
-
-
-class RunHooksCommand(Command):
-    """
-    Run prek hooks on modified or specified project files
-    """
-    name:  ClassVar[str] = 'run-hooks'
-    group: ClassVar[str] = 'Codebase'
-
-    class Args(argparse.Namespace):
-        hooks:       list[str] | None   # positional arg(s) "HOOK|PROJECT"
-        skip:        list[str] | None   # --skip
-        all_files:   bool               # --all-files
-        files:       list[str] | None   # --files
-        directory:   str | None         # --directory
-        from_ref:    str | None         # --from-ref
-        to_ref:      str | None         # --to-ref
-        last_commit: bool               # --last-commit
-        stage:       str | None         # --stage
-        show_diff:   bool               # --show-diff-on-failure
-        fail_fast:   bool               # --fail-fast
-        dry_run:     bool               # --dry-run
-        verbose:     bool               # --verbose
-
-    def add_arguments(self, parser: argparse.ArgumentParser, *, include_selection: bool = True) -> None:
-        parser.add_argument(
-            'hooks',
-            nargs='*',
-            default=None,
-            metavar='HOOK|PROJECT',
-            help='Hooks or projects to run (default: all)',
-        )
-
-        if include_selection:
-            file_opts = parser.add_argument_group('File selection')
-            file_opts.add_argument(
-                '-a',
-                '--all-files',
-                action='store_true',
-                help='Run on all files in the repo',
-            )
-            file_opts.add_argument(
-                '--files',
-                nargs='*',
-                metavar='FILE',
-                help='Run on these files (put hook names before this option)',
-            )
-            file_opts.add_argument(
-                '-d',
-                '--directory',
-                metavar='DIR',
-                help='Run on all files in this directory',
-            )
-
-            ref_opts = parser.add_argument_group('Ref selection')
-            ref_opts.add_argument(
-                '-s',
-                '--from-ref',
-                metavar='REF',
-                help='Original ref in a from_ref...to_ref diff expression',
-            )
-            ref_opts.add_argument(
-                '-o',
-                '--to-ref',
-                metavar='REF',
-                help='Destination ref in a from_ref...to_ref diff expression (default: HEAD)',
-            )
-            ref_opts.add_argument(
-                '--last-commit',
-                action='store_true',
-                help='Run on the files of the last commit (--from-ref HEAD~1 --to-ref HEAD)',
-            )
-
-        run_opts = parser.add_argument_group('Run options')
-        run_opts.add_argument(
-            '--skip',
-            action='append',
-            metavar='HOOK|PROJECT',
-            help='Skip this hook or project (repeatable)',
-        )
-        run_opts.add_argument(
-            '--stage',
-            metavar='STAGE',
-            help='The git stage the hooks run for (e.g. pre-push, manual)',
-        )
-        run_opts.add_argument(
-            '--show-diff-on-failure',
-            action='store_true',
-            dest='show_diff',
-            help='Run `git diff` after a hook fails',
-        )
-        run_opts.add_argument(
-            '--fail-fast',
-            action='store_true',
-            help='Stop after the first failing hook',
-        )
-        run_opts.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='List the hooks that would run without running them',
-        )
-        run_opts.add_argument(
-            '-v',
-            '--verbose',
-            action='store_true',
-            help='Show verbose prek output',
-        )
-
-    @staticmethod
-    def build_command(args: Args) -> list[str]:
-        """
-        Build the ``prek run`` command line
-
-        Hook names go first: prek's ``--files`` is greedy, so a trailing hook name would be read as a filename.
-
-        :param args: parsed arguments (the file and ref selection attributes are absent for commands that omit those
-                     options)
-        :return: command and arguments
-        """
-        cmd: list[str] = ['prek', 'run', *(args.hooks or [])]
-
-        if getattr(args, 'all_files', False):
-            cmd.append('--all-files')
-        if files := getattr(args, 'files', None):
-            cmd.extend(['--files', *files])
-        if directory := getattr(args, 'directory', None):
-            cmd.extend(['--directory', directory])
-
-        if from_ref := getattr(args, 'from_ref', None):
-            cmd.extend(['--from-ref', from_ref])
-        if to_ref := getattr(args, 'to_ref', None):
-            cmd.extend(['--to-ref', to_ref])
-        if getattr(args, 'last_commit', False):
-            cmd.append('--last-commit')
-
-        for skip in (args.skip or []):
-            cmd.extend(['--skip', skip])
-        if args.stage:
-            cmd.extend(['--stage', args.stage])
-        if args.show_diff:
-            cmd.append('--show-diff-on-failure')
-        if args.fail_fast:
-            cmd.append('--fail-fast')
-        if args.dry_run:
-            cmd.append('--dry-run')
-        if args.verbose:
-            cmd.append('--verbose')
-
-        return cmd
-
-    def run(self, args: Args) -> None:
-        if getattr(args, 'all_files', False):
-            printf('🕝 Running prek hooks on all project files...', fg='bright_cyan')
-        elif files := getattr(args, 'files', None):
-            files = cast('list[str]', files)
-            printf(f'🕝 Running prek hooks on {len(files)} file(s)...', fg='bright_cyan')
-        else:
-            printf('🕝 Running prek hooks...', fg='bright_cyan')
-
-        result = shell_command(self.build_command(args), check=False)
-        sys.exit(result.returncode)
-
-
-class PreCommand(RunHooksCommand):
-    """
-    Run prek (pre-commit) hooks on all project files
-    """
-    name: ClassVar[str] = 'pre'
-
-    def add_arguments(self, parser: argparse.ArgumentParser, **_kwargs: object) -> None:
-        super().add_arguments(parser, include_selection=False)
-
-    def run(self, args: RunHooksCommand.Args) -> None:
-        args.all_files = True
-        super().run(args)
-
-
-class PrepareHooksCommand(Command):
-    """
-    Prepare the environments of all prek hooks
-    """
-    name:  ClassVar[str] = 'prepare-hooks'
-    group: ClassVar[str] = 'Codebase'
-
-    class Args(argparse.Namespace):
-        hooks:   list[str] | None       # positional arg(s) "HOOK|PROJECT"
-        skip:    list[str] | None       # --skip
-        verbose: bool                   # --verbose
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            'hooks',
-            nargs='*',
-            default=None,
-            metavar='HOOK|PROJECT',
-            help='Hooks or projects to prepare (default: all)',
-        )
-        parser.add_argument(
-            '--skip',
-            action='append',
-            metavar='HOOK|PROJECT',
-            help='Skip this hook or project (repeatable)',
-        )
-        parser.add_argument(
-            '-v',
-            '--verbose',
-            action='store_true',
-            help='Show verbose prek output',
-        )
-
-    def run(self, args: Args) -> None:
-        cmd: list[str] = ['prek', 'prepare-hooks', *(args.hooks or [])]
-        for skip in (args.skip or []):
-            cmd.extend(['--skip', skip])
-        if args.verbose:
-            cmd.append('--verbose')
-
-        printf('⏬ Preparing prek hook environments...', fg='bright_cyan')
-        result = shell_command(cmd, indent=3, check=False)
-        sys.exit(result.returncode)
-
-
-class InstallHooksCommand(Command):
-    """
-    Install prek git hook shims (overwrites any existing shims)
-    """
-    name:  ClassVar[str] = 'install-hooks'
-    group: ClassVar[str] = 'Codebase'
-
-    def run(self, args: argparse.Namespace) -> None:
-        printf('🪝 Installing prek git hook shims...', fg='bright_cyan')
-        shell_command(
-            ['prek', 'install', '-f'],
-            indent=3,
-            check=False,
-        )
-
-
-class UninstallHooksCommand(Command):
-    """
-    Uninstall prek git hook shims
-    """
-    name:  ClassVar[str] = 'uninstall-hooks'
-    group: ClassVar[str] = 'Codebase'
-
-    def run(self, args: argparse.Namespace) -> None:
-        printf('🪝 Uninstalling prek git hook shims...', fg='bright_cyan')
-        shell_command(
-            ['prek', 'uninstall'],
-            indent=3,
-            check=False,
-        )
 
 
 # ====================================================================================================
@@ -4371,6 +4111,272 @@ class InstallHatchCommand(_InstallToolCommand):
     description:      ClassVar[str]  = f'Install {style("hatch", fg="bright_magenta")} Python project management tool'
     tool_name:        ClassVar[str]  = 'hatch'
     installer_script: ClassVar[Path] = SCRIPTS_DIR / 'install' / 'install_hatch.py'
+
+
+# ====================================================================================================
+# Hooks commands
+#
+# Commands:
+#   - install-hooks:   Install prek git hook shims
+#   - prepare-hooks:   Prepare the environments of all prek hooks
+#   - uninstall-hooks: Uninstall prek git hook shims
+#   - run-hooks:       Run prek hooks on modified or specified project files
+#   - pre:             Run prek hooks on all files
+# ====================================================================================================
+
+
+class InstallHooksCommand(Command):
+    """
+    Install prek git hook shims (overwrites any existing shims)
+    """
+    name:  ClassVar[str] = 'install-hooks'
+    group: ClassVar[str] = 'Hooks'
+
+    def run(self, args: argparse.Namespace) -> None:
+        printf('🪝 Installing prek git hook shims...', fg='bright_cyan')
+        shell_command(
+            ['prek', 'install', '-f'],
+            indent=3,
+            check=False,
+        )
+
+
+class PrepareHooksCommand(Command):
+    """
+    Prepare the environments of all prek hooks
+    """
+    name:  ClassVar[str] = 'prepare-hooks'
+    group: ClassVar[str] = 'Hooks'
+
+    class Args(argparse.Namespace):
+        hooks:   list[str] | None       # positional arg(s) "HOOK|PROJECT"
+        skip:    list[str] | None       # --skip
+        verbose: bool                   # --verbose
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'hooks',
+            nargs='*',
+            default=None,
+            metavar='HOOK|PROJECT',
+            help='Hooks or projects to prepare (default: all)',
+        )
+        parser.add_argument(
+            '--skip',
+            action='append',
+            metavar='HOOK|PROJECT',
+            help='Skip this hook or project (repeatable)',
+        )
+        parser.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Show verbose prek output',
+        )
+
+    def run(self, args: Args) -> None:
+        cmd: list[str] = ['prek', 'prepare-hooks', *(args.hooks or [])]
+        for skip in (args.skip or []):
+            cmd.extend(['--skip', skip])
+        if args.verbose:
+            cmd.append('--verbose')
+
+        printf('⏬ Preparing prek hook environments...', fg='bright_cyan')
+        result = shell_command(cmd, indent=3, check=False)
+        sys.exit(result.returncode)
+
+
+class UninstallHooksCommand(Command):
+    """
+    Uninstall prek git hook shims
+    """
+    name:  ClassVar[str] = 'uninstall-hooks'
+    group: ClassVar[str] = 'Hooks'
+
+    def run(self, args: argparse.Namespace) -> None:
+        printf('🪝 Uninstalling prek git hook shims...', fg='bright_cyan')
+        shell_command(
+            ['prek', 'uninstall'],
+            indent=3,
+            check=False,
+        )
+
+
+class RunHooksCommand(Command):
+    """
+    Run prek hooks on modified or specified project files
+    """
+    name:  ClassVar[str] = 'run-hooks'
+    group: ClassVar[str] = 'Hooks'
+
+    class Args(argparse.Namespace):
+        hooks:       list[str] | None   # positional arg(s) "HOOK|PROJECT"
+        skip:        list[str] | None   # --skip
+        all_files:   bool               # --all-files
+        files:       list[str] | None   # --files
+        directory:   str | None         # --directory
+        from_ref:    str | None         # --from-ref
+        to_ref:      str | None         # --to-ref
+        last_commit: bool               # --last-commit
+        stage:       str | None         # --stage
+        show_diff:   bool               # --show-diff-on-failure
+        fail_fast:   bool               # --fail-fast
+        dry_run:     bool               # --dry-run
+        verbose:     bool               # --verbose
+
+    def add_arguments(self, parser: argparse.ArgumentParser, *, include_selection: bool = True) -> None:
+        parser.add_argument(
+            'hooks',
+            nargs='*',
+            default=None,
+            metavar='HOOK|PROJECT',
+            help='Hooks or projects to run (default: all)',
+        )
+
+        if include_selection:
+            file_opts = parser.add_argument_group('File selection')
+            file_opts.add_argument(
+                '-a',
+                '--all-files',
+                action='store_true',
+                help='Run on all files in the repo',
+            )
+            file_opts.add_argument(
+                '--files',
+                nargs='*',
+                metavar='FILE',
+                help='Run on these files (put hook names before this option)',
+            )
+            file_opts.add_argument(
+                '-d',
+                '--directory',
+                metavar='DIR',
+                help='Run on all files in this directory',
+            )
+
+            ref_opts = parser.add_argument_group('Ref selection')
+            ref_opts.add_argument(
+                '-s',
+                '--from-ref',
+                metavar='REF',
+                help='Original ref in a from_ref...to_ref diff expression',
+            )
+            ref_opts.add_argument(
+                '-o',
+                '--to-ref',
+                metavar='REF',
+                help='Destination ref in a from_ref...to_ref diff expression (default: HEAD)',
+            )
+            ref_opts.add_argument(
+                '--last-commit',
+                action='store_true',
+                help='Run on the files of the last commit (--from-ref HEAD~1 --to-ref HEAD)',
+            )
+
+        run_opts = parser.add_argument_group('Run options')
+        run_opts.add_argument(
+            '--skip',
+            action='append',
+            metavar='HOOK|PROJECT',
+            help='Skip this hook or project (repeatable)',
+        )
+        run_opts.add_argument(
+            '--stage',
+            metavar='STAGE',
+            help='The git stage the hooks run for (e.g. pre-push, manual)',
+        )
+        run_opts.add_argument(
+            '--show-diff-on-failure',
+            action='store_true',
+            dest='show_diff',
+            help='Run `git diff` after a hook fails',
+        )
+        run_opts.add_argument(
+            '--fail-fast',
+            action='store_true',
+            help='Stop after the first failing hook',
+        )
+        run_opts.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='List the hooks that would run without running them',
+        )
+        run_opts.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Show verbose prek output',
+        )
+
+    @staticmethod
+    def build_command(args: Args) -> list[str]:
+        """
+        Build the ``prek run`` command line
+
+        Hook names go first: prek's ``--files`` is greedy, so a trailing hook name would be read as a filename.
+
+        :param args: parsed arguments (the file and ref selection attributes are absent for commands that omit those
+                     options)
+        :return: command and arguments
+        """
+        cmd: list[str] = ['prek', 'run', *(args.hooks or [])]
+
+        # File selection
+        if getattr(args, 'all_files', False):
+            cmd.append('--all-files')
+        if files := getattr(args, 'files', None):
+            cmd.extend(['--files', *files])
+        if directory := getattr(args, 'directory', None):
+            cmd.extend(['--directory', cast('str', directory)])
+
+        # Ref selection
+        if from_ref := getattr(args, 'from_ref', None):
+            cmd.extend(['--from-ref', cast('str', from_ref)])
+        if to_ref := getattr(args, 'to_ref', None):
+            cmd.extend(['--to-ref', cast('str', to_ref)])
+        if getattr(args, 'last_commit', False):
+            cmd.append('--last-commit')
+
+        # Ruyn options
+        for skip in (args.skip or []):
+            cmd.extend(['--skip', skip])
+        if args.stage:
+            cmd.extend(['--stage', args.stage])
+        if args.show_diff:
+            cmd.append('--show-diff-on-failure')
+        if args.fail_fast:
+            cmd.append('--fail-fast')
+        if args.dry_run:
+            cmd.append('--dry-run')
+        if args.verbose:
+            cmd.append('--verbose')
+        return cmd
+
+    def run(self, args: Args) -> None:
+        if getattr(args, 'all_files', False):
+            printf('🕝 Running prek hooks on all project files...',     fg='bright_cyan')
+        elif files := getattr(args, 'files', None):
+            files = cast('list[str]', files)
+            printf(f'🕝 Running prek hooks on {len(files)} file(s)...', fg='bright_cyan')
+        else:
+            printf('🕝 Running prek hooks...',                          fg='bright_cyan')
+
+        result = shell_command(self.build_command(args), check=False)
+        sys.exit(result.returncode)
+
+
+class PreCommand(RunHooksCommand):
+    """
+    Run prek (pre-commit) hooks on all project files
+    """
+    name: ClassVar[str] = 'pre'
+
+    def add_arguments(self, parser: argparse.ArgumentParser, **_kwargs: object) -> None:
+        super().add_arguments(parser, include_selection=False)
+
+    def run(self, args: RunHooksCommand.Args) -> None:
+        args.all_files = True
+        super().run(args)
 
 
 # ====================================================================================================
