@@ -391,6 +391,7 @@ tags
 # End of https://www.toptal.com/developers/gitignore/api/macos,python,git,ansible,pycharm+all,vim,VisualStudioCode,sublimetext
 
 !/scripts/env/
+!/tests/unit/scripts/env/
 !services/compose.base.yml
 
 # CI check reports
