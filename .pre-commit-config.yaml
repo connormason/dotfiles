@@ -266,7 +266,7 @@ repos:
         groups: [check, local, ci, pyproject, toml]
         stages: [pre-commit, manual]
         priority: 10
-        args: ["--disable-plugins", "hatch"]
+        args: ["pyproject.toml", "--disable-plugins", "hatch"]
         additional_dependencies:
           - validate-pyproject[all]
           - validate-pyproject-schema-store

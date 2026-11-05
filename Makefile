@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean bootstrap nas-provision stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test lock lock-check lock-upgrade sync-deps makefile diagnose
+.PHONY: help install dev shell status doctor clean bootstrap nas-provision stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test lock lock-check lock-upgrade lock-sync makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -55,7 +55,7 @@ help: ## Show this help message
 	@echo "  $(YELLOW)lock                $(NC) Update uv.lock from pyproject.toml"
 	@echo "  $(YELLOW)lock-check          $(NC) Check that uv.lock is up to date with pyproject.toml"
 	@echo "  $(YELLOW)lock-upgrade        $(NC) Upgrade locked dependency versions in uv.lock"
-	@echo "  $(YELLOW)sync-deps           $(NC) Re-sync dependencies, exported requirements, and hook versions from the committed uv.lock"
+	@echo "  $(YELLOW)lock-sync           $(NC) Re-sync dependencies, exported requirements, and hook versions from the committed uv.lock"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Utilities:$(NC)"
 	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands (run.py)"
@@ -151,8 +151,8 @@ lock-check: ## Check that uv.lock is up to date with pyproject.toml
 lock-upgrade: ## Upgrade locked dependency versions in uv.lock
 	@python3 run.py lock-upgrade
 
-sync-deps: ## Re-sync dependencies, exported requirements, and hook versions from the committed uv.lock
-	@python3 run.py sync-deps
+lock-sync: ## Re-sync dependencies, exported requirements, and hook versions from the committed uv.lock
+	@python3 run.py lock-sync
 
 # Utilities
 makefile: ## Generate Makefile from project management script commands (run.py)

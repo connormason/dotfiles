@@ -197,7 +197,7 @@ class TestPreCommitWiring:
         """
         hook = _wired_hook()
 
-        assert hook['name']     == '[format] json array sort (keybindings)'
+        assert hook['name']     == '[format] json - vscode keybindings sort'
         assert hook['priority'] == 35
         assert hook['entry']    == 'scripts/hooks/sort-json-array.py'
         assert hook['language'] == 'python'
