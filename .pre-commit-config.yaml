@@ -31,7 +31,7 @@ repos:
       # environment is rewritten back to public PyPI whenever uv.lock is staged
       # pyproject.toml -> uv.lock
       - id: uv-lock
-        name: "[sync]   dependencies (pyproject.toml          -> uv.lock)"
+        name: "[sync]   dependencies (pyproject.toml -> uv.lock)"
         groups: [sync, local, uv]
         stages: [pre-commit, manual]
         priority: 0
@@ -43,7 +43,7 @@ repos:
       # Sync .venv/ with uv.lock on checkout/pull/rebase
       # uv.lock -> .venv/
       - id: uv-sync
-        name: "[sync]   dependencies (uv.lock                 -> .venv)"
+        name: "[sync]   dependencies (uv.lock -> .venv)"
         groups: [sync, local, uv]
         stages: [post-checkout, post-merge, post-rewrite]
         priority: 5
@@ -55,7 +55,7 @@ repos:
       # Export locked package requirements to requirements.txt
       # uv.lock -> requirements.txt
       - id: uv-export
-        name: "[sync]   dependencies (uv.lock                 -> requirements.txt)"
+        name: "[sync]   dependencies (uv.lock -> requirements.txt)"
         groups: [sync, local, uv, requirements]
         stages: [pre-commit, manual]
         priority: 5
@@ -77,7 +77,7 @@ repos:
       # Sync pre-commit hook versions with uv.lock versions
       # uv.lock -> .pre-commit-config.yaml
       - id: sync-with-uv
-        name: "[sync]   dependencies (uv.lock                 -> .pre-commit-config.yaml)"
+        name: "[sync]   dependencies (uv.lock -> .pre-commit-config.yaml)"
         groups: [sync, local, uv, requirements]
         stages: [pre-commit, manual]
         priority: 5
