@@ -34,6 +34,7 @@ SNIPPET = re.compile(r'`(\d{2}-[A-Za-z0-9_-]+\.zsh)`')
 # Parsing helpers
 # ==============================================================================
 
+
 def _stage_scripts_on_disk(repo: Path) -> set[str]:
     """
     Return the set of bootstrap stage ids backed by a ``NN-*.sh`` script
@@ -54,7 +55,7 @@ def _stage_ids_in_readme(repo: Path) -> set[str]:
     :param repo: repository root
     :return: stage ids documented in the stage table
     """
-    text = (repo / 'bootstrap' / 'README.md').read_text(encoding='utf-8')
+    text        = (repo / 'bootstrap' / 'README.md').read_text(encoding='utf-8')
     row_pattern = re.compile(rf'^\|\s*({STAGE_ID})\s*\|', re.MULTILINE)
     return set(row_pattern.findall(text))
 
@@ -121,6 +122,7 @@ def _out_of_sync_message(label_a: str, set_a: set[str], label_b: str, set_b: set
 # Bootstrap stage documentation
 # ==============================================================================
 
+
 class TestBootstrapStageDocs:
     """
     Guardrails tying the bootstrap stage table to the stage scripts
@@ -149,6 +151,7 @@ class TestBootstrapStageDocs:
 # ==============================================================================
 # Stow package documentation
 # ==============================================================================
+
 
 class TestStowPackageDocs:
     """
@@ -265,7 +268,6 @@ class TestServicesReadme:
         """
         documented = set(_services_readme_rows(REPO_ROOT))
         on_disk    = set(_compose_containers(REPO_ROOT))
-
         assert documented == on_disk, _out_of_sync_message(
             'services/README.md Quick Reference', documented, 'services/*/compose.yml*', on_disk,
         )

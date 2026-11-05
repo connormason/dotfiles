@@ -34,7 +34,6 @@ class TestDeployWorkflow:
         Test that each deploy job calls the shared script and holds no inline rsync
         """
         runs = [step['run'] for step in _steps(job) if 'run' in step]
-
         assert any(SCRIPT in run for run in runs)
         assert not any('rsync' in run for run in runs)
 
@@ -44,8 +43,8 @@ class TestDeployWorkflow:
         Test that host, user, and service pass via env, never interpolated into the shell command
         """
         steps = [step for step in _steps(job) if SCRIPT in step.get('run', '')]
-
         assert len(steps) == 1
+
         step = steps[0]
         assert '${{' not in step['run']
         assert set(step['env']) == {'NAS_HOST', 'NAS_USER', 'SERVICE'}
@@ -65,12 +64,12 @@ class TestDeployWorkflow:
         Test that the key step reads the private key and host from env variables
         """
         steps = [step for step in _steps(job) if step.get('name') == 'Set up SSH key']
-
         assert len(steps) == 1
+
         step = steps[0]
         assert set(step['env']) == {'NAS_SSH_PRIVATE_KEY', 'NAS_HOST'}
         assert '"$NAS_SSH_PRIVATE_KEY"' in step['run']
-        assert '"$NAS_HOST"' in step['run']
+        assert '"$NAS_HOST"'            in step['run']
 
     @pytest.mark.parametrize('job', ['deploy-push', 'deploy-manual'])
     def test_ssh_key_step_writes_a_private_key_file(self, job: str, tmp_path: Path) -> None:
@@ -81,13 +80,15 @@ class TestDeployWorkflow:
 
         bin_dir = tmp_path / 'bin'
         bin_dir.mkdir()
+
         keyscan = bin_dir / 'ssh-keyscan'
         keyscan.write_text('#!/bin/sh\nexit 0\n', encoding='utf-8')
         keyscan.chmod(0o755)
+
         home = tmp_path / 'home'
         home.mkdir()
-        key = '-----BEGIN KEY-----\nline-two\n-----END KEY-----'
 
+        key = '-----BEGIN KEY-----\nline-two\n-----END KEY-----'
         subprocess.run(
             ['/bin/bash', '-e', '-c', step['run']],
             check=True,

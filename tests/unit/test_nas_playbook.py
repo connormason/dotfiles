@@ -33,10 +33,11 @@ def _role_task(role: str, name: str) -> dict[str, Any]:  # Any: heterogeneous, y
     """
     Load the task with the given name from a role's tasks/main.yml
     """
-    tasks = yaml.safe_load((ROLES / role / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+    tasks   = yaml.safe_load((ROLES / role / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
     matches = [task for task in tasks if task.get('name') == name]
     assert len(matches) == 1, f'expected exactly one task named {name!r}'
     return matches[0]
+
 
 class TestPlaybookSyntax:
     """
@@ -97,9 +98,10 @@ class TestDotfilesRole:
         """
         driver = (REPO_ROOT / 'bootstrap' / 'bootstrap.sh').read_text(encoding='utf-8')
         tasks  = (ROLES / 'dotfiles' / 'tasks' / 'main.yml').read_text(encoding='utf-8')
+
         assert "printf 'bootstrap: changes=%d\\n'" in driver
-        assert "'bootstrap: changes=0'" in tasks
-        assert "'^bootstrap: changes=[0-9]+$'" in tasks
+        assert "'bootstrap: changes=0'"            in tasks
+        assert "'^bootstrap: changes=[0-9]+$'"     in tasks
 
     def test_play_defines_the_repo_dir(self) -> None:
         """
@@ -112,23 +114,24 @@ class TestDotfilesRole:
         """
         Test that the refuse-to-update assert checks the status, remote-branch and local-branch ancestry probes
         """
-        refuse = _role_task('dotfiles', 'Refuse to update a clone with local work')
+        refuse     = _role_task('dotfiles', 'Refuse to update a clone with local work')
         conditions = '\n'.join(refuse['ansible.builtin.assert']['that'])
+
         assert 'dotfiles_clone_status.stdout | length == 0' in conditions
-        assert 'dotfiles_clone_remote.rc == 0' in conditions
-        assert 'dotfiles_clone_remote.stdout | length > 0' in conditions
-        assert 'dotfiles_clone_pushed.rc' in conditions
+        assert 'dotfiles_clone_remote.rc == 0'              in conditions
+        assert 'dotfiles_clone_remote.stdout | length > 0'  in conditions
+        assert 'dotfiles_clone_pushed.rc'                   in conditions
 
         pushed = _role_task('dotfiles', 'Check that the local version branch is pushed')
-        argv = pushed['ansible.builtin.command']['argv']
+        argv   = pushed['ansible.builtin.command']['argv']
         assert argv[-3:] == [
             '--is-ancestor',
             'refs/heads/{{ dotfiles_repo_version }}',
             'refs/remotes/origin/{{ dotfiles_repo_version }}',
         ]
-        assert pushed['check_mode'] is False
+        assert pushed['check_mode']   is False
         assert pushed['changed_when'] is False
-        assert pushed['failed_when'] is False
+        assert pushed['failed_when']  is False
 
     def test_login_shell_is_verified_before_it_is_set(self) -> None:
         """
@@ -140,16 +143,17 @@ class TestDotfilesRole:
 
         require = _role_task('dotfiles', 'Require a usable login shell')
         conditions = '\n'.join(require['ansible.builtin.assert']['that'])
-        assert 'dotfiles_shell.stat.exists' in conditions
+        assert 'dotfiles_shell.stat.exists'     in conditions
         assert 'dotfiles_shell.stat.executable' in conditions
-        assert 'dotfiles_shell_listed.rc == 0' in conditions
+        assert 'dotfiles_shell_listed.rc == 0'  in conditions
 
     def test_engine_dry_run_only_under_check_or_preview(self) -> None:
         """
         Test that the engine argv adds --dry-run solely under check mode or the preview variable
         """
         engine = _role_task('dotfiles', 'Run the bootstrap engine')
-        argv = engine['ansible.builtin.command']['argv']
+        argv   = engine['ansible.builtin.command']['argv']
+
         assert argv.count('--dry-run') == 1
         assert 'if (ansible_check_mode or dotfiles_bootstrap_preview | bool) else []' in argv
         assert engine['environment']['DOTFILES_OVERLAYS_FILE'] == '{{ dotfiles_overlays_file }}'
@@ -192,16 +196,18 @@ class TestHaosRole:
         """
         setup = (REPO_ROOT / 'vms' / 'haos' / 'setup.sh').read_text(encoding='utf-8')
         tasks = (ROLES / 'haos' / 'tasks' / 'main.yml').read_text(encoding='utf-8')
+
         assert "printf 'haos: changes=%d\\n'" in setup
-        assert "'haos: changes=0'" in tasks
-        assert "'^haos: changes=[0-9]+$'" in tasks
+        assert "'haos: changes=0'"            in tasks
+        assert "'^haos: changes=[0-9]+$'"     in tasks
 
     def test_setup_runs_async_and_dry_run_only_under_check(self) -> None:
         """
         Test that the setup task survives a dropped session and adds --dry-run solely under check mode
         """
         setup = _role_task('haos', 'Provision the Home Assistant OS VM')
-        argv = setup['ansible.builtin.command']['argv']
+        argv  = setup['ansible.builtin.command']['argv']
+
         assert argv.count('--dry-run') == 1
         assert 'if ansible_check_mode else []' in argv
         assert setup['environment']['BRIDGE'] == '{{ haos_bridge }}'
@@ -334,8 +340,7 @@ class TestPlaybookTags:
 
         The include is what --tags selects first, so an inner tag the include lacks can never be asked for
         """
-        name       = include['ansible.builtin.include_role']['name']
-        selectable = set(include['tags']) | _apply_tags(include)
-
+        name        = include['ansible.builtin.include_role']['name']
+        selectable  = set(include['tags']) | _apply_tags(include)
         unreachable = sorted(_role_tags(name.removeprefix('roles/')) - selectable - {'always'})
         assert not unreachable, f'tags {unreachable} inside {name} cannot be selected through its include'

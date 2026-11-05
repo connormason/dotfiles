@@ -98,8 +98,8 @@ class TestDeployOneService:
         Test that one service rsyncs compose.base.yml and its directory, then runs deploy.sh over ssh
         """
         result = _run(env, 'glance')
-
         assert result.returncode == 0, result.stderr
+
         calls = _calls(env)
         assert len(calls) == 3
         assert calls[0].endswith(f'{SERVICES_DIR}/compose.base.yml tester@nas.example:~/docker/compose.base.yml')
@@ -127,8 +127,8 @@ class TestDeployOneService:
         assert len(calls) == 3
         for call in calls[:2]:
             assert '--exclude=*.j2' in call
-            assert '--exclude=.env'  in call
-            assert '--delete'    not in call
+            assert '--exclude=.env' in call
+            assert '--delete'   not in call
 
     @pytest.mark.parametrize('service', ['glance', 'all'])
     def test_rsync_is_idempotent_and_skips_laptop_junk(self, env: dict[str, str], service: str) -> None:
@@ -168,14 +168,15 @@ class TestKeyHandling:
         argv_env['NAS_SSH_KEY'] = str(key)
 
         result = _run(argv_env, 'glance')
-
         assert result.returncode == 0, result.stderr
+
         calls = _calls(argv_env)
         assert len(calls) == 3
         assert _words(calls[2]) == [
             '-i', str(key), '-o', 'StrictHostKeyChecking=accept-new', '--', 'tester@nas.example',
             '~/docker/deploy.sh glance',
         ]
+
         rsync_words = _words(calls[0])
         rsh         = rsync_words[rsync_words.index('-e') + 1]
         assert shlex.split(rsh) == ['ssh', '-i', str(key), '-o', 'StrictHostKeyChecking=accept-new']
@@ -186,7 +187,6 @@ class TestKeyHandling:
         Test that a key path rsync's -e quoting cannot carry exits 2 before any network call
         """
         env['NAS_SSH_KEY'] = "/keys/o'brien"
-
         result = _run(env, 'glance')
 
         assert result.returncode == 2
@@ -199,7 +199,6 @@ class TestKeyHandling:
         Test that a value starting with - exits 2 before any network call
         """
         env[name] = '-oProxyCommand=evil'
-
         result = _run(env, 'glance')
 
         assert result.returncode == 2
@@ -213,6 +212,7 @@ class TestKeyHandling:
         """
         bin_dir = tmp_path / 'bin'
         bin_dir.mkdir()
+
         ssh = bin_dir / 'ssh'
         ssh.write_text(ARGV_STUB + 'exit 255\n', encoding='utf-8')
         ssh.chmod(0o755)
@@ -242,8 +242,8 @@ class TestDeployAll:
         Test that 'all' rsyncs the whole services/ directory and runs deploy.sh all
         """
         result = _run(env, 'all')
-
         assert result.returncode == 0, result.stderr
+
         calls = _calls(env)
         assert len(calls) == 2
         assert calls[0].endswith(f'{SERVICES_DIR}/ tester@nas.example:~/docker/')
@@ -259,8 +259,8 @@ class TestDryRun:
         Test that --dry-run adds rsync -n, skips ssh, and prints the command it would have run
         """
         result = _run(env, '--dry-run', 'glance')
-
         assert result.returncode == 0, result.stderr
+
         calls = _calls(env)
         assert len(calls) == 2
         assert all(call.startswith('rsync ') and ' -n ' in call for call in calls)
@@ -271,7 +271,6 @@ class TestDryRun:
         Test that the printed ssh command escapes a key path containing a space, so the words stay distinguishable
         """
         env['NAS_SSH_KEY'] = '/keys/my keys/id'
-
         result = _run(env, '--dry-run', 'glance')
 
         assert result.returncode == 0, result.stderr

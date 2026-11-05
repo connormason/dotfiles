@@ -102,8 +102,8 @@ class TestServicesRole:
         """
         args = _task('services', 'Sync compose files to the NAS')['ansible.posix.synchronize']
 
-        assert '--exclude=*.j2'  in args['rsync_opts']
-        assert '--exclude=.env'  in args['rsync_opts']
+        assert '--exclude=*.j2' in args['rsync_opts']
+        assert '--exclude=.env' in args['rsync_opts']
         assert not args.get('delete')
         assert args['dest'].startswith('{{ services_target_dir }}')
 
@@ -391,8 +391,9 @@ def _render_secrets(tmp_path: Path, source: Path, *extra_vars: str) -> tuple[int
     :return: tuple of (return code, combined output, target directory)
     """
     target = tmp_path / 'docker'
-    args   = [
-        '--tags', 'secrets', '--diff',
+    args: list[str] = [
+        '--tags', 'secrets',
+        '--diff',
         '-e', f'services_source_dir={source}',
         '-e', f'services_target_dir={target}',
     ]
@@ -413,8 +414,11 @@ class TestTagSelection:
         """
         target = tmp_path / 'docker'
         code, output = _run_play(
-            tmp_path, _include_play('services'), '--tags', 'configfile',
-            '-e', f'services_source_dir={SERVICES_DIR}', '-e', f'services_target_dir={target}',
+            tmp_path,
+            _include_play('services'),
+            '--tags', 'configfile',
+            '-e', f'services_source_dir={SERVICES_DIR}',
+            '-e', f'services_target_dir={target}',
         )
 
         assert code == 0, output
@@ -430,8 +434,11 @@ class TestTagSelection:
         docker_dir = tmp_path / 'docker'
         docker_dir.mkdir()
         code, output = _run_play(
-            tmp_path, _include_play('docker'), '--tags', 'configfile',
-            '-e', f'docker_dir={docker_dir}', '-e', 'tailscale_tailnet_name=example.ts.net',
+            tmp_path,
+            _include_play('docker'),
+            '--tags', 'configfile',
+            '-e', f'docker_dir={docker_dir}',
+            '-e', 'tailscale_tailnet_name=example.ts.net',
         )
 
         assert code == 0, output
@@ -464,8 +471,8 @@ class TestSecretsRender:
         _write(source / 'on' / 'env.j2', (SERVICES_DIR / 'pihole' / 'env.j2').read_text(encoding='utf-8'))
 
         code, output, target = _render_secrets(tmp_path, source, 'pihole_web_password=hunter2-test-value')
-
         assert code == 0, output
+
         env_file = target / 'on' / '.env'
         assert env_file.read_text(encoding='utf-8').strip() == 'FTLCONF_webserver_api_password=hunter2-test-value'
         assert env_file.stat().st_mode & 0o777 == 0o600
@@ -481,7 +488,6 @@ class TestSecretsRender:
         _write(source / 'off' / 'env.j2', 'TOKEN={{ off_token }}\n')  # off_token is deliberately undefined
 
         code, output, target = _render_secrets(tmp_path, source)
-
         assert code == 0, output
         assert not (target / 'off').exists()
 
@@ -496,7 +502,6 @@ class TestSecretsRender:
         }
 
         code, output, target = _render_secrets(tmp_path, SERVICES_DIR, 'pihole_web_password=hunter2-test-value')
-
         assert code == 0, output
         assert {path.parent.name for path in target.glob('*/.env')} == enabled
 
@@ -509,7 +514,6 @@ class TestSecretsRender:
         _write(source / 'off' / 'env.j2', 'TOKEN=x\n')
 
         code, output, target = _render_secrets(tmp_path, source)
-
         assert code == 0, output
         assert not list(target.glob('*/.env'))
 
@@ -561,7 +565,10 @@ class TestReadOnlyProbesRunUnderCheck:
         ])
 
         code, output = _run_play(
-            tmp_path, play, '--check', env=_stub_tool(tmp_path, 'smbd', 'Version 4.17.12-Debian'),
+            tmp_path,
+            play,
+            '--check',
+            env=_stub_tool(tmp_path, 'smbd', 'Version 4.17.12-Debian'),
         )
 
         assert code == 0, output
@@ -582,7 +589,9 @@ class TestReadOnlyProbesRunUnderCheck:
         ])
 
         code, output = _run_play(
-            tmp_path, play, '--check', env=_stub_tool(tmp_path, 'tailscale', '{"BackendState": "Running"}'),
+            tmp_path,
+            play,
+            '--check',
+            env=_stub_tool(tmp_path, 'tailscale', '{"BackendState": "Running"}'),
         )
-
         assert code == 0, output
