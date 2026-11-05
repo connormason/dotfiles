@@ -4508,6 +4508,7 @@ class TestCommand(Command):
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
             'paths',
+            type=str,
             nargs='*',
             help='Test paths (default: tests/)',
         )
