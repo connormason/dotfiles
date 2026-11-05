@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help list-hosts inventory-status update-inventory vault-decrypt vault-encrypt clean run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
+.PHONY: help clean list-hosts inventory-status update-inventory vault-decrypt vault-encrypt run-hooks pre prepare-hooks install-hooks uninstall-hooks nas-provision doctor bootstrap stow render track-claude test install-uv install-hatch makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -13,6 +13,9 @@ NC := \033[0m
 help: ## Show this help message
 	@echo "$(BRIGHT_GREEN)Runner script for Connor's dotfiles$(NC)"
 	@echo ""
+	@echo "$(BRIGHT_WHITE)Setup & Environment:$(NC)"
+	@echo "  $(YELLOW)clean               $(NC) Remove all environments, build artifacts, and caches"
+	@echo ""
 	@echo "$(BRIGHT_WHITE)Inventory:$(NC)"
 	@echo "  $(YELLOW)list-hosts          $(NC) List available bootstrap targets from inventory"
 	@echo "  $(YELLOW)inventory-status    $(NC) Display current status of inventory directory"
@@ -21,7 +24,6 @@ help: ## Show this help message
 	@echo "  $(YELLOW)vault-encrypt       $(NC) Re-encrypt all inventory vault files after editing"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Codebase:$(NC)"
-	@echo "  $(YELLOW)clean               $(NC) Remove all environments, build artifacts, and caches"
 	@echo "  $(YELLOW)run-hooks           $(NC) Run prek hooks on modified or specified project files"
 	@echo "  $(YELLOW)pre                 $(NC) Run prek (pre-commit) hooks on all project files"
 	@echo "  $(YELLOW)prepare-hooks       $(NC) Prepare the environments of all prek hooks"
@@ -48,6 +50,10 @@ help: ## Show this help message
 	@echo "  $(YELLOW)diagnose            $(NC) Gather and output local Python environment information to help triage installation/configuration issues"
 	@echo ""
 
+# Setup & Environment
+clean: ## Remove all environments, build artifacts, and caches
+	@python3 run.py clean
+
 # Inventory
 list-hosts: ## List available bootstrap targets from inventory
 	@python3 run.py list-hosts
@@ -65,9 +71,6 @@ vault-encrypt: ## Re-encrypt all inventory vault files after editing
 	@python3 run.py vault-encrypt
 
 # Codebase
-clean: ## Remove all environments, build artifacts, and caches
-	@python3 run.py clean
-
 run-hooks: ## Run prek hooks on modified or specified project files
 	@python3 run.py run-hooks
 

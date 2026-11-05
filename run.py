@@ -1527,11 +1527,11 @@ def retry_on_failure(
 
 
 # =======================================================================================
-# Python version check
+# Python installation helpers
 # =======================================================================================
 
 
-def check_python(*, quiet: bool = False,  indent: int = 0) -> ToolInfo:
+def check_python(*, quiet: bool = False, indent: int = 0) -> ToolInfo:
     """
     Get current python executable path and version.
 
@@ -1555,6 +1555,70 @@ def check_python(*, quiet: bool = False,  indent: int = 0) -> ToolInfo:
     if not quiet:
         printf(f'⚪ {info_str}', indent=indent)
     return ToolInfo(executable=exe, version=v_str)
+
+
+# =======================================================================================
+# Setup & Environment commands
+#
+# Commands:
+#   - clean: Remove build artifacts, caches, and temporary files
+# =======================================================================================
+
+
+class CleanCommand(Command):
+    """
+    Remove all environments, build artifacts, and caches
+    """
+    name:  ClassVar[str] = 'clean'
+    group: ClassVar[str] = 'Setup & Environment'
+
+    class Args(argparse.Namespace):
+        envs: bool      # --no-envs
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            '--no-envs',
+            '--no-env',
+            dest='envs',
+            action='store_false',
+            help='Skip removal of project virtual environment',
+        )
+
+    def run(self, args: Args) -> None:
+        printf('🧹 Cleaning project workspace...', fg='bright_cyan')
+
+        cleaned = 0
+        for group, patterns in CLEAN_PATTERN_GROUPS.items():
+            if (group == 'virtual environments') and not args.envs:
+                continue
+            printf(f'Cleaning {style(group, fg="bright_white")}...', indent=3)
+
+            for pattern in patterns:
+                for path in DOTFILES_DIR.glob(pattern):
+                    path     = cast('Path', path)
+                    rel_path = path.relative_to(DOTFILES_DIR)
+
+                    if path.is_dir():
+                        dir_files = list(path.glob('**/*'))
+                        printf(
+                            style(f'Removing {rel_path}', dim=True, fg='bright_yellow') +
+                            style(f' ({len(dir_files)} files)', dim=True),
+                            debug=True,
+                            indent=5,
+                        )
+                        for p in dir_files:
+                            printf(str(p.relative_to(DOTFILES_DIR)), debug=True, indent=7)
+                        shutil.rmtree(path)
+                        cleaned += len(dir_files)
+
+                    elif path.is_file():
+                        printf(f'Removing {rel_path}', debug=True, fg='bright_white', indent=5)
+                        path.unlink()
+                        cleaned += 1
+
+        printf('✅ Cleanup complete',                                  fg='bright_green')
+        printf(f'{cleaned} file{"s" if cleaned != 1 else ""} removed', fg='bright_white', dim=True, indent=3)
+        printf('')
 
 
 # ====================================================================================================
@@ -1989,39 +2053,10 @@ class VaultEncryptCommand(Command):
 # ====================================================================================================
 # Codebase commands
 #
-# General repository maintenance commands:
-#   - clean: Remove build artifacts, caches, and temporary files
+# Commands:
+#   - TODO: other hook commands
 #   - pre:   Run prek hooks on all files
 # ====================================================================================================
-
-
-class CleanCommand(Command):
-    """
-    Remove all environments, build artifacts, and caches
-    """
-    name:  ClassVar[str] = 'clean'
-    group: ClassVar[str] = 'Codebase'
-
-    def run(self, args: argparse.Namespace) -> None:
-        printf('🧹 Cleaning project workspace...', fg='bright_cyan')
-
-        cleaned = 0
-        for group, patterns in CLEAN_PATTERN_GROUPS.items():
-            printf(f'Cleaning {group}...', indent=3)
-            for pattern in patterns:
-                for path in DOTFILES_DIR.glob(pattern):
-                    path = cast('Path', path)
-                    if path.is_dir():
-                        printf(f'Removing {path}', debug=True, indent=5)
-                        shutil.rmtree(path)
-                        cleaned += 1
-                    elif path.is_file():
-                        printf(f'Removing {path}', debug=True, indent=5)
-                        path.unlink()
-                        cleaned += 1
-
-        printf(f'{cleaned} file{"s" if cleaned != 1 else ""} removed', debug=True, indent=3)
-        printf('✅ Cleanup complete\n', fg='bright_green')
 
 
 class RunHooksCommand(Command):
