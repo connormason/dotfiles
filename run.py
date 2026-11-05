@@ -117,6 +117,18 @@ if TYPE_CHECKING:
 # Can be 2-element version tuple (major, minor), or None to skip minimum version check
 MIN_PYTHON: tuple[int, int] | None = None
 
+
+# UV configuration
+# -------------------------------------------------------------------
+UV_COMMON_EXECUTABLE_PATHS: list[Path] = [
+    Path.home() / '.cargo/bin/uv',
+    Path.home() / '.local/bin/uv',
+    Path('/usr/local/bin/uv'),
+    Path('/usr/bin/uv'),
+    Path('/opt/homebrew/bin/uv'),
+]
+
+
 # Ansible inventory/vault configuration
 # -------------------------------------------------------------------
 # Hostname in Ansible inventory for NAS machine
@@ -226,7 +238,8 @@ UV_VERBOSE_ENVVAR:         str = f'{ENVVAR_PREFIX}_UV_VERBOSE'
 
 # Environment variable values
 # -------------------------------------------------------------------
-NO_COLOR:   bool = bool(os.getenv('NO_COLOR'))    # https://no-color.org: any non-empty value disables color
+NO_COLOR:   bool = bool(os.getenv('NO_COLOR'))  # https://no-color.org: any non-empty value disables color
+CI:         bool = os.getenv('CI',              'false').lower() == 'true'
 RUN_DEBUG:  bool = os.getenv(RUN_DEBUG_ENVVAR,  'false').lower() == 'true'
 UV_VERBOSE: bool = os.getenv(UV_VERBOSE_ENVVAR, 'false').lower() == 'true'
 
@@ -237,7 +250,7 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 
 
 # =======================================================================================
-# Dotfiles repo filepaths
+# Project filepaths
 #
 #   dotfiles/                       DOTFILES_DIR
 #     .git/                         GIT_DIR
@@ -349,6 +362,20 @@ class ExitCode(int, enum.Enum):
     USER_CANCELLED = 3
 
 
+# =======================================================================================
+# Regex patterns
+# =======================================================================================
+
+
+VERSION_RE:               re.Pattern[str] = re.compile(r'(?P<version>[\d.]+)')
+VERSION_PRERELEASE_RE:    re.Pattern[str] = re.compile(r'\d(?:a|b|rc)\d|\.dev|dev\d')
+UV_TOOL_LIST_RE:          re.Pattern[str] = re.compile(r'^(?P<name>\S+)\s+v(?P<version>\S+)$')
+UV_RECEIPT_REQS_BLOCK_RE: re.Pattern[str] = re.compile(r'requirements\s*=\s*\[(.*?)\]', re.DOTALL)
+UV_RECEIPT_REQ_ENTRY_RE:  re.Pattern[str] = re.compile(r'\{([^}]*)\}')
+UV_RECEIPT_KV_RE:         re.Pattern[str] = re.compile(r'([A-Za-z_][\w-]*)\s*=\s*"([^"]*)"')
+UV_RECEIPT_PYTHON_PIN_RE: re.Pattern[str] = re.compile(r'(?m)^\s*python\s*=\s*"([^"]+)"')
+
+
 # ====================================================================================================
 # Basic types
 # ====================================================================================================
@@ -390,25 +417,6 @@ class ToolInfo(TypedDict):
 #   - The description defaults to the class docstring and drives subparser, script, and Makefile help text
 #   - add_arguments() adds command options; a nested Args(argparse.Namespace) types the parsed result
 #   - group / script_only / makefile_only control help organization and Makefile generation
-#
-# Example::
-#
-#     class UpdateInventoryCommand(Command):
-#         '''
-#         Update inventory repo
-#         '''
-#         name:  ClassVar[str] = 'update-inventory'
-#         group: ClassVar[str] = 'Inventory'
-#
-#         class Args(argparse.Namespace):
-#             force: bool
-#
-#         def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-#             parser.add_argument('-f', '--force', action='store_true', help='Discard local changes first')
-#
-#         def run(self, args: Args) -> None:
-#             ...
-#
 # ====================================================================================================
 
 
@@ -1527,7 +1535,7 @@ def retry_on_failure(
 
 
 # =======================================================================================
-# Python installation helpers
+# Python helpers
 # =======================================================================================
 
 
@@ -1555,6 +1563,102 @@ def check_python(*, quiet: bool = False, indent: int = 0) -> ToolInfo:
     if not quiet:
         printf(f'⚪ {info_str}', indent=indent)
     return ToolInfo(executable=exe, version=v_str)
+
+
+# =======================================================================================
+# `uv` helpers
+# =======================================================================================
+
+
+def find_uv_executable() -> Path | None:
+    """
+    Find uv executable, checking both PATH and common install locations.
+
+    :return: path to ``uv`` executable, or None if not found
+    """
+    uv_path: str | None = shutil.which('uv')
+    if uv_path:
+        return Path(uv_path)
+    for path in UV_COMMON_EXECUTABLE_PATHS:
+        if path.exists() and path.is_file():
+            return path
+    return None
+
+
+def check_uv(*, timeout: float | None = 5) -> ToolInfo | None:
+    """
+    Get ``uv`` executable path and version if installed.
+
+    :param timeout: ``uv --version`` command timeout in seconds
+    :return: :class:`ToolInfo` with executable path and installed version, None if ``uv`` not installed
+    """
+    if uv_executable_path := find_uv_executable():
+        try:
+            cp = shell_command([str(uv_executable_path), '--version'], capture_output=True, timeout=timeout)
+        except (FileNotFoundError, ShellCommandError):
+            return None
+        else:
+            if m := VERSION_RE.search(f'{cp.stdout}\n{cp.stderr}'):
+                return ToolInfo(executable=uv_executable_path, version=m.group('version'))
+    return None
+
+
+def ensure_uv(*, install_if_missing: bool | None = None, quiet: bool = False, indent: int = 0) -> ToolInfo:
+    """
+    Ensure that uv is installed and accessible, offering auto-installation if missing.
+
+    In CI mode, auto-installs without prompting. In interactive mode, asks for user confirmation.
+
+    :param install_if_missing: if True, uv will be installed automatically if it isn't currently installed.
+                               If False, script will exit with error if uv is not installed.
+                               If None (default), user will be prompted asking if they would like to install uv (unless
+                               script is running in CI, in which case we proceed with installation without prompt)
+    :param quiet: if True, suppress console output unless uv is not installed
+    :param indent: number of spaces to indent logging output by
+    :return: :class:`ToolInfo` with executable path and installed version
+    """
+    if uv_info := check_uv():
+        if not quiet:
+            uv_loc = style(f'@ {folduser(uv_info["executable"])}', dim=True)
+            printf(
+                f'⚪ {style("uv", fg="white", bold=True)}      '
+                f'{style(uv_info["version"].ljust(8), fg="bright_cyan")} {uv_loc}',
+                indent=indent,
+            )
+        return uv_info
+
+    printf('🔴 uv is not installed', fg='bright_red')
+
+    perform_install: bool
+    if install_if_missing is not None:
+        perform_install = install_if_missing
+    elif CI:
+        printf('💿 Auto-installing uv (CI mode)...', fg='bright_cyan', indent=3)
+        perform_install = True
+    else:
+        perform_install = confirm('Would you like to install it now?', default=True, indent=3)
+
+    if not perform_install:
+        printf('')
+        printf('To install uv:',                        fg='bright_white',   indent=3)
+        printf('python3 scripts/install/install_uv.py', fg='bright_magenta', indent=5)
+        printf('')
+        sys.exit(ExitCode.SETUP_ERROR)
+
+    if not run_installer('uv', indent=3):
+        sys.exit(ExitCode.SETUP_ERROR)
+
+    if uv_info := check_uv():
+        printf(
+            f'✅ uv {style(uv_info["version"], fg="bright_cyan")} installed successfully\n',
+            fg='bright_green',
+            indent=3,
+        )
+        return uv_info
+
+    printf('❌ uv installation succeeded but tool not found in PATH',  fg='bright_red')
+    printf('Try restarting your terminal and re-running this command', fg='bright_white', indent=3)
+    sys.exit(ExitCode.SETUP_ERROR)
 
 
 # =======================================================================================
@@ -1618,7 +1722,6 @@ class CleanCommand(Command):
 
         printf('✅ Cleanup complete',                                  fg='bright_green')
         printf(f'{cleaned} file{"s" if cleaned != 1 else ""} removed', fg='bright_white', dim=True, indent=3)
-        printf('')
 
 
 # ====================================================================================================

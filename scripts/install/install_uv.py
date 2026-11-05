@@ -81,8 +81,7 @@ class SupportsWrite(Protocol[T_contra]):
     """
     Protocol for writable things (like :attr:`sys.stdout` and :attr:`sys.stderr`).
     """
-    def write(self, s: T_contra, /) -> object:
-        ...
+    def write(self, s: T_contra, /) -> object: ...
 
 
 class ExitCode(int, enum.Enum):
@@ -381,6 +380,7 @@ def check_python_version() -> bool:
             file=sys.stderr,
         )
         return False
+
     vers_str = f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'
     printf(f'✅ Python version {vers_str}', verbose=True)
     return True
