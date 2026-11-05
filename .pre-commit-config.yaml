@@ -533,7 +533,7 @@ repos:
 
       # Check python code docstring coverage
       - id: interrogate
-        name: "[check]  python docstring coverage"
+        name: "[check]  python docstring coverage (interrogate)"
         stages: [pre-commit, manual]
         priority: 40
         pass_filenames: false
@@ -561,7 +561,7 @@ repos:
 
       # Linting for shell scripts
       - id: shellcheck
-        name: "[lint]   shell scripts"
+        name: "[lint]   shell scripts (shellcheck)"
         stages: [pre-commit, manual]
         priority: 40
         # shellcheck does not support zsh: *.zsh files (e.g. stow/shell/.config/zsh/conf.d/*.zsh) and stowed zsh dotfiles
@@ -610,7 +610,7 @@ repos:
 
       # Fix common misspellings in text files
       - id: codespell
-        name: "[fix]    spelling mistakes"
+        name: "[fix]    spelling mistakes (codespell)"
         stages: [pre-commit, manual]
         priority: 40
         pass_filenames: false
@@ -623,7 +623,7 @@ repos:
 
       # Ansible linting of playbooks/ and roles/ (check only; the wrapper supplies a throwaway vault password)
       - id: ansible-lint
-        name: "[lint]   ansible"
+        name: "[lint]   ansible roles/playbooks (ansible-lint)"
         stages: [pre-commit, manual]
         priority: 40
         entry: scripts/hooks/ansible-lint.sh
