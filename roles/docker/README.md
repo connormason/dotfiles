@@ -33,7 +33,7 @@ All of `tasks/main.yml`, in order. Steps marked root run with `become`; the othe
 | 6    | `service` (root)                       | Starts `docker`                                                                                                                                  |
 | 7    | `user` (root)                          | Appends the SSH user (`ansible_facts['user_id']`) to the `docker` group                                                                          |
 | 8    | `file`                                 | Creates `~/docker` and `~/docker/.build` (0755, enforced on every run)                                                                           |
-| 9    | `stat`, `file`                         | Creates `~/docker/pihole-data/etc-pihole` (0755) only when it is absent, along with the missing parent `~/docker/pihole-data` (default mode)     |
+| 9    | `stat`, `file`                         | Creates `~/docker/pihole-data/etc-pihole` (0755) only when it is absent, along with the missing parent `~/docker/pihole-data` (also 0755)        |
 | 10   | `template`                             | Renders `~/docker/.env` from `templates/env.j2` (tag `configfile`)                                                                               |
 | 11   | `git`                                  | Clones or updates autoplex (see [Autoplex image](#autoplex-image))                                                                               |
 | 12   | `community.docker.docker_image` (root) | Builds `danielmmetz/autoplex:latest` from that clone                                                                                             |
@@ -46,16 +46,16 @@ architecture from step 3.
 
 ## What it installs<a name="what-it-installs"></a>
 
-| Path or object                    | Mode                    | Source                                                                                                     |
-| --------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `/usr/share/keyrings/docker.asc`  | `0644`, root            | `https://download.docker.com/linux/<distribution>/gpg`                                                     |
-| `docker` group membership         |                         | The SSH user, appended                                                                                     |
-| `~/docker`, `~/docker/.build`     | `0755`, enforced        | `file` loop                                                                                                |
-| `~/docker/pihole-data/etc-pihole` | `0755` at creation only | `file`, when `stat` finds it absent; also creates the missing parent `~/docker/pihole-data` (default mode) |
-| `~/docker/.env`                   | `0600`                  | `templates/env.j2`                                                                                         |
-| `~/docker/.build/autoplex`        | git clone               | `docker_autoplex_repo_url`                                                                                 |
-| Image `danielmmetz/autoplex`      | tag `latest`            | Built from the clone                                                                                       |
-| `~/docker/deploy.sh`              | `0755`                  | `files/deploy.sh`                                                                                          |
+| Path or object                    | Mode                    | Source                                                                                                  |
+| --------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `/usr/share/keyrings/docker.asc`  | `0644`, root            | `https://download.docker.com/linux/<distribution>/gpg`                                                  |
+| `docker` group membership         |                         | The SSH user, appended                                                                                  |
+| `~/docker`, `~/docker/.build`     | `0755`, enforced        | `file` loop                                                                                             |
+| `~/docker/pihole-data/etc-pihole` | `0755` at creation only | `file`, when `stat` finds it absent; also creates the missing parent `~/docker/pihole-data` (also 0755) |
+| `~/docker/.env`                   | `0600`                  | `templates/env.j2`                                                                                      |
+| `~/docker/.build/autoplex`        | git clone               | `docker_autoplex_repo_url`                                                                              |
+| Image `danielmmetz/autoplex`      | tag `latest`            | Built from the clone                                                                                    |
+| `~/docker/deploy.sh`              | `0755`                  | `files/deploy.sh`                                                                                       |
 
 `~/docker/.env` holds only `ADVERTISE_IP=https://<host>.<tailnet>.ts.net:32443` (`<tailnet>` is the part of
 `tailscale_tailnet_name` before `.ts.net`), which `services/plex/compose.yml` passes to Plex through a bare
@@ -77,9 +77,9 @@ as removed.
 Every default is prefixed `docker_` (pinned by `tests/unit/test_services_role.py`). The `tailscale_*` pair are inputs
 from the inventory: the [`tailscale`](../tailscale/README.md) role declares defaults for both but runs after this role,
 so those defaults are not loaded here. The port `32443` is written into `env.j2` and is the port published by
-`services/caddy/compose.yml`. The `tailscale` role's `tailscale_plex_port` (default `32443`) is otherwise unused: the
-Caddy listener comes from the `dedicated_port` entry of `tailscale_services` (`roles/tailscale/templates/Caddyfile.j2`),
-so changing that variable changes nothing.
+`services/caddy/compose.yml`. The `tailscale` role's `tailscale_plex_port` (default `32443`) is unused: the Caddy
+listener comes from the `dedicated_port` entry of `tailscale_services` (`roles/tailscale/templates/Caddyfile.j2`), so
+changing that variable changes nothing.
 
 ## Tags and running<a name="tags-and-running"></a>
 

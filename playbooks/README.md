@@ -67,9 +67,11 @@ The tags listed are the ones on the role's include; [Tags](#tags) explains what 
 - `tailscale_tailnet_name`: the tailnet domain including `.ts.net` (for example `tail1234.ts.net`); read by the `docker`
   role's `.env` template (`ADVERTISE_IP`) and, when `tailscale_https_enabled` is true, by the `tailscale` role's HTTPS
   tasks
-- `ansible_host` and `ansible_user` of the `nas` host: literal values, not templates. The `debian`, `samba` (defaults),
-  and `dotfiles` roles read `ansible_user` with no default, and `run.py` reads both for its SSH preflight and refuses
-  templated values
+- `ansible_user` of the `nas` host: required by the roles (`debian`, `samba` defaults, and `dotfiles` read it with no
+  default). `run.py` alone falls back to the local login
+- `ansible_host` of the `nas` host: optional, since `run.py` falls back to the inventory name `nas`. When either
+  connection variable is set it must be a literal, not a template: `run.py` refuses templated values in its SSH
+  preflight
 - `tailscale_ssh_enabled: false` in the NAS host variables, which CI deploys require (Tailscale SSH blocks the `tag:ci`
   deploy; see [`services/README.md`](../services/README.md#ci-deploys))
 - Whatever an enabled service's `services/<svc>/env.j2` references. No enabled service has one today: PiHole's `env.j2`
@@ -85,13 +87,14 @@ and shared by the `dotfiles` and `haos` roles.
 
 ```bash
 python3 run.py nas-provision                 # preflight, collections, then the playbook
-python3 run.py nas-provision --check --diff  # preview
+python3 run.py nas-provision --check --diff  # preview (converged host)
 python3 run.py nas-provision --tags services -v
 ```
 
 The command checks that the inventory and `vault_password.txt` exist and that the `nas` host answers over SSH, installs
 the collections from `roles/requirements.yml`, then runs `ansible-playbook playbooks/nas_bootstrap.yml` in the uv
-environment. Options are documented in [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md#nas).
+environment. Options are documented in [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md#nas). On a fresh host
+the samba and tailscale probes still cannot run under `--check` (see [Tags](#tags)).
 
 `nas_bootstrap.sh` validates the repository layout (`run.py`, `nas_bootstrap.sh`, `playbooks/`) and hands every argument
 to `run.py nas-provision`. The Homebrew installer pin lives only in `bootstrap/50-brew.sh` (`BREW_INSTALLER_URL` and
@@ -107,7 +110,7 @@ also needs the `ansible-playbook` of the project environment, so prefix it with 
 # Full playbook
 scripts/hooks/uv-public.sh run ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml -vv
 
-# Dry run
+# Dry run (converged host; see Tags for the fresh-host limit)
 scripts/hooks/uv-public.sh run ansible-playbook playbooks/nas_bootstrap.yml -i inventory/inventory.yml --check -vv
 
 # Syntax check
@@ -142,7 +145,8 @@ python3 run.py nas-provision --tags secrets         # per-service secret files o
 
 The two probes that need an installed tool, samba's `Register Samba version` (`smbd --version`) and the `tailscale`
 role's `tailscale status --json`, are read-only and carry `check_mode: false`, like the other roles' probes, so they run
-under `--check` too.
+under `--check` too. On a fresh host, where `smbd` or `tailscale` is not installed yet, they still cannot succeed under
+`--check`, because the real run installs those tools first.
 
 `--tags configfile` assumes `~/docker` exists, because the directory tasks do not carry the tag. On a host without it,
 the run fails (at the `.env` render once samba is installed); run `--tags docker` first. See

@@ -27,8 +27,8 @@ rejects a name outside `^[a-z0-9][a-z0-9_-]*$` and a service without a `services
 A service is **disabled** by renaming its `compose.yml` to `compose.yml.disabled`. `deploy.sh all` on the NAS discovers
 only directories containing a `compose.yml`; `deploy-services.sh <svc>` requires `services/<svc>/compose.yml`, CI push
 detection drops directories without one, and the `services` role renders `env.j2` only for those. In contrast,
-`deploy-services.sh all` still rsyncs the whole `services/` tree, disabled directories included. `pihole` and
-`homeassistant` are currently disabled.
+`deploy-services.sh all` and the `services` role's own sync still push the whole `services/` tree, disabled directories
+included. `pihole` and `homeassistant` are currently disabled.
 
 Disabling a service in the repository stops nothing on the NAS. The sync never deletes, so an already-synced
 `~/docker/<svc>/compose.yml` stays, its container keeps running, and `~/docker/deploy.sh all` on the NAS still discovers

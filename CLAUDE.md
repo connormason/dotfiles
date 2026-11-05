@@ -21,8 +21,8 @@ For detailed reference, load on-demand:
 2. **`run.py nas-provision`** (wrapped by `nas_bootstrap.sh`) → `playbooks/nas_bootstrap.yml` — home NAS / server
    configuration; **`run.py nas-deploy`** deploys Compose services. CI does the same on pushes to `main` that touch
    `services/`: `.github/workflows/deploy.yml` calls `scripts/nas/deploy-services.sh`, the script behind `nas-deploy`.
-3. **`run.py`** — repository-management CLI (inventory and vault helpers, codebase chores, wrappers for the stow
-   engine). `Makefile` wraps these (`make help`). Full command reference in
+3. **`run.py`** — repository-management CLI (inventory and vault helpers, codebase chores, NAS provisioning and deploy,
+   wrappers for the stow engine). `Makefile` wraps these (`make help`). Full command reference in
    [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 
 `nas_bootstrap.sh` validates the repo, then hands off to `run.py nas-provision`, which checks the inventory, vault

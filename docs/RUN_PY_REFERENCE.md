@@ -344,10 +344,11 @@ update-inventory: ## Update inventory repo
 
 ### Dotfiles<a name="dotfiles"></a>
 
-Thin wrappers over the layered dev-env engine: [`stow.sh`](../stow.sh),
+Wrappers over the layered dev-env engine ([`stow.sh`](../stow.sh),
 [`bootstrap/bootstrap.sh`](../bootstrap/bootstrap.sh), and
-[`scripts/dotfiles/render.py`](../scripts/dotfiles/render.py). Each wrapper forwards its flags and exits with the
-underlying script's return code. All commands belong to the `Dotfiles` group.
+[`scripts/dotfiles/render.py`](../scripts/dotfiles/render.py)), plus `test` (pytest through the uv wrapper) and `doctor`
+(native checks, described below). Each wrapper forwards its flags and exits with the underlying script's return code.
+All commands belong to the `Dotfiles` group.
 
 | Command     | Forwards to                  | Options                                                                                   |
 | ----------- | ---------------------------- | ----------------------------------------------------------------------------------------- |
@@ -578,8 +579,8 @@ Used by `update-inventory` for git operations with different parameters:
 
 ### Constants<a name="constants"></a>
 
-Selected constants from `run.py`. The listings leave out `REQUIRED_TOOLS` and `MIN_GIT_VERSION` (what `doctor` checks),
-`ENVVAR_PREFIX`, and `SCRIPT_HELP_COL_SPACING`.
+Selected constants from `run.py`. The listings leave out `REQUIRED_TOOLS` and `MIN_GIT_VERSION` (what `doctor` checks)
+and `SCRIPT_HELP_COL_SPACING`, and show `ENVVAR_PREFIX` only as a comment.
 
 **File paths:**
 
