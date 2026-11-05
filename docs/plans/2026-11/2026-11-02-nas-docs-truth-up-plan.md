@@ -2462,7 +2462,8 @@ Deviations from the plan above, recorded after the work landed (the task text is
 - **Merge from `main`:** PR #38 (class-based `run.py` commands) merged first and was merged into the branch (merge
   commit `f97299d`) instead of rebasing; `run.py` stays identical to `main`.
 - **Final review and fix waves:** before the final review, a consistency-sweep commit (`5d35d04`) reconciled wording
-  across documents; after it, two fix waves followed. Wave A (`65d2408`, `6b5b3ea`) made the tag guard check tags in
-  both directions and made the samba `Register Samba version` and tailscale `tailscale status` probes run under
-  `--check` (`check_mode: false`), a defect that predates this branch and broke `run.py nas-provision --check --diff`.
-  Wave B applied the independent audit's documentation findings.
+  across documents; after it, fix waves followed. Wave A (`65d2408`, `6b5b3ea`) made the tag guard check tags in both
+  directions and made the samba `Register Samba version` and tailscale `tailscale status` probes run under `--check`
+  (`check_mode: false`), a defect that predates this branch and broke `run.py nas-provision --check --diff`. Wave B
+  (`a91d3b8`) applied the independent audit's documentation findings; `3d37882` and later commits corrected small
+  wording.

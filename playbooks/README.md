@@ -94,7 +94,7 @@ python3 run.py nas-provision --tags services -v
 The command checks that the inventory and `vault_password.txt` exist and that the `nas` host answers over SSH, installs
 the collections from `roles/requirements.yml`, then runs `ansible-playbook playbooks/nas_bootstrap.yml` in the uv
 environment. Options are documented in [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md#nas). On a fresh host
-the samba and tailscale probes still cannot run under `--check` (see [Tags](#tags)).
+the samba probe fails and the tailscale probe returns nothing, so the next task's `from_json` fails (see [Tags](#tags)).
 
 `nas_bootstrap.sh` validates the repository layout (`run.py`, `nas_bootstrap.sh`, `playbooks/`) and hands every argument
 to `run.py nas-provision`. The Homebrew installer pin lives only in `bootstrap/50-brew.sh` (`BREW_INSTALLER_URL` and
@@ -145,8 +145,9 @@ python3 run.py nas-provision --tags secrets         # per-service secret files o
 
 The two probes that need an installed tool, samba's `Register Samba version` (`smbd --version`) and the `tailscale`
 role's `tailscale status --json`, are read-only and carry `check_mode: false`, like the other roles' probes, so they run
-under `--check` too. On a fresh host, where `smbd` or `tailscale` is not installed yet, they still cannot succeed under
-`--check`, because the real run installs those tools first.
+under `--check` too. On a fresh host, where `smbd` or `tailscale` is not installed yet, the samba probe fails
+(`smbd --version` errors) and the tailscale probe returns nothing, so the next task's `from_json` fails; the real run
+installs those tools first.
 
 `--tags configfile` assumes `~/docker` exists, because the directory tasks do not carry the tag. On a host without it,
 the run fails (at the `.env` render once samba is installed); run `--tags docker` first. See
