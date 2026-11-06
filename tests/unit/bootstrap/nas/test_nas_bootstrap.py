@@ -1,14 +1,11 @@
 """
-Guardrail tests for the NAS bootstrap entry point and its Ansible collection requirements
+Guardrail tests for the Homebrew installer pin and the NAS Ansible collection requirements
 
-Most checks are static (they read the script and role files); one test runs ``nas_bootstrap.sh`` in a subprocess with
-``uv`` missing from ``PATH``.
+The checks are static: they read the brew stage script and the role and playbook files.
 """
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -25,67 +22,6 @@ BREW_URL = re.compile(r'^BREW_INSTALLER_URL="([^"]+)"$', re.MULTILINE)
 
 # A commit-pinned upstream installer URL: the ref segment is a full 40-hex commit SHA, never a moving ref such as HEAD
 COMMIT_PINNED_URL = re.compile(r'^https://raw\.githubusercontent\.com/Homebrew/install/[0-9a-f]{40}/install\.sh$')
-
-
-class TestNasBootstrapScript:
-    """
-    Tests for nas_bootstrap.sh
-    """
-    SCRIPT = REPO_ROOT / 'nas_bootstrap.sh'
-
-    def test_delegates_to_nas_provision_through_uv(self) -> None:
-        """
-        Test that the script hands every argument to run.py nas-provision through the public-index uv wrapper
-        """
-        text = self.SCRIPT.read_text(encoding='utf-8')
-        assert re.search(
-            r'^exec "\$\{SCRIPT_DIR\}/scripts/hooks/uv-public\.sh" run python "\$\{SCRIPT_DIR\}/run\.py" '
-            r'nas-provision "\$@"$',
-            text,
-            re.MULTILINE,
-        )
-
-    def test_installs_nothing_on_the_controller(self) -> None:
-        """
-        Test that the Homebrew and Ansible installs, and their platform-specific paths, are gone
-        """
-        text = self.SCRIPT.read_text(encoding='utf-8').lower()
-        for needle in ('brew', '/opt/', 'shasum', 'curl', 'ansible-playbook'):
-            assert needle not in text, needle
-
-    def test_still_validates_the_repository_layout(self) -> None:
-        """
-        Test that the script refuses to run outside the dotfiles directory
-        """
-        text = self.SCRIPT.read_text(encoding='utf-8')
-        assert '"${SCRIPT_DIR}/run.py"' in text
-        assert '"${SCRIPT_DIR}/playbooks"' in text
-
-    def test_stops_with_a_clear_message_when_uv_is_missing(self, tmp_path: Path) -> None:
-        """
-        Test that a PATH without uv ends the script with exit 1 and a message naming uv, before any exec
-        """
-        bin_dir = tmp_path / 'bin'
-        bin_dir.mkdir()
-        (bin_dir / 'dirname').symlink_to(shutil.which('dirname') or '/usr/bin/dirname')
-
-        result = subprocess.run(
-            ['/bin/bash', str(self.SCRIPT)],
-            capture_output=True,
-            text=True,
-            check=False,
-            env={'PATH': str(bin_dir)},
-        )
-
-        assert result.returncode == 1
-        assert 'uv is required' in result.stderr
-
-    def test_uv_check_precedes_the_exec(self) -> None:
-        """
-        Test that the uv guard sits before the exec line, so a missing uv never reaches the wrapper
-        """
-        text = self.SCRIPT.read_text(encoding='utf-8')
-        assert text.index('command -v uv') < text.index('exec "${SCRIPT_DIR}')
 
 
 class TestBrewInstallerPin:

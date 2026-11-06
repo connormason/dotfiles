@@ -18,19 +18,19 @@ For detailed reference, load on-demand:
 
 1. **`bootstrap/bootstrap.sh`** — personal Mac configuration (stow packages in `stow/`, overlays in `profiles/`). It
    also runs on the NAS, where the `dotfiles` role applies the `profiles/nas` overlay.
-2. **`run.py nas-provision`** (wrapped by `nas_bootstrap.sh`) → `playbooks/nas_bootstrap.yml` — home NAS / server
-   configuration; **`run.py nas-deploy`** deploys Compose services. CI does the same on pushes to `main` that touch
-   `services/`: `.github/workflows/deploy.yml` calls `scripts/nas/deploy-services.sh`, the script behind `nas-deploy`.
+2. **`run.py nas-provision`** → `playbooks/nas_bootstrap.yml` — home NAS / server configuration; **`run.py nas-deploy`**
+   deploys Compose services. CI does the same on pushes to `main` that touch `services/`: `.github/workflows/deploy.yml`
+   calls `scripts/nas/deploy-services.sh`, the script behind `nas-deploy`.
 3. **`run.py`** — repository-management CLI (inventory and vault helpers, codebase chores and prek hook management
    (`run-hooks`, `prepare-hooks`, `install-hooks`), NAS provisioning and deploy, wrappers for the stow engine, and
    `track-claude` for ingesting local Claude config). `Makefile` wraps these (`make help`). Full command reference in
    [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 
-`nas_bootstrap.sh` validates the repo, then hands off to `run.py nas-provision`, which checks the inventory, vault
-password, and SSH reachability before running the NAS playbook in the uv environment. The Home Assistant OS VM is
-provisioned by the playbook's `haos` role, which runs `vms/haos/setup.sh`; only `bridge.sh` is hand-run
-([`vms/haos/`](vms/haos/README.md) has the runbook). See [`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flows
-and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation (stage flags / tags / extra-vars).
+`run.py nas-provision` checks the inventory, vault password, and SSH reachability before running the NAS playbook in the
+uv environment. The Home Assistant OS VM is provisioned by the playbook's `haos` role, which runs `vms/haos/setup.sh`;
+only `bridge.sh` is hand-run ([`vms/haos/`](vms/haos/README.md) has the runbook). See
+[`.ctx/ARCHITECTURE.md`](.ctx/ARCHITECTURE.md) for the flows and [`.ctx/BUILD.md`](.ctx/BUILD.md) for invocation (stage
+flags / tags / extra-vars).
 
 ## Inventory
 

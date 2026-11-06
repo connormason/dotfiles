@@ -94,8 +94,8 @@ without sudo). `setup.sh` prints `haos: changes=N` after its last step, the numb
 
 ## Re-bootstrapping a wiped NAS<a name="re-bootstrapping-a-wiped-nas"></a>
 
-1. `./nas_bootstrap.sh` (system roles, the stow engine in `$HOME`, and the `haos` role, which stops at the missing `br0`
-   with instructions; see the [root README](../../README.md)).
+1. `python3 run.py nas-provision` (system roles, the stow engine in `$HOME`, and the `haos` role, which stops at the
+   missing `br0` with instructions; see the [root README](../../README.md)).
 2. `sudo ~/dotfiles-personal/vms/haos/bridge.sh` from the console or `tmux`, then re-run the playbook with `--tags haos`
    (or `sudo vms/haos/setup.sh` by hand). `--tags haos` does not deploy `services`, which the first run never reached,
    so finish with a full `python3 run.py nas-provision`.

@@ -8,7 +8,7 @@ Full command reference for the dotfiles repository. Loaded on demand from [`CLAU
 # Bootstrap a Mac (stow engine + numbered stages; --dry-run previews, --list shows stages, --resume continues)
 bootstrap/bootstrap.sh
 
-# Provision the NAS (Ansible; the become password comes from the vault). nas_bootstrap.sh is a thin wrapper.
+# Provision the NAS (Ansible; the become password comes from the vault)
 python3 run.py nas-provision --check --diff
 python3 run.py nas-provision
 

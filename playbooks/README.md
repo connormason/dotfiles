@@ -21,9 +21,9 @@ is preserved in [`archive/ansible-macos/`](../archive/ansible-macos/README.md).
 
 ## Overview<a name="overview"></a>
 
-| Playbook            | Target                   | Entry point                                          | Purpose                                                              |
-| ------------------- | ------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------- |
-| `nas_bootstrap.yml` | Debian server (nas host) | `run.py nas-provision` (wrapper: `nas_bootstrap.sh`) | Home NAS with Docker media stack, file sharing, and network services |
+| Playbook            | Target                   | Entry point            | Purpose                                                              |
+| ------------------- | ------------------------ | ---------------------- | -------------------------------------------------------------------- |
+| `nas_bootstrap.yml` | Debian server (nas host) | `run.py nas-provision` | Home NAS with Docker media stack, file sharing, and network services |
 
 The playbook:
 
@@ -97,9 +97,8 @@ environment. Options are documented in [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_
 fresh host the samba probe fails and the tailscale probe returns nothing, so the next task's `from_json` fails (see
 [Tags](#tags)).
 
-`nas_bootstrap.sh` validates the repository layout (`run.py`, `nas_bootstrap.sh`, `playbooks/`) and hands every argument
-to `run.py nas-provision`. The Homebrew installer pin lives only in `bootstrap/50-brew.sh` (`BREW_INSTALLER_URL` and
-`BREW_INSTALLER_SHA256`; see the [README](../README.md#homebrew-checksum-mismatch) for how to re-pin).
+The Homebrew installer pin lives only in `bootstrap/50-brew.sh` (`BREW_INSTALLER_URL` and `BREW_INSTALLER_SHA256`; see
+the [README](../README.md#homebrew-checksum-mismatch) for how to re-pin).
 
 ### Direct execution<a name="direct-execution"></a>
 
