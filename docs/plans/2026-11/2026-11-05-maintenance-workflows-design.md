@@ -15,8 +15,8 @@ Keep three kinds of tracked state fresh without manual effort, each delivered as
 
 ## Scope
 
-**In:** a prek auto-update script, a gitignore refresh script, a consolidated dependency update, the shared PR-opening
-layer, two scheduled workflows, unit tests, and docs.
+**In:** a gitignore refresh script, a consolidated dependency update, the shared PR-opening layer, two scheduled
+workflows, unit tests, and docs.
 
 **Out:** the older `pre-commit`-based updater (superseded; this repo uses prek), the public-API sync tooling
 (specific to the work repo), and the ruff-reference generator (no `docs/references/` tree here; not requested).
@@ -29,23 +29,26 @@ layer, two scheduled workflows, unit tests, and docs.
 | Shared wrapper module (run steps, commit, push, open PR)    | Composite action `.github/actions/open-maintenance-pr`        |
 | Internal GitHub client and CI secret store                  | `gh` CLI with a fine-grained PAT secret                       |
 | `--branch` argument on every wrapper                        | Base branch fixed to `main` in the composite action           |
-| Dependency wrapper delegating to the `lock-upgrade` target  | Workflow steps: `update_prek.py`, then `run.py lock-upgrade`  |
+| Dependency wrapper delegating to the `lock-upgrade` target  | Workflow steps: `prek update`, then `run.py lock-upgrade`     |
 | Internal-certificate workaround in the gitignore fetcher    | Dropped (GitHub runners have a normal trust store)            |
 
 ## Components
 
-### 1. `scripts/codebase/update_prek.py`
+### 1. prek hook updates (no script)
 
-Wraps `prek auto-update` with the tag/repo filter surface, `--cooldown-days`, and `--dry-run` (run, report, revert).
-Conformed to this repo's rules: single-line imports, sphinx docstrings, boxed section headers, and the styled-output
-helpers copied verbatim from `run.py` (`scripts/` are standalone). Public symbol: `run_autoupdate`.
+The workflow calls `prek update --cooldown-days 3` directly. prek 0.5.10 (which has no `auto-update` command) natively
+provides the tag and repo filters, `--jobs`, `--refresh`, and `--dry-run` that a wrapper script would re-expose, so no
+wrapper is ported.
 
 ### 2. `scripts/codebase/update_gitignore.py`
 
 Reads the template list from the toptal URL in the current `.gitignore`, fetches fresh content (`urllib`, falling back
-to `curl`), and re-appends custom patterns found after the end marker. The third `git-ignore-io` fallback is dropped: no
-runner or machine here has it. Public symbols: `extract_templates_from_gitignore`, `extract_custom_patterns`,
-`fetch_gitignore_content`, `generate_updated_gitignore`.
+to `curl --fail`), and re-appends custom patterns found after the end marker. The third `git-ignore-io` fallback is
+dropped: no runner or machine here has it. A missing end marker raises instead of dropping custom patterns, and fetched
+content without the end marker (an error page or truncated response) is refused. Conformed to this repo's rules:
+single-line imports, sphinx docstrings, boxed section headers, and the styled-output helpers copied from `run.py`
+(`scripts/` are standalone). Public symbols: `extract_templates`, `extract_custom_patterns`, `fetch_gitignore_content`,
+`generate_updated_gitignore`.
 
 ### 3. Composite action `.github/actions/open-maintenance-pr/action.yml`
 
@@ -62,21 +65,27 @@ Pushing and PR creation use the PAT, not `GITHUB_TOKEN`, so the PR triggers `lin
 ### 4. Workflows
 
 - `.github/workflows/update-dependencies.yml` — Tuesdays 09:00 UTC. Steps: checkout, `astral-sh/setup-uv`,
-  `uv sync --group lint`, `uv run scripts/codebase/update_prek.py --cooldown-days 3`, `uv run run.py lock-upgrade`,
-  then the composite action over `.pre-commit-config.yaml`, `uv.lock`, `requirements.txt`. Order matters:
-  `lock-upgrade` regenerates `requirements.txt` and re-syncs hook dependency pins from the new lock, so it runs after
-  the hook bump.
+  `uv sync --group lint`, `uv run prek update --cooldown-days 3`, `uv run run.py lock-upgrade`, then the composite
+  action over `.pre-commit-config.yaml`, `uv.lock`, `requirements.txt`. Order matters: `lock-upgrade` regenerates
+  `requirements.txt` and re-syncs hook dependency pins from the new lock, so it runs after the hook bump.
 - `.github/workflows/update-gitignore.yml` — Mondays 09:00 UTC. Steps: checkout, setup-uv,
-  `uv run scripts/codebase/update_gitignore.py --force`, composite action over `.gitignore`.
+  `uv run --no-project scripts/codebase/update_gitignore.py`, composite action over `.gitignore`.
 
-Both: `permissions: contents: read` (writes happen through the PAT), `workflow_dispatch` enabled for manual runs, and a
-`concurrency` group per workflow so overlapping runs cannot race on the evergreen branch.
+Both: `permissions: contents: read` (writes happen through the PAT), `workflow_dispatch` enabled for manual runs, a
+`concurrency` group per workflow so overlapping runs cannot race on the evergreen branch, a job guard
+(`github.ref == 'refs/heads/main'`) so a dispatch from another branch cannot open a PR containing that branch's changes,
+and a first step that fails loudly when `MAINTENANCE_PR_TOKEN` is unset (otherwise checkout silently falls back to
+`GITHUB_TOKEN` and the PR never triggers checks).
 
 ### 5. Tests
 
-`tests/unit/scripts/codebase/` covering the pure logic: template and custom-pattern extraction, gitignore regeneration
-(with and without custom patterns, missing marker), `run_autoupdate` command construction for each option, and argument
-validation in `main`. Network and `prek` invocations are mocked.
+- `tests/unit/scripts/codebase/`: template and custom-pattern extraction, gitignore regeneration (with and without
+  custom patterns, missing marker), fetch fallbacks and refusal of incomplete content, and `main` behaviour. `urllib`
+  and `curl` are mocked.
+- `tests/unit/github/test_open_maintenance_pr.py`: `open-pr.sh` against a throwaway origin/work repo pair with a stubbed
+  `gh` (unchanged, out-of-scope change, new PR, existing PR, untracked files, re-run, missing variables).
+- `tests/unit/github/test_maintenance_workflows.py`: structural guards for both workflows and the composite action
+  (token wiring, main-only guard, serialization, input contract, referenced scripts exist).
 
 ### 6. Docs
 
