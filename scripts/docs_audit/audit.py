@@ -48,6 +48,7 @@ def run_audit(scopes: Sequence[Path], *, repo_root: Path) -> AuditReport:
     policy:     list[PolicyFinding]     = []
 
     for rel_dir, cls in classified:
+
         # EXEMPT directories (e.g. docs/plans) are index-free by convention, so any README in them is not held to the
         # navigation contract
         if cls is DirClass.EXEMPT:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import enum
 from pathlib import Path
+from typing import Literal
 
 from scripts.docs_audit.conventions import META_DIR_NAMES
 from scripts.docs_audit.conventions import PLACEHOLDER_FILENAMES
@@ -12,6 +13,7 @@ from scripts.docs_audit.conventions import PLANS_EXEMPT_PARTS
 
 __all__ = [
     'DirClass',
+    'DirClassName',
     'classify',
 ]
 
@@ -20,7 +22,8 @@ __all__ = [
 # Directory classification enum
 # ==============================================================================
 
-class DirClass(enum.Enum):
+
+class DirClass(str, enum.Enum):
     """
     Documentation class of a directory, determining its README requirements.
     """
@@ -30,9 +33,13 @@ class DirClass(enum.Enum):
     EXEMPT = 'exempt'
 
 
+DirClassName = Literal['code', 'data', 'meta', 'exempt']
+
+
 # ==============================================================================
 # Classification logic
 # ==============================================================================
+
 
 def classify(rel_dir: Path, *, repo_root: Path) -> DirClass:
     """

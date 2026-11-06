@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     'AuditReport',
+    'AuditReportDict',
     'AuditReportSummaryDict',
     'style',
     'unstyle',
@@ -61,13 +62,15 @@ def style(text: Any, *, fg: str | None = None, bold: bool | None = None, dim: bo
     text = str(text)
     if os.environ.get('NO_COLOR') is not None:
         return text
+
     bits: list[str] = []
-    if fg:
+    if fg is not None:
         bits.append(f'\033[{ANSI_COLORS[fg]}m')
     if bold:
         bits.append('\033[1m')
     if dim:
         bits.append('\033[2m')
+
     bits.append(text)
     if bits[:-1]:
         bits.append(ANSI_RESET_ALL)
@@ -98,6 +101,19 @@ class AuditReportSummaryDict(TypedDict):
     structural:       int
     links:            int
     policy:           int
+
+
+class AuditReportDict(TypedDict):
+    """
+    JSON-serializable dict representation of :class:`AuditReport` (returned by :meth:`AuditReport.to_dict`)
+    """
+    scope:            list[str]
+    missing:          list[MissingFinding.MissingFindingDict]
+    stale_candidates: list[StaleFinding.StaleFindingDict]
+    structural:       list[StructuralFinding.StructuralFindingDict]
+    links:            list[LinkFinding.LinkFindingDict]
+    policy:           list[PolicyFinding.PolicyFindingDict]
+    summary:          AuditReportSummaryDict
 
 
 @dataclass
@@ -142,55 +158,20 @@ class AuditReport:
             'policy':           len(self.policy),
         }
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> AuditReportDict:
         """
         Get audit report data as a dictionary.
 
         :return: JSON-encodable dict
         """
         return {
-            'scope':   self.scope,
-            'missing': [
-                {'path':  m.path.as_posix(), 'class': m.dir_class.value}
-                for m in self.missing
-            ],
-            'stale_candidates': [
-                {
-                    'path':               s.readme.as_posix(),
-                    'readme_mtime':       s.readme_mtime,
-                    'newest_source':      s.newest_source,
-                    'newest_source_file': s.newest_source_file.as_posix(),
-                }
-                for s in self.stale_candidates
-            ],
-            'structural': [
-                {
-                    'path':   s.readme.as_posix(),
-                    'issues': s.issues,
-                }
-                for s in self.structural
-            ],
-            'links': [
-                {
-                    'path':   link_finding.readme.as_posix(),
-                    'broken': [
-                        {'link': b.link, 'reason': b.reason}
-                        for b in link_finding.broken
-                    ]
-                }
-                for link_finding in self.links
-            ],
-            'policy': [
-                {
-                    'path':    p.readme.as_posix(),
-                    'matches': [
-                        {'pattern': m.pattern, 'line': m.line, 'text': m.text}
-                        for m in p.matches
-                    ],
-                }
-                for p in self.policy
-            ],
-            'summary': self.summary,
+            'scope':            self.scope,
+            'missing':          [m.to_dict() for m in self.missing],
+            'stale_candidates': [s.to_dict() for s in self.stale_candidates],
+            'structural':       [s.to_dict() for s in self.structural],
+            'links':            [l.to_dict() for l in self.links],
+            'policy':           [p.to_dict() for p in self.policy],
+            'summary':          self.summary,
         }
 
     def to_json(self, *, indent: int | None = 2, **kwargs: Any) -> str:

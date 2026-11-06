@@ -109,7 +109,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     print(report.to_json() if args.json else report.to_text())
-
     if args.no_fail:
         return 0
     return 1 if report.has_findings else 0

@@ -11,8 +11,11 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import TypedDict
+from typing import cast
 
 from scripts.docs_audit.classify import DirClass
+from scripts.docs_audit.classify import DirClassName
 from scripts.docs_audit.conventions import FORBIDDEN_PATTERNS
 from scripts.docs_audit.conventions import POLICY_ALLOW_END
 from scripts.docs_audit.conventions import POLICY_ALLOW_INLINE
@@ -36,6 +39,7 @@ __all__ = [
     'structural_issues',
 ]
 
+
 # ==============================================================================
 # Finding dataclasses
 # ==============================================================================
@@ -49,6 +53,17 @@ class MissingFinding:
     path:      Path
     dir_class: DirClass
 
+    MissingFindingDict = TypedDict('MissingFindingDict', {
+        'path':  str,
+        'class': DirClassName,
+    })
+
+    def to_dict(self) -> MissingFindingDict:
+        return {
+            'path':  self.path.as_posix(),
+            'class': cast('DirClassName', self.dir_class.value),
+        }
+
 
 @dataclass(frozen=True)
 class StaleFinding:
@@ -60,6 +75,20 @@ class StaleFinding:
     newest_source:      str
     newest_source_file: Path
 
+    class StaleFindingDict(TypedDict):
+        path:               str
+        readme_mtime:       str
+        newest_source:      str
+        newest_source_file: str
+
+    def to_dict(self) -> StaleFindingDict:
+        return {
+            'path':               self.readme.as_posix(),
+            'readme_mtime':       self.readme_mtime,
+            'newest_source':      self.newest_source,
+            'newest_source_file': self.newest_source_file.as_posix(),
+        }
+
 
 @dataclass(frozen=True)
 class StructuralFinding:
@@ -68,6 +97,16 @@ class StructuralFinding:
     """
     readme: Path
     issues: list[str]
+
+    class StructuralFindingDict(TypedDict):
+        path:   str
+        issues: list[str]
+
+    def to_dict(self) -> StructuralFindingDict:
+        return {
+            'path':   self.readme.as_posix(),
+            'issues': self.issues,
+        }
 
 
 @dataclass(frozen=True)
@@ -78,6 +117,16 @@ class BrokenLink:
     link:   str
     reason: str
 
+    class BrokenLinkDict(TypedDict):
+        link:   str
+        reason: str
+
+    def to_dict(self) -> BrokenLinkDict:
+        return {
+            'link':   self.link,
+            'reason': self.reason,
+        }
+
 
 @dataclass(frozen=True)
 class LinkFinding:
@@ -86,6 +135,16 @@ class LinkFinding:
     """
     readme: Path
     broken: list[BrokenLink]
+
+    class LinkFindingDict(TypedDict):
+        path:   str
+        broken: list[BrokenLink.BrokenLinkDict]
+
+    def to_dict(self) -> LinkFindingDict:
+        return {
+            'path':   self.readme.as_posix(),
+            'broken': [b.to_dict() for b in self.broken],
+        }
 
 
 @dataclass(frozen=True)
@@ -97,6 +156,18 @@ class PolicyMatch:
     line:    int
     text:    str
 
+    class PolicyMatchDict(TypedDict):
+        pattern: str
+        line:    int
+        text:    str
+
+    def to_dict(self) -> PolicyMatchDict:
+        return {
+            'pattern': self.pattern,
+            'line':    self.line,
+            'text':    self.text,
+        }
+
 
 @dataclass(frozen=True)
 class PolicyFinding:
@@ -105,6 +176,16 @@ class PolicyFinding:
     """
     readme:  Path
     matches: list[PolicyMatch]
+
+    class PolicyFindingDict(TypedDict):
+        path:    str
+        matches: list[PolicyMatch.PolicyMatchDict]
+
+    def to_dict(self) -> PolicyFindingDict:
+        return {
+            'path':    self.readme.as_posix(),
+            'matches': [m.to_dict() for m in self.matches],
+        }
 
 
 # ==============================================================================
@@ -123,10 +204,10 @@ def policy_issues(readme: Path) -> list[PolicyMatch]:
     :param readme: path to the README file
     :return: one match per forbidden pattern occurrence, with line number and stripped line text
     """
-    matches: list[PolicyMatch] = []
+    text = readme.read_text(encoding='utf-8', errors='replace')
 
     in_allow_block = False
-    text = readme.read_text(encoding='utf-8', errors='replace')
+    matches: list[PolicyMatch] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         if POLICY_ALLOW_START in line:
             in_allow_block = True
@@ -149,6 +230,7 @@ def policy_issues(readme: Path) -> list[PolicyMatch]:
 # ==============================================================================
 # Structural check
 # ==============================================================================
+
 
 LINK_RE:           re.Pattern[str] = re.compile(r'\[[^\]]*\]\(([^)]+)\)')
 BREADCRUMB_PREFIX: str             = '[Project Root]'
@@ -209,7 +291,6 @@ def structural_issues(
         for child in children_with_readme
         if not _links_to(links, base, child / 'README.md')
     )
-
     return issues
 
 
@@ -217,8 +298,9 @@ def structural_issues(
 # Link / anchor check
 # ==============================================================================
 
-HEADING_RE:    re.Pattern[str] = re.compile(r'^#{1,6}\s+(.*)$')
-ANCHOR_TAG_RE: re.Pattern[str] = re.compile(r'<a name="([^"]+)">')
+
+HEADING_RE:     re.Pattern[str] = re.compile(r'^#{1,6}\s+(.*)$')
+ANCHOR_TAG_RE:  re.Pattern[str] = re.compile(r'<a name="([^"]+)">')
 
 FENCE_RE:       re.Pattern[str] = re.compile(r'^[ \t]*(`{3,}|~{3,})')
 INLINE_CODE_RE: re.Pattern[str] = re.compile(r'(?P<ticks>`+)(?:(?!(?P=ticks)).)*?(?P=ticks)', re.DOTALL)
@@ -235,8 +317,9 @@ def _strip_code_spans(text: str) -> str:
     :param text: the Markdown source
     :return: the text with fenced code blocks and inline code spans removed
     """
-    out:        list[str] = []
+    out:        list[str]  = []
     fence_char: str | None = None
+
     for line in text.splitlines():
         if fence_char is None:
             if (match := FENCE_RE.match(line)) is not None:
@@ -248,6 +331,7 @@ def _strip_code_spans(text: str) -> str:
             out.append('')
             if line.lstrip().startswith(fence_char * 3):
                 fence_char = None
+
     return '\n'.join(out)
 
 
@@ -397,7 +481,6 @@ def find_missing(
             continue
 
         cover = _nearest_readme_ancestor(rel_dir, classes, repo_root)
-
         if cls is DirClass.DATA:
             if (_nearest_classified_ancestor(rel_dir, classes) is DirClass.DATA) or (cover is not None):
                 continue
@@ -431,12 +514,10 @@ def _git_commit_time(repo_root: Path, rel_path: Path) -> tuple[int, str] | None:
         text=True,
         check=False,
     )
-    out = result.stdout.strip()
-    if not out:
-        return None
-
-    epoch_str, _, iso = out.partition(' ')
-    return int(epoch_str), iso
+    if out := result.stdout.strip():
+        epoch_str, _, iso = out.partition(' ')
+        return int(epoch_str), iso
+    return None
 
 
 def stale_candidates(classified: Sequence[tuple[Path, DirClass]], *, repo_root: Path) -> list[StaleFinding]:

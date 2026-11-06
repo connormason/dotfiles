@@ -4594,7 +4594,7 @@ class TestCommand(Command):
 
 
 # ====================================================================================================
-# Documentation commands
+# Static analysis commands
 #
 # Commands
 #   - docs-audit: Audit per-directory README documentation (scripts/docs_audit)
@@ -4616,6 +4616,7 @@ class DocsAuditCommand(Command):
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
             'scopes',
+            type=str,
             nargs='*',
             metavar='SCOPE',
             help='Repo-relative paths to audit (default: whole repo)',
