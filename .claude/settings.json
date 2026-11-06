@@ -8,26 +8,22 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "if [[ \"$CLAUDE_TOOL_ARG_FILE_PATH\" == *.py ]]; then \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/uv-public.sh run ruff check --fix-only \"$CLAUDE_TOOL_ARG_FILE_PATH\" 2>/dev/null; fi; exit 0"
-          },
-          {
-            "type": "command",
-            "command": "f=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; if [[ \"$f\" == *.yml || \"$f\" == *.yaml ]]; then \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/uv-public.sh run yamllint \"$f\" 2>&1 || true; fi; exit 0"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/lint-on-edit.sh"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$CLAUDE_TOOL_ARG_FILE_PATH\" | grep -qE '(vault_password\\.txt|/vault_password|inventory/)'; then echo 'BLOCKED: Cannot edit vault password or inventory files — these are sensitive and managed separately' >&2; exit 2; fi"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-protected-files.sh"
           }
         ]
       }
