@@ -8,6 +8,6 @@ NAS playbook's [`haos`](../roles/haos/README.md) role runs `vms/haos/setup.sh`, 
 the Ansible bootstrap. Only `vms/haos/bridge.sh`, which blips the network for a few seconds, is run by hand on the NAS;
 `sudo vms/haos/setup.sh` also works by hand.
 
-| Directory        | VM                                                           |
-| ---------------- | ------------------------------------------------------------ |
-| [`haos/`](haos/) | Home Assistant OS, bridged onto the LAN with its own address |
+| Directory                 | VM                                                           |
+| ------------------------- | ------------------------------------------------------------ |
+| [`haos/`](haos/README.md) | Home Assistant OS, bridged onto the LAN with its own address |

@@ -135,6 +135,10 @@ python3 run.py track-claude
 
 # Run the test suite through the public-index uv wrapper
 python3 run.py test
+
+# Audit per-directory README files: missing, stale, structural, broken links, forbidden patterns
+# (--json for machine-readable output, --no-fail to always exit 0; SCOPE paths narrow the audit)
+python3 run.py docs-audit
 ```
 
 ## Using Make (auto-generated)
@@ -164,7 +168,8 @@ Hooks run via [prek](https://github.com/j178/prek) (a faster pre-commit reimplem
   `uv-export` (requirements.txt), `sync-with-uv`, `sync-pre-commit-deps`
 - **Checks**: filesystem safety, large files, merge conflicts, `check-vcs-permalinks` (VCS links must be permalinks),
   private keys, `detect-secrets`, submodule ban, shebang/executable, TOML/XML/YAML/JSON syntax, `check-json5`,
-  `check-pkl`, `validate-pyproject`, Python AST/debug/test-naming
+  `check-pkl`, `validate-pyproject`, Python AST/debug/test-naming, `docs-audit-readme` (changed `README.md` files must
+  satisfy the navigation contract; `docs/plans/` and nested `stow/` READMEs are excluded)
 - **Leak guard** (blocks employer-internal identifiers): `check-leaks` (pre-commit, also checks the commit identity),
   `check-leaks-msg` (commit-msg), `check-leaks-push-files` and `check-leaks-push-history` (pre-push)
 - **Formatters**: `keep-sorted` (priority 30); at 35, JSON (`.claude` settings via `pretty-format-json`), VS Code

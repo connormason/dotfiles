@@ -296,10 +296,24 @@ repos:
         stages: [pre-commit, manual]
         priority: 10
         args: [--pytest-test-first]
-        exclude: ^tests/golden\.py$
+        exclude: ^tests/(golden\.py|unit/scripts/docs_audit/git_helpers\.py)$
 
   - repo: local
     hooks:
+
+      # Validate changed README.md files against the navigation contract (breadcrumb, down-links, relative links and
+      # anchors, forbidden command patterns). Whole-repo audit incl. missing/stale READMEs: `run.py docs-audit`.
+      # Excludes vendored stow READMEs (skills/spoons) and docs/plans (index-free by convention)
+      - id: docs-audit-readme
+        name: "[check]  README navigation contract"
+        groups: [check, local, ci, docs]
+        stages: [pre-commit, manual]
+        priority: 10
+        entry: scripts/hooks/docs_audit_hook.py
+        language: python
+        files: (^|/)README\.md$
+        exclude: ^(docs/plans/|stow/.+/)
+        types: [markdown]
 
       # Block employer-internal identifiers in staged content/paths and in the commit identity
       # (public baseline + optional private patterns from ~/.config/dotfiles/leak-patterns.txt).

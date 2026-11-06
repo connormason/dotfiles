@@ -93,8 +93,9 @@ python3 run.py nas-provision --tags services -v
 
 The command checks that the inventory and `vault_password.txt` exist and that the `nas` host answers over SSH, installs
 the collections from `roles/requirements.yml`, then runs `ansible-playbook playbooks/nas_bootstrap.yml` in the uv
-environment. Options are documented in [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md#nas). On a fresh host
-the samba probe fails and the tailscale probe returns nothing, so the next task's `from_json` fails (see [Tags](#tags)).
+environment. Options are documented in [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md#nas-provision). On a
+fresh host the samba probe fails and the tailscale probe returns nothing, so the next task's `from_json` fails (see
+[Tags](#tags)).
 
 `nas_bootstrap.sh` validates the repository layout (`run.py`, `nas_bootstrap.sh`, `playbooks/`) and hands every argument
 to `run.py nas-provision`. The Homebrew installer pin lives only in `bootstrap/50-brew.sh` (`BREW_INSTALLER_URL` and

@@ -8,8 +8,9 @@ Custom pre-commit hook scripts for checks and transforms not covered by standard
 same interface contract as `pre-commit`: they accept a list of filenames as positional arguments and exit `0` on success
 or non-zero on failure. Every script here is wired into [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) as a
 `local` repo hook and runs via `prek` / `make pre`. Each Python script is a self-contained PEP 723 script, so `uv run`
-resolves any dependencies in isolation. [`uv-public.sh`](#uv-publicsh) and [`check-leaks-push.sh`](#check-leaks-pushsh)
-are the exceptions: shell scripts rather than PEP 723 scripts.
+resolves any dependencies in isolation, except [`docs_audit_hook.py`](#docs_audit_hookpy): it is stdlib-only and imports
+the in-repo [`scripts/docs_audit/`](../docs_audit/README.md) package. [`uv-public.sh`](#uv-publicsh) and
+[`check-leaks-push.sh`](#check-leaks-pushsh) are the exceptions: shell scripts rather than PEP 723 scripts.
 
 <!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
 
@@ -54,6 +55,12 @@ are the exceptions: shell scripts rather than PEP 723 scripts.
   - [Synopsis](#synopsis-6)
   - [Behavior](#behavior-6)
   - [Pre-Commit Integration](#pre-commit-integration-6)
+- [`docs_audit_hook.py`](#docs_audit_hookpy)
+  - [Synopsis](#synopsis-7)
+  - [Options](#options-5)
+  - [Behavior](#behavior-7)
+  - [Exit Codes](#exit-codes-6)
+  - [Pre-Commit Integration](#pre-commit-integration-7)
 
 <!-- mdformat-toc end -->
 
@@ -68,6 +75,7 @@ are the exceptions: shell scripts rather than PEP 723 scripts.
 | [`format-pkl.py`](#format-pklpy)             | Auto-format Pkl files via `pkl format`                                  | `format-pkl`                                         | 35 (format phase) |
 | [`sort-json-array.py`](#sort-json-arraypy)   | Sort a top-level JSON array of objects by a key                         | `sort-json-array`                                    | 35 (format phase) |
 | [`uv-public.sh`](#uv-publicsh)               | Run uv against public PyPI only (wraps `uv-lock`/`uv-sync`/`uv-export`) | `uv-*`                                               | 0–5 (sync phase)  |
+| [`docs_audit_hook.py`](#docs_audit_hookpy)   | Validate changed `README.md` files against the navigation contract      | `docs-audit-readme`                                  | 10 (check phase)  |
 
 > [!NOTE]
 > This repository currently tracks no `.json5` or `.pkl` files, so `check-pkl` and `format-pkl` match nothing today and
@@ -130,7 +138,8 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
         types: [file]
 ```
 
-The `sort-json-array` entry is shown [in its own section](#pre-commit-integration-5).
+The `sort-json-array` entry is shown [in its own section](#pre-commit-integration-5), and the `docs-audit-readme` entry
+[in its own](#pre-commit-integration-7).
 
 **Priority scheme** used across the whole config:
 
@@ -692,3 +701,63 @@ that was regenerated with the internal index is rewritten back to public PyPI be
 
 `uv-sync` (`sync --no-active --locked`) and `uv-export` use the same wrapper with `language: system` and
 `pass_filenames: false`.
+
+---
+
+## `docs_audit_hook.py`<a name="docs_audit_hookpy"></a>
+
+### Synopsis<a name="synopsis-7"></a>
+
+Validates changed `README.md` files against the per-directory navigation contract: the file-scoped subset of the
+[docs audit](../docs_audit/README.md). It runs the structural check (breadcrumb, H1 title, down-links to child READMEs),
+the relative link and anchor check, and the content-policy check (forbidden command patterns). The missing-README and
+stale-candidate checks are skipped: a changed-files hook cannot see a directory that has no README, and a README always
+looks stale mid-commit. Use `python3 run.py docs-audit` for the whole-repo audit.
+
+Unlike the other Python scripts here it is stdlib-only and declares no PEP 723 metadata: it prepends the repository root
+to `sys.path` and imports the in-repo `scripts.docs_audit` package.
+
+```
+python3 scripts/hooks/docs_audit_hook.py [FILENAMES...]
+```
+
+### Options<a name="options-5"></a>
+
+| Flag           | Description                                                      | Default |
+| -------------- | ---------------------------------------------------------------- | ------- |
+| `FILENAMES`    | Files supplied by prek; names other than `README.md` are ignored | —       |
+| `-h`, `--help` | Show help and exit                                               | —       |
+
+### Behavior<a name="behavior-7"></a>
+
+For each existing `README.md`, the script runs `structural_issues`, `link_issues`, and `policy_issues` from
+`scripts.docs_audit.checks`. The repository-root README is exempt from the breadcrumb requirement. The down-links
+required of a README are one per immediate child directory that itself holds a `README.md`; symlinked directories and
+directories matching the audit's exclusions (`EXCLUDE_SEGMENTS`, `EXCLUDE_SUFFIXES`) are not counted.
+
+A README with findings is reported as `🔴 <path>` followed by one indented line per finding: `structural: <issue>`,
+`link: <link> (<reason>)`, or `policy: <pattern> @ line <n>`. A line (or block) can opt out of the policy check with the
+`<!-- docs-audit-allow -->` inline marker or the `<!-- docs-audit-allow-start -->` / `<!-- docs-audit-allow-end -->`
+block markers.
+
+### Exit Codes<a name="exit-codes-6"></a>
+
+| Code | Meaning                                                       |
+| ---- | ------------------------------------------------------------- |
+| `0`  | Every supplied README passed (or no READMEs were supplied)    |
+| `1`  | At least one README has a structural, link, or policy finding |
+
+### Pre-Commit Integration<a name="pre-commit-integration-7"></a>
+
+```yaml
+  - id: docs-audit-readme
+    entry: scripts/hooks/docs_audit_hook.py
+    language: python
+    files: (^|/)README\.md$
+    exclude: ^(docs/plans/|stow/.+/)
+    types: [markdown]
+    stages: [pre-commit, manual]
+```
+
+The `exclude` skips `docs/plans/` (planning artifacts are index-free by convention) and the vendored READMEs nested
+under `stow/` packages (skills and spoons); `stow/README.md` itself is checked.

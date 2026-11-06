@@ -15,6 +15,7 @@ dev environment (stow, bootstrap, render, track-claude), with ANSI styling and r
   - [Inventory Management](#inventory-management)
   - [Tool Installation](#tool-installation)
   - [Testing](#testing)
+  - [Static Analysis](#static-analysis)
   - [Utilities](#utilities)
 - [Architecture](#architecture)
   - [Command Registration System](#command-registration-system)
@@ -625,6 +626,33 @@ Run the test suite through the public-index uv wrapper: `scripts/hooks/uv-public
 ```bash
 python3 run.py test tests/unit/run
 ```
+
+### Static Analysis<a name="static-analysis"></a>
+
+#### `docs-audit`
+
+Audit the per-directory `README.md` files: directories that should have a README and do not, READMEs older than their
+newest sibling file, and READMEs with a missing breadcrumb or down-link, a broken relative link or anchor, or a
+forbidden command pattern. The engine is [`scripts/docs_audit/`](../scripts/docs_audit/README.md).
+
+```bash
+python3 run.py docs-audit                         # whole repo
+python3 run.py docs-audit roles playbooks         # only these paths
+python3 run.py docs-audit --json --no-fail        # machine-readable, always exit 0
+```
+
+| Option      | Effect                                                 |
+| ----------- | ------------------------------------------------------ |
+| `SCOPE...`  | repo-relative paths to audit (default: the whole repo) |
+| `--json`    | emit the JSON envelope instead of styled text          |
+| `--no-fail` | always exit `0`, even when findings exist              |
+
+**Behavior:** runs `python -m scripts.docs_audit` with the repo root as the working directory, using the interpreter
+that is running `run.py` (the engine is standard-library only, so no environment is needed). Exits `0` when clean (or
+with `--no-fail`), `1` when any finding exists, and `2` on a usage or internal error. The status line is suppressed
+under `--json`, so stdout is a single JSON object. The stale-candidate check is a commit-timestamp heuristic, so it
+reports candidates rather than confirmed drift. The structural, link, and policy checks also run per changed README as
+the `docs-audit-readme` prek hook (see [`scripts/hooks/`](../scripts/hooks/README.md#docs_audit_hookpy)).
 
 ### Utilities<a name="utilities"></a>
 
