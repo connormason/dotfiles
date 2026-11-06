@@ -116,9 +116,9 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Constants/configuration
-# ====================================================================================================
+# ==================================================================================================
 
 # Python configuration
 # -------------------------------------------------------------------
@@ -238,11 +238,11 @@ TRACK_CLAUDE_PREFLIGHT_LINES: int = 8
 DERIVED_FILE_HOOK_IDS: list[str] = ['uv-export', 'sync-with-uv', 'sync-pre-commit-deps']
 
 
-# =======================================================================================
+# ==================================================================================================
 # Configuration vars read from environment
 #
 # All env vars are prefixed with "DOTFILES_" namespace (except standardized "NO_COLOR")
-# =======================================================================================
+# ==================================================================================================
 
 # Environment variable names
 # -------------------------------------------------------------------
@@ -264,7 +264,7 @@ INVENTORY_REPO_URL_DEFAULT: str = 'git@github.com:connormason/dotfiles-inventory
 INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTORY_REPO_URL_DEFAULT)
 
 
-# =======================================================================================
+# ==================================================================================================
 # Project filepaths
 #
 #   dotfiles/                       DOTFILES_DIR
@@ -313,7 +313,7 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 #     run.py                        SCRIPT_PATH
 #     stow.sh                       STOW_SCRIPT
 #     vault_password.txt            VAULT_PASSWORD
-# =======================================================================================
+# ==================================================================================================
 
 SCRIPT_PATH:            Path = Path(__file__)
 DOTFILES_DIR:           Path = SCRIPT_PATH.parent
@@ -361,9 +361,9 @@ STOW_SCRIPT:            Path = DOTFILES_DIR / 'stow.sh'
 VAULT_PASSWORD:         Path = DOTFILES_DIR / VAULT_PASSWORD_FILENAME
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Exit codes
-# ====================================================================================================
+# ==================================================================================================
 
 
 class ExitCode(int, enum.Enum):
@@ -376,17 +376,17 @@ class ExitCode(int, enum.Enum):
     USER_CANCELLED = 3
 
 
-# =======================================================================================
+# ==================================================================================================
 # Regex patterns
-# =======================================================================================
+# ==================================================================================================
 
 
 VERSION_RE:               re.Pattern[str] = re.compile(r'(?P<version>[\d.]+)')
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Basic types
-# ====================================================================================================
+# ==================================================================================================
 
 
 F        = TypeVar('F',        bound=Callable[..., Any])
@@ -424,7 +424,7 @@ class SSHTarget(NamedTuple):
     user: str
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Command registration
 #
 # Commands are classes deriving from the abstract Command base:
@@ -433,7 +433,7 @@ class SSHTarget(NamedTuple):
 #   - The description defaults to the class docstring and drives subparser, script, and Makefile help text
 #   - add_arguments() adds command options; a nested Args(argparse.Namespace) types the parsed result
 #   - group / script_only / makefile_only control help organization and Makefile generation
-# ====================================================================================================
+# ==================================================================================================
 
 
 def get_default_help_formatter_cls(
@@ -618,9 +618,9 @@ def get_commands(
     return commands
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Formatting
-# ====================================================================================================
+# ==================================================================================================
 
 
 def folduser(path: PathLike) -> str:
@@ -687,7 +687,7 @@ def cleanup_whitespace(text: str) -> str:
     return cleaned
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Text styling
 #
 # ANSI styling functions for terminal output. The style() function is inspired by Click's style implementation but
@@ -699,10 +699,10 @@ def cleanup_whitespace(text: str) -> str:
 #   - Auto-reset by default to prevent style leakage
 #
 # The printf() function wraps style() for common use cases and supports:
-#   - Debug mode filtering (only prints if RUN_DEBUG=true)
+#   - Debug mode filtering (only prints if DOTFILES_RUN_DEBUG=true)
 #   - Text indentation
 #   - Automatic text-to-str conversion
-# ====================================================================================================
+# ==================================================================================================
 
 
 ANSI_COLOR: dict[str, int] = {
@@ -833,7 +833,7 @@ def arg_note(name: str, val: str, *, dim: bool = True, color: StyleColor | None 
     """
     Format a bracketed annotation string for argparse help text
 
-    Produces styled output like ``[env var: MAKE_DEBUG]`` or ``[default: False]``
+    Produces styled output like ``[env var: DOTFILES_RUN_DEBUG]`` or ``[default: False]``
 
     :param name: the annotation label (e.g. ``"env var"``, ``"default"``)
     :param val: the annotation value
@@ -941,7 +941,7 @@ def printf(
     Print styled text with optional indentation and debug gating
 
     Applies ANSI styling via :func:`style` and prints the result. When ``debug=True``, the message is only emitted
-    if the global ``MAKE_DEBUG`` flag is set, defaults to dim bright-white text, and routes output to stderr
+    if the global ``RUN_DEBUG`` flag is set, defaults to dim bright-white text, and routes output to stderr
 
     :param text: the content to print (converted to str if needed)
     :param fg: foreground color
@@ -956,7 +956,7 @@ def printf(
     :param strikethrough: enable or disable strikethrough
     :param reset: if True, append an ANSI reset sequence after the text
     :param indent: number of leading spaces to prepend
-    :param debug: if True, only print when ``MAKE_DEBUG`` is enabled and route to stderr
+    :param debug: if True, only print when ``RUN_DEBUG`` is enabled and route to stderr
     :param file: output stream (defaults to stdout, or stderr when debug is True)
     """
     if debug and not RUN_DEBUG:
@@ -1027,9 +1027,9 @@ UV    = style('uv',    fg='bright_magenta')
 HATCH = style('hatch', fg='bright_magenta')
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Prompting helpers
-# ====================================================================================================
+# ==================================================================================================
 
 
 def confirm(prompt_text: str, *, default: bool = True, indent: int = 0) -> bool:
@@ -1054,7 +1054,7 @@ def confirm(prompt_text: str, *, default: bool = True, indent: int = 0) -> bool:
     return answer in ('y', 'yes')
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Command utils
 #
 # Subprocess execution with enhanced error handling and output formatting
@@ -1068,7 +1068,7 @@ def confirm(prompt_text: str, *, default: bool = True, indent: int = 0) -> bool:
 #   - SSH error detection with helpful troubleshooting suggestions
 #   - Timeout support with graceful degradation
 #   - Custom ShellCommandError with formatted output
-# ====================================================================================================
+# ==================================================================================================
 
 
 RUN_COMMAND_ENVVARS: dict[str, str] = {}
@@ -1381,9 +1381,9 @@ def first_output_line(text: str, default: str) -> str:
     return default
 
 
-# ====================================================================================================
+# ==================================================================================================
 # External script utilities
-# ====================================================================================================
+# ==================================================================================================
 
 
 def check_script_validity(script_path: PathLike, name: str | None = None, *, indent: int = 0) -> None:
@@ -1544,9 +1544,9 @@ def run_installer(tool_name: InstallableTool, *, indent: int = 0) -> bool:
     return True
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Decorators
-# ====================================================================================================
+# ==================================================================================================
 
 
 def retry_on_failure(
@@ -1591,9 +1591,9 @@ def retry_on_failure(
     return decorator
 
 
-# =======================================================================================
+# ==================================================================================================
 # Python helpers
-# =======================================================================================
+# ==================================================================================================
 
 
 def check_python(*, quiet: bool = False, indent: int = 0) -> ToolInfo:
@@ -1622,9 +1622,9 @@ def check_python(*, quiet: bool = False, indent: int = 0) -> ToolInfo:
     return ToolInfo(executable=exe, version=v_str)
 
 
-# =======================================================================================
+# ==================================================================================================
 # Git status helpers
-# =======================================================================================
+# ==================================================================================================
 
 
 def warn_on_dirty_services() -> None:
@@ -1642,9 +1642,9 @@ def warn_on_dirty_services() -> None:
         printf('CI redeploys main whenever it changes a service, which supersedes a branch deploy', indent=3, dim=True)
 
 
-# =======================================================================================
+# ==================================================================================================
 # `uv` helpers
-# =======================================================================================
+# ==================================================================================================
 
 
 def find_uv_executable() -> Path | None:
@@ -2011,9 +2011,9 @@ def uv_tree(
         return result.stdout
 
 
-# =======================================================================================
+# ==================================================================================================
 # Virtual environment helpers
-# =======================================================================================
+# ==================================================================================================
 
 
 class VenvStatus(str, enum.Enum):
@@ -2342,9 +2342,9 @@ def enter_venv(*, verbose: bool = False, indent: int = 0) -> None:
         printf('⏪ Exiting virtual environment...', fg='bright_white', indent=indent)
 
 
-# =======================================================================================
+# ==================================================================================================
 # Ansible vault helpers
-# =======================================================================================
+# ==================================================================================================
 
 
 def find_vault_files() -> list[Path]:
@@ -2372,9 +2372,9 @@ def require_vault_password() -> None:
         sys.exit(ExitCode.COMMAND_FAILED)
 
 
-# =======================================================================================
+# ==================================================================================================
 # Ansible inventory helpers
-# =======================================================================================
+# ==================================================================================================
 
 
 def require_inventory() -> None:
@@ -2434,9 +2434,9 @@ def resolve_ssh_target_from_inventory_host(host: str) -> SSHTarget:
     return SSHTarget(host=ssh_host, user=ssh_user)
 
 
-# =======================================================================================
+# ==================================================================================================
 # Ansible playbook helpers
-# =======================================================================================
+# ==================================================================================================
 
 
 def parse_playbook_extra_vars(extra_vars_list: list[str] | None) -> dict[str, str]:
@@ -2489,9 +2489,9 @@ def build_nas_provision_command(args: argparse.Namespace) -> list[str]:
     return cmd
 
 
-# =======================================================================================
+# ==================================================================================================
 # NAS SSH connection helpers
-# =======================================================================================
+# ==================================================================================================
 
 
 def require_nas_reachable(host: str, user: str) -> None:
@@ -2529,9 +2529,9 @@ def resolve_reachable_nas() -> SSHTarget:
     return target
 
 
-# =======================================================================================
+# ==================================================================================================
 # Claude Code config file utilities
-# =======================================================================================
+# ==================================================================================================
 
 
 def find_untracked_claude_files() -> list[Path]:
@@ -2567,9 +2567,9 @@ def find_untracked_claude_files() -> list[Path]:
     return sorted(untracked)
 
 
-# =======================================================================================
+# ==================================================================================================
 # `doctor` command checks
-# =======================================================================================
+# ==================================================================================================
 
 
 @dataclasses.dataclass(frozen=True)
@@ -2826,7 +2826,7 @@ def doctor_checks() -> list[DoctorCheck]:
     ]
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Setup & Environment commands
 #
 # Commands:
@@ -2836,7 +2836,7 @@ def doctor_checks() -> list[DoctorCheck]:
 #   - status:  Show environment health status
 #   - doctor:  Verify the environment (``--fix`` confirms each repair, then re-checks; ``--yes`` skips the prompts)
 #   - clean:   Remove environments, build artifacts, caches, and temporary files
-# ====================================================================================================
+# ==================================================================================================
 
 
 class InstallCommand(Command):
@@ -3181,14 +3181,14 @@ class CleanCommand(Command):
         printf(f'{cleaned} file{"s" if cleaned != 1 else ""} removed', fg='bright_white', dim=True, indent=3)
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Bootstrap & Deploy commands
 #
 # Commands:
 #   - bootstrap:     Run the layered bootstrap stages on local machine
 #   - nas-provision: Run the Ansible playbook (playbooks/nas_bootstrap.yml) against the inventory's ``nas`` host
 #   - nas-deploy:    Sync services/ to the NAS and run deploy.sh there (scripts/nas/deploy-services.sh, as CI does)
-# ====================================================================================================
+# ==================================================================================================
 
 
 class BootstrapCommand(Command):
@@ -3380,14 +3380,14 @@ class NasDeployCommand(Command):
         sys.exit(result.returncode)
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Dotfiles commands
 #
 # Thin wrappers over the layered engine (stow.sh, bootstrap/bootstrap.sh, scripts/dotfiles/render.py)
 #   - stow:         Link stow packages from every layer into $HOME
 #   - render:       Render settings files from per-layer fragments
 #   - track-claude: Ingest local ~/.claude agents/commands/skills/hooks/rules into the ``claude`` stow package
-# ====================================================================================================
+# ==================================================================================================
 
 
 class StowCommand(Command):
@@ -3718,7 +3718,7 @@ class TrackClaudeCommand(Command):
         printf(style('git add stow/claude/.claude && git commit', fg='bright_magenta'), indent=3)
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Inventory commands
 #
 # Commands for managing the standalone inventory git repository
@@ -3734,7 +3734,7 @@ class TrackClaudeCommand(Command):
 #     - Provides SSH error detection and troubleshooting guidance
 #   - vault-decrypt:    Decrypt all inventory vault files for editing
 #   - vault-encrypt:    Re-encrypt all inventory vault files after editing
-# ====================================================================================================
+# ==================================================================================================
 
 
 class InventoryHostsCommand(Command):
@@ -4113,9 +4113,9 @@ class VaultEncryptCommand(Command):
             printf('✅ All vault files encrypted', fg='bright_green')
 
 
-# =======================================================================================
+# ==================================================================================================
 # Tool installation commands
-# =======================================================================================
+# ==================================================================================================
 
 
 class _InstallToolCommand(Command, register=False):
@@ -4195,7 +4195,7 @@ class InstallHatchCommand(_InstallToolCommand):
     tool_name:   ClassVar[InstallableTool] = 'hatch'
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Hooks commands
 #
 # Commands:
@@ -4204,7 +4204,7 @@ class InstallHatchCommand(_InstallToolCommand):
 #   - uninstall-hooks: Uninstall prek git hook shims
 #   - run-hooks:       Run prek hooks on modified or specified project files
 #   - pre:             Run prek pre-commit hooks on all files
-# ====================================================================================================
+# ==================================================================================================
 
 
 class InstallHooksCommand(Command):
@@ -4559,12 +4559,12 @@ class PreCommand(RunHooksCommand):
         super().run(args)
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Testing commands
 #
 # Commands
 #   - test: Run the test suite through the public-index uv wrapper
-# ====================================================================================================
+# ==================================================================================================
 
 
 class TestCommand(Command):
@@ -4593,12 +4593,12 @@ class TestCommand(Command):
         sys.exit(result.returncode)
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Static analysis commands
 #
 # Commands
 #   - docs-audit: Audit per-directory README documentation (scripts/docs_audit)
-# ====================================================================================================
+# ==================================================================================================
 
 
 class DocsAuditCommand(Command):
@@ -4646,7 +4646,7 @@ class DocsAuditCommand(Command):
         sys.exit(result.returncode)
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Dependencies commands
 #
 # Commands:
@@ -4654,7 +4654,7 @@ class DocsAuditCommand(Command):
 #   - lock-check:   Check that uv.lock is up to date
 #   - lock-upgrade: Upgrade locked dependency versions
 #   - lock-sync:    Re-sync dependencies, exported requirements, and hook versions from uv.lock
-# ====================================================================================================
+# ==================================================================================================
 
 
 def regenerate_derived_files(*, indent: int = 0) -> None:
@@ -4763,7 +4763,7 @@ class LockSyncCommand(Command):
         regenerate_derived_files()
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Utilities commands
 #
 # General repository maintenance commands:
@@ -4773,7 +4773,7 @@ class LockSyncCommand(Command):
 #     - Organizes targets by command group
 #     - Preserves command descriptions in Make comments
 #     - Auto-generates help target with formatted command listing
-# ====================================================================================================
+# ==================================================================================================
 
 
 class MakefileCommand(Command):
@@ -4921,7 +4921,7 @@ class DiagnoseCommand(Command):
         ], indent=3)
 
 
-# ====================================================================================================
+# ==================================================================================================
 # Command-line argument parsing / entry point
 #
 # build_parser() creates the root parser (help text organized by command group, plus Debug Options and Other Options
@@ -4929,7 +4929,7 @@ class DiagnoseCommand(Command):
 #
 # main() parses args into the typed root Args namespace, enables debug mode if requested, dispatches to the selected
 # command, and maps Ctrl-C / unexpected errors to ExitCode values.
-# ====================================================================================================
+# ==================================================================================================
 
 
 class Args(argparse.Namespace):
