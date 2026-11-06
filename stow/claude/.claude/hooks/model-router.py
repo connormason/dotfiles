@@ -24,6 +24,7 @@ from typing import Any
 # Constants
 # ==============================================================================
 
+
 VALID_MODELS   = ('haiku', 'sonnet', 'opus', 'fable')
 VALID_MODES    = ('off', 'advise', 'enforce')
 TIER_ORDER     = {'haiku': 0, 'sonnet': 1, 'opus': 2}
@@ -37,6 +38,7 @@ RULE_FLAGS     = re.IGNORECASE | re.DOTALL
 # ==============================================================================
 # Config
 # ==============================================================================
+
 
 class ConfigError(ValueError):
     """
@@ -190,6 +192,7 @@ def load_config(cwd: Path, home: Path | None = None, default_path: Path = DEFAUL
 # Decision
 # ==============================================================================
 
+
 @dataclass
 class Decision:
     """
@@ -267,6 +270,7 @@ def decide(tool_input: dict, cfg: dict) -> Decision:
 # ==============================================================================
 # Hook output and records
 # ==============================================================================
+
 
 def now_iso() -> str:
     """
@@ -374,6 +378,7 @@ def handle_post(payload: dict) -> dict:
 # Decision log
 # ==============================================================================
 
+
 def state_dir() -> Path:
     """
     Directory holding the decision log: ``${XDG_STATE_HOME:-~/.local/state}/dotfiles/model-router``.
@@ -407,6 +412,7 @@ def write_log(record: dict) -> None:
 # ==============================================================================
 # Entry points
 # ==============================================================================
+
 
 def run(mode: str, raw: str) -> dict | None:
     """
