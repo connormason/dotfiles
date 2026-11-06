@@ -202,7 +202,7 @@ python3 run.py uninstall-hooks
 
 ## CI
 
-Three workflows in `.github/workflows/`:
+Five workflows in `.github/workflows/`:
 
 - **`lint.yml`** (`Lint`, on pull requests to `main`): jobs `ruff`, `mypy`, `interrogate`, `yamllint`, `ansible-lint`,
   `codespell`, `pytest (macOS)`, and `pytest (Linux)`. Both pytest jobs install the Ansible collections, run
@@ -215,3 +215,10 @@ Three workflows in `.github/workflows/`:
 - **`leaks.yml`** (`gitleaks`, on pull requests, pushes, and manual runs): jobs `gitleaks` and `leak guard`. The latter
   runs `scripts/hooks/check-leaks.py` over the tracked files, the new commit messages, and the identity of every
   reachable commit.
+- **`update-dependencies.yml`** (`Update dependencies`, Tuesdays 09:00 UTC or manual, `main` only): runs
+  `prek update --cooldown-days 3`, then `run.py lock-upgrade`, and opens or refreshes a PR from
+  `maintenance/update-dependencies` covering `.pre-commit-config.yaml`, `uv.lock`, and `requirements.txt`.
+- **`update-gitignore.yml`** (`Update gitignore`, Mondays 09:00 UTC or manual, `main` only): runs
+  `scripts/codebase/update_gitignore.py` and opens or refreshes a PR from `maintenance/update-gitignore`. Both update
+  workflows use the `MAINTENANCE_PR_TOKEN` secret through `.github/actions/open-maintenance-pr` (setup in
+  [`scripts/codebase/README.md`](../scripts/codebase/README.md#one-time-setup)).
