@@ -8,6 +8,7 @@ docstrings are preserved, that recursion respects skip directories, and that exi
 from __future__ import annotations
 
 import importlib.util
+import tokenize
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -259,6 +260,43 @@ class TestFormatFile:
 
         assert replaced             == 0
         assert f.stat().st_mtime_ns == original_mtime
+
+    def test_crlf_file_round_trips(self, hook: ModuleType, tmp_path: Path) -> None:
+        """
+        Test that a CRLF file is converted and keeps CRLF endings on every line
+        """
+        border = hook.make_border()
+        f = tmp_path / 'crlf.py'
+        f.write_bytes(b'"""\r\nModule\r\n"""\r\n\r\n\r\n"""\r\nSection\r\n"""\r\n\r\nx = 1\r\n')
+
+        replaced = hook.format_file(f)
+
+        assert replaced == 1
+        assert f.read_bytes() == (
+            f'"""\r\nModule\r\n"""\r\n\r\n\r\n{border}\r\n# Section\r\n{border}\r\n\r\nx = 1\r\n'.encode()
+        )
+
+    def test_tokenize_failure_skips_file(
+        self,
+        hook: ModuleType,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that a tokenizer error is reported, the file is left untouched, and -1 is returned
+        """
+        def raise_token_error(*_args: object, **_kwargs: object) -> tuple[str, int]:
+            raise tokenize.TokenError('EOF in multi-line statement', (1, 0))
+
+        monkeypatch.setattr(hook, 'normalize_borders', raise_token_error)
+        src = '"""\nModule\n"""\n\n\n"""\nSection\n"""\n'
+        f = tmp_path / 'sample.py'
+        f.write_text(src)
+
+        assert hook.format_file(f) == -1
+        assert f.read_text()       == src
+        assert 'could not be tokenized' in capsys.readouterr().err
 
 
 class TestMakeBorder:

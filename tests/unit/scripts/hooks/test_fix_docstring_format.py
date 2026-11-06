@@ -489,15 +489,74 @@ class TestFixFile:
         assert result.modified is True
         assert f.read_text()   == source
 
-    def test_syntax_error_returns_false(self, hook: ModuleType, tmp_path: Path) -> None:
+    def test_syntax_error_raises(self, hook: ModuleType, tmp_path: Path) -> None:
         """
-        Test that files with syntax errors are skipped gracefully.
+        Test that files with syntax errors raise SyntaxError instead of passing silently
         """
         f = tmp_path / 'broken.py'
         f.write_text('def func(\n')
 
+        with pytest.raises(SyntaxError):
+            hook.fix_file(f)
+
+    def test_crlf_line_endings_preserved(self, hook: ModuleType, tmp_path: Path) -> None:
+        """
+        Test that a CRLF file keeps CRLF endings on every line, including the expanded docstring
+        """
+        f = tmp_path / 'crlf.py'
+        f.write_bytes(b'def func():\r\n    """Brief."""\r\n    return 1\r\n')
+
         result = hook.fix_file(f)
-        assert result.modified is False
+
+        assert result.modified is True
+        assert f.read_bytes() == b'def func():\r\n    """\r\n    Brief.\r\n    """\r\n    return 1\r\n'
+
+    @pytest.mark.parametrize(
+        'separator',
+        [
+            '\x0c',
+            '\u2028',
+            '\x0b',
+        ],
+    )
+    def test_exotic_line_separators_do_not_shift_lines(
+        self,
+        hook: ModuleType,
+        tmp_path: Path,
+        separator: str,
+    ) -> None:
+        """
+        Test that characters str.splitlines() treats as line breaks (but ast does not) do not misplace the rewrite
+        """
+        f = tmp_path / 'sep.py'
+        source = f'# header{separator}text\nx = """not a docstring"""\n\ndef func():\n    """Brief."""\n'
+        f.write_text(source, encoding='utf-8')
+
+        result = hook.fix_file(f)
+
+        assert result.modified is True
+        assert f.read_text(encoding='utf-8') == (
+            f'# header{separator}text\nx = """not a docstring"""\n\ndef func():\n    """\n    Brief.\n    """\n'
+        )
+
+    @pytest.mark.parametrize(
+        'prefix',
+        [
+            'R',
+            'U',
+        ],
+    )
+    def test_uppercase_prefix_expanded(self, hook: ModuleType, tmp_path: Path, prefix: str) -> None:
+        """
+        Test that uppercase R/U-prefixed docstrings are expanded and keep their prefix
+        """
+        f = tmp_path / 'upper.py'
+        f.write_text(f'def func():\n    {prefix}"""Brief."""\n')
+
+        result = hook.fix_file(f)
+
+        assert result.modified is True
+        assert f.read_text() == f'def func():\n    {prefix}"""\n    Brief.\n    """\n'
 
     def test_no_docstrings_returns_false(self, hook: ModuleType, tmp_path: Path) -> None:
         """
@@ -681,6 +740,21 @@ class TestMain:
 
         result = hook.main([str(f)])
         assert result == 1
+
+    def test_syntax_error_returns_one_and_reports(
+        self,
+        hook: ModuleType,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that main reports an unparsable file as an error and returns 1
+        """
+        f = tmp_path / 'broken.py'
+        f.write_text('def func(\n')
+
+        assert hook.main([str(f)]) == 1
+        assert 'ERROR' in unstyle(capsys.readouterr().out)
 
     def test_clean_file_returns_zero(self, hook: ModuleType, tmp_path: Path) -> None:
         """
