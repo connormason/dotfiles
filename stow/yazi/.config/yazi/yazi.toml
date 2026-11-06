@@ -1,21 +1,26 @@
 # =====================================================================================================
 # yazi — general settings (https://yazi-rs.github.io/docs/configuration/yazi)
 # =====================================================================================================
-# Placeholder: every value below is commented out and mirrors yazi's default, so uncommenting a line
-# is a no-op until the value is changed. Run `yazi --debug` to see the effective configuration.
 
-# [mgr]
-# ratio          = [1, 4, 3]      # parent / current / preview pane widths
-# sort_by        = "alphabetical" # alphabetical, natural, mtime, btime, extension, size, random
-# sort_dir_first = true
-# show_hidden    = false
-# show_symlink   = true
+[mgr]
+ratio          = [1, 3, 4]          # parent / current / preview pane widths
+sort_by        = "natural"          # alphabetical, natural, mtime, btime, extension, size, random
+sort_dir_first = true
+show_hidden    = true
+show_symlink   = true
 
-# [preview]
-# max_width  = 600
-# max_height = 900
+[opener]
+sublime = [
+  { run = 'open -a "Sublime Text" %s', desc = "Sublime Text", for = "macos", orphan = true },
+]
 
-# [opener]
-# edit = [
-#     { run = '${EDITOR:-vi} "$@"', block = true, for = "unix" },
-# ]
+[open]
+prepend_rules = [
+  { mime = "text/*",                             use = ["sublime", "edit"] },
+  { mime = "application/{json,x-yaml,toml,xml}", use = ["sublime", "edit"] },
+  { mime = "inode/x-empty",                      use = ["sublime", "edit"] },
+]
+
+[preview]
+max_width  = 600
+max_height = 900

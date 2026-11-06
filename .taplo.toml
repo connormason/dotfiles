@@ -1,4 +1,7 @@
-exclude = ["archive/**/*.toml"]
+exclude = [
+    "archive/**/*.toml",
+    "stow/yazi/.config/yazi/yazi.toml",
+]
 
 [formatting]
 align_comments        = true
