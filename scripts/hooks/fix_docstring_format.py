@@ -194,110 +194,8 @@ SKIPPED    = style('SKIPPED',    fg='bright_blue',   dim=True)
 
 
 # ==================================================================================================
-# Core script logic
+# Detection
 # ==================================================================================================
-
-
-# ==================================================================================================
-# Command-line arguments
-# ==================================================================================================
-
-
-class Args(argparse.Namespace):
-    """
-    :class:`argparse.Namespace` annotated with args supported by this script.
-    """
-    filenames: Sequence[str]        # positional arg(s) "FILENAMES"
-    check:     bool                 # --check
-    verbose:   bool                 # --verbose
-
-
-def parse_args(argv: Sequence[str] | None = None) -> Args:
-    """
-    Build argument parser and parse command-line args.
-
-    :param argv: command-line arguments (default: ``sys.argv[1:]``)
-    :return: :class:`Args` (typed :class:`argparse.Namespace` subclass)
-    """
-    parser = argparse.ArgumentParser(
-        description='Enforce multi-line docstring format in Python files',
-        formatter_class=functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
-        add_help=False,
-    )
-
-    def add_positional_args() -> None:
-        """
-        Register the positional arguments group on the parser.
-        """
-        positional_args = parser.add_argument_group('Positional arguments')
-        positional_args.add_argument(
-            'filenames',
-            nargs='*',
-            help='Python files to check/fix',
-        )
-    add_positional_args()
-
-    def add_mode_opts() -> None:
-        """
-        Register the mode options group on the parser.
-        """
-        mode_opts = parser.add_argument_group('Mode options')
-        mode_opts.add_argument(
-            '--check',
-            action='store_true',
-            default=False,
-            help='Report violations without modifying files (exit non-zero if any found)',
-        )
-    add_mode_opts()
-
-    def add_output_opts() -> None:
-        """
-        Register the output options group on the parser.
-        """
-        output_opts = parser.add_argument_group('Output options')
-        output_opts.add_argument(
-            '-v',
-            '--verbose',
-            action='store_true',
-            default=False,
-            help='Output result for each processed file to console',
-        )
-    add_output_opts()
-
-    def add_other_opts() -> None:
-        """
-        Register the miscellaneous options group on the parser.
-        """
-        other_opts = parser.add_argument_group('Other options')
-        other_opts.add_argument(
-            '-h',
-            '--help',
-            action='help',
-            default=argparse.SUPPRESS,
-            help='Show this help message and exit',
-        )
-    add_other_opts()
-
-    return parser.parse_args(argv, namespace=Args())
-
-
-# ==================================================================================================
-# Core script logic
-# ==================================================================================================
-
-
-class FixResult:
-    """
-    Result of fixing a single Python file.
-
-    :param modified: whether the file was modified (or would be in check mode)
-    :param skipped_lines: 1-based line numbers of docstrings skipped due to suppression comments
-    """
-    __slots__ = ('modified', 'skipped_lines')
-
-    def __init__(self, modified: bool, *, skipped_lines: list[int] | None = None) -> None:
-        self.modified      = modified
-        self.skipped_lines = skipped_lines if skipped_lines is not None else []
 
 
 def find_docstring_exprs(tree: ast.Module) -> list[ast.Expr]:
@@ -362,6 +260,25 @@ def has_suppression_comment(lines: list[str], docstring_line_idx: int) -> bool:
         if above_line.startswith('#') and SUPPRESSION_MARKER in above_line:
             return True
     return False
+
+
+# ==================================================================================================
+# Fixing
+# ==================================================================================================
+
+
+class FixResult:
+    """
+    Result of fixing a single Python file.
+
+    :param modified: whether the file was modified (or would be in check mode)
+    :param skipped_lines: 1-based line numbers of docstrings skipped due to suppression comments
+    """
+    __slots__ = ('modified', 'skipped_lines')
+
+    def __init__(self, modified: bool, *, skipped_lines: list[int] | None = None) -> None:
+        self.modified      = modified
+        self.skipped_lines = skipped_lines if skipped_lines is not None else []
 
 
 def expand_single_line_docstring(line: str) -> list[str]:
@@ -475,6 +392,94 @@ def fix_file(filepath: Path, *, check_only: bool = False) -> FixResult:
 
     skipped_lines.sort()
     return FixResult(modified=modified, skipped_lines=skipped_lines)
+
+
+# ==================================================================================================
+# Command-line arguments
+# ==================================================================================================
+
+
+class Args(argparse.Namespace):
+    """
+    :class:`argparse.Namespace` annotated with args supported by this script.
+    """
+    filenames: Sequence[str]        # positional arg(s) "FILENAMES"
+    check:     bool                 # --check
+    verbose:   bool                 # --verbose
+
+
+def parse_args(argv: Sequence[str] | None = None) -> Args:
+    """
+    Build argument parser and parse command-line args.
+
+    :param argv: command-line arguments (default: ``sys.argv[1:]``)
+    :return: :class:`Args` (typed :class:`argparse.Namespace` subclass)
+    """
+    parser = argparse.ArgumentParser(
+        description='Enforce multi-line docstring format in Python files',
+        formatter_class=functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
+        add_help=False,
+    )
+
+    def add_positional_args() -> None:
+        """
+        Register the positional arguments group on the parser.
+        """
+        positional_args = parser.add_argument_group('Positional arguments')
+        positional_args.add_argument(
+            'filenames',
+            nargs='*',
+            help='Python files to check/fix',
+        )
+    add_positional_args()
+
+    def add_mode_opts() -> None:
+        """
+        Register the mode options group on the parser.
+        """
+        mode_opts = parser.add_argument_group('Mode options')
+        mode_opts.add_argument(
+            '--check',
+            action='store_true',
+            default=False,
+            help='Report violations without modifying files (exit non-zero if any found)',
+        )
+    add_mode_opts()
+
+    def add_output_opts() -> None:
+        """
+        Register the output options group on the parser.
+        """
+        output_opts = parser.add_argument_group('Output options')
+        output_opts.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            default=False,
+            help='Output result for each processed file to console',
+        )
+    add_output_opts()
+
+    def add_other_opts() -> None:
+        """
+        Register the miscellaneous options group on the parser.
+        """
+        other_opts = parser.add_argument_group('Other options')
+        other_opts.add_argument(
+            '-h',
+            '--help',
+            action='help',
+            default=argparse.SUPPRESS,
+            help='Show this help message and exit',
+        )
+    add_other_opts()
+
+    return parser.parse_args(argv, namespace=Args())
+
+
+# ==================================================================================================
+# Core script entry point
+# ==================================================================================================
 
 
 def main(argv: Sequence[str] | None = None) -> int:
