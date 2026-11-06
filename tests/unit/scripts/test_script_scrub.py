@@ -1,5 +1,5 @@
 """
-Unit tests asserting the copied install/env scripts carry no employer-internal markers
+Unit tests asserting the copied install/env/codebase scripts carry no employer-internal markers
 """
 from __future__ import annotations
 
@@ -11,7 +11,11 @@ import pytest
 
 REPO_ROOT:    Path       = Path(__file__).resolve().parents[3]
 LEAK_GUARD:   Path       = REPO_ROOT / 'scripts' / 'hooks' / 'check-leaks.py'
-SCRIPT_DIRS:  list[Path] = [REPO_ROOT / 'scripts' / 'install', REPO_ROOT / 'scripts' / 'env']
+SCRIPT_DIRS:  list[Path] = [
+    REPO_ROOT / 'scripts' / 'install',
+    REPO_ROOT / 'scripts' / 'env',
+    REPO_ROOT / 'scripts' / 'codebase',
+]
 SCRIPT_FILES: list[Path] = sorted(path for directory in SCRIPT_DIRS for path in directory.glob('*.py'))
 
 
@@ -32,14 +36,14 @@ def leak_guard() -> object:
 
 class TestScriptScrub:
     """
-    Tests that the scripts under scripts/install and scripts/env pass the public-repo leak guard
+    Tests that the scripts under scripts/install, scripts/env and scripts/codebase pass the public-repo leak guard
     """
     def test_scripts_are_discovered(self) -> None:
         """
         Test that the glob finds the copied scripts, so the parametrized checks cannot pass vacuously
         """
         assert {path.name for path in SCRIPT_FILES} >= {
-            'install_uv.py', 'install_hatch.py', 'python_diagnostic.py', 'venvshell.py',
+            'install_uv.py', 'install_hatch.py', 'python_diagnostic.py', 'venvshell.py', 'update_gitignore.py',
         }
 
     @pytest.mark.parametrize('script', SCRIPT_FILES, ids=lambda path: path.name)
