@@ -605,7 +605,9 @@ Configured checks include:
 - **Ansible**: ansible-lint over `playbooks/` and `roles/` (check only; accepted findings are in `.ansible-lint-ignore`)
 - **Formatters**: shfmt (shell), taplo (TOML), mdformat (Markdown; `.ctx/` and `docs/plans/` are excluded), ruff
   `--fix-only` (Python)
-- **Fixers**: Whitespace, line endings, UTF-8 BOM, codespell (rewrites misspellings in place)
+- **Fixers**: Whitespace, line endings, UTF-8 BOM, codespell (rewrites misspellings in place), and two Python fixers:
+  `fix-docstring-format` (single-line docstrings become multi-line) and `format-module-section-headers` (module-level
+  triple-quoted section headers become boxed `# ====` comments); see [scripts/hooks/README.md](scripts/hooks/README.md)
 
 Run hooks:
 

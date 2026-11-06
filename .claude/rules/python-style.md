@@ -38,6 +38,11 @@ Self-contained Python style for this repository (does not depend on any global `
   `See Also:`) and Sphinx field tags (`:param:`, `:raises:`, `:return:`). There is **no** enforced summary-line period
   and **no** dashed section underlines (that is the numpy convention, which this repo does not use).
 - No blank line between a class docstring and its first member.
+- Docstrings are **multi-line** (opening `"""`, text, closing `"""` on separate lines). The `fix-docstring-format` hook
+  expands single-line ones; mark an intentional exception with `# nofmt: docstring` (inline or on the line above).
+- Module-level section headers are boxed comments (`# ====` borders, 100 columns wide), not triple-quoted strings. The
+  `format-module-section-headers` hook converts the latter and resizes borders. See
+  [`scripts/hooks/README.md`](../../scripts/hooks/README.md).
 
 ## `run.py` patterns
 

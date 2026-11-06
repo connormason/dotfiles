@@ -8,9 +8,11 @@ Custom pre-commit hook scripts for checks and transforms not covered by standard
 same interface contract as `pre-commit`: they accept a list of filenames as positional arguments and exit `0` on success
 or non-zero on failure. Every script here is wired into [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) as a
 `local` repo hook and runs via `prek` / `make pre`. Each Python script is a self-contained PEP 723 script, so `uv run`
-resolves any dependencies in isolation, except [`docs_audit_hook.py`](#docs_audit_hookpy): it is stdlib-only and imports
-the in-repo [`scripts/docs_audit/`](../docs_audit/README.md) package. [`uv-public.sh`](#uv-publicsh) and
-[`check-leaks-push.sh`](#check-leaks-pushsh) are the exceptions: shell scripts rather than PEP 723 scripts.
+resolves any dependencies in isolation, except [`docs_audit_hook.py`](#docs_audit_hookpy), which is stdlib-only and
+imports the in-repo [`scripts/docs_audit/`](../docs_audit/README.md) package, and
+[`fix_docstring_format.py`](#fix_docstring_formatpy), which is stdlib-only and declares no PEP 723 metadata.
+[`uv-public.sh`](#uv-publicsh) and [`check-leaks-push.sh`](#check-leaks-pushsh) are the exceptions: shell scripts rather
+than PEP 723 scripts.
 
 <!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
 
@@ -61,27 +63,42 @@ the in-repo [`scripts/docs_audit/`](../docs_audit/README.md) package. [`uv-publi
   - [Behavior](#behavior-7)
   - [Exit Codes](#exit-codes-6)
   - [Pre-Commit Integration](#pre-commit-integration-7)
+- [`fix_docstring_format.py`](#fix_docstring_formatpy)
+  - [Synopsis](#synopsis-8)
+  - [Options](#options-6)
+  - [Behavior](#behavior-8)
+  - [Exit Codes](#exit-codes-7)
+  - [Pre-Commit Integration](#pre-commit-integration-8)
+- [`format_module_section_headers.py`](#format_module_section_headerspy)
+  - [Synopsis](#synopsis-9)
+  - [Options](#options-7)
+  - [Behavior](#behavior-9)
+  - [Exit Codes](#exit-codes-8)
+  - [Pre-Commit Integration](#pre-commit-integration-9)
 
 <!-- mdformat-toc end -->
 
 ## Scripts<a name="scripts"></a>
 
-| Script                                       | What it does                                                            | Hook id                                              | Priority          |
-| -------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------- | ----------------- |
-| [`check-json5.py`](#check-json5py)           | Validate JSON5 file syntax via `pyjson5`                                | `check-json5`                                        | 10 (check phase)  |
-| [`check-leaks.py`](#check-leakspy)           | Block employer-internal identifiers (content, paths, git identity)      | `check-leaks`, `check-leaks-msg`                     | 10 (check phase)  |
-| [`check-leaks-push.sh`](#check-leaks-pushsh) | Pre-push scan of pushed commits' identities, messages, and added lines  | `check-leaks-push-history`, `check-leaks-push-files` | 10 (check phase)  |
-| [`check-pkl.py`](#check-pklpy)               | Validate Pkl files by running `pkl eval --format yaml`                  | `check-pkl`                                          | 10 (check phase)  |
-| [`format-pkl.py`](#format-pklpy)             | Auto-format Pkl files via `pkl format`                                  | `format-pkl`                                         | 35 (format phase) |
-| [`sort-json-array.py`](#sort-json-arraypy)   | Sort a top-level JSON array of objects by a key                         | `sort-json-array`                                    | 35 (format phase) |
-| [`uv-public.sh`](#uv-publicsh)               | Run uv against public PyPI only (wraps `uv-lock`/`uv-sync`/`uv-export`) | `uv-*`                                               | 0–5 (sync phase)  |
-| [`docs_audit_hook.py`](#docs_audit_hookpy)   | Validate changed `README.md` files against the navigation contract      | `docs-audit-readme`                                  | 10 (check phase)  |
+| Script                                                                 | What it does                                                                                     | Hook id                                              | Priority          |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------- | ----------------- |
+| [`check-json5.py`](#check-json5py)                                     | Validate JSON5 file syntax via `pyjson5`                                                         | `check-json5`                                        | 10 (check phase)  |
+| [`check-leaks.py`](#check-leakspy)                                     | Block employer-internal identifiers (content, paths, git identity)                               | `check-leaks`, `check-leaks-msg`                     | 10 (check phase)  |
+| [`check-leaks-push.sh`](#check-leaks-pushsh)                           | Pre-push scan of pushed commits' identities, messages, and added lines                           | `check-leaks-push-history`, `check-leaks-push-files` | 10 (check phase)  |
+| [`check-pkl.py`](#check-pklpy)                                         | Validate Pkl files by running `pkl eval --format yaml`                                           | `check-pkl`                                          | 10 (check phase)  |
+| [`format-pkl.py`](#format-pklpy)                                       | Auto-format Pkl files via `pkl format`                                                           | `format-pkl`                                         | 35 (format phase) |
+| [`sort-json-array.py`](#sort-json-arraypy)                             | Sort a top-level JSON array of objects by a key                                                  | `sort-json-array`                                    | 35 (format phase) |
+| [`uv-public.sh`](#uv-publicsh)                                         | Run uv against public PyPI only (wraps `uv-lock`/`uv-sync`/`uv-export`)                          | `uv-*`                                               | 0–5 (sync phase)  |
+| [`docs_audit_hook.py`](#docs_audit_hookpy)                             | Validate changed `README.md` files against the navigation contract                               | `docs-audit-readme`                                  | 10 (check phase)  |
+| [`fix_docstring_format.py`](#fix_docstring_formatpy)                   | Expand single-line Python docstrings to multi-line form                                          | `fix-docstring-format`                               | 32 (format phase) |
+| [`format_module_section_headers.py`](#format_module_section_headerspy) | Convert module-level triple-quoted section headers to boxed comments and normalize border widths | `format-module-section-headers`                      | 33 (format phase) |
 
 > [!NOTE]
 > This repository currently tracks no `.json5` or `.pkl` files, so `check-pkl` and `format-pkl` match nothing today and
 > fire automatically the moment a matching file lands. `check-json5` also matches `stow/zed/**/*.json` and therefore
 > validates the tracked Zed settings file today. `sort-json-array` is scoped to the one tracked `keybindings.json` under
-> `stow/vscode/` (already sorted by `command`, so it is a no-op until that file changes). `check-leaks` runs on every
+> `stow/vscode/` (already sorted by `command`, so it is a no-op until that file changes). `fix-docstring-format` and
+> `format-module-section-headers` run on every staged Python file and rewrite it in place. `check-leaks` runs on every
 > commit; the `uv-*` hooks run through `uv-public.sh` but fire only on their own triggers (`uv-lock` when `uv.lock`,
 > `pyproject.toml`, or `uv.toml` is staged; `uv-sync` after checkout, merge, or rewrite).
 
@@ -138,23 +155,24 @@ slotted into the repository's priority scheme (the `uv-*` entries that call `uv-
         types: [file]
 ```
 
-The `sort-json-array` entry is shown [in its own section](#pre-commit-integration-5), and the `docs-audit-readme` entry
-[in its own](#pre-commit-integration-7).
+The `sort-json-array` entry is shown [in its own section](#pre-commit-integration-5), the `docs-audit-readme` entry
+[in its own](#pre-commit-integration-7), and the `fix-docstring-format` and `format-module-section-headers` entries in
+[theirs](#pre-commit-integration-8) ([second](#pre-commit-integration-9)).
 
 **Priority scheme** used across the whole config:
 
-| Priority band | Phase             | Notes                                                                                          |
-| ------------- | ----------------- | ---------------------------------------------------------------------------------------------- |
-| 0–6           | Dependency sync   | `uv-lock`, `uv-sync`, `uv-export` (via `uv-public.sh`), `sync-with-uv`, `sync-pre-commit-deps` |
-| 10            | Read-only checks  | Run in parallel; `check-json5`, `check-pkl`, `check-leaks` live here                           |
-| 20–23         | Whitespace fixers | `fix-byte-order-marker`, `end-of-file-fixer`, `trailing-whitespace`, etc.                      |
-| 30–35         | Formatters        | `keep-sorted` (30); `shfmt`, `format-pkl`, `sort-json-array`, etc. (35)                        |
-| 40            | Linters           | `ruff`, `mypy`, `yamllint`, `shellcheck`, `codespell`                                          |
+| Priority band | Phase             | Notes                                                                                                                                                        |
+| ------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0–6           | Dependency sync   | `uv-lock`, `uv-sync`, `uv-export` (via `uv-public.sh`), `sync-with-uv`, `sync-pre-commit-deps`                                                               |
+| 10            | Read-only checks  | Run in parallel; `check-json5`, `check-pkl`, `check-leaks` live here                                                                                         |
+| 20–23         | Whitespace fixers | `fix-byte-order-marker`, `end-of-file-fixer`, `trailing-whitespace`, etc.                                                                                    |
+| 30–35         | Formatters        | `codespell` (30), `keep-sorted` (31), `fix-docstring-format` (32), `format-module-section-headers` (33); `shfmt`, `format-pkl`, `sort-json-array`, etc. (35) |
+| 40            | Linters           | `ruff`, `mypy`, `yamllint`, `shellcheck`, `codespell`                                                                                                        |
 
-The `format-pkl` and `sort-json-array` hooks carry `stages: [pre-commit]` so they are skipped when the config is run in
-CI (`manual` stage). `check-pkl` and `check-json5` run in the `pre-commit` and `manual` (CI) stages (`check-leaks` is
-`pre-commit` only and `check-leaks-msg` is `commit-msg` only; the `check-leaks-push-*` hooks are `pre-push` only; CI
-runs its own leak-guard job).
+The `format-pkl`, `sort-json-array`, `fix-docstring-format`, and `format-module-section-headers` hooks carry
+`stages: [pre-commit]` so they are skipped when the config is run in CI (`manual` stage). `check-pkl` and `check-json5`
+run in the `pre-commit` and `manual` (CI) stages (`check-leaks` is `pre-commit` only and `check-leaks-msg` is
+`commit-msg` only; the `check-leaks-push-*` hooks are `pre-push` only; CI runs its own leak-guard job).
 
 Both Pkl hooks are tolerant of environments where `pkl` is not installed: by default they print a warning and exit `0`.
 Pass `--require-pkl` to make the missing binary a hard failure.
@@ -763,3 +781,161 @@ block markers.
 
 The `exclude` skips `docs/plans/` (planning artifacts are index-free by convention) and the vendored READMEs nested
 under `stow/` packages (skills and spoons); `stow/README.md` itself is checked.
+
+---
+
+## `fix_docstring_format.py`<a name="fix_docstring_formatpy"></a>
+
+### Synopsis<a name="synopsis-8"></a>
+
+Rewrites single-line Python docstrings in multi-line form, in place. Docstrings are located with the `ast` module (the
+first statement of a module, class, or function body when it is a bare string), so ordinary string literals and
+section-comment strings are never touched. Stdlib-only; it declares no PEP 723 metadata.
+
+```
+python3 scripts/hooks/fix_docstring_format.py [OPTIONS] [FILENAMES...]
+```
+
+### Options<a name="options-6"></a>
+
+| Flag              | Description                                                                | Default |
+| ----------------- | -------------------------------------------------------------------------- | ------- |
+| `FILENAMES`       | Python files to check/fix                                                  | —       |
+| `--check`         | Report violations without modifying files (exit non-zero if any are found) | off     |
+| `-v`, `--verbose` | Report every processed file, plus docstrings skipped by a suppression      | off     |
+| `-h`, `--help`    | Show help and exit                                                         | —       |
+
+### Behavior<a name="behavior-8"></a>
+
+For each filename:
+
+1. Parses the file with `ast`. A file with a syntax error is reported as an error and left untouched.
+2. Collects the docstrings that open and close on the same line and expands each into three lines at the same
+   indentation: the opening quotes, the text, and the closing quotes. Raw (`r`/`R`) and `u`/`U`-prefixed triple-quoted
+   docstrings keep their prefix. Empty docstrings, and any single-line docstring that is not triple-quoted, are left
+   as-is.
+3. Skips a docstring carrying a `# nofmt: docstring` comment, either after the closing quotes on the same line or on the
+   line immediately above. Skipped docstrings are listed only with `--verbose`.
+4. Rewrites the file unless `--check` is given. The file is read and written without newline translation, so CRLF files
+   keep their line endings.
+
+Output: `MODIFIED <file>` for each changed file (or, with `--check`, each file that would change); with `--verbose`,
+`UNMODIFIED <file>` for the rest and `SKIPPED <file>:<line> (# nofmt: docstring)` per suppression. A file that cannot be
+processed (including one with a syntax error) prints `ERROR <file>` followed by the exception message. With no filenames
+the script prints `No filenames to check` and exits `0`.
+
+### Exit Codes<a name="exit-codes-7"></a>
+
+| Code | Meaning                                                                                       |
+| ---- | --------------------------------------------------------------------------------------------- |
+| `0`  | Every file already conforms (or no files supplied)                                            |
+| `1`  | A file was modified (or would be, with `--check`), or a file raised an error while processing |
+
+### Pre-Commit Integration<a name="pre-commit-integration-8"></a>
+
+```yaml
+  - id: fix-docstring-format
+    name: '[fix]    python docstring format'
+    stages: [pre-commit]
+    priority: 32
+    entry: scripts/hooks/fix_docstring_format.py
+    language: python
+    types: [python]
+```
+
+The hook rewrites files and exits `1`, so a commit that needed fixing fails once; re-stage the result and commit again.
+It runs ahead of `format-module-section-headers` (priority 33) and `ruff --fix-only` (35).
+
+---
+
+## `format_module_section_headers.py`<a name="format_module_section_headerspy"></a>
+
+### Synopsis<a name="synopsis-9"></a>
+
+Keeps module-level section headers in the boxed comment style. It converts triple-quoted headers into a boxed comment
+and resizes the borders of existing boxed comments to one width. Pure-stdlib PEP 723 script (no dependencies).
+
+```
+python3 scripts/hooks/format_module_section_headers.py [OPTIONS] [PATHS...]
+```
+
+A converted header looks like this:
+
+```
+# ==================================================================================================
+# Section name
+# ==================================================================================================
+```
+
+### Options<a name="options-7"></a>
+
+#### Positional
+
+| Argument | Description                                                                      | Default |
+| -------- | -------------------------------------------------------------------------------- | ------- |
+| `PATHS`  | Files or directories to process; directories are searched recursively for `*.py` | `.`     |
+
+#### Border options
+
+| Flag                     | Description                                                                              | Default |
+| ------------------------ | ---------------------------------------------------------------------------------------- | ------- |
+| `--border-char CHAR`     | Single non-whitespace character used to draw borders                                     | `=`     |
+| `--border-width N`       | Total border line width, indentation and the leading `# ` included (integer, at least 3) | `100`   |
+| `--no-normalize-borders` | Only convert triple-quoted headers; leave existing borders as they are                   | off     |
+
+#### Behavior options
+
+| Flag                     | Description                                         | Default |
+| ------------------------ | --------------------------------------------------- | ------- |
+| `--exit-non-zero-on-fix` | Exit `1` if any file was modified (for fixer hooks) | off     |
+
+#### Other
+
+| Flag           | Description        |
+| -------------- | ------------------ |
+| `-h`, `--help` | Show help and exit |
+
+### Behavior<a name="behavior-9"></a>
+
+**Conversion.** Using `ast`, the script finds module-level string statements whose opening and closing lines are exactly
+`"""` with no indentation. Each becomes a border line, the content lines prefixed with `# ` (blank lines become a bare
+`#`), and a closing border. A module docstring (the first statement, with only blanks and comments before it),
+single-line `"""..."""` strings, `'''` blocks, and indented strings are never converted.
+
+**Border normalization** (on by default). A boxed header is a standalone border comment, one or more standalone comment
+lines, and a closing border comment, all on consecutive lines at the same indentation. Both borders are rewritten so the
+full line, indentation included, is `--border-width` characters wide. A border is a `#` comment made only of three or
+more `--border-char` characters, so other rules (such as `# -----`) and a lone border that does not enclose a header are
+left alone. Comments are located with `tokenize`, so border-like text inside string literals is ignored.
+
+**Files and directories.** Files passed directly are processed whatever their suffix; directories are searched for
+`*.py`, skipping `.git`, `.venv`, `venv`, `.tox`, `site-packages`, and `__pycache__`. A path that does not exist prints
+a `WARN` to stderr and is skipped. A file that does not parse (or whose comments cannot be tokenized) prints `ERROR` to
+stderr and is skipped. Files are read and written as UTF-8 without newline translation, so CRLF files keep their line
+endings.
+
+Each changed file is reported as `<path>: fixed <n> header(s)`, counting converted and resized headers together.
+
+### Exit Codes<a name="exit-codes-8"></a>
+
+| Code | Meaning                                                                                   |
+| ---- | ----------------------------------------------------------------------------------------- |
+| `0`  | No file needed changes, or files changed and `--exit-non-zero-on-fix` was not given       |
+| `1`  | A file could not be parsed, or a file was modified and `--exit-non-zero-on-fix` was given |
+
+### Pre-Commit Integration<a name="pre-commit-integration-9"></a>
+
+```yaml
+  - id: format-module-section-headers
+    name: '[format] python module section headers'
+    stages: [pre-commit]
+    priority: 33
+    entry: scripts/hooks/format_module_section_headers.py
+    language: python
+    types: [python]
+    args: [--exit-non-zero-on-fix]
+```
+
+`--exit-non-zero-on-fix` makes a run that rewrote files fail the commit so the result can be re-staged. The defaults
+(`=` borders, 100 columns) match the existing headers in the repo; change them by adding `--border-char` or
+`--border-width` to `args`.
