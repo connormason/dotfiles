@@ -4,13 +4,12 @@ Tests for the update_gitignore.py script
 from __future__ import annotations
 
 import importlib.util
+import re
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-
-from tests.conftest import unstyle
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -32,6 +31,13 @@ GENERATED = (
     f'# End of {API_URL}{TEMPLATES}\n'
 )
 CUSTOM = '\n# Custom\n.claude/worktrees/\n\n*.local\n'
+
+
+def unstyle(text: str) -> str:
+    """
+    Strip ANSI escape sequences from captured output
+    """
+    return re.sub(r'\033\[[;?0-9]*[a-zA-Z]', '', text)
 
 
 class FakeResponse:
