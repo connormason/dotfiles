@@ -66,6 +66,10 @@
 .config/tmux/tmux.conf
 .config/tmux/tmux.conf.local
 .config/worktrunk/config.toml
+.config/yazi/init.lua
+.config/yazi/keymap.toml
+.config/yazi/theme.toml
+.config/yazi/yazi.toml
 .config/zed/settings.json
 .config/zsh/conf.d/00-lib.zsh
 .config/zsh/conf.d/00-path.zsh
@@ -77,6 +81,7 @@
 .config/zsh/conf.d/35-tools-misc.zsh
 .config/zsh/conf.d/36-fzf.zsh
 .config/zsh/conf.d/38-zoxide.zsh
+.config/zsh/conf.d/39-yazi.zsh
 .config/zsh/conf.d/40-aliases.zsh
 .config/zsh/conf.d/40-git.zsh
 .config/zsh/conf.d/42-python.zsh

@@ -1,0 +1,2 @@
+-- yazi plugin bootstrap (https://yazi-rs.github.io/docs/plugins/overview): runs once at startup.
+-- Placeholder: configure installed plugins here, e.g. require("git"):setup()

@@ -68,6 +68,7 @@ tree
 uv
 visual-studio-code
 worktrunk
+yazi
 zed
 zoxide
 zsh
