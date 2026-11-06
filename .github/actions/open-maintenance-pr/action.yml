@@ -1,0 +1,45 @@
+---
+name: Open maintenance pull request
+description: >-
+  Commit changes under the given paths to an evergreen branch, force-push it, and open or refresh a pull request
+  against the base branch. The calling job's checkout must use the same token (actions/checkout `token:`) so the push
+  authenticates as that token's owner and the resulting pull request triggers workflows.
+
+inputs:
+  branch:
+    description: Evergreen head branch, for example maintenance/update-dependencies
+    required: true
+  paths:
+    description: Space-separated paths to inspect and stage
+    required: true
+  title:
+    description: Pull request title
+    required: true
+  body:
+    description: Pull request body (Markdown)
+    required: true
+  commit-message:
+    description: Commit message
+    required: true
+  base-branch:
+    description: Branch the pull request targets
+    required: false
+    default: main
+  token:
+    description: Token gh uses to open or edit the pull request
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Commit, push, and open or refresh the pull request
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        BRANCH: ${{ inputs.branch }}
+        PATHS: ${{ inputs.paths }}
+        TITLE: ${{ inputs.title }}
+        BODY: ${{ inputs.body }}
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+      run: bash "${{ github.action_path }}/open-pr.sh"
