@@ -113,7 +113,7 @@ Plex's `ADVERTISE_IP` needs no manual step: the `docker` role renders `~/docker/
 
 ```bash
 # Full NAS bootstrap
-./nas_bootstrap.sh
+python3 run.py nas-provision
 
 # Tailscale only (add -vv for more output)
 python3 run.py nas-provision --tags tailscale -vv

@@ -71,8 +71,7 @@ machine.
 ### NAS Bootstrapping<a name="nas-bootstrapping"></a>
 
 Prerequisite: [`uv`](https://docs.astral.sh/uv/) on the controlling machine. `run.py` runs Ansible through
-`scripts/hooks/uv-public.sh`, and [`bootstrap/Brewfile`](bootstrap/Brewfile) installs it on a Mac. `./nas_bootstrap.sh`
-stops with an install pointer when `uv` is missing.
+`scripts/hooks/uv-public.sh`, and [`bootstrap/Brewfile`](bootstrap/Brewfile) installs it on a Mac.
 
 The preflight and the roles also expect:
 
@@ -91,7 +90,7 @@ The inventory variables the playbook reads are listed in [`playbooks/README.md`]
 
 1. Pull inventory repository: `python3 run.py update-inventory`
 2. Create file `vault_password.txt` in the repo root and paste in the Ansible Vault password from password manager
-3. Run the provisioning command (`./nas_bootstrap.sh` is a thin wrapper around it)
+3. Run the provisioning command
    - `python3 run.py nas-provision`
 
 The system roles run first, then the `dotfiles` role hands the NAS user's `$HOME` to the stow engine, the `haos` role
@@ -105,9 +104,9 @@ each service's web UI ([`roles/tailscale/README.md`](roles/tailscale/README.md#p
 One layered stow engine configures `$HOME`, with two entry points:
 
 - **A Mac**: `bootstrap/bootstrap.sh` runs the engine's numbered stages directly.
-- **The home NAS**: `run.py nas-provision` (wrapped by `nas_bootstrap.sh`) runs the Ansible playbook. It does the
-  root-level setup, then hands the NAS user's `$HOME` to the same engine through the `dotfiles` role and the
-  [`profiles/nas`](profiles/nas/README.md) overlay.
+- **The home NAS**: `run.py nas-provision` runs the Ansible playbook. It does the root-level setup, then hands the NAS
+  user's `$HOME` to the same engine through the `dotfiles` role and the [`profiles/nas`](profiles/nas/README.md)
+  overlay.
 
 ### Stow engine and bootstrap stages (macOS and Linux)<a name="stow-engine-and-bootstrap-stages-macos-and-linux"></a>
 
@@ -370,7 +369,6 @@ make pre
 dotfiles/
 ├── run.py                                  # Python CLI for repository management
 ├── stow.sh                                 # Links stow packages into $HOME
-├── nas_bootstrap.sh                        # Wrapper for `run.py nas-provision`
 ├── Makefile                                # Auto-generated from run.py commands
 ├── ansible.cfg                             # Ansible defaults (roles_path, vault_password_file)
 ├── pyproject.toml                          # Project metadata, uv dependency groups, and tool settings

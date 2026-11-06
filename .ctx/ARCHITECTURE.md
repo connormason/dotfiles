@@ -6,7 +6,7 @@ section of the [README](../README.md). Loaded on demand from [`CLAUDE.md`](../CL
 ## Two Provisioning Systems
 
 - **macOS** — the stow engine and `bootstrap/` stage scripts. Entry point: `bootstrap/bootstrap.sh`.
-- **NAS** — Ansible plus the stow engine. Entry point: `run.py nas-provision` (wrapped by `nas_bootstrap.sh`) →
+- **NAS** — Ansible plus the stow engine. Entry point: `run.py nas-provision` →
   `playbooks/nas_bootstrap.yml`; services deploy with `run.py nas-deploy`.
 
 The retired Ansible macOS setup survives as a frozen, unmaintained snapshot in `archive/ansible-macos/` (reference only;
@@ -20,8 +20,6 @@ skipped by the lint tooling).
 2. Installs the Ansible collections from `roles/requirements.yml`; a failed install only warns, and the playbook still
    runs with the collections already installed
 3. Runs `playbooks/nas_bootstrap.yml` in the uv environment and exits with its status
-
-`nas_bootstrap.sh` validates the repository layout and delegates to it.
 
 ## Stow Engine and Bootstrap Stages (macOS + Linux)
 

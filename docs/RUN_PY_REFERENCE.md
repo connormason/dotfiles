@@ -395,11 +395,10 @@ python3 run.py nas-deploy all
 Runs the preflight, installs the Ansible collections with `ansible-galaxy collection install -r roles/requirements.yml`,
 then runs `ansible-playbook playbooks/nas_bootstrap.yml` (with the inventory and vault password file) through
 [`scripts/hooks/uv-public.sh`](../scripts/hooks/uv-public.sh). A failed collection install prints a warning and the
-playbook still runs with the collections already installed. The exit status is Ansible's. `nas_bootstrap.sh` is a thin
-wrapper that forwards its arguments to this command. `--check --diff` previews the whole playbook on a converged host.
-On a fresh host, where `smbd` or `tailscale` is not installed yet, the Samba version probe fails and the Tailscale
-status probe returns nothing for the next task to parse, so `--check` stops there (the real run installs those tools
-first). Both probes are read-only and carry `check_mode: false`.
+playbook still runs with the collections already installed. The exit status is Ansible's. `--check --diff` previews the
+whole playbook on a converged host. On a fresh host, where `smbd` or `tailscale` is not installed yet, the Samba version
+probe fails and the Tailscale status probe returns nothing for the next task to parse, so `--check` stops there (the
+real run installs those tools first). Both probes are read-only and carry `check_mode: false`.
 
 #### `nas-deploy`
 
