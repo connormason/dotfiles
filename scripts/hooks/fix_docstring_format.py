@@ -417,7 +417,10 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
     """
     parser = argparse.ArgumentParser(
         description='Enforce multi-line docstring format in Python files',
-        formatter_class=functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
+        formatter_class=functools.partial(
+            argparse.RawTextHelpFormatter,
+            max_help_position=50,
+        ),
         add_help=False,
     )
 
