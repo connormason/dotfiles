@@ -88,3 +88,16 @@ Each lesson follows this pattern:
   carries selects the include and nothing else. Only three tasks carried `configfile`.
 - **Rule**: Every tag on an include must be the apply tag or be carried by a task in the role
   (`tests/unit/test_nas_playbook.py::TestPlaybookTags`). Prove tag semantics with a real run before documenting them.
+
+### Claude Code hooks read tool data from stdin JSON, not from environment variables
+
+- **Context**: The project `.claude/settings.json` hooks (vault/inventory edit guard, ruff on `.py`, yamllint on YAML)
+  read `$CLAUDE_TOOL_ARG_FILE_PATH`. An automation review noticed that no other hook on the machine used it.
+- **Mistake**: Claude Code exports no such variable. The documented contract is a JSON payload on stdin
+  (`tool_input.file_path`, always absolute for Write and Edit), plus `CLAUDE_PROJECT_DIR`. Every hook therefore saw an
+  empty path and silently did nothing, including the guard protecting `vault_password.txt`. Nothing failed, because each
+  command ended in `exit 0`.
+- **Rule**: Write hooks as scripts under `.claude/hooks/` that parse stdin with `jq`, and cover them with
+  `tests/unit/claude/test_project_hooks.py`, which feeds real payloads. A PostToolUse hook can only reach Claude by
+  exiting 2 with the message on stderr. A security guard must prove it blocks (exit 2) for a protected path, not merely
+  that it exits 0 for others.
