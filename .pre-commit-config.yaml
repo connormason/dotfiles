@@ -409,8 +409,10 @@ repos:
   #
   #   - Priority 30    any file type                  codespell --write-changes
   #   - Priority 31    any file type                  keep-sorted
+  #   - Priority 32    python                         fix-docstring-format
+  #   - Priority 33    python                         format-module-section-headers
   #   - Priority 35    shell scripts                  shfmt
-  #                    json (.claude)                 pretty-format-json
+  #                    json (.claude/settings.json)   pretty-format-json
   #                    json (vscode keybindings)      sort-json-array
   #                    toml                           taplo
   #                    pkl                            format-pkl
@@ -444,6 +446,32 @@ repos:
         groups: [format, local, sort]
         stages: [pre-commit]
         priority: 31
+
+  - repo: local
+    hooks:
+
+      # Enforce multi-line docstring format
+      - id: fix-docstring-format
+        name: "[fix]    python docstring format"
+        groups: [fix, local, python, docs]
+        stages: [pre-commit, manual]
+        priority: 32
+        entry: uv run python scripts/hooks/fix_docstring_format.py
+        language: system
+        types: [python]
+
+      # Convert module-level triple-quoted section headers to boxed comment headers and normalize border widths
+      # (see --border-char / --border-width / --no-normalize-borders)
+      - id: format-module-section-headers
+        name: "[format] python module section headers"
+        groups: [format, local, python, docs]
+        stages: [pre-commit, manual]
+        priority: 33
+        entry: scripts/hooks/format_module_section_headers.py
+        language: python
+        files: '.*\.py$'
+        types: [text]
+        args: [--exit-non-zero-on-fix]
 
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.13.1-1
