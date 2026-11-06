@@ -4,6 +4,7 @@ Shared pytest fixtures
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,7 +18,13 @@ __all__ = [
     'SHELLS',
     'shell',
     'unreadable_overlay',
+    'unstyle',
 ]
+
+
+# ==================================================================================================
+# Fixtures
+# ==================================================================================================
 
 
 def _discover_shells() -> list[str]:
@@ -66,3 +73,18 @@ def unreadable_overlay(tmp_path: Path) -> Iterator[Path]:
     path.chmod(0)
     yield path
     path.chmod(0o755)
+
+
+# ==================================================================================================
+# String helpers
+# ==================================================================================================
+
+
+def unstyle(text: str) -> str:
+    """
+    Removes ANSI styling information from a string.
+
+    :param text: the text to remove style information from
+    :return: string with ANSI styling characters removed
+    """
+    return re.sub(r'\033\[[;?0-9]*[a-zA-Z]', '', text)
