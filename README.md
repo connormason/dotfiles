@@ -141,22 +141,23 @@ Configures the home NAS server with:
 
 ### Core Components<a name="core-components"></a>
 
-| Directory / file               | Purpose                                                                         | Documentation                                            |
-| ------------------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| [`bootstrap/`](bootstrap/)     | Layered stage driver and install manifests (macOS and the NAS)                  | [bootstrap/README.md](bootstrap/README.md)               |
-| [`stow/`](stow/)               | Stow packages linked into `$HOME`                                               | [stow/README.md](stow/README.md)                         |
-| [`profiles/`](profiles/)       | Per-machine overlays                                                            | [profiles/README.md](profiles/README.md)                 |
-| [`render/`](render/)           | Settings fragments merged by `render.py`                                        | [scripts/dotfiles/README.md](scripts/dotfiles/README.md) |
-| [`scripts/`](scripts/)         | Render tool, prek hooks, tool installers, Python env scripts, NAS deploy script | [scripts/README.md](scripts/README.md)                   |
-| [`scripts/nas/`](scripts/nas/) | Syncs `services/` to the NAS and runs `deploy.sh` (CI and `run.py nas-deploy`)  | [scripts/nas/README.md](scripts/nas/README.md)           |
-| [`playbooks/`](playbooks/)     | NAS Ansible playbook and execution guide                                        | [playbooks/README.md](playbooks/README.md)               |
-| [`roles/`](roles/)             | Ansible roles for the NAS                                                       | [roles/README.md](roles/README.md)                       |
-| [`services/`](services/)       | Docker Compose definitions for the NAS stack                                    | [services/README.md](services/README.md)                 |
-| [`vms/`](vms/)                 | Virtual machines on the NAS (Home Assistant OS)                                 | [vms/README.md](vms/README.md)                           |
-| [`archive/`](archive/)         | Frozen reference material (retired Ansible macOS setup and YAML Home Assistant) | [archive/README.md](archive/README.md)                   |
-| [`docs/`](docs/)               | Extended documentation, notes, and plans                                        | [docs/README.md](docs/README.md)                         |
-| [`run.py`](run.py)             | Python CLI for repository management                                            | [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md)     |
-| `inventory/`                   | Host definitions and encrypted vault files (gitignored)                         | Managed via `run.py update-inventory`                    |
+| Directory / file               | Purpose                                                                         | Documentation                                        |
+| ------------------------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [`bootstrap/`](bootstrap/)     | Layered stage driver and install manifests (macOS and the NAS)                  | [bootstrap/README.md](bootstrap/README.md)           |
+| [`stow/`](stow/)               | Stow packages linked into `$HOME`                                               | [stow/README.md](stow/README.md)                     |
+| [`profiles/`](profiles/)       | Per-machine overlays                                                            | [profiles/README.md](profiles/README.md)             |
+| [`render/`](render/)           | Settings fragments merged by `render.py`                                        | [render/README.md](render/README.md)                 |
+| [`scripts/`](scripts/)         | Render tool, prek hooks, tool installers, Python env scripts, NAS deploy script | [scripts/README.md](scripts/README.md)               |
+| [`scripts/nas/`](scripts/nas/) | Syncs `services/` to the NAS and runs `deploy.sh` (CI and `run.py nas-deploy`)  | [scripts/nas/README.md](scripts/nas/README.md)       |
+| [`playbooks/`](playbooks/)     | NAS Ansible playbook and execution guide                                        | [playbooks/README.md](playbooks/README.md)           |
+| [`roles/`](roles/)             | Ansible roles for the NAS                                                       | [roles/README.md](roles/README.md)                   |
+| [`services/`](services/)       | Docker Compose definitions for the NAS stack                                    | [services/README.md](services/README.md)             |
+| [`vms/`](vms/)                 | Virtual machines on the NAS (Home Assistant OS)                                 | [vms/README.md](vms/README.md)                       |
+| [`tests/`](tests/)             | pytest suite: unit and integration tests, fixtures                              | [tests/README.md](tests/README.md)                   |
+| [`archive/`](archive/)         | Frozen reference material (retired Ansible macOS setup and YAML Home Assistant) | [archive/README.md](archive/README.md)               |
+| [`docs/`](docs/)               | Extended documentation, notes, and plans                                        | [docs/README.md](docs/README.md)                     |
+| [`run.py`](run.py)             | Python CLI for repository management                                            | [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md) |
+| `inventory/`                   | Host definitions and encrypted vault files (gitignored)                         | Managed via `run.py update-inventory`                |
 
 ## Documentation<a name="documentation"></a>
 
@@ -408,6 +409,7 @@ dotfiles/
 │   └── host_vars/                          # Host-specific variables and vault files
 │
 ├── scripts/                                # Utility scripts
+│   ├── docs_audit/                         # Deterministic per-directory README audit (`run.py docs-audit`)
 │   ├── dotfiles/                           # render.py
 │   ├── hooks/                              # Custom prek hook scripts
 │   ├── nas/                                # deploy-services.sh (CI and `run.py nas-deploy`)

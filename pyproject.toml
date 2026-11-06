@@ -311,6 +311,7 @@ ignore = [
 # keep-sorted start
 "run.py"                                   = ["BLE001", "S112"]
 "scripts/**/*.py"                          = ["BLE001"]
+"scripts/docs_audit/report.py"             = ["E741"]
 "scripts/env/venvshell.py"                 = ["RUF001"]
 "scripts/utility/generate_completions.py"  = ["FLY002"]
 "stow/**/startup/*.py"                     = ["INP001"]

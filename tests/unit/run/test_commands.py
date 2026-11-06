@@ -117,6 +117,7 @@ class TestCommandRegistration:
             'install-uv', 'install-hatch',
             'install-hooks', 'prepare-hooks', 'uninstall-hooks', 'run-hooks', 'pre',
             'test',
+            'docs-audit',
             'lock', 'lock-check', 'lock-upgrade', 'lock-sync',
             'makefile', 'diagnose',
         ]

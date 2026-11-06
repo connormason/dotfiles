@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean bootstrap nas-provision stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test lock lock-check lock-upgrade lock-sync makefile diagnose
+.PHONY: help install dev shell status doctor clean bootstrap nas-provision stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -50,6 +50,9 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Testing:$(NC)"
 	@echo "  $(YELLOW)test                $(NC) Run the test suite via uv (public-index wrapper)"
+	@echo ""
+	@echo "$(BRIGHT_WHITE)Static Analysis:$(NC)"
+	@echo "  $(YELLOW)docs-audit          $(NC) Audit per-directory README documentation (missing, stale, structural, links, policy)"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Dependencies:$(NC)"
 	@echo "  $(YELLOW)lock                $(NC) Update uv.lock from pyproject.toml"
@@ -140,6 +143,10 @@ pre: ## Run prek (pre-commit) hooks on all project files
 # Testing
 test: ## Run the test suite via uv (public-index wrapper)
 	@python3 run.py test
+
+# Static Analysis
+docs-audit: ## Audit per-directory README documentation (missing, stale, structural, links, policy)
+	@python3 run.py docs-audit
 
 # Dependencies
 lock: ## Update uv.lock from pyproject.toml
