@@ -4,12 +4,13 @@ Tests for the update_gitignore.py script
 from __future__ import annotations
 
 import importlib.util
-import re
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+
+from tests.conftest import unstyle
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -31,13 +32,6 @@ GENERATED = (
     f'# End of {API_URL}{TEMPLATES}\n'
 )
 CUSTOM = '\n# Custom\n.claude/worktrees/\n\n*.local\n'
-
-
-def unstyle(text: str) -> str:
-    """
-    Strip ANSI escape sequences from captured output
-    """
-    return re.sub(r'\033\[[;?0-9]*[a-zA-Z]', '', text)
 
 
 class FakeResponse:
@@ -78,7 +72,7 @@ class TestExtractTemplates:
     @pytest.mark.parametrize(
         ('content', 'expected'),
         [
-            (GENERATED,                                   ['macos', 'python', 'pycharm+all']),
+            (GENERATED,                                    ['macos', 'python', 'pycharm+all']),
             (f'# Created by {API_URL}rust-analyzer,a.b\n', ['rust-analyzer', 'a.b']),
             (f'x\n# Created by {API_URL}git\ny\n',         ['git']),
         ],
@@ -172,11 +166,11 @@ class TestFetchGitignoreContent:
             calls.append(cmd)
             return subprocess.CompletedProcess(cmd, 0, stdout=GENERATED, stderr='')
 
-        monkeypatch.setattr(script, 'urlopen', failing_urlopen)
-        monkeypatch.setattr(script.subprocess, 'run', fake_run)
+        monkeypatch.setattr(script,            'urlopen', failing_urlopen)
+        monkeypatch.setattr(script.subprocess, 'run',     fake_run)
 
         assert script.fetch_gitignore_content(['git']) == GENERATED
-        assert calls[0][0] == 'curl'
+        assert calls[0][0]  == 'curl'
         assert calls[0][-1] == f'{API_URL}git'
 
     def test_all_methods_fail(self, script: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -189,8 +183,8 @@ class TestFetchGitignoreContent:
         def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             return subprocess.CompletedProcess(cmd, 22, stdout='', stderr='HTTP 404')
 
-        monkeypatch.setattr(script, 'urlopen', failing_urlopen)
-        monkeypatch.setattr(script.subprocess, 'run', fake_run)
+        monkeypatch.setattr(script,            'urlopen', failing_urlopen)
+        monkeypatch.setattr(script.subprocess, 'run',     fake_run)
 
         with pytest.raises(RuntimeError, match='curl exit 22'):
             script.fetch_gitignore_content(['git'])
@@ -205,8 +199,8 @@ class TestFetchGitignoreContent:
         def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             raise FileNotFoundError('curl')
 
-        monkeypatch.setattr(script, 'urlopen', failing_urlopen)
-        monkeypatch.setattr(script.subprocess, 'run', fake_run)
+        monkeypatch.setattr(script,            'urlopen', failing_urlopen)
+        monkeypatch.setattr(script.subprocess, 'run',     fake_run)
 
         with pytest.raises(RuntimeError, match='urllib and curl both failed'):
             script.fetch_gitignore_content(['git'])
@@ -244,12 +238,11 @@ class TestMain:
         Test that a changed upstream block is written and custom patterns survive
         """
         monkeypatch.setattr(script, 'fetch_gitignore_content', lambda templates: GENERATED)
-
         assert script.main(['--gitignore-path', str(gitignore)]) == 0
 
         text = gitignore.read_text(encoding='utf-8')
         assert '.DS_Store' in text
-        assert '.OLD' not in text
+        assert '.OLD'  not in text
         assert text.endswith('# Custom\n.claude/worktrees/\n\n*.local\n')
         assert 'Updated' in unstyle(capsys.readouterr().out)
 

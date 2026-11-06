@@ -19,23 +19,28 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      # Without the PAT the checkout would fall back to GITHUB_TOKEN and the PR would never trigger lint/leak checks
       - name: Require MAINTENANCE_PR_TOKEN
         env:
           TOKEN: ${{ secrets.MAINTENANCE_PR_TOKEN }}
         run: test -n "$TOKEN" || { echo "::error::MAINTENANCE_PR_TOKEN secret is not set"; exit 1; }
+
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.MAINTENANCE_PR_TOKEN }}
+
       - uses: astral-sh/setup-uv@v6
+
       - name: Install dependencies
         run: uv sync --group lint
+
       # Skips releases younger than three days: a supply-chain guard against freshly published (or hijacked) versions
       - name: Update prek hook revisions
         run: uv run prek update --cooldown-days 3
+
       # Upgrades uv.lock, then regenerates requirements.txt and re-syncs hook dependency pins from the new lock
       - name: Upgrade uv.lock and regenerate derived files
         run: uv run run.py lock-upgrade
+
       - uses: ./.github/actions/open-maintenance-pr
         with:
           branch: maintenance/update-dependencies

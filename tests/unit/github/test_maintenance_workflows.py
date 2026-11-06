@@ -139,5 +139,4 @@ class TestCompositeAction:
         Test that no input is interpolated into the shell command (script injection guard)
         """
         run = load_action()['runs']['steps'][0]['run']
-
         assert 'inputs.' not in run

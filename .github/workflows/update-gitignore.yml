@@ -19,17 +19,20 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      # Without the PAT the checkout would fall back to GITHUB_TOKEN and the PR would never trigger lint/leak checks
       - name: Require MAINTENANCE_PR_TOKEN
         env:
           TOKEN: ${{ secrets.MAINTENANCE_PR_TOKEN }}
         run: test -n "$TOKEN" || { echo "::error::MAINTENANCE_PR_TOKEN secret is not set"; exit 1; }
+
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.MAINTENANCE_PR_TOKEN }}
+
       - uses: astral-sh/setup-uv@v6
+
       - name: Refresh .gitignore from gitignore.io
         run: uv run --no-project scripts/codebase/update_gitignore.py
+
       - uses: ./.github/actions/open-maintenance-pr
         with:
           branch: maintenance/update-gitignore

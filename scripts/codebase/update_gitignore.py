@@ -161,7 +161,16 @@ def printf(
     :param indent: number of leading spaces to prepend
     :param file: output stream (defaults to stdout)
     """
-    print(style(textwrap.indent(text, ' ' * indent), fg=fg, bold=bold, dim=dim), file=file, flush=True)
+    print(
+        style(
+            textwrap.indent(text, ' ' * indent),
+            fg=fg,
+            bold=bold,
+            dim=dim,
+        ),
+        file=file,
+        flush=True,
+    )
 
 
 # ==================================================================================================
@@ -236,7 +245,6 @@ def fetch_gitignore_content(templates: list[str]) -> str:
     :return: gitignore.io content
     """
     url = f'{GITIGNORE_API_URL}{",".join(templates)}'
-
     try:
         with urlopen(url, timeout=FETCH_TIMEOUT) as response:       # noqa: S310
             content = response.read().decode('utf-8')
@@ -296,7 +304,10 @@ def build_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(
         description='Refresh the generated block of .gitignore from gitignore.io, preserving custom patterns',
-        formatter_class=functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
+        formatter_class=functools.partial(
+            argparse.RawTextHelpFormatter,
+            max_help_position=50,
+        ),
         add_help=False,
     )
 
@@ -313,14 +324,27 @@ def build_parser() -> argparse.ArgumentParser:
 
     def add_execution_opts() -> None:
         execution_opts = parser.add_argument_group('Execution options')
-        execution_opts.add_argument('--dry-run', action='store_true', help='Show the result without writing the file')
-        execution_opts.add_argument('--force', action='store_true', help='Write the file even if nothing changed')
+        execution_opts.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Show the result without writing the file',
+        )
+        execution_opts.add_argument(
+            '--force',
+            action='store_true',
+            help='Write the file even if nothing changed',
+        )
     add_execution_opts()
 
     def add_other_opts() -> None:
         other_opts = parser.add_argument_group('Other options')
-        other_opts.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
-                                help='Show this help message and exit')
+        other_opts.add_argument(
+            '-h',
+            '--help',
+            action='help',
+            default=argparse.SUPPRESS,
+            help='Show this help message and exit',
+        )
     add_other_opts()
 
     return parser
@@ -345,7 +369,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         custom    = extract_custom_patterns(current)
 
         printf('🔄 Refreshing .gitignore from gitignore.io', fg='bright_cyan')
-        printf(f'Templates: {", ".join(templates)}', indent=3)
+        printf(f'Templates: {", ".join(templates)}',       indent=3)
         printf(f'Preserving {len(custom)} custom line(s)', indent=3)
 
         updated = generate_updated_gitignore(fetch_gitignore_content(templates), custom)
@@ -359,6 +383,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
 
         args.gitignore_path.write_text(updated, encoding='utf-8')
+
     except (ValueError, RuntimeError, OSError) as e:
         printf(f'❌ {e}', fg='bright_red', file=sys.stderr)
         return 1

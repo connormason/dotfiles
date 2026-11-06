@@ -17,7 +17,7 @@ BRANCH = 'maintenance/update-things'
 
 RunScript = Callable[..., subprocess.CompletedProcess[str]]
 
-GIT_ENV = {
+GIT_ENV: dict[str, str] = {
     **os.environ,
     'GIT_CONFIG_GLOBAL':   os.devnull,
     'GIT_CONFIG_SYSTEM':   os.devnull,
@@ -60,8 +60,10 @@ def work(tmp_path: Path, origin: Path) -> Path:
     """
     path = tmp_path / 'work'
     git(tmp_path, 'clone', str(origin), str(path))
+
     (path / 'tracked.txt').write_text('base\n', encoding='utf-8')
     (path / 'other.txt').write_text('base\n', encoding='utf-8')
+
     git(path, 'add', '-A')
     git(path, 'commit', '-m', 'base')
     git(path, 'push', 'origin', 'main')
@@ -83,6 +85,7 @@ def run_script(tmp_path: Path, work: Path, gh_log: Path) -> RunScript:
     """
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
+
     fake_gh = bin_dir / 'gh'
     fake_gh.write_text(FAKE_GH, encoding='utf-8')
     fake_gh.chmod(fake_gh.stat().st_mode | stat.S_IEXEC)
@@ -151,7 +154,11 @@ class TestOpenMaintenancePr:
         assert remote_branches(origin) == []
 
     def test_change_pushes_branch_and_creates_pr(
-        self, run_script: RunScript, work: Path, origin: Path, gh_log: Path,
+        self,
+        run_script: RunScript,
+        work: Path,
+        origin: Path,
+        gh_log: Path,
     ) -> None:
         """
         Test that a change is committed, force-pushed one commit ahead of main, and opened as a new PR
@@ -183,7 +190,10 @@ class TestOpenMaintenancePr:
         assert not any(call.startswith('pr create') for call in calls)
 
     def test_untracked_file_under_a_listed_directory_is_included(
-        self, run_script: RunScript, work: Path, origin: Path,
+        self,
+        run_script: RunScript,
+        work: Path,
+        origin: Path,
     ) -> None:
         """
         Test that new files under a listed path are staged, not only modifications
