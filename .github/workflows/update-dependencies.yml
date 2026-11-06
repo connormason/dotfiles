@@ -1,0 +1,68 @@
+---
+name: Update dependencies
+on:
+  schedule:
+    - cron: "0 9 * * 2" # Tuesdays, 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-dependencies
+  cancel-in-progress: false
+
+jobs:
+
+  update:
+    name: prek hooks, uv.lock, requirements
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require MAINTENANCE_PR_TOKEN
+        env:
+          TOKEN: ${{ secrets.MAINTENANCE_PR_TOKEN }}
+        run: test -n "$TOKEN" || { echo "::error::MAINTENANCE_PR_TOKEN secret is not set"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MAINTENANCE_PR_TOKEN }}
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: uv sync --group lint
+
+      # Skips releases younger than three days: a supply-chain guard against freshly published (or hijacked) versions
+      - name: Update prek hook revisions
+        run: uv run prek update --cooldown-days 3
+
+      # Upgrades uv.lock, then regenerates requirements.txt and re-syncs hook dependency pins from the new lock
+      - name: Upgrade uv.lock and regenerate derived files
+        run: uv run run.py lock-upgrade
+
+      - uses: ./.github/actions/open-maintenance-pr
+        with:
+          branch: maintenance/update-dependencies
+          paths: .pre-commit-config.yaml uv.lock requirements.txt
+          title: "chore: update dependencies (prek hooks, uv.lock, requirements)"
+          commit-message: |
+            chore: update dependencies (prek hooks, uv.lock, requirements)
+
+            Automated by the scheduled "Update dependencies" workflow:
+              - prek update --cooldown-days 3 (hook revisions)
+              - uv lock --upgrade (Python package dependencies)
+              - regenerated requirements.txt and synced hook dependency pins from uv.lock
+          body: |
+            ## Automated dependency update
+
+            Opened by the scheduled `Update dependencies` workflow.
+
+            - `prek update --cooldown-days 3`: hook revisions in `.pre-commit-config.yaml`
+            - `uv lock --upgrade`: `uv.lock`
+            - `run.py lock-upgrade` regenerated `requirements.txt` and synced hook dependency pins
+
+            Review the diff and merge if it looks good. This PR tracks the evergreen `maintenance/update-dependencies`
+            branch: if the workflow runs again before this is merged, the branch is force-updated and this PR is
+            refreshed.
+          token: ${{ secrets.MAINTENANCE_PR_TOKEN }}

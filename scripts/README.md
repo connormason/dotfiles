@@ -3,10 +3,11 @@
 # Scripts
 
 Helper scripts for the repository: the render tool, prek hook scripts, standalone tool installers, Python environment
-utilities, and the NAS deploy script.
+utilities, codebase maintenance, and the NAS deploy script.
 
 | Directory                    | Contents                                                                             |
 | ---------------------------- | ------------------------------------------------------------------------------------ |
+| [`codebase/`](codebase/)     | `update_gitignore.py`: refreshes the generated `.gitignore` block (scheduled)        |
 | [`docs_audit/`](docs_audit/) | `docs_audit` package: deterministic per-directory README audit (`run.py docs-audit`) |
 | [`dotfiles/`](dotfiles/)     | `render.py`: merges settings fragments across layers                                 |
 | [`env/`](env/)               | `loadenv.py`, `python_diagnostic.py`, `venvshell.py`: Python environment utilities   |
@@ -20,6 +21,7 @@ is its reference implementation.
 
 ## Subdirectory READMEs
 
+- [Codebase scripts](codebase/README.md)
 - [Docs audit](docs_audit/README.md)
 - [Dotfiles tools](dotfiles/README.md)
 - [Env scripts](env/README.md)

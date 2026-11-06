@@ -173,8 +173,8 @@ The repository change stops nothing on the NAS; see [`services/README.md`](../se
 - **`ansible.cfg`**: Ansible defaults (`roles_path`, `vault_password_file`)
 - **`vault_password.txt`**: Ansible Vault password (gitignored, create manually)
 - **`roles/requirements.yml`**: External Ansible collection dependencies
-- **`.github/workflows/{lint,deploy,leaks}.yml`**: CI: lint and tests, service deploys, leak scanning (see
-  [`BUILD.md`](BUILD.md#ci))
+- **`.github/workflows/{lint,deploy,leaks,update-dependencies,update-gitignore}.yml`**: CI: lint and tests, service
+  deploys, leak scanning, scheduled dependency and `.gitignore` update PRs (see [`BUILD.md`](BUILD.md#ci))
 
 ## Bootstrap Script Security
 
