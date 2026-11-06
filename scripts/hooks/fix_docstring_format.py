@@ -33,6 +33,7 @@ import argparse
 import ast
 import functools
 import io
+import os
 import sys
 import textwrap
 from pathlib import Path
@@ -45,12 +46,15 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-StyleColor = Union[int, tuple[int, int, int], str]
+NO_COLOR: bool = bool(os.getenv('NO_COLOR'))  # https://no-color.org: any non-empty value disables color
 
 
 # ==================================================================================================
 # Console output + styling helpers
 # ==================================================================================================
+
+
+StyleColor = Union[int, tuple[int, int, int], str]
 
 
 ANSI_COLOR: dict[str, int] = {
@@ -100,7 +104,7 @@ def style(
     reset: bool = True,
 ) -> str:
     """
-    Style text with ANSI escape codes.
+    Style text with ANSI escape codes. Returns the text unstyled when ``NO_COLOR`` is set.
 
     :param text: the string to style with ansi codes
     :param fg: foreground color
@@ -116,6 +120,8 @@ def style(
     :param reset: add a reset-all code at the end of the string
     :return: styled text
     """
+    if NO_COLOR:
+        return str(text)
     if not isinstance(text, str):
         text = str(text)
 

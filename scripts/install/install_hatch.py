@@ -65,6 +65,9 @@ INSTALLATION_GUIDE_URL: str = 'https://hatch.pypa.io/latest/install/'
 # Global verbose flag
 VERBOSE: bool = False
 
+# Standardized console color output disable flag
+NO_COLOR: bool = bool(os.getenv('NO_COLOR'))        # https://no-color.org: any non-empty value disables color
+
 
 # ==================================================================================================
 # Types/protocols
@@ -169,7 +172,7 @@ def style(
     reset: bool = True,
 ) -> str:
     """
-    Style text with ANSI escape codes.
+    Style text with ANSI escape codes. Returns the text unstyled when ``NO_COLOR`` is set.
 
     :param text: the string to style with ansi codes
     :param fg: foreground color
@@ -185,6 +188,8 @@ def style(
     :param reset: add a reset-all code at the end of the string
     :return: styled text
     """
+    if NO_COLOR:
+        return str(text)
     if not isinstance(text, str):
         text = str(text)
 

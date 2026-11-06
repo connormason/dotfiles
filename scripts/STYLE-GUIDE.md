@@ -64,13 +64,14 @@ keep `fg`, `bold`, `dim`) but must keep the names and semantics of those it reta
 
 Lift the blocks from `run.py` verbatim rather than rewriting them, and keep these behaviors:
 
-- `style()` returns the text unstyled when `NO_COLOR` is set, and appends the reset code unless `reset=False`.
+- `style()` returns the text unstyled when `NO_COLOR` is set to a non-empty value (<https://no-color.org>), and appends
+  the reset code unless `reset=False`. Read it once into a module-level `NO_COLOR` constant.
 - `style()` raises `TypeError` (chained `from None`) for an unknown color name.
 - `printf()` applies indentation with `textwrap.indent(text, ' ' * indent)` so multi-line text indents on every line.
 - `printf()` in debug/verbose mode is a no-op unless the flag is on; when on, it defaults to `fg='bright_white'`,
   `dim=True` and writes to **stderr**.
-- `printf()` flushes (`flush=True`) in scripts that interleave their output with child-process output, so lines stay
-  ordered when stdout is a pipe.
+- Add `flush=True` to `printf()` only in a script that streams child-process output straight to the terminal, so lines
+  stay ordered when stdout is a pipe. `run.py` does; the hooks and installers capture child output and do not need it.
 
 The gating flag differs by script type: `run.py` uses `printf(..., debug=True)` gated on `RUN_DEBUG`; standalone scripts
 use `printf(..., verbose=True)` gated on a module-level `VERBOSE` set from `--verbose`.

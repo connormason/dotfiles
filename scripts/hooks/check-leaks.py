@@ -25,9 +25,9 @@ from pathlib import Path
 from typing import Any
 from typing import Union
 
-# ==========================
+# ==================================================================================================
 # Constants/defaults/globals
-# ==========================
+# ==================================================================================================
 
 
 VERBOSE:               bool = False
@@ -36,6 +36,8 @@ PATTERNS_ENV_VAR:      str  = 'DOTFILES_LEAK_PATTERNS'
 IDENTITY_SOURCE:       str  = '<identity>'
 MAX_FINDINGS_PER_FILE: int  = 5
 BINARY_SNIFF_BYTES:    int  = 8192
+
+NO_COLOR: bool = bool(os.getenv('NO_COLOR'))  # https://no-color.org: any non-empty value disables color
 
 # Public vendor hosts that legitimately appear in public files (plist DTDs, App Store and developer links)
 PUBLIC_VENDOR_HOSTS: tuple[str, ...] = ('apps', 'developer', 'support', 'www')
@@ -56,9 +58,9 @@ BASELINE_PATTERNS: tuple[str, ...] = (
 IDENT_RE: re.Pattern[str] = re.compile(r'^(?P<ident>.*?>)')
 
 
-# ===============
+# ==================================================================================================
 # Types/protocols
-# ===============
+# ==================================================================================================
 
 
 PathLike = Union[str, Path]
@@ -85,9 +87,9 @@ class Finding:
     match:  str
 
 
-# ==================
+# ==================================================================================================
 # Formatting/logging
-# ==================
+# ==================================================================================================
 
 
 ANSI_COLOR: dict[str, int] = {
@@ -102,7 +104,7 @@ ANSI_RESET_ALL = '\033[0m'
 
 def style(text: Any = '', *, fg: str | None = None, bold: bool | None = None, dim: bool | None = None) -> str:
     """
-    Style text with ANSI escape codes.
+    Style text with ANSI escape codes. Returns the text unstyled when ``NO_COLOR`` is set.
 
     :param text: the value to style (converted with ``str()``)
     :param fg: foreground color name from :data:`ANSI_COLOR`
@@ -110,6 +112,9 @@ def style(text: Any = '', *, fg: str | None = None, bold: bool | None = None, di
     :param dim: enable or disable dim mode
     :return: styled text
     """
+    if NO_COLOR:
+        return str(text)
+
     bits: list[str] = []
     if fg is not None:
         bits.append(f'\033[{ANSI_COLOR[fg]}m')
@@ -171,9 +176,9 @@ def printf(
     )
 
 
-# ======================
+# ==================================================================================================
 # Command-line arguments
-# ======================
+# ==================================================================================================
 
 
 class Args(argparse.Namespace):
@@ -198,7 +203,10 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
 
     parser = argparse.ArgumentParser(
         description='Block employer-internal identifiers from entering this public repository',
-        formatter_class=functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
+        formatter_class=functools.partial(
+            argparse.RawTextHelpFormatter,
+            max_help_position=50,
+        ),
         add_help=False,
     )
 
@@ -278,9 +286,9 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
     return args
 
 
-# =================
+# ==================================================================================================
 # Core script logic
-# =================
+# ==================================================================================================
 
 
 def default_patterns_file() -> Path:

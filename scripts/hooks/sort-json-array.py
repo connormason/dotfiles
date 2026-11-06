@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import os
 import re
 import sys
 import textwrap
@@ -20,28 +21,29 @@ from typing import Any
 from typing import Union
 from typing import cast
 
-# ==========================
+# ==================================================================================================
 # Constants/defaults/globals
-# ==========================
+# ==================================================================================================
 
 
 VERBOSE:        bool = False
+NO_COLOR:       bool = bool(os.getenv('NO_COLOR'))  # https://no-color.org: any non-empty value disables color
 DEFAULT_KEY:    str  = 'command'
 DEFAULT_INDENT: int  = 4
 
 
-# ===============
+# ==================================================================================================
 # Types/protocols
-# ===============
+# ==================================================================================================
 
 
 PathLike   = Union[str, Path]
 StyleColor = Union[int, tuple[int, int, int], str]
 
 
-# ==================
+# ==================================================================================================
 # Formatting/logging
-# ==================
+# ==================================================================================================
 
 
 ANSI_COLOR: dict[str, int] = {
@@ -91,7 +93,7 @@ def style(
     reset: bool = True,
 ) -> str:
     """
-    Style text with ANSI escape codes.
+    Style text with ANSI escape codes. Returns the text unstyled when ``NO_COLOR`` is set.
 
     :param text: the string to style with ansi codes
     :param fg: foreground color
@@ -107,6 +109,8 @@ def style(
     :param reset: add a reset-all code at the end of the string
     :return: styled text
     """
+    if NO_COLOR:
+        return str(text)
     if not isinstance(text, str):
         text = str(text)
 
@@ -203,9 +207,9 @@ def printf(
     )
 
 
-# ======================
+# ==================================================================================================
 # Command-line arguments
-# ======================
+# ==================================================================================================
 
 
 class Args(argparse.Namespace):
@@ -229,7 +233,10 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
 
     parser = argparse.ArgumentParser(
         description='Sort a top-level JSON array of objects by a chosen key',
-        formatter_class=functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
+        formatter_class=functools.partial(
+            argparse.RawTextHelpFormatter,
+            max_help_position=50,
+        ),
         add_help=False,
     )
 
@@ -296,9 +303,9 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
     return args
 
 
-# =================
+# ==================================================================================================
 # Core script logic
-# =================
+# ==================================================================================================
 
 
 def sort_file(path: Path, *, key: str, indent: int) -> int:
