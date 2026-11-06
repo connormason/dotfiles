@@ -71,7 +71,7 @@ repos:
           - "--no-header"
 
   - repo: https://github.com/tsvikas/sync-with-uv
-    rev: v0.5.0
+    rev: v0.6.0
     hooks:
 
       # Sync pre-commit hook versions with uv.lock versions
@@ -83,7 +83,7 @@ repos:
         priority: 5
 
   - repo: https://github.com/pre-commit/sync-pre-commit-deps
-    rev: v0.0.4
+    rev: v0.0.5
     hooks:
 
       # Sync pre-commit hook dependencies based on other installed hooks
@@ -437,7 +437,7 @@ repos:
           - tomli
 
   - repo: https://github.com/google/keep-sorted
-    rev: v0.9.1
+    rev: v0.10.0
     hooks:
 
       # Language-agnostic auto-sorting between two markers
@@ -472,7 +472,7 @@ repos:
         args: [--exit-non-zero-on-fix]
 
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.13.1-1
+    rev: v3.14.1-1
     hooks:
 
       # Shell script auto-formatting
