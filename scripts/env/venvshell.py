@@ -56,9 +56,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-# ====================
+# ==================================================================================================
 # Script configuration
-# ====================
+# ==================================================================================================
 
 #: Directory names to look for virtual environments within when auto-discovering environment
 VENV_DIR_NAMES: list[str] = ['.venv', 'venv']
@@ -71,9 +71,9 @@ HATCH_ENABLED: bool = True
 VERBOSE: bool = False
 
 
-# =======================================================================================
+# ==================================================================================================
 # Script configuration/argument defaults that can be overridden via environment variables
-# =======================================================================================
+# ==================================================================================================
 
 #: Default path to look for virtual environment directory (--path option default)
 #: This hard-codes the default path we look for the virtual environment to activate, overriding auto-discovery behavior
@@ -95,9 +95,9 @@ HATCH_DISCOVER_ENVVAR:  str       = 'VENVSHELL_DISCOVER_HATCH'
 HATCH_DISCOVER_DEFAULT: bool      = True
 
 
-# ===============
+# ==================================================================================================
 # Types/protocols
-# ===============
+# ==================================================================================================
 
 SupportedShell = Literal['bash', 'zsh', 'fish']
 PathLike       = Union[Path, str]
@@ -165,9 +165,9 @@ class Exit(Exception):
         sys.exit(self.code)
 
 
-# ==================
+# ==================================================================================================
 # Formatting/logging
-# ==================
+# ==================================================================================================
 
 
 ANSI_COLORS: dict[str, int] = {
@@ -227,7 +227,7 @@ def style(
     :param reset: add a reset-all code at the end of the string
     :return: styled text
     """
-    if os.environ.get('NO_COLOR') is not None:
+    if os.environ.get('NO_COLOR'):
         return str(text)
     if not isinstance(text, str):
         text = str(text)
@@ -411,7 +411,7 @@ def printf(
     if verbose and not VERBOSE:
         return
     if verbose:
-        fg   = fg or 'bright_black'
+        fg   = fg or 'bright_white'
         dim  = True if dim is None else dim
         file = file or sys.stderr
 
@@ -439,9 +439,9 @@ def printf(
         )
 
 
-# =============================
+# ==================================================================================================
 # Virtual environment discovery
-# =============================
+# ==================================================================================================
 
 
 def find_venv(start: PathLike | None = None, *, dir_names: Iterable[str] | None = None) -> Path | None:
@@ -532,9 +532,9 @@ def validate_venv(venv_path: Path) -> str | None:
     return None
 
 
-# ====================================
+# ==================================================================================================
 # Virtual environment shell activation
-# ====================================
+# ==================================================================================================
 
 
 #: Configuration files to source/symlink when activating virtual environment subshell, mapped by shell
@@ -751,9 +751,9 @@ def launch_venv_shell(
         )
 
 
-# ==========================================================
+# ==================================================================================================
 # Command-line arguments and environment variable resolution
-# ==========================================================
+# ==================================================================================================
 
 
 def resolve_bool_env_var(env_var_name: str, default: bool | None = None) -> bool | None:
@@ -812,7 +812,10 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
                 f'or automatically discovered from the current project directory'
             ),
         ]),
-        formatter_class=functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
+        formatter_class=functools.partial(
+            argparse.RawTextHelpFormatter,
+            max_help_position=50,
+        ),
         add_help=False,
     )
 
@@ -978,9 +981,9 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
     return args
 
 
-# =======================
+# ==================================================================================================
 # Core script entry point
-# =======================
+# ==================================================================================================
 
 
 def main(argv: list[str] | None = None) -> None:

@@ -159,7 +159,7 @@ def style(
     :param reset: add a reset-all code at the end of the string
     :return: styled text
     """
-    if (not COLOR_ENABLED) or (os.environ.get('NO_COLOR') is not None):
+    if not COLOR_ENABLED or os.environ.get('NO_COLOR'):
         return str(text)
     if not isinstance(text, str):
         text = str(text)
@@ -1057,7 +1057,10 @@ def build_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(
         description=style('Collect Python environment diagnostic information', fg='bright_magenta'),
-        formatter_class=partial(argparse.RawTextHelpFormatter, max_help_position=50),
+        formatter_class=partial(
+            argparse.RawTextHelpFormatter,
+            max_help_position=50,
+        ),
         add_help=False,
     )
 

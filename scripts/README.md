@@ -15,6 +15,9 @@ utilities, and the NAS deploy script.
 | [`nas/`](nas/)               | `deploy-services.sh`: syncs `services/` to the NAS and runs `deploy.sh`              |
 | [`utility/`](utility/)       | `generate_completions.py`, `summarize_stow.awk`                                      |
 
+[`STYLE-GUIDE.md`](STYLE-GUIDE.md) documents the console-output and argparse conventions these scripts share; `run.py`
+is its reference implementation.
+
 ## Subdirectory READMEs
 
 - [Docs audit](docs_audit/README.md)
