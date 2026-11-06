@@ -52,6 +52,7 @@ todoist-cli-go
 tree
 uv
 worktrunk
+yazi
 zoxide
 zsh
 zsh-autosuggestions

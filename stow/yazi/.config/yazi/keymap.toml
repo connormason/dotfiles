@@ -1,0 +1,10 @@
+# =====================================================================================================
+# yazi — keybindings (https://yazi-rs.github.io/docs/configuration/keymap)
+# =====================================================================================================
+# Placeholder: `prepend_keymap` entries take priority over the defaults and leave them intact, so
+# add custom bindings here rather than redefining `keymap`.
+
+# [mgr]
+# prepend_keymap = [
+#     { on = "<C-s>", run = 'shell "$SHELL" --block', desc = "Open a shell here" },
+# ]

@@ -1,0 +1,21 @@
+# =====================================================================================================
+# yazi — general settings (https://yazi-rs.github.io/docs/configuration/yazi)
+# =====================================================================================================
+# Placeholder: every value below is commented out and mirrors yazi's default, so uncommenting a line
+# is a no-op until the value is changed. Run `yazi --debug` to see the effective configuration.
+
+# [mgr]
+# ratio          = [1, 4, 3]      # parent / current / preview pane widths
+# sort_by        = "alphabetical" # alphabetical, natural, mtime, btime, extension, size, random
+# sort_dir_first = true
+# show_hidden    = false
+# show_symlink   = true
+
+# [preview]
+# max_width  = 600
+# max_height = 900
+
+# [opener]
+# edit = [
+#     { run = '${EDITOR:-vi} "$@"', block = true, for = "unix" },
+# ]

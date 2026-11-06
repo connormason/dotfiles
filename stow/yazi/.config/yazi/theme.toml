@@ -1,0 +1,9 @@
+# =====================================================================================================
+# yazi — theme (https://yazi-rs.github.io/docs/configuration/theme)
+# =====================================================================================================
+# Placeholder: the built-in theme applies until something below is uncommented. Flavors installed
+# with `ya pkg add <owner>/<repo>` are selected via [flavor].
+
+# [flavor]
+# dark  = "catppuccin-mocha"
+# light = "catppuccin-latte"
