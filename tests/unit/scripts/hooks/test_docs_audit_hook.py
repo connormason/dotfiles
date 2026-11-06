@@ -7,10 +7,10 @@ import importlib.util
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from types import ModuleType
-
-    import pytest
 
 HOOK_PATH = Path(__file__).parents[4] / 'scripts' / 'hooks' / 'docs_audit_hook.py'
 
@@ -218,3 +218,43 @@ class TestDocsAuditHook:
         readme.write_text('# Project Root\n\nRoot index.\n', encoding='utf-8')
 
         assert self.mod.main([str(readme)]) == 0
+
+    @pytest.mark.parametrize('name', ['inventory', 'archive'])
+    def test_root_only_excluded_child_needs_no_downlink_from_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+    ) -> None:
+        """
+        Verify a repo-root-only excluded child (e.g. the gitignored inventory clone) is not demanded as a root down-link
+        """
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(self.mod, 'REPO_ROOT', tmp_path.resolve())
+
+        (tmp_path / name).mkdir()
+        (tmp_path / name / 'README.md').write_text('# Separate repo\n', encoding='utf-8')
+
+        readme = tmp_path / 'README.md'
+        readme.write_text('# Project Root\n\nRoot index.\n', encoding='utf-8')
+
+        assert self.mod.main([str(readme)]) == 0
+
+    def test_root_only_excluded_name_still_required_when_nested(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """
+        Verify a nested directory named like a root-only exclude still demands a down-link from its parent
+        """
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(self.mod, 'REPO_ROOT', tmp_path.resolve())
+        (tmp_path / 'README.md').write_text('# Project Root\n\nRoot index.\n', encoding='utf-8')
+
+        pkg_dir = tmp_path / 'pkg'
+        (pkg_dir / 'inventory').mkdir(parents=True)
+        (pkg_dir / 'inventory' / 'README.md').write_text('# inventory\n', encoding='utf-8')
+
+        readme = pkg_dir / 'README.md'
+        readme.write_text(
+            '[Project Root](../README.md) > **pkg**\n\n# pkg\n\nClean content.\n',
+            encoding='utf-8',
+        )
+
+        assert self.mod.main([str(readme)]) == 1

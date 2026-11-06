@@ -22,6 +22,7 @@ from scripts.docs_audit.checks import policy_issues
 from scripts.docs_audit.checks import structural_issues
 from scripts.docs_audit.conventions import EXCLUDE_SEGMENTS
 from scripts.docs_audit.conventions import EXCLUDE_SUFFIXES
+from scripts.docs_audit.conventions import EXCLUDE_TOP_LEVEL
 from scripts.docs_audit.report import style
 
 # Resolved from this file's location rather than `git rev-parse`: git exports GIT_DIR while committing from a linked
@@ -36,16 +37,22 @@ def _children_with_readme(readme: Path) -> list[Path]:
     Symlinked directories are skipped: their real location is documented in place, and the audit's directory discovery
     (driven by ``git ls-files``) records a symlink as a single entry rather than expanding it, so following symlinks
     here would demand down-links the CLI audit never requires. Directories matching the audit's exclusions (caches,
-    build artifacts, ``*.egg-info``, etc.) are likewise skipped.
+    build artifacts, ``*.egg-info``, etc.) are likewise skipped, and so are the repo-root-only exclusions
+    (``EXCLUDE_TOP_LEVEL``) when ``readme`` is the repo-root README. Those include untracked or gitignored directories
+    such as the ``inventory/`` clone, which the ``git ls-files``-driven audit never sees.
 
     :param readme: absolute path to the README file
     :return: list of child directories containing a README
     """
+    is_repo_root = readme.resolve().parent == REPO_ROOT
+
     children: list[Path] = []
     for child in sorted(readme.parent.iterdir()):
         if child.is_symlink() or (not child.is_dir()) or (not (child / 'README.md').is_file()):
             continue
         if (child.name in EXCLUDE_SEGMENTS) or any(child.name.endswith(suffix) for suffix in EXCLUDE_SUFFIXES):
+            continue
+        if is_repo_root and (child.name in EXCLUDE_TOP_LEVEL):
             continue
         children.append(child)
     return children

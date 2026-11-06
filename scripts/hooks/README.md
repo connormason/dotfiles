@@ -733,7 +733,9 @@ python3 scripts/hooks/docs_audit_hook.py [FILENAMES...]
 For each existing `README.md`, the script runs `structural_issues`, `link_issues`, and `policy_issues` from
 `scripts.docs_audit.checks`. The repository-root README is exempt from the breadcrumb requirement. The down-links
 required of a README are one per immediate child directory that itself holds a `README.md`; symlinked directories and
-directories matching the audit's exclusions (`EXCLUDE_SEGMENTS`, `EXCLUDE_SUFFIXES`) are not counted.
+directories matching the audit's exclusions (`EXCLUDE_SEGMENTS`, `EXCLUDE_SUFFIXES`) are not counted. For the
+repository-root README, the root-only exclusions (`EXCLUDE_TOP_LEVEL`: `archive`, `inventory`, ...) are not counted
+either, so the gitignored `inventory/` clone never demands a down-link.
 
 A README with findings is reported as `🔴 <path>` followed by one indented line per finding: `structural: <issue>`,
 `link: <link> (<reason>)`, or `policy: <pattern> @ line <n>`. A line (or block) can opt out of the policy check with the

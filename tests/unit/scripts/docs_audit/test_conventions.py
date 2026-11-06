@@ -44,6 +44,13 @@ class TestConventions:
         assert 'archive'     in EXCLUDE_TOP_LEVEL
         assert 'archive' not in EXCLUDE_SEGMENTS
 
+    def test_inventory_is_a_top_level_only_exclude(self) -> None:
+        """
+        Verify the gitignored inventory clone is a root-only exclude, so a nested inventory directory stays auditable
+        """
+        assert 'inventory'     in EXCLUDE_TOP_LEVEL
+        assert 'inventory' not in EXCLUDE_SEGMENTS
+
     def test_build_artifacts_are_top_level_only_excludes(self) -> None:
         """
         Verify build/dist/site are top-level-only excludes, not any-depth segments

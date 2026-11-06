@@ -45,11 +45,13 @@ EXCLUDE_SEGMENTS: frozenset[str] = frozenset({
 })
 
 # Directory names excluded ONLY when they are the top-level (repo-root) directory. ``archive`` is the frozen pre-stow
-# setup (not maintained, skipped by the lint tooling); build/dist/site are output dirs that matter only if ever tracked.
+# setup (not maintained, skipped by the lint tooling); ``inventory`` is a gitignored clone of a separate repo (it has
+# its own README, but is not part of this one); build/dist/site are output dirs that matter only if ever tracked.
 EXCLUDE_TOP_LEVEL: frozenset[str] = frozenset({
     'archive',
     'build',
     'dist',
+    'inventory',
     'site',
 })
 

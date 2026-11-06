@@ -125,7 +125,7 @@ reuse them without duplicating ANSI handling.
 | Symbol                  | Type                     | Description                                                                                     |
 | ----------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
 | `EXCLUDE_SEGMENTS`      | `frozenset[str]`         | Path segments excluded at any depth (caches, VCS, tooling, and hidden stow payload directories) |
-| `EXCLUDE_TOP_LEVEL`     | `frozenset[str]`         | Names excluded only at the repo root (`archive`, `build`, `dist`, `site`)                       |
+| `EXCLUDE_TOP_LEVEL`     | `frozenset[str]`         | Names excluded only at the repo root (`archive`, `build`, `dist`, `inventory`, `site`)          |
 | `EXCLUDE_SUFFIXES`      | `tuple[str, ...]`        | Path-segment suffixes that disqualify a directory (e.g. `.egg-info`)                            |
 | `META_DIR_NAMES`        | `frozenset[str]`         | Top-level names treated as meta directories (`docs`, `scripts`, `tests`)                        |
 | `PLACEHOLDER_FILENAMES` | `frozenset[str]`         | Filenames (`.gitkeep`, `.keep`) that mark an otherwise-empty dir as EXEMPT                      |
