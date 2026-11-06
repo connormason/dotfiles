@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import ast
 import functools
+import io
 import sys
 import textwrap
 from pathlib import Path
@@ -303,7 +304,7 @@ def expand_single_line_docstring(line: str) -> list[str]:
 
     prefix = ''
     quote  = ''
-    for candidate_prefix in ('r', 'u', ''):
+    for candidate_prefix in ('r', 'R', 'u', 'U', ''):
         for candidate_quote in ('"""', "'''"):
             full = candidate_prefix + candidate_quote
             if stripped.startswith(full) and stripped.endswith(candidate_quote):
@@ -340,15 +341,16 @@ def fix_file(filepath: Path, *, check_only: bool = False) -> FixResult:
 
     Docstrings marked with a ``# nofmt: docstring`` comment (inline or on the line above) are skipped.
 
+    The file is read and written without newline translation, so CRLF files keep their line endings.
+
     :param filepath: path to the Python file
     :param check_only: if ``True``, report violations without modifying the file
+    :raises SyntaxError: if the file cannot be parsed as Python
     :return: :class:`FixResult` with modification status and any skipped line numbers
     """
-    source = filepath.read_text(encoding='utf-8')
-    try:
-        tree = ast.parse(source, filename=str(filepath))
-    except SyntaxError:
-        return FixResult(modified=False)
+    with filepath.open(encoding='utf-8', newline='') as fh:
+        source = fh.read()
+    tree = ast.parse(source, filename=str(filepath))
 
     docstring_exprs:   list[ast.Expr] = find_docstring_exprs(tree)
     single_line_exprs: list[ast.Expr] = [expr for expr in docstring_exprs if expr.lineno == expr.end_lineno]
@@ -356,7 +358,8 @@ def fix_file(filepath: Path, *, check_only: bool = False) -> FixResult:
     if not single_line_exprs:
         return FixResult(modified=False)
 
-    lines = source.splitlines(keepends=True)
+    # Unlike str.splitlines(), this splits only on \n, \r\n and \r, matching how ast numbers lines
+    lines = io.StringIO(source, newline='').readlines()
     single_line_exprs.sort(key=lambda e: e.lineno, reverse=True)
 
     modified = False
@@ -388,7 +391,8 @@ def fix_file(filepath: Path, *, check_only: bool = False) -> FixResult:
         modified = True
 
     if modified and not check_only:
-        filepath.write_text(''.join(lines), encoding='utf-8')
+        with filepath.open('w', encoding='utf-8', newline='') as fh:
+            fh.write(''.join(lines))
 
     skipped_lines.sort()
     return FixResult(modified=modified, skipped_lines=skipped_lines)

@@ -212,7 +212,13 @@ def format_file(
     :return: number of headers converted or resized (zero if no changes were made), or -1 if the file could not be
              parsed as valid Python
     """
-    text  = path.read_text()
+
+    # Read without newline translation so CRLF files round-trip; work on LF text and restore the endings on write.
+    with path.open(encoding='utf-8', newline='') as fh:
+        raw = fh.read()
+
+    eol   = '\r\n' if '\r\n' in raw else '\n'
+    text  = raw.replace('\r\n', '\n')
     lines = text.split('\n')
     try:
         tree = ast.parse(text, filename=str(path))
@@ -264,10 +270,15 @@ def format_file(
     new_text  = '\n'.join(lines)
     n_resized = 0
     if normalize:
-        new_text, n_resized = normalize_borders(new_text, border_char, border_width)
+        try:
+            new_text, n_resized = normalize_borders(new_text, border_char, border_width)
+        except (tokenize.TokenError, SyntaxError) as e:
+            print(f'ERROR: {path} could not be tokenized; skipping ({e})', file=sys.stderr)
+            return -1
 
     if new_text != text:
-        path.write_text(new_text)
+        with path.open('w', encoding='utf-8', newline='') as fh:
+            fh.write(new_text.replace('\n', eol))
     return len(sections) + n_resized
 
 
@@ -449,20 +460,15 @@ def main(argv: list[str] | None = None) -> int:
     """
     args = parse_args(argv)
 
-    n_replacements            = 0
     n_files_with_replacements = 0
-    n_input_files             = 0
     n_errors                  = 0
 
     for py_path in iter_python_files(args.paths):
-        n_input_files += 1                              # noqa: SIM113
-
         replaced = format_file(py_path, args.border_char, args.border_width, args.normalize_borders)
         if replaced < 0:
             n_errors += 1
         elif replaced:
             n_files_with_replacements += 1
-            n_replacements            += replaced
             print(f'{py_path}: fixed {replaced} header{"s" if replaced > 1 else ""}')
 
     if n_errors > 0:
