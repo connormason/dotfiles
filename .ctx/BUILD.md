@@ -172,11 +172,13 @@ Hooks run via [prek](https://github.com/j178/prek) (a faster pre-commit reimplem
   satisfy the navigation contract; `docs/plans/` and nested `stow/` READMEs are excluded)
 - **Leak guard** (blocks employer-internal identifiers): `check-leaks` (pre-commit, also checks the commit identity),
   `check-leaks-msg` (commit-msg), `check-leaks-push-files` and `check-leaks-push-history` (pre-push)
-- **Formatters**: `keep-sorted` (priority 30); at 35, JSON (`.claude` settings via `pretty-format-json`), VS Code
-  keybindings (`sort-json-array`), shell (`shfmt`), TOML (`taplo-format`), Pkl (`format-pkl`), markdown (`mdformat`;
-  `.ctx/` and `docs/plans/` are excluded), Python (`ruff --fix-only`)
+- **Formatters**: `keep-sorted` (priority 31); Python docstring and header fixers `fix-docstring-format` (32: expands
+  single-line docstrings; `# nofmt: docstring` opts out) and `format-module-section-headers` (33: triple-quoted section
+  headers → boxed `# ====` comments, borders normalized to 100 columns); at 35, JSON (`.claude` settings via
+  `pretty-format-json`), VS Code keybindings (`sort-json-array`), shell (`shfmt`), TOML (`taplo-format`), Pkl
+  (`format-pkl`), markdown (`mdformat`; `.ctx/` and `docs/plans/` are excluded), Python (`ruff --fix-only`)
 - **Linters** (40): `ruff check`, `mypy`, `interrogate`, `shellcheck`, `yamllint`, `ansible-lint`
-- **Fixer at priority 40**: `codespell` runs with `--write-changes`, so it rewrites misspellings instead of reporting
+- **Fixer at priority 30**: `codespell` runs with `--write-changes`, so it rewrites misspellings instead of reporting
   them
 
 ```bash

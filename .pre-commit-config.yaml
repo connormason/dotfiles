@@ -454,23 +454,21 @@ repos:
       - id: fix-docstring-format
         name: "[fix]    python docstring format"
         groups: [fix, local, python, docs]
-        stages: [pre-commit, manual]
+        stages: [pre-commit]
         priority: 32
-        entry: uv run python scripts/hooks/fix_docstring_format.py
-        language: system
+        entry: scripts/hooks/fix_docstring_format.py
+        language: python
         types: [python]
 
       # Convert module-level triple-quoted section headers to boxed comment headers and normalize border widths
-      # (see --border-char / --border-width / --no-normalize-borders)
       - id: format-module-section-headers
         name: "[format] python module section headers"
         groups: [format, local, python, docs]
-        stages: [pre-commit, manual]
+        stages: [pre-commit]
         priority: 33
         entry: scripts/hooks/format_module_section_headers.py
         language: python
-        files: '.*\.py$'
-        types: [text]
+        types: [python]
         args: [--exit-non-zero-on-fix]
 
   - repo: https://github.com/scop/pre-commit-shfmt
