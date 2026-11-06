@@ -86,7 +86,7 @@ class TestConventions:
         """
         Verify the banned code formatter invocation is matched
         """
-        assert any(p.search('run ruff format now') for p in FORBIDDEN_PATTERNS)
+        assert any(p.search('run ruff format now')  for p in FORBIDDEN_PATTERNS)
         assert any(p.search('uv run ruff format .') for p in FORBIDDEN_PATTERNS)
 
     @pytest.mark.parametrize(

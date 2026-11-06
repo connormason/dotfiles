@@ -28,6 +28,7 @@ class TestStructuralIssues:
         """
         readme = tmp_path / 'README.md'
         readme.write_text('# Title\n\nNo breadcrumb here.\n', encoding='utf-8')
+
         child = tmp_path / 'sub'
         child.mkdir()
         (child / 'README.md').write_text('# Sub\n', encoding='utf-8')
@@ -42,6 +43,7 @@ class TestStructuralIssues:
         """
         readme = tmp_path / 'README.md'
         readme.write_text('# Project\n\nRoot index.\n', encoding='utf-8')
+
         issues = structural_issues(readme, children_with_readme=[], is_repo_root=True)
         assert 'missing breadcrumb' not in issues
 
@@ -51,6 +53,7 @@ class TestStructuralIssues:
         """
         readme = tmp_path / 'README.md'
         readme.write_text('[Project Root](../README.md) > **pkg**\n\nNo heading at all.\n', encoding='utf-8')
+
         issues = structural_issues(readme, children_with_readme=[], is_repo_root=False)
         assert 'missing H1 title' in issues
 
@@ -67,6 +70,7 @@ class TestStructuralIssues:
             '[Project Root](../README.md) > **pkg**\n\n# Title\n\nSee [sub](sub/README.md).\n',
             encoding='utf-8',
         )
+
         issues = structural_issues(readme, children_with_readme=[child], is_repo_root=False)
         assert issues == []
 
@@ -83,6 +87,7 @@ class TestStructuralIssues:
             '[Project Root](../README.md) > **here**\n\n# Here\n\n[child module](child/README.md)\n',
             encoding='utf-8',
         )
+
         issues = structural_issues(readme, children_with_readme=[child], is_repo_root=False)
         assert not any('down-link' in i for i in issues)
 
@@ -97,6 +102,7 @@ class TestPolicyIssues:
         """
         readme = tmp_path / 'README.md'
         readme.write_text('# Title\n\nRun ruff format to tidy up.\n', encoding='utf-8')
+
         matches = policy_issues(readme)
         assert [m.line for m in matches] == [3]
         assert matches[0].text == 'Run ruff format to tidy up.'
@@ -165,6 +171,7 @@ class TestLinkIssues:
         """
         readme = tmp_path / 'README.md'
         readme.write_text('# Title\n\n[gone](missing.md)\n', encoding='utf-8')
+
         broken = link_issues(readme)
         assert any(b.link == 'missing.md' for b in broken)
 
@@ -191,6 +198,7 @@ class TestLinkIssues:
         readme = tmp_path / 'README.md'
         (tmp_path / 'other.md').write_text('# Other\n', encoding='utf-8')
         readme.write_text('# Title\n\n[x](other.md#does-not-exist)\n', encoding='utf-8')
+
         broken = link_issues(readme)
         assert any(b.link == 'other.md#does-not-exist' for b in broken)
 
@@ -204,6 +212,7 @@ class TestLinkIssues:
             encoding='utf-8',
         )
         readme.write_text('# Title\n\n[sec](other.md#section-one)\n', encoding='utf-8')
+
         broken = link_issues(readme)
         assert not any(b.link == 'other.md#section-one' for b in broken)
 
@@ -255,6 +264,7 @@ class TestLinkIssues:
             '# Title\n\nFormat is `[#N](url)`.\n\nBut [this](missing/path.md) is real.\n',
             encoding='utf-8',
         )
+
         broken = link_issues(readme)
         assert [b.link for b in broken] == ['missing/path.md']
 
@@ -347,7 +357,7 @@ class TestFindMissing:
         findings   = find_missing(classified, repo_root=tmp_path)
 
         assert len(findings) == 1
-        assert findings[0].path == Path('pkg')
+        assert findings[0].path      == Path('pkg')
         assert findings[0].dir_class is DirClass.CODE
 
     def test_exempt_dir_is_never_reported(self, tmp_path: Path) -> None:

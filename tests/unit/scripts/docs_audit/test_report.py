@@ -46,10 +46,13 @@ class TestAuditReport:
         Verify an empty report reports no findings and a zeroed summary
         """
         report = _empty_report()
-
         assert report.has_findings is False
         assert report.summary == {
-            'missing': 0, 'stale_candidates': 0, 'structural': 0, 'links': 0, 'policy': 0,
+            'missing':          0,
+            'stale_candidates': 0,
+            'structural':       0,
+            'links':            0,
+            'policy':           0,
         }
 
     def test_json_envelope_has_summary(self) -> None:
@@ -59,7 +62,7 @@ class TestAuditReport:
         envelope = json.loads(_empty_report().to_json())
 
         assert envelope['summary']['missing'] == 0
-        assert envelope['scope']              == ['.']
+        assert envelope['scope'] == ['.']
         assert 'coverage' not in envelope
 
     def test_to_text_runs_without_color(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,8 +71,9 @@ class TestAuditReport:
         """
         monkeypatch.setenv('NO_COLOR', '1')
         text = _empty_report().to_text()
+
         assert 'docs-audit' in text
-        assert '\033[' not in text
+        assert '\033['  not in text
 
     def test_non_empty_report_has_findings(self) -> None:
         """
@@ -149,9 +153,7 @@ class TestAuditReport:
         """
         envelope = self._fully_populated_report().to_dict()
 
-        assert envelope['missing'] == [
-            {'path': 'pkg/data', 'class': 'data'},
-        ]
+        assert envelope['missing'] == [{'path': 'pkg/data', 'class': 'data'}]
 
         assert envelope['stale_candidates'] == [{
             'path':               'pkg/README.md',
@@ -176,7 +178,11 @@ class TestAuditReport:
         }]
 
         assert envelope['summary'] == {
-            'missing': 1, 'stale_candidates': 1, 'structural': 1, 'links': 1, 'policy': 1,
+            'missing':          1,
+            'stale_candidates': 1,
+            'structural':       1,
+            'links':            1,
+            'policy':           1,
         }
 
     def test_to_text_renders_every_category(self, monkeypatch: pytest.MonkeyPatch) -> None:

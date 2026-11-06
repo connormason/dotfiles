@@ -66,10 +66,18 @@ def main(argv: list[str] | None = None) -> int:
     :return: 1 when any README has a structural, link, or policy issue; 0 otherwise
     """
     parser = argparse.ArgumentParser(description='Validate changed README files')
-    parser.add_argument('filenames', nargs='*', help='files supplied by pre-commit')
+    parser.add_argument(
+        'filenames',
+        type=str,
+        nargs='*',
+        help='files supplied by pre-commit',
+    )
     args = parser.parse_args(argv)
 
-    readmes = [Path(name) for name in args.filenames if Path(name).name == 'README.md']
+    readmes: list[Path] = [
+        Path(name) for name in args.filenames
+        if Path(name).name == 'README.md'
+    ]
 
     failed = False
     for readme in readmes:

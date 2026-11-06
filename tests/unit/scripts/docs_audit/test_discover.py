@@ -66,10 +66,10 @@ class TestDiscover:
         git_commit_all(tmp_path, 'init')
 
         dirs = discover([Path()], repo_root=tmp_path)
-        assert Path('pkg')                 in dirs
-        assert Path('__pycache__')     not in dirs
+        assert Path('pkg')                   in dirs
+        assert Path('__pycache__')       not in dirs
         assert Path('.github/workflows') not in dirs
-        assert Path('archive/old')     not in dirs
+        assert Path('archive/old')       not in dirs
 
     def test_scope_limits_discovery(self, tmp_path: Path) -> None:
         """

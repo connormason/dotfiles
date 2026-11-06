@@ -62,6 +62,7 @@ class TestDocsAuditHook:
 
         pkg_dir = tmp_path / 'pkg'
         pkg_dir.mkdir()
+
         readme = pkg_dir / 'README.md'
         readme.write_text(
             '[Project Root](../README.md) > **pkg**\n\n# pkg\n\nClean content.\n',
@@ -78,6 +79,7 @@ class TestDocsAuditHook:
 
         pkg_dir = tmp_path / 'pkg'
         pkg_dir.mkdir()
+
         readme = pkg_dir / 'README.md'
         readme.write_text(
             '[Project Root](../README.md) > **pkg**\n\n# pkg\n\nRun ruff format.\n',
@@ -86,7 +88,9 @@ class TestDocsAuditHook:
         assert self.mod.main([str(readme)]) == 1
 
     def test_fails_readme_with_structural_and_link_issues(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """
         Verify a README missing its breadcrumb and containing a broken relative link fails the hook
@@ -97,7 +101,10 @@ class TestDocsAuditHook:
         assert self.mod.main([str(readme)]) == 1
 
     def test_failure_report_names_each_issue_kind(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Verify the failure output lists the structural, link, and policy problems of a README
@@ -107,15 +114,16 @@ class TestDocsAuditHook:
 
         pkg_dir = tmp_path / 'pkg'
         pkg_dir.mkdir()
+
         readme = pkg_dir / 'README.md'
         readme.write_text('# pkg\n\nRun ruff format.\n\n[gone](missing.md)\n', encoding='utf-8')
 
         assert self.mod.main([str(readme)]) == 1
         out = capsys.readouterr().out
 
-        assert 'structural: missing breadcrumb' in out
+        assert 'structural: missing breadcrumb'    in out
         assert 'link: missing.md (path not found)' in out
-        assert 'policy:' in out
+        assert 'policy:'                           in out
 
     def test_missing_file_is_skipped(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -125,7 +133,9 @@ class TestDocsAuditHook:
         assert self.mod.main([str(tmp_path / 'gone' / 'README.md')]) == 0
 
     def test_symlinked_child_does_not_require_downlink(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """
         Verify a symlinked child directory containing a README does not demand a down-link from its parent
@@ -155,7 +165,9 @@ class TestDocsAuditHook:
         assert self.mod.main([str(readme)]) == 0
 
     def test_excluded_child_does_not_require_downlink(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """
         Verify a child directory matching an audit exclusion (e.g. a hidden tooling directory) demands no down-link
@@ -172,7 +184,6 @@ class TestDocsAuditHook:
             '[Project Root](../README.md) > **pkg**\n\n# pkg\n\nClean content.\n',
             encoding='utf-8',
         )
-
         assert self.mod.main([str(readme)]) == 0
 
     def test_real_child_requires_downlink(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -191,7 +202,6 @@ class TestDocsAuditHook:
             '[Project Root](../README.md) > **pkg**\n\n# pkg\n\nClean content.\n',
             encoding='utf-8',
         )
-
         assert self.mod.main([str(readme)]) == 1
 
     def test_repo_root_readme_needs_no_breadcrumb(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -221,7 +231,10 @@ class TestDocsAuditHook:
 
     @pytest.mark.parametrize('name', ['inventory', 'archive'])
     def test_root_only_excluded_child_needs_no_downlink_from_root(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        name: str,
     ) -> None:
         """
         Verify a repo-root-only excluded child (e.g. the gitignored inventory clone) is not demanded as a root down-link
@@ -256,5 +269,4 @@ class TestDocsAuditHook:
             '[Project Root](../README.md) > **pkg**\n\n# pkg\n\nClean content.\n',
             encoding='utf-8',
         )
-
         assert self.mod.main([str(readme)]) == 1

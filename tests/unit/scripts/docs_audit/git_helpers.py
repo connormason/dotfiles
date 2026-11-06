@@ -56,5 +56,5 @@ def git_commit_all(root: Path, message: str = 'commit', *, date: str | None = No
         env['GIT_AUTHOR_DATE']    = date
         env['GIT_COMMITTER_DATE'] = date
 
-    subprocess.run(['git', 'add', '-A'], cwd=root, check=True, capture_output=True, env=env)
+    subprocess.run(['git', 'add', '-A'],                   cwd=root, check=True, capture_output=True, env=env)
     subprocess.run(['git', 'commit', '-q', '-m', message], cwd=root, check=True, capture_output=True, env=env)
