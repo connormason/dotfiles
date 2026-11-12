@@ -46,6 +46,16 @@
       tags:
         - zfs
 
+    # Off-site restic backup to Backblaze B2: needs nas-notify (debian) and the pool (zfs). Inert until backup_b2_bucket
+    # is set, so an unconfigured backup never blocks the roles after it.
+    - name: Configure the off-site backup
+      ansible.builtin.include_role:
+        name: roles/backup
+        apply:
+          tags: backup
+      tags:
+        - backup
+
     # Tasks for Samba file sharing
     - name: Configure Samba file sharing
       ansible.builtin.include_role:

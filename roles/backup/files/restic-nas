@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Run restic against the NAS backup repository with the credentials the nightly job uses: sudo restic-nas snapshots
+# Managed by Ansible (roles/backup).
+set -euo pipefail
+
+set -a
+# shellcheck disable=SC1090,SC1091
+source "${RESTIC_NAS_ENV:-/etc/restic/restic.env}"
+set +a
+exec restic "$@"

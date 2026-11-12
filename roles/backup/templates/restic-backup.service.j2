@@ -1,0 +1,20 @@
+# Managed by Ansible (roles/backup).
+[Unit]
+Description=Back up the NAS to restic on Backblaze B2
+Wants=network-online.target
+After=network-online.target
+OnFailure=nas-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+EnvironmentFile={{ backup_config_dir }}/restic.env
+Environment=BACKUP_ZFS_DATASET={{ backup_zfs_dataset }}
+Environment="BACKUP_PATHS={{ backup_paths | join(' ') }}"
+Environment=BACKUP_KEEP_DAILY={{ backup_keep_daily }}
+Environment=BACKUP_KEEP_WEEKLY={{ backup_keep_weekly }}
+Environment=BACKUP_KEEP_MONTHLY={{ backup_keep_monthly }}
+ExecStart={{ backup_script_path }}
+# The first upload can take hours on a home connection
+TimeoutStartSec=24h
+Nice=19
+IOSchedulingClass=idle

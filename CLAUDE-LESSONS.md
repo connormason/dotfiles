@@ -113,3 +113,12 @@ Each lesson follows this pattern:
 - **Rule**: Before giving a command sequence, check each tool exists at that step (what installs it, and when). Anchor
   device-name filters (`\bsde\b`, `\[sde\]`) and list devices with `lsblk` rather than from memory. Check directives
   against the manual for every device type the scan reaches, and enumerate every disk, including the boot disk.
+
+### Re-check the live layout before designing on a plan's premise
+
+- **Context**: The audit plan and the sanoid/ZFS role docs said the pool was "a single dataset today". Designing the
+  restic backup, `zfs list` showed `storage/backups` as its own dataset.
+- **Mistake**: The interim sanoid policy covers `[storage]` with `recursive = no`, so `storage/backups` (one of the two
+  backup sources) had no snapshots at all. A backup reading "the latest sanoid snapshot" would have found nothing there.
+- **Rule**: Before building on a statement about the live system, run the read-only command that proves it (`zfs list`,
+  `lsblk`, `ss`). The backup job takes its own recursive snapshot instead of depending on another job's policy.

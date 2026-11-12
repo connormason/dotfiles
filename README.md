@@ -385,6 +385,7 @@ dotfiles/
 ├── roles/                                  # Ansible roles (NAS), in playbook order
 │   ├── debian/                             # Debian system packages and the Linuxbrew prefix
 │   ├── zfs/                                # ZFS installation
+│   ├── backup/                             # Nightly restic backup to Backblaze B2
 │   ├── samba/                              # File sharing
 │   ├── docker/                             # Docker Engine, ~/docker skeleton, autoplex image, deploy.sh
 │   ├── tailscale/                          # Tailscale VPN, HTTPS certificates, Caddyfile

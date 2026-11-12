@@ -1,0 +1,11 @@
+# Managed by Ansible (roles/backup).
+[Unit]
+Description=Nightly restic backup to Backblaze B2
+
+[Timer]
+OnCalendar={{ backup_on_calendar }}
+RandomizedDelaySec={{ backup_randomized_delay }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

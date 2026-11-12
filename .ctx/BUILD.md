@@ -20,7 +20,7 @@ python3 run.py nas-deploy glance
 ## Running Ansible Playbooks (NAS)
 
 ```bash
-# Run specific tags only (system: debian,zfs,samba,docker,tailscale; $HOME: dotfiles; VM: haos; stack: services)
+# Run specific tags only (system: debian,zfs,samba,docker,tailscale; $HOME: dotfiles; VM: haos; stack: services; off-site backup: backup)
 python3 run.py nas-provision --tags dotfiles,haos
 
 # Extra variables, e.g. test the dotfiles role against a branch

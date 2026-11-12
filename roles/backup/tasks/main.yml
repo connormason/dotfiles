@@ -1,0 +1,115 @@
+---
+# Nothing is configured until the bucket is named; say so instead of skipping silently, so an unconfigured backup is
+# visible in the provisioning output.
+- name: Warn that off-site backup is not configured
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: backup_b2_bucket is not set, so no off-site backup is configured. See roles/backup/README.md.
+  when: backup_b2_bucket | length == 0
+
+- name: Configure the restic backup to Backblaze B2
+  when: backup_b2_bucket | length > 0
+  block:
+    # The conditions name variables only; the failure output never shows their values. The env file is read by systemd
+    # and by the shell (single-quoted values), so a quote or newline in a credential would corrupt it.
+    - name: Assert that the backup settings are complete
+      ansible.builtin.assert:
+        that:
+          - backup_b2_account_id | length > 0
+          - backup_b2_account_key | length > 0
+          - backup_repository_password | length > 0
+          - backup_b2_account_id is not search("['\n]")
+          - backup_b2_account_key is not search("['\n]")
+          - backup_paths | length > 0
+          - backup_paths | select('search', '\s') | list | length == 0
+        fail_msg: >-
+          Backup settings are incomplete or unusable: restic_b2_account_id, restic_b2_account_key and
+          restic_repository_password must be set in the inventory vault (the B2 values without quotes or newlines),
+          and backup_paths must be non-empty with no whitespace in any path. See roles/backup/README.md.
+        quiet: true
+
+    - name: Install restic
+      become: true
+      ansible.builtin.apt:
+        name: restic
+
+    - name: Create the restic configuration directory
+      become: true
+      ansible.builtin.file:
+        path: "{{ backup_config_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    # diff and no_log are off by design: these files hold the B2 key and the repository password (CLAUDE-LESSONS.md)
+    - name: Store the restic repository password
+      become: true
+      ansible.builtin.copy:
+        content: "{{ backup_repository_password }}"
+        dest: "{{ backup_config_dir }}/password"
+        owner: root
+        group: root
+        mode: "0600"
+      diff: false
+      no_log: true
+
+    - name: Render the restic environment file
+      become: true
+      ansible.builtin.template:
+        src: restic.env.j2
+        dest: "{{ backup_config_dir }}/restic.env"
+        owner: root
+        group: root
+        mode: "0600"
+      diff: false
+      no_log: true
+
+    - name: Install the backup script
+      become: true
+      ansible.builtin.copy:
+        src: restic-backup
+        dest: "{{ backup_script_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the restic wrapper
+      become: true
+      ansible.builtin.copy:
+        src: restic-nas
+        dest: "{{ backup_wrapper_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the backup service
+      become: true
+      ansible.builtin.template:
+        src: restic-backup.service.j2
+        dest: "{{ backup_unit_dir }}/restic-backup.service"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd for backup
+
+    - name: Install the backup timer
+      become: true
+      ansible.builtin.template:
+        src: restic-backup.timer.j2
+        dest: "{{ backup_unit_dir }}/restic-backup.timer"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd for backup
+
+    # The new units must be loaded before the timer can be enabled
+    - name: Reload systemd before enabling the timer
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start the backup timer
+      become: true
+      ansible.builtin.systemd:
+        name: restic-backup.timer
+        state: started
+        enabled: true
