@@ -52,6 +52,7 @@ def _run_tasks(
     tasks: list[TaskDict],
     *extra: str,
     env: dict[str, str] | None = None,
+    handlers: list[TaskDict] | None = None,
 ) -> tuple[int, str]:
     """
     Run tasks as one localhost play with the role's defaults loaded
@@ -61,6 +62,7 @@ def _run_tasks(
     :param tasks: task dicts to run
     :param extra: extra ansible-playbook arguments (for example ``-e name=value``)
     :param env: extra environment variables
+    :param handlers: handler task dicts for the play (tasks reach them with ``notify``)
     :return: tuple of (return code, combined output)
     """
     play = [{
@@ -69,6 +71,7 @@ def _run_tasks(
         'connection':   'local',
         'vars_files':   [str(ROLES / role / 'defaults' / 'main.yml')],
         'tasks':        tasks,
+        **({'handlers': handlers} if handlers else {}),
     }]
     playbook = tmp_path / 'play.yml'
     playbook.write_text(yaml.safe_dump(play), encoding='utf-8')

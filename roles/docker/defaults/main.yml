@@ -4,3 +4,20 @@ docker_dir: "{{ ansible_facts['user_dir'] }}/docker"
 docker_autoplex_repo_dest: "{{ docker_dir }}/.build/autoplex"
 docker_autoplex_repo_url: https://github.com/danielmmetz/autoplex.git
 docker_autoplex_repo_branch: master
+
+# /etc/docker/daemon.json. The default log limits cap each container's json-file log at 3 x 10 MB. Values under log-opts
+# must be strings (dockerd rejects numbers). Defaults apply only to containers created after dockerd restarts, so
+# existing containers keep their unlimited logs until they are recreated (see the role README).
+docker_daemon_config:
+  log-driver: json-file
+  log-opts:
+    max-size: 10m
+    max-file: "3"
+
+# Restarting dockerd stops every container until its restart policy starts it again (live-restore is off), so a changed
+# daemon.json does not restart docker unless this is true.
+docker_restart_on_config_change: false
+
+# Weekly prune of images no container references that were created before this age
+docker_image_prune_until: 168h
+docker_image_prune_on_calendar: "Sun *-*-* 05:30:00"

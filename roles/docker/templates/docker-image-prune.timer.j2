@@ -1,0 +1,11 @@
+# Managed by Ansible (roles/docker).
+[Unit]
+Description=Weekly removal of unused Docker images
+
+[Timer]
+OnCalendar={{ docker_image_prune_on_calendar }}
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

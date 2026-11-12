@@ -29,6 +29,7 @@ debian_apt_packages:
   - fzf
   - exfat-fuse
   - smartmontools
+  - unattended-upgrades
 
 # Homebrew's Linux prefix: created here (that needs root) and owned by the user, so the engine installs Homebrew there
 # without sudo
@@ -48,3 +49,11 @@ debian_smartd_ignored_devices:
 
 # smartd self-test schedule (T/MM/DD/d/HH): short test Sundays at 03:00, long test on the 1st at 04:00
 debian_smartd_schedule: "(S/../../7/03|L/../01/./04)"
+
+# Automatic upgrades: security origin only, never an automatic reboot (zfs-dkms). apt-listchanges and the package's own
+# 50unattended-upgrades stay untouched; the role adds a later drop-in that replaces the origin list.
+debian_unattended_origin_patterns:
+  - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
+
+# When nas-reboot-check looks for a pending reboot
+debian_reboot_check_on_calendar: "*-*-* 09:00:00"

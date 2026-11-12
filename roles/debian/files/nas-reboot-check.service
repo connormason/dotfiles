@@ -1,0 +1,7 @@
+[Unit]
+Description=Alert when the host needs a reboot
+OnFailure=nas-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nas-reboot-check

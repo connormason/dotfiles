@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# Alert through nas-notify when the host needs a reboot. unattended-upgrades never reboots (zfs-dkms: a reboot must be a
+# decision), so something has to say that one is due.
+#
+# A reboot is due when either signal is present:
+#   - /run/reboot-required exists (written by update-notifier-common, which this host does not install, so it is a bonus)
+#   - a newer kernel than the running one is installed in /boot (the signal that works on plain Debian)
+# When a newer kernel is the reason, the script also checks that DKMS built the zfs module for it: booting a kernel
+# without zfs.ko leaves the pool unimported, so that case is raised at urgent priority with a "do not reboot" warning.
+#
+# The same condition is reported once, then again after REMINDER_MINUTES (default one week) while it persists. The state
+# file lives in /run, so it resets at boot.
+#
+# Overridable for tests: REBOOT_REQUIRED_FILE, REBOOT_REQUIRED_PKGS, BOOT_DIR, KERNEL_RELEASE, STATE_FILE,
+# REMINDER_MINUTES, NAS_NOTIFY.
+set -euo pipefail
+
+REBOOT_REQUIRED_FILE="${REBOOT_REQUIRED_FILE:-/run/reboot-required}"
+REBOOT_REQUIRED_PKGS="${REBOOT_REQUIRED_PKGS:-/run/reboot-required.pkgs}"
+BOOT_DIR="${BOOT_DIR:-/boot}"
+KERNEL_RELEASE="${KERNEL_RELEASE:-$(uname -r)}"
+STATE_FILE="${STATE_FILE:-/run/nas-reboot-check.state}"
+REMINDER_MINUTES="${REMINDER_MINUTES:-10080}"
+NAS_NOTIFY="${NAS_NOTIFY:-/usr/local/bin/nas-notify}"
+
+# Newest installed kernel release (vmlinuz-<release>), by version order
+newest_kernel() {
+    local newest=''
+    for image in "${BOOT_DIR}"/vmlinuz-*; do
+        [[ -e "${image}" ]] || continue
+        newest="$(printf '%s\n%s\n' "${newest}" "${image##*/vmlinuz-}" | sort -V | tail -n 1)"
+    done
+    echo "${newest}"
+}
+
+# sha256 digest of stdin; falls back to shasum where coreutils is absent (macOS, where the tests also run)
+sha256() {
+    if command -v sha256sum >/dev/null; then
+        sha256sum | cut -d ' ' -f 1
+    else
+        shasum -a 256 | cut -d ' ' -f 1
+    fi
+}
+
+reasons=()
+priority=high
+
+if [[ -e "${REBOOT_REQUIRED_FILE}" ]]; then
+    packages=''
+    [[ -r "${REBOOT_REQUIRED_PKGS}" ]] && packages=" ($(sort -u "${REBOOT_REQUIRED_PKGS}" | tr '\n' ' ' | sed 's/ $//'))"
+    reasons+=("the reboot-required flag is set${packages}")
+fi
+
+newest="$(newest_kernel)"
+if [[ -n "${newest}" && "${newest}" != "${KERNEL_RELEASE}" ]] &&
+    [[ "$(printf '%s\n%s\n' "${KERNEL_RELEASE}" "${newest}" | sort -V | tail -n 1)" == "${newest}" ]]; then
+    reasons+=("kernel ${newest} is installed but ${KERNEL_RELEASE} is running")
+    if ! command -v dkms >/dev/null; then
+        reasons+=("dkms is not installed, so the zfs module for ${newest} could not be checked")
+    elif dkms status 2>/dev/null | grep -Eq "^zfs/[^,]+, ${newest}, [^:]+: installed"; then
+        reasons+=("DKMS has built the zfs module for it")
+    else
+        reasons+=("DO NOT REBOOT YET: DKMS has not built the zfs module for ${newest} (dkms status), so the pool would not import")
+        priority=urgent
+    fi
+fi
+
+if ((${#reasons[@]} == 0)); then
+    rm -f "${STATE_FILE}"
+    exit 0
+fi
+
+key="$(printf '%s\n' "${reasons[@]}" | sha256)"
+if [[ -r "${STATE_FILE}" && "$(cat "${STATE_FILE}")" == "${key}" && -n "$(find "${STATE_FILE}" -mmin "-${REMINDER_MINUTES}")" ]]; then
+    exit 0
+fi
+
+message="$(printf '%s; ' "${reasons[@]}")"
+"${NAS_NOTIFY}" -p "${priority}" -t "Reboot required on $(hostname)" "${message%; }"
+echo "${key}" >"${STATE_FILE}"

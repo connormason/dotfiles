@@ -6,8 +6,8 @@ section of the [README](../README.md). Loaded on demand from [`CLAUDE.md`](../CL
 ## Two Provisioning Systems
 
 - **macOS** — the stow engine and `bootstrap/` stage scripts. Entry point: `bootstrap/bootstrap.sh`.
-- **NAS** — Ansible plus the stow engine. Entry point: `run.py nas-provision` →
-  `playbooks/nas_bootstrap.yml`; services deploy with `run.py nas-deploy`.
+- **NAS** — Ansible plus the stow engine. Entry point: `run.py nas-provision` → `playbooks/nas_bootstrap.yml`; services
+  deploy with `run.py nas-deploy`.
 
 The retired Ansible macOS setup survives as a frozen, unmaintained snapshot in `archive/ansible-macos/` (reference only;
 skipped by the lint tooling).
@@ -49,9 +49,9 @@ ordered base first, then overlays in file order. Full contract in [`bootstrap/RE
   (`--dry-run` previews).
 - **`profiles/`**: per-machine overlays; see [`profiles/README.md`](../profiles/README.md).
 - **OS support**: `lib.sh` `dotfiles_os` (`darwin`/`linux`, `DOTFILES_OS` override) and `require_os` gate stages;
-  `.dotfiles-os` markers scope stow packages; `render.py` `TARGET_OS` scopes render targets; the Brewfile's
-  `if OS.mac?` block holds macOS-only entries. Linux means Debian-family with Linuxbrew; the engine never runs `apt` or
-  `sudo` there (root-level setup is the NAS Ansible's job). Contract in [`bootstrap/README.md`](../bootstrap/README.md).
+  `.dotfiles-os` markers scope stow packages; `render.py` `TARGET_OS` scopes render targets; the Brewfile's `if OS.mac?`
+  block holds macOS-only entries. Linux means Debian-family with Linuxbrew; the engine never runs `apt` or `sudo` there
+  (root-level setup is the NAS Ansible's job). Contract in [`bootstrap/README.md`](../bootstrap/README.md).
 
 ## Inventory Management
 
@@ -90,12 +90,14 @@ Ansible roles, all run by `playbooks/nas_bootstrap.yml`, listed in playbook orde
 fails when this list drifts from the playbook):
 
 - `debian`: base Debian configuration, covering system packages (including the stow engine's prerequisites), the
-  Linuxbrew prefix, and the systemd sleep targets
+  Linuxbrew prefix, the systemd sleep targets, alerting (`nas-notify`, smartd), and unattended security upgrades with a
+  reboot alert
 - `zfs`: adds the `contrib` apt component and installs the kernel packages, `zfs-dkms`, `zfsutils-linux`; manages no
   pools
 - `samba`: Samba file sharing
-- `docker`: Docker Engine and compose plugin, docker-group membership, the `~/docker` skeleton and shared `.env`, the
-  autoplex image build, `deploy.sh`
+- `docker`: Docker Engine and compose plugin (the v1 `docker-compose` package is removed), `daemon.json` log limits, a
+  weekly image-prune timer, docker-group membership, the `~/docker` skeleton and shared `.env`, the autoplex image
+  build, `deploy.sh`
 - `tailscale`: Tailscale install and configuration, HTTPS certificates, and the Caddyfile Caddy reads
 - `dotfiles`: `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh`
 - `haos`: Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)
@@ -133,8 +135,8 @@ from a bare `python3`.
 **Environment variables and flags**:
 
 - `DOTFILES_RUN_DEBUG`: enables debug output only when set to `true` (case-insensitive)
-- `-d/--debug`: global flag with the same effect; it goes before the command (`python3 run.py -d doctor`).
-  `--no-debug` overrides `DOTFILES_RUN_DEBUG=true`
+- `-d/--debug`: global flag with the same effect; it goes before the command (`python3 run.py -d doctor`). `--no-debug`
+  overrides `DOTFILES_RUN_DEBUG=true`
 - `DOTFILES_INVENTORY_REPO_URL`: Override inventory repo URL
 - `NO_COLOR`: any non-empty value strips the ANSI styling from the output
 - `DOTFILES_UV_VERBOSE` / `--uv-verbose`: parsed like the debug flag; when on, `RUST_LOG=uv=debug` is added to the
@@ -151,8 +153,8 @@ Media server stack defined by `services/compose.base.yml` plus one `services/<na
 - **Network**: Caddy (reverse proxy), PiHole (DNS/ad-blocking; disabled)
 - **Dashboard**: Glance
 - **Support**: Autoplex (copies completed downloads into the Plex layout)
-- **Home automation**: Home Assistant runs as a libvirt VM provisioned by `vms/haos/` scripts; its container
-  definition is disabled
+- **Home automation**: Home Assistant runs as a libvirt VM provisioned by `vms/haos/` scripts; its container definition
+  is disabled
 
 **Disabling a service**: rename its `compose.yml` to `compose.yml.disabled` (`pihole` and `homeassistant` today).
 `deploy.sh`, `scripts/nas/deploy-services.sh`, and the CI workflow pick up only directories containing a `compose.yml`.

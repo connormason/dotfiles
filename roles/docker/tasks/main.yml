@@ -46,13 +46,64 @@
           - containerd.io
           - docker-buildx-plugin
           - docker-compose-plugin
-          - docker-compose
+
+    # The compose plugin (`docker compose`) is what deploy.sh and the services role use; v1 (`docker-compose`) is
+    # deprecated and has no caller in this repository.
+    - name: Remove the legacy docker-compose v1 package
+      become: true
+      ansible.builtin.apt:
+        name: docker-compose
+        state: absent
+
+    # Written before the daemon starts, so a fresh install needs no restart. On a running host the change waits for a
+    # restart: see docker_restart_on_config_change, which is off by default because a restart stops every container.
+    - name: Configure the docker daemon
+      become: true
+      ansible.builtin.template:
+        src: daemon.json.j2
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: "0644"
+        validate: dockerd --validate --config-file %s
+      notify: Restart docker
 
     - name: Ensure docker daemon is running
       become: true
       ansible.builtin.service:
         name: docker
         state: started
+
+    - name: Install the weekly image prune service
+      become: true
+      ansible.builtin.template:
+        src: docker-image-prune.service.j2
+        dest: /etc/systemd/system/docker-image-prune.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd for docker
+
+    - name: Install the weekly image prune timer
+      become: true
+      ansible.builtin.template:
+        src: docker-image-prune.timer.j2
+        dest: /etc/systemd/system/docker-image-prune.timer
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd for docker
+
+    # The new units must be loaded before the timer can be enabled
+    - name: Reload systemd before enabling the prune timer
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start the weekly image prune timer
+      become: true
+      ansible.builtin.systemd:
+        name: docker-image-prune.timer
+        state: started
+        enabled: true
 
     # deploy.sh runs as this user; the group applies to new sessions, which is why the services role deploys through
     # become as the same user
