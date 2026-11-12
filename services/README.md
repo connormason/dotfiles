@@ -49,6 +49,7 @@ it. Remove the NAS copy by hand; for `homeassistant`, the steps are in the
   - [`prowlarr`, `radarr`, `sonarr`, `transmission`](#prowlarr-radarr-sonarr-transmission)
   - [`flaresolverr`](#flaresolverr)
   - [`autoplex`](#autoplex)
+  - [`ntfy`](#ntfy)
 - [Data flow](#data-flow)
 - [Storage layout](#storage-layout)
 - [Secrets](#secrets)
@@ -79,6 +80,7 @@ All host ports below are bound on the NAS itself. Services without a host port a
 | `transmission`   | `linuxserver/transmission`          | `9091/tcp`                                      | BitTorrent client (web UI)                  |
 | `flaresolverr`   | `ghcr.io/flaresolverr/flaresolverr` | internal only (`8191/tcp`, not declared here)   | Cloudflare challenge solver for Prowlarr    |
 | `autoplex`       | `danielmmetz/autoplex` (built)      | none                                            | Copies completed downloads into Plex layout |
+| `ntfy`           | `binwiederhier/ntfy:v2.11.0`        | `127.0.0.1:2586` → 80 (loopback only)           | Push-notification channel for host alerts   |
 
 The compose files declare neither the Home Assistant port `8123` nor the Flaresolverr port `8191`; both are upstream
 defaults that nothing in this repository verifies.
@@ -189,6 +191,26 @@ It starts with `--mode copy` and `--host transmission`, and two `--src`/`--dest`
 `/tv` and `/downloads/complete/movies` to `/movies`. Those are the container paths of `/storage/media/downloads`,
 `/storage/media/tv`, and `/storage/media/movies`.
 
+### `ntfy`<a name="ntfy"></a>
+
+Self-hosted push-notification server and the alert channel for the host (SMART, ZFS, snapshot and upgrade alerts). The
+image is pinned to a version tag rather than `latest`. The port is published on the loopback interface only
+(`127.0.0.1:2586`): scripts on the NAS publish to it directly, and Caddy reaches it by name on `nas-network`. The cache
+and the user database live in `/storage/media/config/ntfy`. `NTFY_AUTH_DEFAULT_ACCESS=deny-all` makes every topic
+require a token, so after the first deploy create an admin user and a write-only token for host scripts:
+
+```bash
+docker exec -it ntfy ntfy user add --role=admin <admin-user>
+docker exec -it ntfy ntfy user add alerts
+docker exec ntfy ntfy access alerts 'nas-*' write-only
+docker exec ntfy ntfy token add alerts
+```
+
+A publish from the host then looks like
+`curl -H "Authorization: Bearer <token>" -d "message" http://127.0.0.1:2586/nas-alerts`. Subscribe from a phone through
+the ntfy app once the server has a tailnet route (a `tailscale_services` entry in the inventory); no compose setting
+here exposes it beyond the NAS.
+
 ## Data flow<a name="data-flow"></a>
 
 The compose files do not wire the apps together: they provide the shared `nas-network` bridge and the mounts below, and
@@ -214,7 +236,8 @@ Every media bind mount comes from `/storage/media`. Nothing in this repository c
 │   ├── transmission/
 │   ├── sonarr/
 │   ├── radarr/
-│   └── prowlarr/
+│   ├── prowlarr/
+│   └── ntfy/
 ├── downloads/
 │   └── complete/           # the Autoplex sources
 │       ├── tv/
@@ -225,14 +248,14 @@ Every media bind mount comes from `/storage/media`. Nothing in this repository c
 └── music/
 ```
 
-| Path (under `/storage/media`) | Mounted by                                                                                    |
-| ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `config/<name>`               | the app of the same name (`plex`, `jellyfin`, `transmission`, `sonarr`, `radarr`, `prowlarr`) |
-| `downloads`                   | `transmission`, `sonarr`, `radarr`, `autoplex`                                                |
-| `watch`                       | `transmission`                                                                                |
-| `tv`                          | `plex`, `jellyfin`, `sonarr`, `autoplex`                                                      |
-| `movies`                      | `plex`, `jellyfin`, `radarr`, `autoplex`                                                      |
-| `music`                       | `plex`, `jellyfin`                                                                            |
+| Path (under `/storage/media`) | Mounted by                                                                                            |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `config/<name>`               | the app of the same name (`plex`, `jellyfin`, `transmission`, `sonarr`, `radarr`, `prowlarr`, `ntfy`) |
+| `downloads`                   | `transmission`, `sonarr`, `radarr`, `autoplex`                                                        |
+| `watch`                       | `transmission`                                                                                        |
+| `tv`                          | `plex`, `jellyfin`, `sonarr`, `autoplex`                                                              |
+| `movies`                      | `plex`, `jellyfin`, `radarr`, `autoplex`                                                              |
+| `music`                       | `plex`, `jellyfin`                                                                                    |
 
 All of these mounts are read-write (no compose file sets `:ro` on them). `flaresolverr` mounts nothing. The mounts of
 the other services (Glance, Caddy, PiHole, Home Assistant) are listed in their sections above. Relative paths in the
