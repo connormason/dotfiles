@@ -15,6 +15,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -1527,3 +1528,68 @@ class TestPortability:
         assert result.returncode == 0
         assert b'FFARGS:' in result.stdout
         assert (b'--logo macOS2' in result.stdout) is self.MACOS
+
+
+class TestSnippetFallbacks:
+    """
+    Tests for snippets that call cached_eval when the shell package (which defines it) is not stowed
+    """
+    SNIPPETS: ClassVar[dict[str, tuple[str, str]]] = {
+        'starship': ('stow/starship/.config/zsh/conf.d/80-starship.zsh', 'STARSHIP_FALLBACK_RAN'),
+        'fzf':      ('stow/fzf/.config/zsh/conf.d/36-fzf.zsh',           'FZF_FALLBACK_RAN'),
+    }
+    LIB = 'stow/shell/.config/zsh/conf.d/00-lib.zsh'
+
+    @pytest.fixture
+    def bare_home(self, tmp_path: Path) -> Home:
+        """
+        An empty HOME whose PATH starts with fake starship and fzf executables that print a marker assignment
+        """
+        bin_dir = tmp_path / 'bin'
+        bin_dir.mkdir()
+        for tool, marker in (('starship', 'STARSHIP_FALLBACK_RAN'), ('fzf', 'FZF_FALLBACK_RAN')):
+            fake = bin_dir / tool
+            fake.write_text(f'#!/bin/sh\necho "typeset -g {marker}=1"\n', encoding='utf-8')
+            fake.chmod(0o755)
+
+        home = tmp_path / 'home'
+        home.mkdir()
+        (home / '.zshrc').write_text('', encoding='utf-8')  # an empty .zshrc keeps zsh from offering first-run setup
+        env = {
+            'HOME':           str(home),
+            'PATH':           f'{bin_dir}:{os.environ["PATH"]}',
+            'TERM':           'dumb',
+            'XDG_CACHE_HOME': str(tmp_path / 'cache'),
+
+            # Debian's /etc/zsh/zshrc otherwise runs its own unguarded compinit, which stalls on a fresh HOME
+            'skip_global_compinit': '1',
+        }
+        return Home(home, env)
+
+    @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
+    @pytest.mark.parametrize('tool', ['starship', 'fzf'])
+    def test_snippet_falls_back_without_cached_eval(self, bare_home: Home, tool: str) -> None:
+        """
+        Test that the snippet still initializes the tool, with no error, when cached_eval is undefined
+        """
+        snippet, marker = self.SNIPPETS[tool]
+        command         = f'source {REPO_ROOT / snippet}; print -r -- "ran=${{{marker}-unset}}"'
+        result, _       = run_zsh_with_tty(bare_home, command)
+        output          = result.stdout.decode('utf-8', errors='replace')
+        assert 'command not found' not in output
+        assert 'ran=1' in output
+
+    @pytest.mark.skipif(os.name != 'posix', reason='pseudo-terminals are POSIX-only')
+    @pytest.mark.parametrize('tool', ['starship', 'fzf'])
+    def test_snippet_uses_cached_eval_when_defined(self, bare_home: Home, tool: str) -> None:
+        """
+        Test that the snippet goes through cached_eval, and so writes its cache, when the helper is defined
+        """
+        snippet, marker = self.SNIPPETS[tool]
+        command = (
+            f'source {REPO_ROOT / self.LIB}; source {REPO_ROOT / snippet}; '
+            f'print -r -- "ran=${{{marker}-unset}}"'
+        )
+        result, _ = run_zsh_with_tty(bare_home, command)
+        assert 'ran=1' in result.stdout.decode('utf-8', errors='replace')
+        assert (Path(bare_home.env['XDG_CACHE_HOME']) / 'zsh' / f'{tool}.zsh').is_file()

@@ -5,7 +5,12 @@
 # Activate `fzf` shell configuration (needs a terminal on stdin: piped `zsh -c` has no ZLE, and the integration's
 # option restore errors out there)
 if (( $+commands[fzf] )) && [[ -t 0 ]]; then
-    cached_eval fzf fzf --zsh
+    # cached_eval comes from the shell package's 00-lib.zsh; fall back to a plain eval when that package is not stowed
+    if (( $+functions[cached_eval] )); then
+        cached_eval fzf fzf --zsh
+    else
+        eval "$(fzf --zsh)"
+    fi
 fi
 # export FZF_CTRL_T_OPTS="
 #   --walker-skip .git,.idea,.mypy_cache,.pytest_cache,.ruff_cache,.venv,__pycache__,node_modules,venv
