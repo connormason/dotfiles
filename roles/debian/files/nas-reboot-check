@@ -33,12 +33,21 @@ newest_kernel() {
     echo "${newest}"
 }
 
+# sha256 digest of stdin; falls back to shasum where coreutils is absent (macOS, where the tests also run)
+sha256() {
+    if command -v sha256sum >/dev/null; then
+        sha256sum | cut -d ' ' -f 1
+    else
+        shasum -a 256 | cut -d ' ' -f 1
+    fi
+}
+
 reasons=()
 priority=high
 
 if [[ -e "${REBOOT_REQUIRED_FILE}" ]]; then
     packages=''
-    [[ -r "${REBOOT_REQUIRED_PKGS}" ]] && packages=" ($(sort -u "${REBOOT_REQUIRED_PKGS}" | paste -sd ' '))"
+    [[ -r "${REBOOT_REQUIRED_PKGS}" ]] && packages=" ($(sort -u "${REBOOT_REQUIRED_PKGS}" | tr '\n' ' ' | sed 's/ $//'))"
     reasons+=("the reboot-required flag is set${packages}")
 fi
 
@@ -61,7 +70,7 @@ if ((${#reasons[@]} == 0)); then
     exit 0
 fi
 
-key="$(printf '%s\n' "${reasons[@]}" | sha256sum | cut -d ' ' -f 1)"
+key="$(printf '%s\n' "${reasons[@]}" | sha256)"
 if [[ -r "${STATE_FILE}" && "$(cat "${STATE_FILE}")" == "${key}" && -n "$(find "${STATE_FILE}" -mmin "-${REMINDER_MINUTES}")" ]]; then
     exit 0
 fi
