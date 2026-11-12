@@ -12,7 +12,7 @@ attrs==26.1.0
     # via interrogate
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
     # via cryptography
-click==8.5.0
+click==8.5.1
     # via
     #   consolekit
     #   flake8-dunder-all
@@ -175,7 +175,7 @@ typing-extensions==4.16.0
 urllib3==2.8.0
     # via types-requests
 validate-pyproject==0.27
-validate-pyproject-schema-store==2026.11.5
+validate-pyproject-schema-store==2026.11.7
 wcwidth==0.9.4
     # via mdformat-gfm
 yamllint==1.38.0

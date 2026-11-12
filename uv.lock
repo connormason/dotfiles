@@ -228,11 +228,11 @@ wheels = [
 
 [[package]]
 name = "click"
-version = "8.5.0"
+version = "8.5.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c7/0e/7fa0ef50764b67090eca4114772a2abf8b6148198475e54c660b97caeee6/click-8.5.0.tar.gz", hash = "sha256:ba0d2089de75ea0310e2dde03160e6ca10009947fb95a182f9b54021bb272e34", size = 382235, upload-time = "2026-08-26T13:33:14.56Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/45/37/edbf1b0707709013c0cf2e8317e03d97ed29bf4cac709fe328904ae92a38/click-8.5.1.tar.gz", hash = "sha256:9bbfada76703fd1d784b83eea012e3e8c6a001a876543ef104fa56aaaeb072b4", size = 399151, upload-time = "2026-11-06T17:37:01.021Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl", hash = "sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360", size = 125251, upload-time = "2026-08-26T13:33:12.928Z" },
+    { url = "https://files.pythonhosted.org/packages/31/7d/164b7ffc8624fe9efb4221bf9af485d5c1e41b9ae118045d2b6dc5457d8b/click-8.5.1-py3-none-any.whl", hash = "sha256:8bb5376d2006950386f8c6427613334a2acadc5f559cb80e638d00b4df957e37", size = 126163, upload-time = "2026-11-06T17:36:59.287Z" },
 ]
 
 [[package]]
@@ -1725,11 +1725,11 @@ all = [
 
 [[package]]
 name = "validate-pyproject-schema-store"
-version = "2026.11.5"
+version = "2026.11.7"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/52/01/f920275eeac515ef382d961b24c74e29abfcd0194c1f09e2cfcb730eeb68/validate_pyproject_schema_store-2026.11.5.tar.gz", hash = "sha256:f57ead97227285ce6bb075b57f03d7e59bf5545be86f5a3caf547f60b1be170f", size = 240952, upload-time = "2026-11-05T16:26:26.37Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5d/c9/f3e2e89dbddeea14c6cd94b181cf2a943a4bca5f71222fe6ffc5688ef042/validate_pyproject_schema_store-2026.11.7.tar.gz", hash = "sha256:c813fee7bd958f23235f364fb3ae1c5ebb25a8567c4724dd0a8c7a576df43dcb", size = 245314, upload-time = "2026-11-07T14:55:47.121Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/c3/1c021592167df0d91cd62220e891d0b7f7414fdefbc504547aeab15655b2/validate_pyproject_schema_store-2026.11.5-py3-none-any.whl", hash = "sha256:8f09f36cd62031266bd583863fa190e18590b893e01a43940d406a74a6735999", size = 245790, upload-time = "2026-11-05T16:26:24.546Z" },
+    { url = "https://files.pythonhosted.org/packages/21/f5/77cab7428b7d220aea738f6a9cfacbcd10f2d716031e18d8e1ef1facf065/validate_pyproject_schema_store-2026.11.7-py3-none-any.whl", hash = "sha256:f6ba66c6e1e5345edd475be63fc5ad8ab4dbedd91bb863db5430c8f273bae2f5", size = 250907, upload-time = "2026-11-07T14:55:45.338Z" },
 ]
 
 [[package]]
