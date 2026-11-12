@@ -1560,6 +1560,9 @@ class TestSnippetFallbacks:
             'PATH':           f'{bin_dir}:{os.environ["PATH"]}',
             'TERM':           'dumb',
             'XDG_CACHE_HOME': str(tmp_path / 'cache'),
+
+            # Debian's /etc/zsh/zshrc otherwise runs its own unguarded compinit, which stalls on a fresh HOME
+            'skip_global_compinit': '1',
         }
         return Home(home, env)
 
