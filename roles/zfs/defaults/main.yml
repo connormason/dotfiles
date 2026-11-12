@@ -3,15 +3,14 @@
 zfs_pool_name: storage
 
 # Properties set on the pool's root dataset (children inherit). Compression applies to new writes only.
-# Quote "off": unquoted, YAML parses it as a boolean.
 zfs_pool_properties:
   compression: lz4
   atime: "off"
 
 zfs_zed_rc_path: /etc/zfs/zed.d/zed.rc
 
-# zed.rc settings (shell syntax, so string values carry their own quotes). OpenZFS 2.1 has no ntfy
-# notifier, so ZED's email hook is pointed at nas-notify; see tasks/zed.yml.
+# zed.rc settings (shell syntax, so string values carry their own quotes).
+# OpenZFS 2.1 has no ntfy notifier, so ZED's email hook is pointed at nas-notify; see tasks/zed.yml.
 zfs_zed_settings:
   ZED_EMAIL_ADDR: '"root"'
   ZED_EMAIL_PROG: '"/usr/local/bin/nas-notify"'
