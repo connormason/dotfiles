@@ -1,0 +1,11 @@
+---
+- name: Reload systemd
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart smartd
+  become: true
+  ansible.builtin.service:
+    name: smartmontools
+    state: restarted

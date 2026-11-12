@@ -53,3 +53,16 @@
           - zfs-dkms
           - zfsutils-linux
       when: not (ansible_check_mode and zfs_contrib_check.rc != 0)
+
+# Pool properties and ZED edit state that a check-mode run on a fresh host cannot see (the zfs tools and zed.rc are not
+# installed yet), so they are skipped there. The pool itself is created by hand, never by this role.
+- name: Assert the pool exists and set its properties
+  ansible.builtin.import_tasks: pool.yml
+  when: not ansible_check_mode
+
+- name: Route ZED notifications through nas-notify
+  ansible.builtin.import_tasks: zed.yml
+  when: not ansible_check_mode
+
+- name: Snapshot the pool with sanoid
+  ansible.builtin.import_tasks: sanoid.yml

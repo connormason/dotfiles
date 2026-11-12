@@ -1,0 +1,38 @@
+---
+# The existing pool this role manages properties and snapshots for. It never creates or destroys a pool.
+zfs_pool_name: storage
+
+# Properties set on the pool's root dataset (children inherit). Compression applies to new writes only.
+zfs_pool_properties:
+  compression: lz4
+  atime: "off"
+
+zfs_zed_rc_path: /etc/zfs/zed.d/zed.rc
+
+# zed.rc settings (shell syntax, so string values carry their own quotes).
+# OpenZFS 2.1 has no ntfy notifier, so ZED's email hook is pointed at nas-notify; see tasks/zed.yml.
+zfs_zed_settings:
+  ZED_EMAIL_ADDR: '"root"'
+  ZED_EMAIL_PROG: '"/usr/local/bin/nas-notify"'
+  ZED_EMAIL_OPTS: '"-z"'
+  ZED_NOTIFY_VERBOSE: "1"
+
+# Snapshot policy. The pool is a single dataset today, so one interim policy covers everything: hourly snapshots for
+# config-style recovery, a short daily tail so churn from deleted downloads does not pin space. Split this per dataset
+# (config / backups / media) once those datasets exist.
+zfs_sanoid_templates:
+  interim:
+    hourly: 24
+    daily: 7
+    monthly: 0
+    autosnap: "yes"
+    autoprune: "yes"
+
+zfs_sanoid_datasets:
+  - name: "{{ zfs_pool_name }}"
+    template: interim
+
+# systemd units whose failure raises an alert through nas-notify
+zfs_sanoid_units:
+  - sanoid.service
+  - sanoid-prune.service

@@ -1,0 +1,9 @@
+# Managed by Ansible (roles/debian).
+# -d ignore           listed devices are skipped by DEVICESCAN (entries must precede it; symlinks are resolved)
+# -a                  monitor health, error log, self-test log and the usual attributes (also covers NVMe)
+# -s REGEXP           self-test schedule (T/MM/DD/d/HH)
+# -M exec             alerts go through nas-notify instead of mail
+{% for device in debian_smartd_ignored_devices %}
+{{ device }} -d ignore
+{% endfor %}
+DEVICESCAN -d removable -a -s {{ debian_smartd_schedule }} -m root -M exec /usr/local/bin/nas-notify

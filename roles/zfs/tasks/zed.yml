@@ -1,0 +1,22 @@
+---
+# Route ZED notifications through nas-notify (installed by the debian role). OpenZFS 2.1 has no ntfy support, so this
+# uses ZED's email hook: with no @SUBJECT@ in ZED_EMAIL_OPTS, ZED writes a "Subject:" line and then the body to stdin,
+# which `nas-notify -z` parses. ZED_NOTIFY_VERBOSE also reports healthy scrub and resilver completions.
+- name: Configure ZED notifications
+  become: true
+  ansible.builtin.lineinfile:
+    path: "{{ zfs_zed_rc_path }}"
+    regexp: "^#?{{ zfs_zed_setting.key }}="
+    line: "{{ zfs_zed_setting.key }}={{ zfs_zed_setting.value }}"
+  loop: "{{ zfs_zed_settings | dict2items }}"
+  loop_control:
+    loop_var: zfs_zed_setting
+    label: "{{ zfs_zed_setting.key }}"
+  notify: Restart zed
+
+- name: Enable and start ZED
+  become: true
+  ansible.builtin.service:
+    name: zfs-zed
+    state: started
+    enabled: true

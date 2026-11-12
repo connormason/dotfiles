@@ -1,0 +1,49 @@
+---
+# Alert delivery (nas-notify) and SMART monitoring (smartd). The ZED and sanoid hooks live in the zfs role.
+- name: Install nas-notify
+  become: true
+  ansible.builtin.copy:
+    src: nas-notify
+    dest: /usr/local/bin/nas-notify
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the failure-alert unit template
+  become: true
+  ansible.builtin.copy:
+    src: nas-notify-failure@.service
+    dest: /etc/systemd/system/nas-notify-failure@.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+# diff and no_log are off by design: the target holds the ntfy token (see CLAUDE-LESSONS.md)
+- name: Render the nas-notify settings
+  become: true
+  ansible.builtin.template:
+    src: nas-notify.env.j2
+    dest: /etc/nas-notify.env
+    owner: root
+    group: root
+    mode: "0600"
+  diff: false
+  no_log: true
+
+- name: Configure smartd
+  become: true
+  ansible.builtin.template:
+    src: smartd.conf.j2
+    dest: /etc/smartd.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart smartd
+
+- name: Enable and start smartd
+  become: true
+  ansible.builtin.service:
+    name: smartmontools
+    state: started
+    enabled: true

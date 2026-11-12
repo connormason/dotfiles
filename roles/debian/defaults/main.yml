@@ -28,7 +28,23 @@ debian_engine_packages:
 debian_apt_packages:
   - fzf
   - exfat-fuse
+  - smartmontools
 
 # Homebrew's Linux prefix: created here (that needs root) and owned by the user, so the engine installs Homebrew there
 # without sudo
 debian_linuxbrew_prefix: /home/linuxbrew/.linuxbrew
+
+# Alerting: nas-notify publishes to the local ntfy server (services/ntfy). The token comes from the vault variable
+# ntfy_alerts_token (see services/README.md for creating it); without one, alerts are only logged to the journal.
+debian_ntfy_url: http://127.0.0.1:2586
+debian_ntfy_topic: nas-alerts
+debian_ntfy_token: "{{ ntfy_alerts_token | default('') }}"
+
+# Devices smartd must skip (stable /dev/disk/by-id paths; /dev/sdX letters can change). The Seagate ST2000DM001 is
+# faulty: the kernel sees 3.9 GB, ATA IDENTIFY reports 137 GB, and every SMART read aborts, so smartd would alert on it
+# daily. It holds no partitions or data. Remove the entry once the drive is physically removed.
+debian_smartd_ignored_devices:
+  - /dev/disk/by-id/ata-ST2000DM001_Z4Z0DDT2
+
+# smartd self-test schedule (T/MM/DD/d/HH): short test Sundays at 03:00, long test on the 1st at 04:00
+debian_smartd_schedule: "(S/../../7/03|L/../01/./04)"

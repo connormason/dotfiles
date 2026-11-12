@@ -1,0 +1,58 @@
+---
+- name: Install sanoid
+  become: true
+  ansible.builtin.apt:
+    name: sanoid
+
+- name: Create the sanoid configuration directory
+  become: true
+  ansible.builtin.file:
+    path: /etc/sanoid
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure the sanoid snapshot policy
+  become: true
+  ansible.builtin.template:
+    src: sanoid.conf.j2
+    dest: /etc/sanoid/sanoid.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create the failure-alert drop-in directories
+  become: true
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ zfs_sanoid_unit }}.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ zfs_sanoid_units }}"
+  loop_control:
+    loop_var: zfs_sanoid_unit
+
+- name: Alert when a sanoid unit fails
+  become: true
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ zfs_sanoid_unit }}.d/onfailure.conf"
+    content: |
+      [Unit]
+      OnFailure=nas-notify-failure@%n.service
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ zfs_sanoid_units }}"
+  loop_control:
+    loop_var: zfs_sanoid_unit
+  notify: Reload systemd for zfs
+
+# The Debian package ships the timer but does not enable it
+- name: Enable and start the sanoid timer
+  become: true
+  ansible.builtin.systemd:
+    name: sanoid.timer
+    state: started
+    enabled: true

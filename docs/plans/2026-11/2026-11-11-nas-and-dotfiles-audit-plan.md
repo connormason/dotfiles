@@ -1,7 +1,8 @@
 # NAS and Dotfiles Audit: Improvement Plan
 
 Date: 2026-11-11. Source: a full audit of the repository and of the live NAS (read-only checks run on the NAS itself).
-SMART data and the host firewall need sudo and were **not** checked; Phase 1 starts by checking them.
+SMART data and the host firewall need sudo and were **not** checked in the audit; they were checked on 2026-11-12 (see
+[Baseline results](#baseline-results-2026-11-12)).
 
 ## Summary
 
@@ -31,6 +32,33 @@ spends the next effort on the services and the storage, not on more tooling.
 | Dev env      | Tool duplication; `mise` installed but unwired; `profiles/nas` empty; `pull.rebase=false`                   | `bootstrap/Brewfile`, `uv-tools.txt`, `.gitconfig`        |
 | Repo         | `run.py` is 5,115 lines in one file; no behavioral (converge-twice) Ansible test                            | `wc -l`, `tests/`                                         |
 
+## Baseline results (2026-11-12)
+
+Phase 1 item 1 was run on the NAS (`smartctl -a`, `lsblk`, `iptables -S`, `dmesg`). Outcomes, and where each is handled:
+
+| Device                           | Result                                                                                                                                                                                                                              | Handled by                                              |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `sda`, `sdc` (WD80EFZZ 8 TB)     | Healthy: 0 reallocated, pending or uncorrectable sectors, no errors logged, 35-36 °C. 28,353 h and 28,666 h powered on (about 3.2 years). **No self-test has ever run.** Both are the same model and age, in a stripe.              | smartd self-tests (PR 57); redundancy decision (1.9)    |
+| `sdb`, `sdd` (Crucial MX500 1TB) | Healthy: 0 errors, lifetime remaining 100, about 350 GB and 690 GB written. `sdb` logged 58 unexpected power losses (`sdd`: 10); attribute 180 reads 000 on both, assumed to be an MX500 reporting quirk (threshold 0, unverified). | smartd; investigate the power losses                    |
+| `sdd` partitions                 | A 16 MB partition and a 146.5 GB partition exist, with no filesystem type visible to a non-root `lsblk`. `sdb` has none. Contents are unknown.                                                                                      | Inspect before any reuse (see below)                    |
+| `sde` (Seagate ST2000DM001)      | Faulty. The kernel sees 3.9 GB, ATA IDENTIFY reports 137 GB (exactly the 28-bit LBA limit), and every SMART read aborts. No partitions, not in the pool. Not hotplugged: its by-id link dates from boot.                           | Ignored by smartd (PR 57); remove the drive physically  |
+| `nvme0n1` (Samsung 970 EVO Plus) | The root disk. **Not baselined**: the audit's command list omitted it. smartd now scans it.                                                                                                                                         | Run `sudo smartctl -a /dev/nvme0` once                  |
+| Firewall                         | `INPUT`, `FORWARD` and `OUTPUT` all default to ACCEPT. The only rules are Docker's, libvirt's and Tailscale's, so every published port is reachable from the LAN.                                                                   | Phase 3.3 (loopback binds); decide on a host firewall   |
+| USB `1-6` (dresden elektronik)   | `dmesg` shows this device re-enumerating roughly hourly, two lines about 4 s apart. Not investigated; could be passthrough to the Home Assistant OS VM or the stick resetting.                                                       | Investigate (see below)                                 |
+
+Follow-ups that stay open:
+
+- **Inspect `sdd` before reuse.** `sudo blkid /dev/sdd1 /dev/sdd2`, `sudo wipefs -n /dev/sdd`, then mount read-only to
+  look. Do not format it until the contents are known.
+- **Baseline the NVMe disk.** `sudo smartctl -a /dev/nvme0`.
+- **Check `sde` for kernel-level errors.** The first `dmesg` filter matched `dresden` ("dre**sde**n"), so any real `sde`
+  errors were missed. Use `sudo dmesg | grep -E '\bsde\b|\[sde\]|ata[0-9]+\.[0-9]+:'`. Whether the port or the drive
+  is at fault decides if the SATA port is safe to reuse.
+- **Investigate the hourly USB re-enumeration** with `lsusb -t`, `sudo journalctl -k | grep 1-6`, and the HAOS VM's USB
+  hostdev settings in `vms/haos/`. If the Zigbee coordinator drops hourly, Home Assistant loses its mesh each time.
+- **Long self-tests** take about 14 hours on the 8 TB disks and run together on the 1st at 04:00. Staggering exists in
+  smartd but is marked experimental; revisit if Plex or Jellyfin suffer.
+
 ## Principles
 
 - Everything lands through the repo (roles, compose files, tests), never as a one-off command on the NAS, unless the
@@ -45,8 +73,10 @@ spends the next effort on the services and the storage, not on more tooling.
 
 Goal: a disk failure or bad write is detected early and is recoverable for everything irreplaceable.
 
-1. **Baseline (manual, needs sudo).** Record `smartctl -a` for `sda`, `sdc`, `sdb`, `sdd`; `sudo iptables -S` or
-   `nft list ruleset`; contents of `sdd` partitions and the 3.9 GB `sde` device before reusing any disk.
+1. **Baseline (manual, needs sudo).** *Done 2026-11-12; see [Baseline results](#baseline-results-2026-11-12).* Still
+   open: the contents of the `sdd` partitions, `smartctl` on `nvme0n1`, and a narrower `dmesg` check of `sde`. `sde` is
+   faulty and should be removed, not reused. Note that `smartctl` is not installed until the `debian` role provisions
+   `smartmontools`, so the baseline needs `sudo apt-get install smartmontools` first.
 2. **`smartmontools` + `smartd`.** Add to `debian_apt_packages` (or a new `monitoring` role); `smartd.conf` with a short
    self-test weekly and a long self-test monthly; alert to the channel built in Phase 4.
 3. **ZED alerting.** Template `/etc/zfs/zed.d/zed.rc` (notify on scrub finish, resilver, checksum errors, pool state);
@@ -193,3 +223,6 @@ Recommended order: 4.1 (ntfy) → 1.1–1.3 → 1.6–1.7 → Phase 2 → 1.4–
 5. Alert delivery: self-hosted ntfy only, or also email?
 6. Which task runner and linter set to keep in Phase 5.1?
 7. Is the bare-`python3` entry point for `run.py` still required, which decides whether the split is a package or a shim?
+8. Should the faulty `sde` (ST2000DM001) be removed from the chassis now, and does the hourly USB re-enumeration of the
+   dresden elektronik device matter to the Zigbee setup?
+9. Add a host firewall (the policy is ACCEPT everywhere), or rely on loopback binds from Phase 3.3 and the tailnet?

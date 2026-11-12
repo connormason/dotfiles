@@ -101,3 +101,15 @@ Each lesson follows this pattern:
   `tests/unit/claude/test_project_hooks.py`, which feeds real payloads. A PostToolUse hook can only reach Claude by
   exiting 2 with the message on stderr. A security guard must prove it blocks (exit 2) for a protected path, not merely
   that it exits 0 for others.
+
+### A runbook step must be runnable at the point it appears, and its filters must be anchored
+
+- **Context**: Handing over the before/after-merge commands for the SMART and ZED PR, then reading the output of the
+  baseline commands the user ran on the NAS.
+- **Mistake**: The pre-merge baseline called `smartctl`, which the PR itself installs, so the first step failed with
+  "command not found". A later `dmesg | grep -E 'sde|ata[0-9]+'` matched "dre**sde**n" (a USB vendor name) and, with
+  `tail`, buried the real disk errors. The first draft of `smartd.conf` also passed ATA-only directives (`-o on`) to a
+  scan that covers WD disks and an NVMe root disk, and the audit's disk list had omitted the NVMe root disk entirely.
+- **Rule**: Before giving a command sequence, check each tool exists at that step (what installs it, and when). Anchor
+  device-name filters (`\bsde\b`, `\[sde\]`) and list devices with `lsblk` rather than from memory. Check directives
+  against the manual for every device type the scan reaches, and enumerate every disk, including the boot disk.

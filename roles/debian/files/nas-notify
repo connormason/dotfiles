@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Publish a NAS alert: always to the journal, and to the local ntfy server when a token is configured.
+#
+# Callers:
+#   nas-notify [-p priority] [-t title] message...   direct use (systemd failure units, timers)
+#   nas-notify -z                                    ZED: ZED_EMAIL_PROG with no @SUBJECT@ in ZED_EMAIL_OPTS, so ZED
+#                                                    writes "Subject: <text>" and then the body to stdin
+#   smartd -M exec                                   detected by SMARTD_MESSAGE in the environment (smartd also passes
+#                                                    mail-style positional arguments, which are ignored)
+#
+# Settings come from NAS_NOTIFY_ENV (default /etc/nas-notify.env, mode 0600): NTFY_URL, NTFY_TOPIC, NTFY_TOKEN.
+set -euo pipefail
+
+ENV_FILE="${NAS_NOTIFY_ENV:-/etc/nas-notify.env}"
+MAX_MESSAGE=3900 # ntfy rejects bodies over 4096 bytes
+
+usage() {
+    echo "usage: ${0##*/} [-p priority] [-t title] message... | -z" >&2
+    exit 2
+}
+
+priority=default
+title=''
+zed=0
+while getopts 'p:t:z' opt; do
+    case "${opt}" in
+    p) priority="${OPTARG}" ;;
+    t) title="${OPTARG}" ;;
+    z) zed=1 ;;
+    *) usage ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+message=''
+if [[ -n "${SMARTD_MESSAGE:-}" ]]; then
+    message="${SMARTD_MESSAGE}"
+    title="SMART ${SMARTD_FAILTYPE:-alert} on ${SMARTD_DEVICE:-unknown device}"
+    priority=high
+elif ((zed)); then
+    body="$(cat)"
+    if [[ "${body}" == Subject:* ]]; then
+        subject="${body%%$'\n'*}"
+        title="${subject#Subject: }"
+        body="${body#"${subject}"}"
+        body="${body#$'\n'}"
+    fi
+    message="${body}"
+    priority=high
+else
+    message="$*"
+fi
+[[ -n "${message}" ]] || usage
+
+title="${title:-NAS alert}"
+title="${title//$'\n'/ }"
+message="${message:0:MAX_MESSAGE}"
+
+if command -v logger >/dev/null; then
+    logger -t nas-notify -p user.warning -- "${title}: ${message}"
+fi
+
+NTFY_URL='http://127.0.0.1:2586'
+NTFY_TOPIC='nas-alerts'
+NTFY_TOKEN=''
+if [[ -r "${ENV_FILE}" ]]; then
+    # shellcheck source=/dev/null
+    source "${ENV_FILE}"
+fi
+
+if [[ -z "${NTFY_TOKEN}" ]]; then
+    echo "${0##*/}: no NTFY_TOKEN in ${ENV_FILE}; alert logged only" >&2
+    exit 0
+fi
+
+curl --fail --silent --show-error --max-time 10 \
+    -H "Authorization: Bearer ${NTFY_TOKEN}" \
+    -H "Title: ${title}" \
+    -H "Priority: ${priority}" \
+    --data-binary "${message}" \
+    "${NTFY_URL%/}/${NTFY_TOPIC}" >/dev/null
