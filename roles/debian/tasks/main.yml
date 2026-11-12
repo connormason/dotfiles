@@ -53,3 +53,6 @@
 
 - name: Configure alerting and SMART monitoring
   ansible.builtin.import_tasks: alerts.yml
+
+- name: Configure unattended security upgrades and the reboot alert
+  ansible.builtin.import_tasks: upgrades.yml

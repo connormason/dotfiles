@@ -1,0 +1,95 @@
+---
+# Automatic security upgrades without automatic reboots, plus the alert that says a reboot is due. Needs nas-notify from
+# alerts.yml.
+- name: Enable the daily package list refresh and unattended upgrade
+  become: true
+  ansible.builtin.copy:
+    src: 20auto-upgrades
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+# Sorts after the package's 50unattended-upgrades, whose origin list it replaces with the security origin only
+- name: Restrict unattended upgrades to the security origin and disable automatic reboot
+  become: true
+  ansible.builtin.template:
+    src: 52nas-unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/52nas-unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+# Debian's apt package ships and enables these timers; assert it so a masked or disabled one is repaired
+- name: Enable the apt timers that drive unattended upgrades
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ debian_apt_timer }}"
+    state: started
+    enabled: true
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  loop_control:
+    loop_var: debian_apt_timer
+
+- name: Create the failure-alert drop-in directory for apt-daily-upgrade
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/apt-daily-upgrade.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Alert when the unattended upgrade run fails
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apt-daily-upgrade.service.d/onfailure.conf
+    content: |
+      [Unit]
+      OnFailure=nas-notify-failure@%n.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Install the reboot check
+  become: true
+  ansible.builtin.copy:
+    src: nas-reboot-check
+    dest: /usr/local/bin/nas-reboot-check
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the reboot check service
+  become: true
+  ansible.builtin.copy:
+    src: nas-reboot-check.service
+    dest: /etc/systemd/system/nas-reboot-check.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Install the reboot check timer
+  become: true
+  ansible.builtin.template:
+    src: nas-reboot-check.timer.j2
+    dest: /etc/systemd/system/nas-reboot-check.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+# The new units must be loaded before the timer can be enabled
+- name: Reload systemd before enabling the reboot check timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the reboot check timer
+  become: true
+  ansible.builtin.systemd:
+    name: nas-reboot-check.timer
+    state: started
+    enabled: true

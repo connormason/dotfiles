@@ -1,0 +1,11 @@
+# Managed by Ansible (roles/debian).
+[Unit]
+Description=Daily check for a pending reboot
+
+[Timer]
+OnCalendar={{ debian_reboot_check_on_calendar }}
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
