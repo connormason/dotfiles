@@ -23,7 +23,7 @@ ANSIBLE_PLAYBOOK = Path(sys.executable).parent / 'ansible-playbook'
 
 needs_ansible = pytest.mark.skipif(not ANSIBLE_PLAYBOOK.exists(), reason='ansible-playbook not in this environment')
 
-TaskDict = dict[str, Any]  # Any: heterogeneous, yaml-loaded task structure
+TaskDict = dict[str, Any]               # Any: heterogeneous, yaml-loaded task structure
 ZfsState = tuple[Path, dict[str, str]]  # (stub state directory, environment putting the stubs on PATH)
 
 # zpool list -H -o name POOL
@@ -64,11 +64,11 @@ def _run_tasks(
     :return: tuple of (return code, combined output)
     """
     play = [{
-        'hosts': 'all',
+        'hosts':        'all',
         'gather_facts': False,
-        'connection': 'local',
-        'vars_files': [str(ROLES / role / 'defaults' / 'main.yml')],
-        'tasks': tasks,
+        'connection':   'local',
+        'vars_files':   [str(ROLES / role / 'defaults' / 'main.yml')],
+        'tasks':        tasks,
     }]
     playbook = tmp_path / 'play.yml'
     playbook.write_text(yaml.safe_dump(play), encoding='utf-8')
@@ -105,6 +105,7 @@ def _render(tmp_path: Path, role: str, template: str, *extra: str) -> str:
     """
     dest = tmp_path / 'rendered'
     task = {'ansible.builtin.template': {'src': str(ROLES / role / 'templates' / template), 'dest': str(dest)}}
+
     code, output = _run_tasks(tmp_path, role, [task], *extra)
     assert code == 0, output
     return dest.read_text(encoding='utf-8')
@@ -121,13 +122,16 @@ def zfs_state(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     bindir = tmp_path / 'zfs-bin'
     state.mkdir()
     bindir.mkdir()
+
     (state / 'pool-storage').mkdir()
     (state / 'compression').write_text('off\n', encoding='utf-8')
     (state / 'atime').write_text('on\n', encoding='utf-8')
+
     for name, body in (('zpool', FAKE_ZPOOL), ('zfs', FAKE_ZFS)):
         stub = bindir / name
         stub.write_text(body, encoding='utf-8')
         stub.chmod(0o755)
+
     return state, {'PATH': f'{bindir}:{os.environ["PATH"]}', 'FAKE_ZFS_STATE': str(state)}
 
 
@@ -175,13 +179,14 @@ class TestPoolProperties:
         assert (state / 'set.log').read_text(encoding='utf-8').splitlines() == ['compression=lz4']
 
     def test_missing_pool_fails_without_creating_anything(
-        self, tmp_path: Path, zfs_state: ZfsState,
+        self,
+        tmp_path: Path,
+        zfs_state: ZfsState,
     ) -> None:
         """
         Test that an absent pool stops the run with an explanation and no zfs set
         """
-        state, env = zfs_state
-
+        state, env   = zfs_state
         code, output = _run_tasks(tmp_path, 'zfs', _import_pool_tasks(), '-e', 'zfs_pool_name=tank', env=env)
 
         assert code != 0
@@ -212,11 +217,12 @@ class TestZedConfiguration:
 
         code, output = _run_tasks(tmp_path, 'zfs', [task], '-e', f'zfs_zed_rc_path={rc}')
         assert code == 0, output
+
         lines = rc.read_text(encoding='utf-8').splitlines()
         assert 'ZED_EMAIL_PROG="/usr/local/bin/nas-notify"' in lines
-        assert 'ZED_EMAIL_OPTS="-z"' in lines
-        assert 'ZED_NOTIFY_VERBOSE=1' in lines
-        assert 'ZED_NOTIFY_INTERVAL_SECS=3600' in lines
+        assert 'ZED_EMAIL_OPTS="-z"'                        in lines
+        assert 'ZED_NOTIFY_VERBOSE=1'                       in lines
+        assert 'ZED_NOTIFY_INTERVAL_SECS=3600'              in lines
         assert not any(line.startswith('#ZED_EMAIL_PROG') for line in lines)
 
         code, output = _run_tasks(tmp_path, 'zfs', [task], '-e', f'zfs_zed_rc_path={rc}')
@@ -228,7 +234,6 @@ class TestZedConfiguration:
         Test that ZED_EMAIL_OPTS has no @SUBJECT@, which makes ZED write the Subject header that nas-notify -z parses
         """
         defaults = yaml.safe_load((ROLES / 'zfs' / 'defaults' / 'main.yml').read_text(encoding='utf-8'))
-
         assert '@SUBJECT@' not in defaults['zfs_zed_settings']['ZED_EMAIL_OPTS']
 
 
@@ -242,8 +247,8 @@ class TestTemplates:
         Test that the single DEVICESCAN line carries the schedule and the nas-notify exec hook
         """
         text = _render(tmp_path, 'debian', 'smartd.conf.j2')
-
         line = next(line for line in text.splitlines() if line.startswith('DEVICESCAN'))
+
         assert '-s (S/../../7/03|L/../01/./04)' in line
         assert '-M exec /usr/local/bin/nas-notify' in line
 
@@ -262,7 +267,6 @@ class TestTemplates:
         Test that the default smartd regexp matches the weekly short and monthly long slots only
         """
         defaults = yaml.safe_load((ROLES / 'debian' / 'defaults' / 'main.yml').read_text(encoding='utf-8'))
-
         assert bool(re.fullmatch(defaults['debian_smartd_schedule'], stamp)) is matches
 
     def test_nas_notify_settings_carry_the_vault_token(self, tmp_path: Path) -> None:
@@ -270,6 +274,7 @@ class TestTemplates:
         Test that ntfy_alerts_token reaches NTFY_TOKEN and defaults to empty when unset
         """
         assert "NTFY_TOKEN=''" in _render(tmp_path, 'debian', 'nas-notify.env.j2')
+
         rendered = _render(tmp_path, 'debian', 'nas-notify.env.j2', '-e', 'ntfy_alerts_token=s3cret')
         assert "NTFY_TOKEN='s3cret'" in rendered
 
@@ -278,8 +283,8 @@ class TestTemplates:
         Test that the pool gets a dataset section using a template section with the retention counts
         """
         text = _render(tmp_path, 'zfs', 'sanoid.conf.j2')
-
         assert re.search(r'^\[storage\]\n\tuse_template = interim\n\trecursive = no$', text, re.MULTILINE)
+
         template = text.split('[template_interim]')[1]
         for setting in ('hourly = 24', 'daily = 7', 'monthly = 0', 'autosnap = yes', 'autoprune = yes'):
             assert setting in template
@@ -295,9 +300,9 @@ class TestRoleWiring:
         """
         task = next(t for t in _tasks('debian', 'alerts.yml') if t['name'] == 'Render the nas-notify settings')
 
-        assert task['ansible.builtin.template']['mode'] == '0600'
+        assert task['ansible.builtin.template']['mode']  == '0600'
         assert task['ansible.builtin.template']['owner'] == 'root'
-        assert task['diff'] is False
+        assert task['diff']   is False
         assert task['no_log'] is True
 
     def test_smartmontools_is_installed(self) -> None:
@@ -305,7 +310,6 @@ class TestRoleWiring:
         Test that smartmontools is in the debian role's package list
         """
         defaults = yaml.safe_load((ROLES / 'debian' / 'defaults' / 'main.yml').read_text(encoding='utf-8'))
-
         assert 'smartmontools' in defaults['debian_apt_packages']
 
     def test_every_notified_handler_exists_in_its_own_role(self) -> None:
@@ -325,7 +329,7 @@ class TestRoleWiring:
         Test that both sanoid units get an OnFailure drop-in pointing at the nas-notify failure template
         """
         defaults = yaml.safe_load((ROLES / 'zfs' / 'defaults' / 'main.yml').read_text(encoding='utf-8'))
-        task = next(t for t in _tasks('zfs', 'sanoid.yml') if t['name'] == 'Alert when a sanoid unit fails')
+        task     = next(t for t in _tasks('zfs', 'sanoid.yml') if t['name'] == 'Alert when a sanoid unit fails')
 
         assert defaults['zfs_sanoid_units'] == ['sanoid.service', 'sanoid-prune.service']
         assert 'OnFailure=nas-notify-failure@%n.service' in task['ansible.builtin.copy']['content']
