@@ -33,7 +33,7 @@ TaskDict = dict[str, Any]  # Any: heterogeneous, yaml-loaded task structure
 REBOOT_CHECK = ROLES / 'debian' / 'files' / 'nas-reboot-check'
 
 needs_apt_config = pytest.mark.skipif(shutil.which('apt-config') is None, reason='apt-config not available')
-needs_dockerd    = pytest.mark.skipif(shutil.which('dockerd') is None, reason='dockerd not available')
+needs_dockerd    = pytest.mark.skipif(shutil.which('dockerd')    is None, reason='dockerd not available')
 
 
 # ==================================================================================================
@@ -49,10 +49,11 @@ def _runnable(role: str, task: TaskDict, out: Path) -> TaskDict:
     ``owner``/``group`` are dropped (chown to root fails unprivileged; a structural test pins them instead).
     """
     adapted = {key: value for key, value in task.items() if key not in {'notify', 'become'}}
+
     for module, subdir in (
-        ('ansible.builtin.copy', 'files'),
+        ('ansible.builtin.copy',     'files'),
         ('ansible.builtin.template', 'templates'),
-        ('ansible.builtin.file', None),
+        ('ansible.builtin.file',     None),
     ):
         if module in adapted:
             args = {key: value for key, value in adapted[module].items() if key not in {'owner', 'group'}}
@@ -62,6 +63,7 @@ def _runnable(role: str, task: TaskDict, out: Path) -> TaskDict:
                 if key in args:
                     args[key] = str(out / Path(args[key]).name)
             adapted[module] = args
+
     return adapted
 
 
@@ -120,6 +122,7 @@ def _effective_apt_config(tmp_path: Path, *parts: tuple[str, str]) -> list[str]:
     parts_dir.mkdir()
     for name, content in parts:
         (parts_dir / name).write_text(content, encoding='utf-8')
+
     main = tmp_path / 'apt.conf'
     main.write_text(f'Dir::Etc::Main "/dev/null";\nDir::Etc::Parts "{parts_dir}";\n', encoding='utf-8')
 
@@ -144,8 +147,7 @@ class TestUnattendedUpgrades:
         Test that the real apt-config, given Debian's default list plus the rendered drop-in, ends with only security
         """
         dropin = _render(tmp_path, 'debian', '52nas-unattended-upgrades.j2')
-
-        lines = _effective_apt_config(tmp_path, ('50unattended-upgrades', DEBIAN_DEFAULT_50), ('52nas', dropin))
+        lines  = _effective_apt_config(tmp_path, ('50unattended-upgrades', DEBIAN_DEFAULT_50), ('52nas', dropin))
 
         origins = [line for line in lines if line.startswith('Unattended-Upgrade::Origins-Pattern::')]
         assert origins == [f'Unattended-Upgrade::Origins-Pattern:: "{SECURITY_ORIGIN}";']
@@ -157,7 +159,6 @@ class TestUnattendedUpgrades:
         Test that without the drop-in Debian's list includes label=Debian, which is why the drop-in must clear it
         """
         lines = _effective_apt_config(tmp_path, ('50unattended-upgrades', DEBIAN_DEFAULT_50))
-
         assert any('label=Debian"' in line for line in lines)
 
     def test_files_are_written_then_converge(self, tmp_path: Path) -> None:
@@ -188,12 +189,12 @@ class TestUnattendedUpgrades:
         """
         out = tmp_path / 'out'
         out.mkdir()
+
         tasks = _named('debian', 'upgrades.yml', UPGRADE_FILE_TASKS, out)
         _run_tasks(tmp_path, 'debian', tasks)
         (out / '52nas-unattended-upgrades').write_text('Unattended-Upgrade::Automatic-Reboot "true";\n')
 
         code, output = _run_tasks(tmp_path, 'debian', tasks)
-
         assert code == 0, output
         assert 'changed=1' in output, output
         assert 'Automatic-Reboot "false"' in (out / '52nas-unattended-upgrades').read_text(encoding='utf-8')
@@ -204,12 +205,14 @@ class TestUnattendedUpgrades:
         """
         out = tmp_path / 'out'
         out.mkdir()
-        _run_tasks(tmp_path, 'debian', _named('debian', 'upgrades.yml', UPGRADE_FILE_TASKS, out))
 
+        _run_tasks(tmp_path, 'debian', _named('debian', 'upgrades.yml', UPGRADE_FILE_TASKS, out))
         assert 'OnFailure=nas-notify-failure@%n.service' in (out / 'onfailure.conf').read_text(encoding='utf-8')
+
         timer = (out / 'nas-reboot-check.timer').read_text(encoding='utf-8')
         assert 'OnCalendar=*-*-* 09:00:00' in timer
-        assert 'Persistent=true' in timer
+        assert 'Persistent=true'           in timer
+
         service = (ROLES / 'debian' / 'files' / 'nas-reboot-check.service').read_text(encoding='utf-8')
         assert 'OnFailure=nas-notify-failure@%n.service' in service
 
@@ -261,13 +264,15 @@ class RebootEnv:
         """
         self.state = tmp_path / 'state'
         self.boot  = tmp_path / 'boot'
-        bindir     = tmp_path / 'stub-bin'
+
+        bindir = tmp_path / 'stub-bin'
         for directory in (self.state, self.boot, bindir):
             directory.mkdir()
 
         notify = self.state / 'nas-notify'
         notify.write_text(FAKE_NAS_NOTIFY, encoding='utf-8')
         notify.chmod(0o755)
+
         dkms = bindir / 'dkms'
         dkms.write_text(FAKE_DKMS, encoding='utf-8')
         dkms.chmod(0o755)
@@ -339,7 +344,6 @@ class TestRebootCheck:
         Test that the running kernel being the newest, with no flag, sends nothing
         """
         result = reboot_env.run()
-
         assert result.returncode == 0, result.stderr
         assert reboot_env.notifications() == []
 
@@ -349,12 +353,12 @@ class TestRebootCheck:
         """
         reboot_env.set_kernels('6.1.0-52-amd64', '6.1.0-54-amd64')
         reboot_env.set_dkms('6.1.0-52-amd64', '6.1.0-54-amd64')
-
         assert reboot_env.run().returncode == 0
+
         [line] = reboot_env.notifications()
         assert line.startswith('-p high -t Reboot required on ')
         assert 'kernel 6.1.0-54-amd64 is installed but 6.1.0-52-amd64 is running' in line
-        assert 'DKMS has built the zfs module for it' in line
+        assert 'DKMS has built the zfs module for it'                             in line
 
         reboot_env.run()
         assert len(reboot_env.notifications()) == 1
@@ -380,7 +384,6 @@ class TestRebootCheck:
         (reboot_env.state / 'dkms-status').write_text('zfs/2.1.11, 6.1.0-54-amd64, x86_64: built\n', encoding='utf-8')
 
         reboot_env.run()
-
         assert 'DO NOT REBOOT YET' in reboot_env.notifications()[0]
 
     def test_missing_dkms_is_reported_not_assumed_fine(self, reboot_env: RebootEnv, tmp_path: Path) -> None:
@@ -418,7 +421,6 @@ class TestRebootCheck:
         reboot_env.set_dkms(*installed)
 
         reboot_env.run(KERNEL_RELEASE=running)
-
         assert bool(reboot_env.notifications()) is alerts
 
     def test_reboot_required_flag_alerts_and_names_the_packages(self, reboot_env: RebootEnv, tmp_path: Path) -> None:
@@ -429,7 +431,6 @@ class TestRebootCheck:
         (tmp_path / 'reboot-required.pkgs').write_text('libc6\nlibssl3\nlibc6\n', encoding='utf-8')
 
         reboot_env.run()
-
         [line] = reboot_env.notifications()
         assert 'reboot-required flag is set (libc6 libssl3)' in line
 
@@ -442,7 +443,6 @@ class TestRebootCheck:
         (tmp_path / 'reboot-required').touch()
 
         reboot_env.run()
-
         assert len(reboot_env.notifications()) == 2
 
     def test_reminder_after_the_interval_while_still_pending(self, reboot_env: RebootEnv) -> None:
@@ -451,12 +451,12 @@ class TestRebootCheck:
         """
         reboot_env.set_kernels('6.1.0-52-amd64', '6.1.0-54-amd64')
         reboot_env.run()
-        state = Path(reboot_env.env['STATE_FILE'])
+
+        state          = Path(reboot_env.env['STATE_FILE'])
         eight_days_ago = time.time() - 8 * 86400
         os.utime(state, (eight_days_ago, eight_days_ago))
 
         reboot_env.run()
-
         assert len(reboot_env.notifications()) == 2
 
     def test_clearing_the_condition_resets_the_state(self, reboot_env: RebootEnv) -> None:
@@ -469,7 +469,6 @@ class TestRebootCheck:
         assert not Path(reboot_env.env['STATE_FILE']).exists()
 
         reboot_env.run()
-
         assert len(reboot_env.notifications()) == 2
 
 
@@ -494,7 +493,6 @@ class TestDockerDaemonConfig:
         Test that the rendered file is JSON selecting json-file with string-valued max-size 10m and max-file 3
         """
         config = json.loads(_render(tmp_path, 'docker', 'daemon.json.j2'))
-
         assert config == {'log-driver': 'json-file', 'log-opts': {'max-file': '3', 'max-size': '10m'}}
 
     @needs_dockerd
@@ -540,11 +538,11 @@ class TestDockerDaemonConfig:
         """
         out = tmp_path / 'out'
         out.mkdir()
+
         tasks = [_runnable('docker', _find_docker_task('Configure the docker daemon'), out)]
-        bad = _json_vars(docker_daemon_config={'log-driver': 'json-file', 'log-opts': {'max-size': 10}})
+        bad   = _json_vars(docker_daemon_config={'log-driver': 'json-file', 'log-opts': {'max-size': 10}})
 
         code, output = _run_tasks(tmp_path, 'docker', tasks, *bad)
-
         assert code != 0, output
         assert not (out / 'daemon.json').exists()
 
@@ -560,12 +558,16 @@ class TestDockerDaemonConfig:
         """
         out = tmp_path / 'out'
         out.mkdir()
+
         marker = tmp_path / 'restarted'
         change = {**_runnable('docker', _find_docker_task('Configure the docker daemon'), out)}
         change['notify'] = 'Restart docker'
         change['ansible.builtin.template'] = {
-            key: value for key, value in change['ansible.builtin.template'].items() if key != 'validate'
+            key: value
+            for key, value in change['ansible.builtin.template'].items()
+            if key != 'validate'
         }
+
         real = next(h for h in _handlers('docker') if h['name'] == 'Restart docker')
         handler = {'name': real['name'], 'ansible.builtin.file': {'path': str(marker), 'state': 'touch'}}
         handler['when'] = real['when']
@@ -577,7 +579,6 @@ class TestDockerDaemonConfig:
             *_json_vars(docker_restart_on_config_change=restart_enabled),
             handlers=[handler],
         )
-
         assert code == 0, output
         assert marker.exists() is restarted
 
@@ -620,13 +621,15 @@ class TestImagePrune:
 
         code, output = _run_tasks(tmp_path, 'docker', tasks)
         assert code == 0, output
+
         service = (out / 'docker-image-prune.service').read_text(encoding='utf-8')
         timer   = (out / 'docker-image-prune.timer').read_text(encoding='utf-8')
 
         assert 'ExecStart=/usr/bin/docker image prune --all --force --filter until=168h' in service
-        assert 'OnFailure=nas-notify-failure@%n.service' in service
+        assert 'OnFailure=nas-notify-failure@%n.service'                                 in service
+
         assert 'OnCalendar=Sun *-*-* 05:30:00' in timer
-        assert 'Persistent=true' in timer
+        assert 'Persistent=true'               in timer
 
         code, output = _run_tasks(tmp_path, 'docker', tasks)
         assert 'changed=0' in output, output
@@ -642,7 +645,7 @@ class TestComposeV1Removal:
         """
         install = _find_docker_task('Install Docker engine')['ansible.builtin.apt']['pkg']
         assert 'docker-compose-plugin' in install
-        assert 'docker-compose' not in install
+        assert 'docker-compose'    not in install
 
         removal = _find_docker_task('Remove the legacy docker-compose v1 package')['ansible.builtin.apt']
         assert removal == {'name': 'docker-compose', 'state': 'absent'}
@@ -651,7 +654,7 @@ class TestComposeV1Removal:
         """
         Test that the deploy scripts and compose services never run the hyphenated docker-compose command
         """
-        candidates = [
+        candidates: list[Path] = [
             ROLES / 'docker' / 'files' / 'deploy.sh',
             REPO_ROOT / 'scripts' / 'nas' / 'deploy-services.sh',
             *(REPO_ROOT / 'services').rglob('*'),
