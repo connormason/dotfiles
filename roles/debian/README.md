@@ -25,9 +25,14 @@ the Linuxbrew prefix, the systemd sleep targets, and alerting (SMART monitoring 
 - smartd (`-M exec`), detected by `SMARTD_MESSAGE` in the environment;
 - ZED (`nas-notify -z`), which reads ZED's `Subject:` line and body from stdin.
 
-`smartd.conf` is a single `DEVICESCAN` line: health, error-log and self-test-log monitoring, a short self-test Sundays
-at 03:00 and a long one on the 1st at 04:00 (`debian_smartd_schedule`). `nas-notify-failure@.service` turns any unit's
-`OnFailure=nas-notify-failure@%n.service` into an alert; the [`zfs`](../zfs/README.md) role attaches it to sanoid.
+`smartd.conf` is one `DEVICESCAN` line (preceded by a `-d ignore` line per entry of `debian_smartd_ignored_devices`):
+health, error-log and self-test-log monitoring, a short self-test Sundays at 03:00 and a long one on the 1st at 04:00
+(`debian_smartd_schedule`). The long test takes about 14 hours on the 8 TB disks. The line deliberately omits `-o on`
+(ATA-only; the WD drives do not support automatic offline testing) and `-S on`, because the root disk is NVMe and the
+scan covers it. The ignore list holds the faulty Seagate ST2000DM001 (3.9 GB to the kernel, 137 GB to ATA IDENTIFY,
+every SMART read aborts; no partitions), which would otherwise alert daily. `nas-notify-failure@.service` turns any
+unit's `OnFailure=nas-notify-failure@%n.service` into an alert; the [`zfs`](../zfs/README.md) role attaches it to
+sanoid.
 
 To start delivering to ntfy, create the token as described in the [ntfy section](../../services/README.md), store it in
 the inventory vault as `ntfy_alerts_token`, and run `python3 run.py nas-provision --tags debian`. After any change,
@@ -35,13 +40,14 @@ the inventory vault as `ntfy_alerts_token`, and run `python3 run.py nas-provisio
 
 ## Variables
 
-| Variable                   | Default                                            | Purpose                                                        |
-| -------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
-| `systemd_allow_sleep` etc. | `true`                                             | Whether each sleep target may run; overridden in the inventory |
-| `debian_engine_packages`   | `build-essential procps curl file git zsh python3` | Engine prerequisites checked by `bootstrap/00-preflight.sh`    |
-| `debian_apt_packages`      | `fzf exfat-fuse smartmontools`                     | Other packages                                                 |
-| `debian_linuxbrew_prefix`  | `/home/linuxbrew/.linuxbrew`                       | Homebrew's Linux prefix                                        |
-| `debian_ntfy_url`          | `http://127.0.0.1:2586`                            | Where `nas-notify` publishes                                   |
-| `debian_ntfy_topic`        | `nas-alerts`                                       | ntfy topic for alerts                                          |
-| `debian_ntfy_token`        | `{{ ntfy_alerts_token \| default('') }}`           | Publisher token; `ntfy_alerts_token` is a vault variable       |
-| `debian_smartd_schedule`   | `(S/../../7/03\|L/../01/./04)`                     | smartd self-test schedule regexp                               |
+| Variable                        | Default                                            | Purpose                                                        |
+| ------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| `systemd_allow_sleep` etc.      | `true`                                             | Whether each sleep target may run; overridden in the inventory |
+| `debian_engine_packages`        | `build-essential procps curl file git zsh python3` | Engine prerequisites checked by `bootstrap/00-preflight.sh`    |
+| `debian_apt_packages`           | `fzf exfat-fuse smartmontools`                     | Other packages                                                 |
+| `debian_linuxbrew_prefix`       | `/home/linuxbrew/.linuxbrew`                       | Homebrew's Linux prefix                                        |
+| `debian_ntfy_url`               | `http://127.0.0.1:2586`                            | Where `nas-notify` publishes                                   |
+| `debian_ntfy_topic`             | `nas-alerts`                                       | ntfy topic for alerts                                          |
+| `debian_ntfy_token`             | `{{ ntfy_alerts_token \| default('') }}`           | Publisher token; `ntfy_alerts_token` is a vault variable       |
+| `debian_smartd_schedule`        | `(S/../../7/03\|L/../01/./04)`                     | smartd self-test schedule regexp                               |
+| `debian_smartd_ignored_devices` | the ST2000DM001's `/dev/disk/by-id` path           | Devices smartd skips; remove the entry when the drive is gone  |

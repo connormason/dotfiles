@@ -247,6 +247,37 @@ class TestTemplates:
         assert '-s (S/../../7/03|L/../01/./04)' in line
         assert '-M exec /usr/local/bin/nas-notify' in line
 
+    def test_smartd_conf_omits_ata_only_directives(self, tmp_path: Path) -> None:
+        """
+        Test that -o (ATA-only, unsupported by the WD drives) and -S stay out of the scan that covers the NVMe disk
+        """
+        text = _render(tmp_path, 'debian', 'smartd.conf.j2')
+
+        line = next(line for line in text.splitlines() if line.startswith('DEVICESCAN'))
+        assert ' -o ' not in line
+        assert ' -S ' not in line
+
+    def test_smartd_conf_ignores_the_faulty_drive_before_the_scan(self, tmp_path: Path) -> None:
+        """
+        Test that the default ignore entry is written as a '-d ignore' line ahead of DEVICESCAN (smartd reads in order)
+        """
+        lines = _render(tmp_path, 'debian', 'smartd.conf.j2').splitlines()
+
+        entry = '/dev/disk/by-id/ata-ST2000DM001_Z4Z0DDT2 -d ignore'
+        scan  = next(i for i, line in enumerate(lines) if line.startswith('DEVICESCAN'))
+        assert entry in lines
+        assert lines.index(entry) < scan
+
+    def test_smartd_conf_without_ignored_devices_has_only_the_scan(self, tmp_path: Path) -> None:
+        """
+        Test that clearing the ignore list leaves no '-d ignore' line
+        """
+        text = _render(tmp_path, 'debian', 'smartd.conf.j2', '-e', '{"debian_smartd_ignored_devices": []}')
+
+        active = [line for line in text.splitlines() if line and not line.startswith('#')]
+        assert len(active) == 1
+        assert active[0].startswith('DEVICESCAN')
+
     @pytest.mark.parametrize(
         ('stamp', 'matches'),
         [
