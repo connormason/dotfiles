@@ -1,0 +1,12 @@
+---
+# Named apart from the debian role's "Reload systemd" so `--tags zfs` works on its own (handlers are play-global)
+- name: Reload systemd for zfs
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart zed
+  become: true
+  ansible.builtin.service:
+    name: zfs-zed
+    state: restarted

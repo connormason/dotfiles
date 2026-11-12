@@ -1,0 +1,6 @@
+[Unit]
+Description=Alert that %i failed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nas-notify -p high -t "Unit failed: %i" "systemd unit %i failed on %H (journalctl -u %i)"

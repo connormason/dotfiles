@@ -1,0 +1,14 @@
+# Managed by Ansible (roles/zfs).
+{% for dataset in zfs_sanoid_datasets %}
+
+[{{ dataset.name }}]
+	use_template = {{ dataset.template }}
+	recursive = {{ 'yes' if dataset.recursive | default(false) else 'no' }}
+{% endfor %}
+{% for name, settings in zfs_sanoid_templates.items() %}
+
+[template_{{ name }}]
+{% for key, value in settings.items() %}
+	{{ key }} = {{ value }}
+{% endfor %}
+{% endfor %}

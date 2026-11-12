@@ -1,0 +1,6 @@
+# Managed by Ansible (roles/debian).
+# -a                  monitor health, error log, self-test log and the usual attributes
+# -o on -S on         automatic offline testing, attribute autosave
+# -s REGEXP           self-test schedule (T/MM/DD/d/HH)
+# -M exec             alerts go through nas-notify instead of mail
+DEVICESCAN -d removable -a -o on -S on -s {{ debian_smartd_schedule }} -m root -M exec /usr/local/bin/nas-notify

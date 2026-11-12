@@ -1,0 +1,43 @@
+---
+# Assert the pool exists and set its properties. Imported only outside check mode: on a fresh host the zfs tools do not
+# exist yet during a dry run, and the pool itself is created by hand, never by this role.
+- name: Check that the pool exists
+  ansible.builtin.command:
+    argv: [zpool, list, -H, -o, name, "{{ zfs_pool_name }}"]
+  register: zfs_pool_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert that the pool exists
+  ansible.builtin.assert:
+    that: zfs_pool_check.rc == 0
+    fail_msg: >-
+      Pool {{ zfs_pool_name }} not found. This role never creates pools: create or import it by hand, or set
+      zfs_pool_name.
+
+- name: Read the pool properties
+  ansible.builtin.command:
+    argv: [zfs, get, -H, -o, value, "{{ zfs_pool_property.key }}", "{{ zfs_pool_name }}"]
+  loop: "{{ zfs_pool_properties | dict2items }}"
+  loop_control:
+    loop_var: zfs_pool_property
+    label: "{{ zfs_pool_property.key }}"
+  register: zfs_pool_property_states
+  changed_when: false
+  check_mode: false
+
+- name: Set the pool properties
+  become: true
+  ansible.builtin.command:
+    argv:
+      - zfs
+      - set
+      - "{{ zfs_pool_state.zfs_pool_property.key }}={{ zfs_pool_state.zfs_pool_property.value }}"
+      - "{{ zfs_pool_name }}"
+  loop: "{{ zfs_pool_property_states.results }}"
+  loop_control:
+    loop_var: zfs_pool_state
+    label: "{{ zfs_pool_state.zfs_pool_property.key }}"
+  when: zfs_pool_state.stdout | trim != zfs_pool_state.zfs_pool_property.value | string
+  changed_when: true
