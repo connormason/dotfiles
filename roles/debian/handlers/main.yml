@@ -4,6 +4,13 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
+# Reload keeps existing sessions alive, so a bad config cannot cut off the session applying it
+- name: Reload sshd
+  become: true
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
+
 - name: Restart smartd
   become: true
   ansible.builtin.service:

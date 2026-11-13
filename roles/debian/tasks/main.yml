@@ -56,3 +56,6 @@
 
 - name: Configure unattended security upgrades and the reboot alert
   ansible.builtin.import_tasks: upgrades.yml
+
+- name: Harden SSH to key-only login
+  ansible.builtin.import_tasks: ssh.yml
