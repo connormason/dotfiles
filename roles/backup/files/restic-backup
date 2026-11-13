@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Back up ZFS-snapshotted paths to a restic repository, then prune old restic snapshots.
+#
+# Databases (Sonarr, Radarr, Plex, ...) are never read live: a dedicated recursive ZFS snapshot is taken, the paths are
+# read through <mountpoint>/.zfs/snapshot/<name>/ (the kernel automounts it on access, whatever `snapdir` says), and the
+# snapshot is destroyed afterwards. The snapshot name is fixed so restic sees the same paths every run and can find its
+# parent snapshot instead of rescanning. The copy is crash-consistent: SQLite replays its journal on first open.
+#
+# Settings come from the environment (the systemd unit sets them; restic reads the credentials itself):
+#   RESTIC_REPOSITORY, RESTIC_PASSWORD_FILE, B2_ACCOUNT_ID, B2_ACCOUNT_KEY   restic's own variables
+#   BACKUP_ZFS_DATASET                  dataset snapshotted recursively (the pool's root dataset)
+#   BACKUP_PATHS                        whitespace-separated absolute paths, each on a ZFS dataset under it
+#   BACKUP_KEEP_DAILY, BACKUP_KEEP_WEEKLY, BACKUP_KEEP_MONTHLY   retention counts
+#   BACKUP_SNAPSHOT_NAME                optional, default restic-backup
+set -euo pipefail
+
+: "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is not set}"
+: "${BACKUP_ZFS_DATASET:?BACKUP_ZFS_DATASET is not set}"
+: "${BACKUP_PATHS:?BACKUP_PATHS is not set}"
+: "${BACKUP_KEEP_DAILY:?BACKUP_KEEP_DAILY is not set}"
+: "${BACKUP_KEEP_WEEKLY:?BACKUP_KEEP_WEEKLY is not set}"
+: "${BACKUP_KEEP_MONTHLY:?BACKUP_KEEP_MONTHLY is not set}"
+
+name="${BACKUP_SNAPSHOT_NAME:-restic-backup}"
+snapshot="${BACKUP_ZFS_DATASET}@${name}"
+
+log() { echo "restic-backup: $*"; }
+die() {
+    log "ERROR: $*" >&2
+    exit 1
+}
+
+snapshot_exists() { zfs list -H -t snapshot -o name "${snapshot}" >/dev/null 2>&1; }
+
+cleanup() {
+    local status=$?
+    if snapshot_exists; then
+        zfs destroy -r "${snapshot}" || log "WARNING: could not destroy ${snapshot}; the next run retries" >&2
+    fi
+    exit "${status}"
+}
+
+# The repository must already exist (restic init is a one-time manual step), so check it before snapshotting anything
+restic cat config >/dev/null 2>&1 ||
+    die "cannot open ${RESTIC_REPOSITORY}: not initialised (run 'restic-nas init' once) or credentials are wrong"
+
+# Map each path to its place inside the snapshot, refusing anything that is not on ZFS rather than backing it up live
+snapshot_paths=()
+for path in ${BACKUP_PATHS}; do
+    [[ "${path}" == /* ]] || die "${path} is not an absolute path"
+    read -r mountpoint fstype < <(findmnt -n -o TARGET,FSTYPE -T "${path}") || die "no mount found for ${path}"
+    [[ "${fstype}" == zfs ]] || die "${path} is on ${fstype}, not ZFS; it cannot be snapshotted"
+    snapshot_paths+=("${mountpoint%/}/.zfs/snapshot/${name}${path#"${mountpoint}"}")
+done
+
+trap cleanup EXIT
+
+if snapshot_exists; then
+    log "removing stale snapshot ${snapshot} left by an interrupted run"
+    zfs destroy -r "${snapshot}"
+fi
+zfs snapshot -r "${snapshot}"
+log "created ${snapshot}"
+
+for snapshot_path in "${snapshot_paths[@]}"; do
+    [[ -d "${snapshot_path}" ]] || die "${snapshot_path} is missing from the snapshot"
+done
+
+restic backup --tag zfs-snapshot "${snapshot_paths[@]}"
+restic forget --prune \
+    --keep-daily "${BACKUP_KEEP_DAILY}" \
+    --keep-weekly "${BACKUP_KEEP_WEEKLY}" \
+    --keep-monthly "${BACKUP_KEEP_MONTHLY}"
+log "done"

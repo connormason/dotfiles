@@ -1,0 +1,6 @@
+---
+# Named apart from the other roles' reload handlers so `--tags backup` works on its own (handlers are play-global)
+- name: Reload systemd for backup
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true

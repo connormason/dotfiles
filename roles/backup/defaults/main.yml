@@ -1,0 +1,35 @@
+---
+# Off-site backup of irreplaceable data to Backblaze B2 with restic. The role does nothing (and says so) until
+# backup_b2_bucket is set; once it is set, the vault credentials below are required.
+
+# Name of the private B2 bucket holding the repository (inventory host variable; no default on purpose)
+backup_b2_bucket: ""
+
+# Folder inside the bucket, so the bucket can hold other things later
+backup_b2_prefix: restic
+
+# Vault variables: a B2 application key restricted to the bucket, and the restic repository password. Losing the
+# password loses the backup, so keep a copy outside the NAS.
+backup_b2_account_id: "{{ restic_b2_account_id | default('') }}"
+backup_b2_account_key: "{{ restic_b2_account_key | default('') }}"
+backup_repository_password: "{{ restic_repository_password | default('') }}"
+
+# Backed up through a ZFS snapshot of backup_zfs_dataset, so every path must be on ZFS beneath it. No spaces in paths.
+backup_paths:
+  - /storage/media/config
+  - /storage/backups
+backup_zfs_dataset: storage
+
+# restic forget --prune retention
+backup_keep_daily: 14
+backup_keep_weekly: 8
+backup_keep_monthly: 12
+
+# systemd calendar expression and jitter for the nightly run
+backup_on_calendar: "*-*-* 02:30:00"
+backup_randomized_delay: 15min
+
+backup_config_dir: /etc/restic
+backup_script_path: /usr/local/bin/restic-backup
+backup_wrapper_path: /usr/local/bin/restic-nas
+backup_unit_dir: /etc/systemd/system

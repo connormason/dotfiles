@@ -94,6 +94,8 @@ fails when this list drifts from the playbook):
   reboot alert
 - `zfs`: adds the `contrib` apt component and installs the kernel packages, `zfs-dkms`, `zfsutils-linux`; manages no
   pools
+- `backup`: nightly restic backup of a ZFS snapshot of `config` and `backups` to Backblaze B2 (systemd timer, prune,
+  failure alert through `nas-notify`); does nothing until `backup_b2_bucket` is set
 - `samba`: Samba file sharing
 - `docker`: Docker Engine and compose plugin (the v1 `docker-compose` package is removed), `daemon.json` log limits, a
   weekly image-prune timer, docker-group membership, the `~/docker` skeleton and shared `.env`, the autoplex image
