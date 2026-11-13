@@ -1,0 +1,15 @@
+---
+# Named apart from the other roles' handlers so `--tags docker` works on its own (handlers are play-global)
+- name: Reload systemd for docker
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+# Restarting dockerd stops every container (live-restore is off) until the restart policy brings them back, so this is
+# opt-in: set docker_restart_on_config_change in a quiet window, or restart by hand (see the role README).
+- name: Restart docker
+  become: true
+  ansible.builtin.service:
+    name: docker
+    state: restarted
+  when: docker_restart_on_config_change | bool

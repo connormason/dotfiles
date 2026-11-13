@@ -1,0 +1,14 @@
+// Managed by Ansible (roles/debian). Loaded after the package's 50unattended-upgrades.
+//
+// Debian's default pattern list also takes label=Debian (the point-release updates repository); `#clear` drops the
+// package's list so only the origins below are upgraded automatically. Third-party repositories (Docker, Tailscale) are
+// never matched, so docker-ce is not upgraded behind your back (that would restart dockerd and stop every container).
+#clear Unattended-Upgrade::Origins-Pattern;
+Unattended-Upgrade::Origins-Pattern {
+{% for pattern in debian_unattended_origin_patterns %}
+        "{{ pattern }}";
+{% endfor %}
+};
+
+// A reboot is a decision (zfs-dkms must have built the module for the new kernel first): nas-reboot-check alerts instead.
+Unattended-Upgrade::Automatic-Reboot "false";

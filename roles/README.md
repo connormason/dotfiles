@@ -11,17 +11,17 @@ as a frozen snapshot in [`archive/ansible-macos/`](../archive/ansible-macos/READ
 
 Roles are included in the order the playbook runs them; each is selectable with the Ansible tag of the same name.
 
-| Role                               | Purpose                                                                                                                                                                      |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`debian`](debian/README.md)       | Base Debian configuration: system packages (including the stow engine's prerequisites), the Linuxbrew prefix, the systemd sleep targets, and alerting (smartd, `nas-notify`) |
-| [`zfs`](zfs/README.md)             | ZFS installation (`contrib` component, kernel packages, `zfs-dkms`, `zfsutils-linux`) plus pool properties, ZED alert routing, and sanoid snapshots                          |
-| [`backup`](backup/README.md)       | Nightly restic backup of a ZFS snapshot of `config` and `backups` to Backblaze B2, with prune and failure alerts                                                             |
-| [`samba`](samba/README.md)         | Samba file sharing                                                                                                                                                           |
-| [`docker`](docker/README.md)       | Docker Engine, `~/docker` skeleton, autoplex image, `deploy.sh`                                                                                                              |
-| [`tailscale`](tailscale/README.md) | Tailscale install and configuration, HTTPS certificates, and the Caddyfile Caddy reads                                                                                       |
-| [`dotfiles`](dotfiles/README.md)   | `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh`                                                                                      |
-| [`haos`](haos/README.md)           | Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)                                                                                                             |
-| [`services`](services/README.md)   | Syncs `services/` to the NAS, renders per-service secrets, deploys the stack                                                                                                 |
+| Role                               | Purpose                                                                                                                                                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`debian`](debian/README.md)       | Base Debian configuration: system packages (including the stow engine's prerequisites), the Linuxbrew prefix, the systemd sleep targets, alerting (smartd, `nas-notify`), and unattended security upgrades |
+| [`zfs`](zfs/README.md)             | ZFS installation (`contrib` component, kernel packages, `zfs-dkms`, `zfsutils-linux`) plus pool properties, ZED alert routing, and sanoid snapshots                                                        |
+| [`backup`](backup/README.md)       | Nightly restic backup of a ZFS snapshot of `config` and `backups` to Backblaze B2, with prune and failure alerts                                                                                           |
+| [`samba`](samba/README.md)         | Samba file sharing                                                                                                                                                                                         |
+| [`docker`](docker/README.md)       | Docker Engine, `daemon.json` log limits, weekly image prune, `~/docker` skeleton, autoplex image, `deploy.sh`                                                                                              |
+| [`tailscale`](tailscale/README.md) | Tailscale install and configuration, HTTPS certificates, and the Caddyfile Caddy reads                                                                                                                     |
+| [`dotfiles`](dotfiles/README.md)   | `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh`                                                                                                                    |
+| [`haos`](haos/README.md)           | Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)                                                                                                                                           |
+| [`services`](services/README.md)   | Syncs `services/` to the NAS, renders per-service secrets, deploys the stack                                                                                                                               |
 
 ## External dependencies
 

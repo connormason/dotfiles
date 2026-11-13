@@ -1,0 +1,12 @@
+# Managed by Ansible (roles/docker).
+[Unit]
+Description=Remove unused Docker images older than {{ docker_image_prune_until }}
+Requires=docker.service
+After=docker.service
+OnFailure=nas-notify-failure@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker image prune --all --force --filter until={{ docker_image_prune_until }}
+Nice=19
+IOSchedulingClass=idle
