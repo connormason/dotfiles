@@ -34,7 +34,7 @@ ROTATED_KEY = 'K00rotatedkeyvalue'             # pragma: allowlist secret
 ROTATED_PW  = 'rotated-pw'                     # pragma: allowlist secret
 
 # Tasks that write files and need no root, systemd or apt, in role order
-FILE_TASKS = [
+FILE_TASKS: list[str] = [
     'Create the restic configuration directory',
     'Store the restic repository password',
     'Render the restic environment file',
@@ -127,12 +127,12 @@ class TestBackupTasks:
         assert 'changed=7' in output, output
 
         config = tmp_path / 'etc-restic'
-        assert _mode(config)               == 0o700
-        assert _mode(config / 'password')  == 0o600
+        assert _mode(config)                == 0o700
+        assert _mode(config / 'password')   == 0o600
         assert _mode(config / 'restic.env') == 0o600
         assert (config / 'password').read_text(encoding='utf-8') == SECRET_PW
         assert os.access(tmp_path / 'bin' / 'restic-backup', os.X_OK)
-        assert os.access(tmp_path / 'bin' / 'restic-nas', os.X_OK)
+        assert os.access(tmp_path / 'bin' / 'restic-nas',    os.X_OK)
 
         code, output = _run_tasks(tmp_path, 'backup', _file_tasks(), *_vars(tmp_path))
         assert code == 0, output
@@ -145,10 +145,10 @@ class TestBackupTasks:
         _run_tasks(tmp_path, 'backup', _file_tasks(), *_vars(tmp_path))
         lines = (tmp_path / 'etc-restic' / 'restic.env').read_text(encoding='utf-8').splitlines()
 
-        assert "RESTIC_REPOSITORY='b2:nas-test-bucket:restic'"                        in lines
-        assert f"RESTIC_PASSWORD_FILE='{tmp_path / 'etc-restic' / 'password'}'"      in lines
-        assert "B2_ACCOUNT_ID='0012345keyid'"                                        in lines
-        assert f"B2_ACCOUNT_KEY='{SECRET_KEY}'"                                      in lines
+        assert "RESTIC_REPOSITORY='b2:nas-test-bucket:restic'"                  in lines
+        assert f"RESTIC_PASSWORD_FILE='{tmp_path / 'etc-restic' / 'password'}'" in lines
+        assert "B2_ACCOUNT_ID='0012345keyid'"                                   in lines
+        assert f"B2_ACCOUNT_KEY='{SECRET_KEY}'"                                 in lines
 
     def test_drift_is_repaired(self, tmp_path: Path) -> None:
         """
@@ -175,8 +175,8 @@ class TestBackupTasks:
         rotated = _vars(tmp_path, backup_b2_account_key=ROTATED_KEY, backup_repository_password=ROTATED_PW)
 
         code, output = _run_tasks(tmp_path, 'backup', _file_tasks(), '--diff', *extra, *rotated)
-
         assert code == 0, output
+
         for secret in (SECRET_KEY, SECRET_PW, ROTATED_KEY, ROTATED_PW):
             assert secret not in output
 
@@ -197,13 +197,13 @@ class TestBackupTasks:
     @pytest.mark.parametrize(
         'override',
         [
-            {'backup_b2_account_id': ''},
-            {'backup_b2_account_key': ''},
+            {'backup_b2_account_id':       ''},
+            {'backup_b2_account_key':      ''},
             {'backup_repository_password': ''},
-            {'backup_b2_account_key': "bad'quote"},
-            {'backup_b2_account_id': 'bad\nnewline'},
-            {'backup_paths': ['/storage/with space']},
-            {'backup_paths': []},
+            {'backup_b2_account_key':      "bad'quote"},
+            {'backup_b2_account_id':       'bad\nnewline'},
+            {'backup_paths':               ['/storage/with space']},
+            {'backup_paths':               []},
         ],
     )
     def test_incomplete_settings_fail_before_anything_is_written(
@@ -233,12 +233,14 @@ class TestBackupTasks:
         service = (tmp_path / 'units' / 'restic-backup.service').read_text(encoding='utf-8')
         timer   = (tmp_path / 'units' / 'restic-backup.timer').read_text(encoding='utf-8')
 
-        assert 'OnFailure=nas-notify-failure@%n.service'                       in service
-        assert f"EnvironmentFile={tmp_path / 'etc-restic' / 'restic.env'}"     in service
+        assert 'OnFailure=nas-notify-failure@%n.service'                           in service
+        assert f"EnvironmentFile={tmp_path / 'etc-restic' / 'restic.env'}"         in service
         assert 'Environment="BACKUP_PATHS=/storage/media/config /storage/backups"' in service
-        assert 'Environment=BACKUP_ZFS_DATASET=storage'  in service  # pragma: allowlist secret
+        assert 'Environment=BACKUP_ZFS_DATASET=storage' in service  # pragma: allowlist secret
+
         for setting in ('BACKUP_KEEP_DAILY=14', 'BACKUP_KEEP_WEEKLY=8', 'BACKUP_KEEP_MONTHLY=12'):
             assert f'Environment={setting}' in service
+
         assert 'OnCalendar=*-*-* 02:30:00' in timer
         assert 'Persistent=true'           in timer
         assert 'WantedBy=timers.target'    in timer
@@ -490,6 +492,7 @@ class TestBackupScript:
 
         assert result.returncode == 0, result.stderr
         assert 'removing stale snapshot' in result.stdout
+
         destroy  = calls.index('zfs destroy -r storage@restic-backup')
         snapshot = calls.index('zfs snapshot -r storage@restic-backup')
         assert destroy < snapshot
@@ -503,7 +506,6 @@ class TestBackupScript:
             f'{script_env.pool}/backups {script_env.pool}/backups zfs',
             f'{script_env.pool} / ext4',
         )
-
         result = script_env.run()
 
         assert result.returncode == 1
@@ -525,7 +527,6 @@ class TestBackupScript:
         Test that a path absent from the snapshot (created after it, say) fails the run and destroys the snapshot
         """
         (script_env.pool / 'media' / 'newdir').mkdir()
-
         result = script_env.run(BACKUP_PATHS=f'{script_env.pool}/media/newdir')
 
         assert result.returncode == 1
@@ -548,8 +549,7 @@ class TestBackupScript:
         """
         Test that each required setting aborts the run, naming the variable, before any command runs
         """
-        env = {key: value for key, value in {**os.environ, **script_env.env}.items() if key != variable}
-
+        env    = {key: value for key, value in {**os.environ, **script_env.env}.items() if key != variable}
         result = subprocess.run([str(SCRIPT)], capture_output=True, text=True, check=False, env=env, timeout=60)
 
         assert result.returncode != 0
@@ -570,6 +570,7 @@ class TestResticWrapper:
         stub = bindir / 'restic'
         stub.write_text('#!/usr/bin/env bash\nprintf "%s|%s|%s\\n" "$RESTIC_REPOSITORY" "$B2_ACCOUNT_KEY" "$*"\n')
         stub.chmod(0o755)
+
         envfile = tmp_path / 'restic.env'
         envfile.write_text("RESTIC_REPOSITORY='b2:bucket:restic'\nB2_ACCOUNT_KEY='k'\n", encoding='utf-8')
 
