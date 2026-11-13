@@ -1,0 +1,31 @@
+---
+# Key-only SSH. A drop-in rather than an edit of /etc/ssh/sshd_config, so package upgrades never conflict with it.
+# Disabling passwords on a host with no usable key would lock everyone out, so the play stops first if the login user
+# has no authorized key.
+- name: Read the login user's authorized keys
+  ansible.builtin.slurp:
+    src: "{{ ansible_user_dir }}/.ssh/authorized_keys"
+  register: debian_ssh_authorized_keys
+  failed_when: false
+  when: debian_ssh_password_authentication == 'no'
+
+- name: Refuse to disable password login without an authorized key
+  ansible.builtin.assert:
+    that:
+      - debian_ssh_authorized_keys.content is defined
+      - (debian_ssh_authorized_keys.content | b64decode).splitlines() | reject('match', '^\s*(#|$)') | list | length > 0
+    fail_msg: "{{ ansible_user }} has no key in ~/.ssh/authorized_keys; disabling password login would lock it out"
+    quiet: true
+  when: debian_ssh_password_authentication == 'no'
+
+# Validated alone with `sshd -t -f`, so a typo cannot reach /etc/ssh and break the next login
+- name: Install the SSH hardening drop-in
+  become: true
+  ansible.builtin.template:
+    src: 00-nas-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-nas-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd

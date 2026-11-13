@@ -666,3 +666,123 @@ class TestComposeV1Removal:
             if path.is_file() and re.search(r'(?<![\w.-])docker-compose(?![\w.-])', path.read_text(encoding='utf-8'))
         ]
         assert callers == []
+
+
+# ==================================================================================================
+# SSH hardening (debian role)
+# ==================================================================================================
+
+SSHD = Path('/usr/sbin/sshd')
+
+needs_sshd = pytest.mark.skipif(not (SSHD.exists() and shutil.which('ssh-keygen')), reason='sshd not available')
+
+
+def _ssh_tasks(out: Path, *names: str) -> list[TaskDict]:
+    """
+    Pick ssh.yml tasks by name, adapted to run unprivileged against a scratch directory
+    """
+    by_name = {task['name']: task for task in _tasks('debian', 'ssh.yml')}
+    return [_runnable('debian', by_name[name], out) for name in names]
+
+
+@needs_ansible
+class TestSshHardening:
+    """
+    Tests for roles/debian/tasks/ssh.yml
+    """
+    GUARD  = 'Refuse to disable password login without an authorized key'
+    READ   = "Read the login user's authorized keys"
+    DROPIN = 'Install the SSH hardening drop-in'
+
+    def test_default_renders_key_only_login_without_root(self, tmp_path: Path) -> None:
+        """
+        Test that the rendered drop-in turns off password, keyboard-interactive and root login
+        """
+        lines = _render(tmp_path, 'debian', '00-nas-hardening.conf.j2').splitlines()
+        assert [line for line in lines if not line.startswith('#')] == [
+            'PasswordAuthentication no',
+            'KbdInteractiveAuthentication no',
+            'PermitRootLogin no',
+        ]
+
+    @needs_sshd
+    def test_the_real_sshd_accepts_the_rendered_dropin_and_reads_it_back(self, tmp_path: Path) -> None:
+        """
+        Test that sshd -T, given the drop-in through an Include, reports the three hardened values
+        """
+        dropin = tmp_path / '00-nas-hardening.conf'
+        dropin.write_text(_render(tmp_path, 'debian', '00-nas-hardening.conf.j2'), encoding='utf-8')
+        main = tmp_path / 'sshd_config'
+        main.write_text(f'Include {dropin}\nPasswordAuthentication yes\nPermitRootLogin yes\n', encoding='utf-8')
+
+        hostkey = tmp_path / 'host_key'  # the real host keys are root-only; sshd -T refuses to run without one
+        subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', str(hostkey)], check=True)
+
+        result = subprocess.run(
+            [str(SSHD), '-T', '-f', str(main), '-h', str(hostkey), '-C', 'user=x,host=h,addr=127.0.0.1'],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+
+        effective = dict(line.split(' ', 1) for line in result.stdout.splitlines() if ' ' in line)
+        assert effective['passwordauthentication'] == 'no'
+        assert effective['kbdinteractiveauthentication'] == 'no'
+        assert effective['permitrootlogin'] == 'no'
+
+    def test_guard_stops_the_play_when_there_is_no_authorized_key(self, tmp_path: Path) -> None:
+        """
+        Test that a missing, empty or comment-only authorized_keys file fails the guard
+        """
+        out = tmp_path / 'out'
+        out.mkdir()
+        ssh = tmp_path / '.ssh'
+        ssh.mkdir()
+        tasks  = _ssh_tasks(out, self.READ, self.GUARD)
+        common = ['-e', f'ansible_user_dir={tmp_path}', '-e', 'ansible_user=nas']
+
+        for content in (None, '', '# only a comment\n\n'):
+            keys = ssh / 'authorized_keys'
+            keys.unlink(missing_ok=True)
+            if content is not None:
+                keys.write_text(content, encoding='utf-8')
+
+            code, output = _run_tasks(tmp_path, 'debian', tasks, *common)
+            assert code != 0, output
+            assert 'lock it out' in output, output
+
+    def test_guard_passes_with_a_key_and_is_skipped_when_passwords_stay_on(self, tmp_path: Path) -> None:
+        """
+        Test that one real key line passes the guard, and that opting out of the lockdown skips the check
+        """
+        out = tmp_path / 'out'
+        out.mkdir()
+        ssh = tmp_path / '.ssh'
+        ssh.mkdir()
+        keys = ssh / 'authorized_keys'
+        keys.write_text('# note\nssh-ed25519 AAAAC3Nza test@host\n', encoding='utf-8')
+        tasks  = _ssh_tasks(out, self.READ, self.GUARD)
+        common = ['-e', f'ansible_user_dir={tmp_path}', '-e', 'ansible_user=nas']
+
+        code, output = _run_tasks(tmp_path, 'debian', tasks, *common)
+        assert code == 0, output
+
+        keys.unlink()
+        code, output = _run_tasks(tmp_path, 'debian', tasks, *common, '-e', 'debian_ssh_password_authentication=yes')
+        assert code == 0, output
+
+    def test_dropin_is_validated_sorts_first_and_reloads_rather_than_restarts(self) -> None:
+        """
+        Test the task's safety properties: sshd -t validation, an early sort order, and a reload handler
+        """
+        task     = _tasks('debian', 'ssh.yml')[-1]
+        template = task['ansible.builtin.template']
+        assert task['name'] == self.DROPIN
+        assert template['validate'] == '/usr/sbin/sshd -t -f %s'
+        assert Path(template['dest']).parent == Path('/etc/ssh/sshd_config.d')
+        assert Path(template['dest']).name < '50-cloud-init.conf'
+        assert (template['owner'], template['group'], template['mode']) == ('root', 'root', '0644')
+
+        handler = next(h for h in _handlers('debian') if h['name'] == task['notify'])
+        assert handler['ansible.builtin.service'] == {'name': 'ssh', 'state': 'reloaded'}
