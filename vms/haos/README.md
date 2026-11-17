@@ -20,15 +20,16 @@ Supervisor, which provides apps (add-ons), managed backups, and in-place OS/Core
 
 ## Layout<a name="layout"></a>
 
-| Piece            | Where                                               | Managed by                                               |
-| ---------------- | --------------------------------------------------- | -------------------------------------------------------- |
-| LAN bridge       | NetworkManager connections `br0` + `br0-port-<nic>` | [`bridge.sh`](bridge.sh)                                 |
-| VM definition    | libvirt domain `haos` (`qemu:///system`)            | [`setup.sh`](setup.sh)                                   |
-| VM disk          | `/var/lib/libvirt/images/haos.qcow2` (64 GB)        | [`setup.sh`](setup.sh) (created once, never overwritten) |
-| Host shutdown    | `/etc/default/libvirt-guests`                       | [`setup.sh`](setup.sh)                                   |
-| Docker exemption | `docker.service.d/10-bridge-forward.conf`           | [`setup.sh`](setup.sh)                                   |
-| USB passthrough  | `/etc/udev/rules.d/90-haos-usb.rules` + `<hostdev>` | [`setup.sh`](setup.sh)                                   |
-| Home Assistant   | inside the VM                                       | Home Assistant UI + its own backups                      |
+| Piece            | Where                                               | Managed by                                                             |
+| ---------------- | --------------------------------------------------- | ---------------------------------------------------------------------- |
+| LAN bridge       | NetworkManager connections `br0` + `br0-port-<nic>` | [`bridge.sh`](bridge.sh)                                               |
+| VM definition    | libvirt domain `haos` (`qemu:///system`)            | [`setup.sh`](setup.sh)                                                 |
+| VM disk          | `/var/lib/libvirt/images/haos.qcow2` (64 GB)        | [`setup.sh`](setup.sh) (created once, never overwritten)               |
+| Host shutdown    | `/etc/default/libvirt-guests`                       | [`setup.sh`](setup.sh)                                                 |
+| Docker exemption | `docker.service.d/10-bridge-forward.conf`           | [`setup.sh`](setup.sh)                                                 |
+| USB passthrough  | `/etc/udev/rules.d/90-haos-usb.rules` + `<hostdev>` | [`setup.sh`](setup.sh)                                                 |
+| Home Assistant   | inside the VM                                       | Home Assistant UI + its own backups                                    |
+| YAML config      | `/config` in the VM, mirrored in `homeassistant/`   | `run.py ha-pull` / `ha-push` ([README](../../homeassistant/README.md)) |
 
 The VM's NIC is bridged onto the LAN, so it gets its own DHCP address from the router and sees mDNS/SSDP broadcasts
 exactly like a physical device (needed for discovery and for reaching the Lutron Caseta bridge). The host keeps its

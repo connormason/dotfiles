@@ -361,6 +361,8 @@ the home NAS over SSH (tailnet or LAN).
 | `bootstrap`     | `bootstrap/bootstrap.sh`         | `--dry-run`, `--list`, `--only STAGE`, `--from STAGE`, `--resume`, `--verify`, `--no-log` |
 | `nas-provision` | `playbooks/nas_bootstrap.yml`    | see below                                                                                 |
 | `nas-deploy`    | `scripts/nas/deploy-services.sh` | see below                                                                                 |
+| `ha-pull`       | tar over SSH from the HAOS VM    | see [Home Assistant commands](#home-assistant-commands)                                   |
+| `ha-push`       | tar over SSH to the HAOS VM      | see [Home Assistant commands](#home-assistant-commands)                                   |
 
 ```bash
 python3 run.py bootstrap --list           # stages across all layers
@@ -410,6 +412,30 @@ and exits with the script's status. `all` syncs the whole `services/` tree to `~
 `<svc>` outside `^[a-z0-9][a-z0-9_-]*$`, or one without `services/<svc>/compose.yml`, is rejected by the script (exit 2)
 before it syncs anything. It is the same script CI uses (see [`scripts/nas/README.md`](../scripts/nas/README.md)). The
 command declares `script_only = True`, so `run.py makefile` does not generate a Makefile target for it.
+
+#### Home Assistant commands<a name="home-assistant-commands"></a>
+
+`ha-pull` and `ha-push` sync the tracked part of the Home Assistant VM's `/config` (the `HA_SYNC_PATHS` allowlist in
+`run.py`) with [`homeassistant/config/`](../homeassistant/README.md). They talk to the VM directly rather than through
+the NAS inventory: `ssh` with `BatchMode=yes` to `DOTFILES_HA_USER@DOTFILES_HA_HOST` on `DOTFILES_HA_PORT` (defaults
+`root@homeassistant.local:22`, the Advanced SSH & Terminal app). Both probe the connection first and exit 1 with a
+remedy when it fails, and both declare `script_only = True`.
+
+| Command   | Does                                                                                           | Options                                 |
+| --------- | ---------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `ha-pull` | Downloads the tracked files and mirrors them into the repo (additions, edits, and deletions)   | `-n/--dry-run`, `--force`               |
+| `ha-push` | Uploads the repo's tracked files, runs `ha core check`, and restores the VM if the check fails | `-n/--dry-run`, `--restart`, `-y/--yes` |
+
+```bash
+python3 run.py ha-pull --dry-run         # what the VM has that the repo lacks
+python3 run.py ha-pull                   # refuses while tracked files have uncommitted edits (--force overrides)
+python3 run.py ha-push --dry-run         # the diff the VM would receive
+python3 run.py ha-push --restart         # confirm, upload, check, restart Core
+```
+
+`ha-push` snapshots the VM's tracked files before writing and uploads the snapshot back when the check rejects the
+result. It refuses to run when the repo holds no tracked files. `secrets.yaml`, `.storage/`, the database, and logs are
+never transferred. See [`homeassistant/README.md`](../homeassistant/README.md) for setup and workflow.
 
 ### Dotfiles<a name="dotfiles"></a>
 

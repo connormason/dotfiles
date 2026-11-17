@@ -15,6 +15,10 @@ python3 run.py nas-provision
 # Deploy Compose services to the NAS (the script CI uses); --dry-run previews
 python3 run.py nas-deploy glance --dry-run
 python3 run.py nas-deploy glance
+
+# Home Assistant YAML (the HAOS VM's /config <-> homeassistant/config/, over SSH); --dry-run previews both
+python3 run.py ha-pull
+python3 run.py ha-push --restart
 ```
 
 ## Running Ansible Playbooks (NAS)
