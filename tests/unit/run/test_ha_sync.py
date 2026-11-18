@@ -61,6 +61,7 @@ def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
     local  = tmp_path / 'repo' / 'homeassistant' / 'config'
     log    = tmp_path / 'ha.log'
     bindir = tmp_path / 'bin'
+
     remote.mkdir(parents=True)
     local.mkdir(parents=True)
     bindir.mkdir()
@@ -76,14 +77,16 @@ def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
     )
     ha.chmod(ha.stat().st_mode | stat.S_IXUSR)
 
-    monkeypatch.setenv('PATH', f'{bindir}{os.pathsep}{os.environ["PATH"]}')
-    monkeypatch.setenv('HA_FAKE_LOG', str(log))
+    monkeypatch.setenv('PATH',           f'{bindir}{os.pathsep}{os.environ["PATH"]}')
+    monkeypatch.setenv('HA_FAKE_LOG',    str(log))
     monkeypatch.setenv('HA_FAKE_CONFIG', str(remote))
-    monkeypatch.setattr(run, 'ha_ssh_command',       lambda remote_command: ['sh', '-c', remote_command])
-    monkeypatch.setattr(run, 'HA_REMOTE_CONFIG_DIR', str(remote))
-    monkeypatch.setattr(run, 'HA_CONFIG_DIR',        local)
-    monkeypatch.setattr(run, 'DOTFILES_DIR',         tmp_path / 'repo')
+
+    monkeypatch.setattr(run, 'ha_ssh_command',              lambda remote_command: ['sh', '-c', remote_command])
+    monkeypatch.setattr(run, 'HA_REMOTE_CONFIG_DIR',        str(remote))
+    monkeypatch.setattr(run, 'HA_CONFIG_DIR',               local)
+    monkeypatch.setattr(run, 'DOTFILES_DIR',                tmp_path / 'repo')
     monkeypatch.setattr(run, 'ha_config_has_local_changes', lambda: False)
+
     return FakeVM(remote=remote, local=local, log=log)
 
 
@@ -111,6 +114,7 @@ class TestDiffTrees:
         """
         old = tmp_path / 'old'
         new = tmp_path / 'new'
+
         _write(old / 'configuration.yaml', 'same')
         _write(new / 'configuration.yaml', 'same')
         _write(old / 'automations.yaml',   'old')
@@ -140,6 +144,7 @@ class TestDiffTrees:
         old = tmp_path / 'old'
         new = tmp_path / 'new'
         old.mkdir()
+
         _write(new / 'secrets.yaml')
         _write(new / '.storage' / 'auth')
         _write(new / 'custom_components' / 'x' / '__pycache__' / 'x.pyc')
@@ -160,6 +165,7 @@ class TestApplyTreeDiff:
         """
         src  = tmp_path / 'src'
         dest = tmp_path / 'dest'
+
         _write(src / 'configuration.yaml', 'new')
         _write(src / 'blueprints' / 'automation' / 'n.yaml', 'n')
         _write(dest / 'configuration.yaml', 'old')
@@ -182,6 +188,7 @@ class TestTarStream:
         """
         src = tmp_path / 'src'
         _write(src / 'configuration.yaml', 'cfg').chmod(0o600)
+
         script = _write(src / 'custom_components' / 'x' / 'run.sh', '#!/bin/sh')
         script.chmod(0o700)
 
@@ -191,7 +198,8 @@ class TestTarStream:
         buffer.seek(0)
         with tarfile.open(fileobj=buffer, mode='r:') as tar:
             members = {m.name: m for m in tar.getmembers()}
-        assert members['configuration.yaml'].mode == 0o644
+
+        assert members['configuration.yaml'].mode         == 0o644
         assert members['custom_components/x/run.sh'].mode == 0o755
         assert all((m.uid, m.gid, m.uname, m.gname) == (0, 0, 'root', 'root') for m in members.values())
 
@@ -226,13 +234,16 @@ class TestTarStream:
             directory = tarfile.TarInfo('blueprints')
             directory.type = tarfile.DIRTYPE
             tar.addfile(directory)
+
             link = tarfile.TarInfo('scripts.yaml')
             link.type = tarfile.SYMTYPE
             link.linkname = '/etc/passwd'
             tar.addfile(link)
+
             real = tarfile.TarInfo('scenes.yaml')
             real.size = 2
             tar.addfile(real, io.BytesIO(b'ok'))
+
         buffer.seek(0)
 
         dest = tmp_path / 'dest'
@@ -277,6 +288,7 @@ class TestHaConfigHasLocalChanges:
         repo   = tmp_path / 'repo'
         config = repo / 'homeassistant' / 'config'
         config.mkdir(parents=True)
+
         subprocess.run(['git', 'init', '-q'], cwd=repo, check=True)
         monkeypatch.setattr(run, 'DOTFILES_DIR',   repo)
         monkeypatch.setattr(run, 'HA_CONFIG_DIR',  config)
@@ -296,16 +308,15 @@ class TestHaPull:
         """
         Test that tracked files and directories arrive while secrets, .storage, and the database stay behind
         """
-        _write(vm.remote / 'configuration.yaml', 'cfg')
-        _write(vm.remote / 'automations.yaml',   '[]')
-        _write(vm.remote / 'blueprints' / 'automation' / 'm.yaml', 'bp')
+        _write(vm.remote / 'configuration.yaml',                                'cfg')
+        _write(vm.remote / 'automations.yaml',                                  '[]')
+        _write(vm.remote / 'blueprints' / 'automation' / 'm.yaml',              'bp')
         _write(vm.remote / 'custom_components' / 'x' / '__pycache__' / 'x.pyc', 'pyc')
-        _write(vm.remote / 'secrets.yaml',                   'token: hunter2')
-        _write(vm.remote / '.storage' / 'auth',              'secret')
-        _write(vm.remote / 'home-assistant_v2.db',           'db')
+        _write(vm.remote / 'secrets.yaml',                                      'token: hunter2')
+        _write(vm.remote / '.storage' / 'auth',                                 'secret')
+        _write(vm.remote / 'home-assistant_v2.db',                              'db')
 
         _pull()
-
         assert _tree(vm.local) == {
             'configuration.yaml':                  'cfg',
             'automations.yaml':                    '[]',
@@ -328,7 +339,6 @@ class TestHaPull:
         Test that --dry-run lists the incoming files without touching the repo directory
         """
         _write(vm.remote / 'configuration.yaml', 'cfg')
-
         _pull(dry_run=True)
 
         assert _tree(vm.local) == {}
@@ -343,7 +353,6 @@ class TestHaPull:
         _write(vm.remote / 'configuration.yaml', 'fresh')
 
         _pull()
-
         assert _tree(vm.local) == {'configuration.yaml': 'fresh'}
 
     def test_refuses_to_overwrite_uncommitted_local_changes(
@@ -360,6 +369,7 @@ class TestHaPull:
 
         with pytest.raises(SystemExit) as exc_info:
             _pull()
+
         assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
         assert _tree(vm.local) == {'configuration.yaml': 'local edit'}
 
@@ -379,11 +389,11 @@ class TestHaPull:
 
         with pytest.raises(SystemExit) as exc_info:
             _pull()
-
         assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+
         output = run.unstyle(capsys.readouterr().out)
         assert 'Advanced SSH' in output
-        assert 'refused' in output
+        assert 'refused'      in output
 
     def test_missing_remote_config_is_reported(self, vm: FakeVM, capsys: pytest.CaptureFixture[str]) -> None:
         """
@@ -404,12 +414,12 @@ class TestHaPush:
         """
         Test that the VM ends up matching the repo for tracked files, leaving untracked VM files alone
         """
-        _write(vm.remote / 'configuration.yaml', 'old')
-        _write(vm.remote / 'scripts.yaml',       'delete me')
-        _write(vm.remote / 'secrets.yaml',       'keep me')
-        _write(vm.remote / '.storage' / 'auth',  'keep me too')
-        _write(vm.local  / 'configuration.yaml', 'new')
-        _write(vm.local  / 'automations.yaml',   '- alias: a')
+        _write(vm.remote / 'configuration.yaml',                   'old')
+        _write(vm.remote / 'scripts.yaml',                         'delete me')
+        _write(vm.remote / 'secrets.yaml',                         'keep me')
+        _write(vm.remote / '.storage' / 'auth',                    'keep me too')
+        _write(vm.local  / 'configuration.yaml',                   'new')
+        _write(vm.local  / 'automations.yaml',                     '- alias: a')
         _write(vm.local  / 'blueprints' / 'automation' / 'm.yaml', 'bp')
 
         _push()
@@ -488,9 +498,10 @@ class TestHaPush:
 
         assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
         assert _tree(vm.remote) == before
+
         output = run.unstyle(capsys.readouterr().out)
         assert 'rejected the config' in output
-        assert 'Invalid config' in output
+        assert 'Invalid config'      in output
 
     def test_restart_flag_restarts_core_after_a_passing_check(self, vm: FakeVM) -> None:
         """
