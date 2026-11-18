@@ -3941,7 +3941,15 @@ class HaPushCommand(Command):
                     printf('Cancelled; nothing was changed', fg='yellow')
                     sys.exit(ExitCode.USER_CANCELLED)
 
-                apply_ha_changes(HA_CONFIG_DIR, diff)
+                try:
+                    apply_ha_changes(HA_CONFIG_DIR, diff)
+
+                # A failure mid-push can leave some files written; the rollback is idempotent, so it is safe then
+                except HASyncError as e:
+                    printf(f'❌ {e}', fg='red', bold=True)
+                    self._roll_back(snapshot)
+                    printf('The VM was restored to its previous state', fg='yellow', indent=3)
+                    sys.exit(ExitCode.COMMAND_FAILED)
 
                 check = shell_command(ha_ssh_command(ha_cli('core check')), capture_output=True, check=False)
                 if check.returncode != 0:

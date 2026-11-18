@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import NamedTuple
 
 import pytest
@@ -22,6 +23,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import run
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # ==================================================================================================
 # Helpers
@@ -92,7 +96,8 @@ def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
 
     The VM's SSH login is an unprivileged user and its /config is root-owned: shims for ``tar -x`` and ``rm`` refuse to
     write unless they were launched through the fake ``sudo``, as on the real Advanced SSH & Terminal app. The ``ha``
-    CLI likewise rejects calls that lack the Supervisor token, which only a login shell (``sh -lc``) provides
+    CLI likewise rejects calls that lack the Supervisor token, which only a login shell (``sh -lc``) provides. The
+    ``tar`` shim sets COPYFILE_DISABLE so macOS bsdtar skips its ``._*`` xattr sidecars, matching the VM's busybox tar
     """
     remote   = tmp_path / 'vm' / 'config'
     local    = tmp_path / 'repo' / 'homeassistant' / 'config'
@@ -136,7 +141,7 @@ def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
         'if [ "$1" = "-xf" ] && [ -z "$HA_FAKE_ROOT" ]; then\n'
         '    echo "tar: can\'t remove old file automations.yaml: Permission denied" >&2; exit 1\n'
         'fi\n'
-        f'exec {real_tar} "$@"\n',
+        f'COPYFILE_DISABLE=1 exec {real_tar} "$@"\n',
     )
     _write_shim(
         bindir / 'rm',
@@ -632,6 +637,68 @@ class TestHaPush:
         output = run.unstyle(capsys.readouterr().out)
         assert 'rejected the config' in output
         assert 'Invalid config'      in output
+
+    def test_failed_apply_rolls_back_the_partial_push(
+        self,
+        vm: FakeVM,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that a failure after the upload (here the deletion step) restores the VM instead of leaving it half-pushed
+        """
+        _write(vm.remote / 'configuration.yaml', 'old')
+        _write(vm.remote / 'scripts.yaml',       'delete me')
+        _write(vm.local  / 'configuration.yaml', 'new')
+        before = _tree(vm.remote)
+
+        real_delete = run.delete_ha_files
+        calls: list[Sequence[str]] = []
+
+        def flaky_delete(relpaths: Sequence[str]) -> None:
+            calls.append(relpaths)
+            if len(calls) == 1:
+                raise run.HASyncError('Deleting from the Home Assistant config failed: connection lost')
+            real_delete(relpaths)
+
+        monkeypatch.setattr(run, 'delete_ha_files', flaky_delete)
+
+        with pytest.raises(SystemExit) as exc_info:
+            _push()
+
+        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert _tree(vm.remote) == before
+
+        output = run.unstyle(capsys.readouterr().out)
+        assert 'connection lost' in output
+        assert 'restored'        in output
+        assert not vm.log.exists()
+
+    def test_failed_rollback_is_reported_as_a_possible_partial_push(
+        self,
+        vm: FakeVM,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that when the upload and the rollback both fail, the output warns the VM may hold a partial push
+        """
+        _write(vm.remote / 'configuration.yaml', 'old')
+        _write(vm.local  / 'configuration.yaml', 'new')
+
+        def failing_upload(root: Path, relpaths: Sequence[str]) -> None:
+            raise run.HASyncError('Uploading to the Home Assistant config failed (exit 255): connection lost')
+
+        monkeypatch.setattr(run, 'upload_ha_files', failing_upload)
+
+        with pytest.raises(SystemExit) as exc_info:
+            _push()
+
+        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+
+        output = run.unstyle(capsys.readouterr().out)
+        assert 'Rollback failed' in output
+        assert 'partial push'    in output
 
     def test_restart_flag_restarts_core_after_a_passing_check(self, vm: FakeVM) -> None:
         """
