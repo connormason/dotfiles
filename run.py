@@ -424,7 +424,7 @@ class ExitCode(int, enum.Enum):
 # ==================================================================================================
 
 
-VERSION_RE:               re.Pattern[str] = re.compile(r'(?P<version>[\d.]+)')
+VERSION_RE: re.Pattern[str] = re.compile(r'(?P<version>[\d.]+)')
 
 
 # ==================================================================================================
@@ -2584,6 +2584,7 @@ class HASyncError(RuntimeError):
     """
     A Home Assistant sync step failed (SSH, the tar stream, or a remote command)
     """
+    pass
 
 
 class TreeDiff(NamedTuple):
@@ -2613,10 +2614,12 @@ def list_ha_tree(root: Path) -> dict[str, Path]:
     :return: mapping of POSIX path relative to ``root`` to the file's path
     """
     files: dict[str, Path] = {}
+
     for top in HA_SYNC_PATHS:
         entry = root / top
         if entry.is_symlink():
             continue
+
         if entry.is_file():
             files[top] = entry
         elif entry.is_dir():
@@ -2625,6 +2628,7 @@ def list_ha_tree(root: Path) -> dict[str, Path]:
                 if path.is_symlink() or not path.is_file() or HA_SYNC_EXCLUDED_NAMES.intersection(rel.parts):
                     continue
                 files[rel.as_posix()] = path
+
     return files
 
 
@@ -2638,6 +2642,7 @@ def diff_trees(old: Path, new: Path) -> TreeDiff:
     """
     old_files = list_ha_tree(old)
     new_files = list_ha_tree(new)
+
     return TreeDiff(
         added=sorted(new_files.keys() - old_files.keys()),
         modified=sorted(
@@ -2660,8 +2665,10 @@ def apply_tree_diff(src: Path, dest: Path, diff: TreeDiff) -> None:
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src / rel, target)
+
     for rel in diff.removed:
         (dest / rel).unlink(missing_ok=True)
+
         # Prune directories the removal emptied, but never the tracked top-level entry itself
         parent = (dest / rel).parent
         while dest not in (parent, parent.parent) and not any(parent.iterdir()):
@@ -2680,10 +2687,12 @@ def pack_ha_files(root: Path, relpaths: Iterable[str], stream: IO[bytes]) -> Non
     with tarfile.open(fileobj=stream, mode='w|') as tar:
         for rel in relpaths:
             path = root / rel
-            info = tar.gettarinfo(str(path), arcname=rel)
+
+            info       = tar.gettarinfo(str(path), arcname=rel)
             info.uid   = info.gid   = 0
             info.uname = info.gname = 'root'
             info.mode  = 0o755 if info.mode & 0o111 else 0o644
+
             with path.open('rb') as handle:
                 tar.addfile(info, handle)
 
@@ -2709,6 +2718,7 @@ def unpack_ha_stream(stream: IO[bytes], dest: Path) -> None:
             source = tar.extractfile(member)
             if source is None:
                 continue
+
             target = dest.joinpath(*name.parts)
             target.parent.mkdir(parents=True, exist_ok=True)
             with source, target.open('wb') as out:
@@ -2790,7 +2800,8 @@ def fetch_ha_config(dest: Path) -> None:
                 stdout.read()                               # drain the tar end-of-archive padding
             except tarfile.TarError as e:
                 stream_error = e
-        if proc.returncode != 0 or stream_error is not None:
+
+        if (proc.returncode != 0) or (stream_error is not None):
             raise _ssh_failure('Downloading the Home Assistant config', stderr_file, proc.returncode) from stream_error
 
 
@@ -2816,6 +2827,7 @@ def upload_ha_files(root: Path, relpaths: Sequence[str]) -> None:
             finally:
                 with contextlib.suppress(BrokenPipeError):
                     stdin.close()
+
         if proc.returncode != 0:
             raise _ssh_failure('Uploading to the Home Assistant config', stderr_file, proc.returncode)
 
@@ -2860,8 +2872,11 @@ def print_tree_diff(diff: TreeDiff, *, verbs: tuple[str, str, str], indent: int 
     :param verbs: past-tense summary words for (added, modified, removed)
     :param indent: number of leading spaces
     """
-    for marker, color, paths in (('+', 'bright_green', diff.added), ('~', 'bright_yellow', diff.modified),
-                                 ('-', 'bright_red',   diff.removed)):
+    for marker, color, paths in (
+        ('+', 'bright_green',  diff.added),
+        ('~', 'bright_yellow', diff.modified),
+        ('-', 'bright_red',    diff.removed)
+    ):
         for rel in paths:
             printf(f'{marker} {rel}', fg=color, indent=indent)
 
@@ -2876,7 +2891,7 @@ def ha_config_has_local_changes() -> bool:
     """
     Whether the tracked Home Assistant files in the repo have uncommitted changes (including untracked ones)
     """
-    base = HA_CONFIG_DIR.relative_to(DOTFILES_DIR)
+    base   = HA_CONFIG_DIR.relative_to(DOTFILES_DIR)
     result = shell_command(
         ['git', 'status', '--porcelain', '--', *(str(base / p) for p in HA_SYNC_PATHS)],
         capture_output=True,
@@ -3850,13 +3865,18 @@ class HaPushCommand(Command):
                     sys.exit(ExitCode.USER_CANCELLED)
 
                 apply_ha_changes(HA_CONFIG_DIR, diff)
+
                 check = shell_command(ha_ssh_command('ha core check'), capture_output=True, check=False)
                 if check.returncode != 0:
                     self._roll_back(snapshot)
-                    printf('❌ `ha core check` rejected the config; the VM was restored to its previous state',
-                           fg='red', bold=True)
+                    printf(
+                        '❌ `ha core check` rejected the config; the VM was restored to its previous state',
+                        fg='red',
+                        bold=True,
+                    )
                     printf((check.stdout + check.stderr).strip(), indent=3)
                     sys.exit(ExitCode.COMMAND_FAILED)
+
             except HASyncError as e:
                 printf(f'❌ {e}', fg='red', bold=True)
                 sys.exit(ExitCode.COMMAND_FAILED)
