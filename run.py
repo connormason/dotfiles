@@ -2785,6 +2785,32 @@ def ha_ssh_command(remote_command: str) -> list[str]:
     ]
 
 
+def ha_privileged(remote_command: str) -> str:
+    """
+    Prefix a remote command with non-interactive sudo unless the SSH login is already root
+
+    The Advanced SSH & Terminal app logs in as an unprivileged user, while ``/config`` and its files are root-owned, so
+    writing there needs root
+
+    :param remote_command: command to run on the VM
+    :return: ``remote_command``, escalated when ``HA_USER`` is not ``root``
+    """
+    return remote_command if HA_USER == 'root' else f'sudo -n {remote_command}'
+
+
+def ha_cli(subcommand: str) -> str:
+    """
+    Build the remote command that runs the ``ha`` CLI with its Supervisor token
+
+    The token is exported by the VM's ``/etc/profile.d/homeassistant.sh``, which a bare ``ssh host cmd`` never sources,
+    so the CLI runs in a login shell
+
+    :param subcommand: arguments to ``ha`` (e.g. ``core check``)
+    :return: the command to hand to :func:`ha_ssh_command`
+    """
+    return f'sh -lc {shlex.quote(f"ha {subcommand}")}'
+
+
 def require_ha_reachable() -> None:
     """
     Exit with a remedy unless the Home Assistant VM answers a non-interactive SSH probe
@@ -2859,7 +2885,7 @@ def upload_ha_files(root: Path, relpaths: Sequence[str]) -> None:
     if not relpaths:
         return
 
-    remote = f'cd {shlex.quote(HA_REMOTE_CONFIG_DIR)} && tar -xf -'
+    remote = f'cd {shlex.quote(HA_REMOTE_CONFIG_DIR)} && {ha_privileged("tar -xf -")}'
     with tempfile.TemporaryFile() as stderr_file:
         with subprocess.Popen(ha_ssh_command(remote), stdin=subprocess.PIPE, stderr=stderr_file) as proc:
             stdin = cast('IO[bytes]', proc.stdin)
@@ -2887,7 +2913,7 @@ def delete_ha_files(relpaths: Sequence[str]) -> None:
 
     quoted = ' '.join(shlex.quote(p) for p in relpaths)
     result = shell_command(
-        ha_ssh_command(f'cd {shlex.quote(HA_REMOTE_CONFIG_DIR)} && rm -f -- {quoted}'),
+        ha_ssh_command(f'cd {shlex.quote(HA_REMOTE_CONFIG_DIR)} && {ha_privileged(f"rm -f -- {quoted}")}'),
         capture_output=True,
         check=False,
     )
@@ -3917,7 +3943,7 @@ class HaPushCommand(Command):
 
                 apply_ha_changes(HA_CONFIG_DIR, diff)
 
-                check = shell_command(ha_ssh_command('ha core check'), capture_output=True, check=False)
+                check = shell_command(ha_ssh_command(ha_cli('core check')), capture_output=True, check=False)
                 if check.returncode != 0:
                     self._roll_back(snapshot)
                     printf(
@@ -3935,7 +3961,7 @@ class HaPushCommand(Command):
         printf('✅ Pushed; `ha core check` passed', fg='bright_green')
         if args.restart:
             printf('💿 Restarting Home Assistant Core', fg='bright_cyan')
-            restart = shell_command(ha_ssh_command('ha core restart'), capture_output=True, check=False)
+            restart = shell_command(ha_ssh_command(ha_cli('core restart')), capture_output=True, check=False)
             if restart.returncode != 0:
                 printf(f'❌ Restart failed: {(restart.stdout + restart.stderr).strip()}', fg='red', bold=True)
                 sys.exit(ExitCode.COMMAND_FAILED)
