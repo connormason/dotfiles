@@ -300,7 +300,7 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 # Home Assistant OS VM (SSH target of `ha-pull` / `ha-push`: the Advanced SSH & Terminal app inside the VM)
 # -------------------------------------------------------------------
 HA_HOST: str = os.getenv(HA_HOST_ENVVAR, 'homeassistant.local')
-HA_USER: str = os.getenv(HA_USER_ENVVAR, 'root')
+HA_USER: str = os.getenv(HA_USER_ENVVAR, 'connormason')
 HA_PORT: str = os.getenv(HA_PORT_ENVVAR, '22')
 
 
