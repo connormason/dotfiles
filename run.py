@@ -341,6 +341,7 @@ HA_PORT: str = os.getenv(HA_PORT_ENVVAR, '22')
 #       nas/
 #         deploy-services.sh        NAS_DEPLOY_SCRIPT
 #       utility/
+#     services/                     SERVICES_DIR
 #     stow/                         STOW_DIR
 #       claude/
 #         .claude/                  CLAUDE_STOW_DIR
@@ -369,6 +370,7 @@ DOCS_DIR:               Path = DOTFILES_DIR / 'docs'
 HA_CONFIG_DIR:          Path = DOTFILES_DIR / 'homeassistant' / 'config'
 PROFILES_DIR:           Path = DOTFILES_DIR / 'profiles'
 RENDER_DIR:             Path = DOTFILES_DIR / 'render'
+SERVICES_DIR:           Path = DOTFILES_DIR / 'services'
 VMS_DIR:                Path = DOTFILES_DIR / 'vms'
 
 INVENTORY_DIR:          Path = DOTFILES_DIR / 'inventory'
@@ -1097,6 +1099,38 @@ def confirm(prompt_text: str, *, default: bool = True, indent: int = 0) -> bool:
     return answer in ('y', 'yes')
 
 
+def select_option(prompt_text: str, options: Sequence[str], *, indent: int = 0) -> str | None:
+    """
+    Prompt the user to pick one of ``options`` from a numbered menu, by number or by name
+
+    :param prompt_text: heading displayed above the menu
+    :param options: the choices, listed in order and numbered from 1
+    :param indent: number of spaces to indent the menu by
+    :return: the chosen option, or None if the user entered nothing or stdin is closed (EOF). An unrecognized entry
+             re-prompts. Ctrl-C is not caught, so it cancels the whole run through :func:`main`
+    """
+    width = len(str(len(options)))
+
+    printf(prompt_text, fg='bright_white', bold=True, indent=indent)
+    for number, option in enumerate(options, start=1):
+        printf(f'{number:>{width}}) {option}', indent=indent + 3)
+
+    while True:
+        try:
+            answer = input(f'{" " * indent}Choice [1-{len(options)}]: ').strip()
+        except EOFError:
+            printf('')
+            return None
+
+        if not answer:
+            return None
+        if answer.isdecimal() and (1 <= int(answer) <= len(options)):
+            return options[int(answer) - 1]
+        if answer in options:
+            return answer
+        printf(f'Not a valid choice: {answer}', fg='bright_yellow', indent=indent)
+
+
 # ==================================================================================================
 # Command utils
 #
@@ -1666,7 +1700,7 @@ def check_python(*, quiet: bool = False, indent: int = 0) -> ToolInfo:
 
 
 # ==================================================================================================
-# Git status helpers
+# NAS services helpers
 # ==================================================================================================
 
 
@@ -1683,6 +1717,15 @@ def warn_on_dirty_services() -> None:
     if (result.returncode == 0) and result.stdout.strip():
         printf('🟡 services/ has uncommitted changes; deploying the working tree', fg='bright_yellow')
         printf('CI redeploys main whenever it changes a service, which supersedes a branch deploy', indent=3, dim=True)
+
+
+def list_services() -> list[str]:
+    """
+    List the deployable services: the directories under services/ that hold a compose.yml
+
+    :return: sorted service names
+    """
+    return sorted(compose.parent.name for compose in SERVICES_DIR.glob('*/compose.yml'))
 
 
 # ==================================================================================================
@@ -2762,6 +2805,7 @@ def require_ha_reachable() -> None:
         sys.exit(ExitCode.COMMAND_FAILED)
 
 
+# TODO: add as classmethod constructor to HASyncError
 def _ssh_failure(what: str, stderr_file: IO[bytes], returncode: int) -> HASyncError:
     """
     Build the error for a failed remote step from the stderr captured in a temp file
@@ -3721,19 +3765,18 @@ class NasDeployCommand(Command):
     """
     Sync services/ to the NAS and run deploy.sh there (the same script CI uses)
     """
-    name:        ClassVar[str]  = 'nas-deploy'
-    group:       ClassVar[str]  = 'Bootstrap & Deploy'
-    script_only: ClassVar[bool] = True
+    name:  ClassVar[str] = 'nas-deploy'
+    group: ClassVar[str] = 'Bootstrap & Deploy'
 
     class Args(argparse.Namespace):
-        service: str        # positional arg "SERVICE"
-        dry_run: bool       # --dry-run
+        service: str | None     # positional arg "SERVICE"
+        dry_run: bool           # --dry-run
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
             'service',
-            type=str,
-            help="Directory under services/ to deploy, or 'all'",
+            nargs='?',
+            help="Directory under services/ to deploy, or 'all' (prompts for one when omitted)",
         )
         parser.add_argument(
             '--dry-run',
@@ -3742,13 +3785,24 @@ class NasDeployCommand(Command):
         )
 
     def run(self, args: Args) -> None:
+        service = args.service
+        if service is None:
+            if not sys.stdin.isatty():
+                printf("❌ No service given and stdin is not a terminal; pass a service or 'all'", fg='red', bold=True)
+                sys.exit(ExitCode.COMMAND_FAILED)
+
+            service = select_option('Select a service to deploy:', ['all', *list_services()])
+            if service is None:
+                printf('Cancelled; nothing was deployed', fg='yellow')
+                sys.exit(ExitCode.USER_CANCELLED)
+
         host, user = resolve_reachable_nas()
         warn_on_dirty_services()
 
         cmd: list[str] = ['bash', str(NAS_DEPLOY_SCRIPT)]
         if args.dry_run:
             cmd.append('--dry-run')
-        cmd.append(args.service)
+        cmd.append(service)
 
         result = shell_command(cmd, env={'NAS_HOST': host, 'NAS_USER': user}, check=False)
         sys.exit(result.returncode)

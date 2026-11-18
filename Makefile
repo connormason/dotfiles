@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean bootstrap nas-provision ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
+.PHONY: help install dev shell status doctor clean bootstrap nas-provision nas-deploy ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -24,6 +24,7 @@ help: ## Show this help message
 	@echo "$(BRIGHT_WHITE)Bootstrap & Deploy:$(NC)"
 	@echo "  $(YELLOW)bootstrap           $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh) on local machine"
 	@echo "  $(YELLOW)nas-provision       $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
+	@echo "  $(YELLOW)nas-deploy          $(NC) Sync services/ to the NAS and run deploy.sh there (the same script CI uses)"
 	@echo "  $(YELLOW)ha-pull             $(NC) Pull the tracked Home Assistant YAML from the HAOS VM into homeassistant/config/"
 	@echo "  $(YELLOW)ha-push             $(NC) Push homeassistant/config/ to the HAOS VM, validate it with 'ha core check', and roll back on failure"
 	@echo ""
@@ -92,6 +93,9 @@ bootstrap: ## Run the layered bootstrap stages (bootstrap/bootstrap.sh) on local
 
 nas-provision: ## Provision the NAS with the Ansible playbook: system config, the stow engine, then services
 	@python3 run.py nas-provision
+
+nas-deploy: ## Sync services/ to the NAS and run deploy.sh there (the same script CI uses)
+	@python3 run.py nas-deploy
 
 ha-pull: ## Pull the tracked Home Assistant YAML from the HAOS VM into homeassistant/config/
 	@python3 run.py ha-pull

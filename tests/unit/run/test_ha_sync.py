@@ -22,6 +22,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import run
 
+# ==================================================================================================
+# Helpers
+# ==================================================================================================
+
 
 def _write(path: Path, text: str = 'x') -> Path:
     """
@@ -41,6 +45,25 @@ def _tree(root: Path) -> dict[str, str]:
         for p in sorted(root.rglob('*'))
         if p.is_file()
     }
+
+
+def _pull(*, dry_run: bool = False, force: bool = False) -> None:
+    """
+    Run ha-pull
+    """
+    run.REGISTERED_COMMANDS['ha-pull'](argparse.Namespace(dry_run=dry_run, force=force))
+
+
+def _push(*, dry_run: bool = False, restart: bool = False, yes: bool = True) -> None:
+    """
+    Run ha-push
+    """
+    run.REGISTERED_COMMANDS['ha-push'](argparse.Namespace(dry_run=dry_run, restart=restart, yes=yes))
+
+
+# ==================================================================================================
+# Fixtures
+# ==================================================================================================
 
 
 class FakeVM(NamedTuple):
@@ -90,18 +113,9 @@ def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
     return FakeVM(remote=remote, local=local, log=log)
 
 
-def _pull(*, dry_run: bool = False, force: bool = False) -> None:
-    """
-    Run ha-pull
-    """
-    run.REGISTERED_COMMANDS['ha-pull'](argparse.Namespace(dry_run=dry_run, force=force))
-
-
-def _push(*, dry_run: bool = False, restart: bool = False, yes: bool = True) -> None:
-    """
-    Run ha-push
-    """
-    run.REGISTERED_COMMANDS['ha-push'](argparse.Namespace(dry_run=dry_run, restart=restart, yes=yes))
+# ==================================================================================================
+# Unit tests
+# ==================================================================================================
 
 
 class TestDiffTrees:

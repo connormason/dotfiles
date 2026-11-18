@@ -382,7 +382,7 @@ A failed probe exits 1 with a remedy.
 | Command         | Runs                                                     | Options                                                                                                          |
 | --------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `nas-provision` | `playbooks/nas_bootstrap.yml` through `ansible-playbook` | `--tags TAGS`, `--check`, `--diff`, `--limit HOSTS`, `-e/--extra-vars KEY=VALUE` (repeatable), `-v` (repeatable) |
-| `nas-deploy`    | `scripts/nas/deploy-services.sh`                         | `<service\|all>`, `--dry-run`                                                                                    |
+| `nas-deploy`    | `scripts/nas/deploy-services.sh`                         | `[service\|all]`, `--dry-run`                                                                                    |
 
 ```bash
 python3 run.py nas-provision --check --diff                  # preview the whole playbook (converged host)
@@ -390,6 +390,7 @@ python3 run.py nas-provision --tags dotfiles,haos            # selected roles on
 python3 run.py nas-provision --tags secrets                  # re-render per-service secrets
 python3 run.py nas-deploy glance --dry-run                   # preview the rsync and the remote command
 python3 run.py nas-deploy all
+python3 run.py nas-deploy                                    # prompt for a service (also: make nas-deploy)
 ```
 
 #### `nas-provision`
@@ -404,14 +405,20 @@ real run installs those tools first). Both probes are read-only and carry `check
 
 #### `nas-deploy`
 
+Without a `service`, the command shows a numbered menu (`all` first, then each directory under `services/` that holds a
+`compose.yml`) and reads a number or a name; an unrecognized entry re-prompts, and an empty answer or EOF exits 3 (user
+cancelled) before anything is probed or deployed. When stdin is not a terminal there is nothing to prompt on, so the
+command exits 1 and asks for an explicit service. That prompt is what lets the command carry a Makefile target:
+`make nas-deploy` runs it with no arguments.
+
 Resolves `ansible_host` and `ansible_user` of the `nas` host with `ansible-inventory` (literal values are required;
 templated values are rejected, and the user falls back to the local login), warns when `services/` has uncommitted
 changes (a deploy ships the working tree), then runs `scripts/nas/deploy-services.sh` with `NAS_HOST` and `NAS_USER` set
 and exits with the script's status. `all` syncs the whole `services/` tree to `~/docker/`; a single service syncs
 `compose.base.yml` plus `services/<svc>/`. Either way the script then runs `~/docker/deploy.sh <svc|all>` on the NAS. A
 `<svc>` outside `^[a-z0-9][a-z0-9_-]*$`, or one without `services/<svc>/compose.yml`, is rejected by the script (exit 2)
-before it syncs anything. It is the same script CI uses (see [`scripts/nas/README.md`](../scripts/nas/README.md)). The
-command declares `script_only = True`, so `run.py makefile` does not generate a Makefile target for it.
+before it syncs anything. It is the same script CI uses (see [`scripts/nas/README.md`](../scripts/nas/README.md)).
+`make` cannot forward flags, so a dry run still goes through `python3 run.py nas-deploy --dry-run`.
 
 #### Home Assistant commands<a name="home-assistant-commands"></a>
 

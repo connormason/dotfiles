@@ -348,10 +348,10 @@ See [Direct execution](playbooks/README.md#direct-execution) for the dry run and
 
 ### Using Make Targets<a name="using-make-targets"></a>
 
-`python3 run.py makefile` writes the `Makefile`: one target per registered command except `nas-deploy`, which is
-script-only. Each target runs `python3 run.py <command>` with no arguments, so anything that takes an option or an
-argument (`nas-provision --tags ...`, `nas-deploy <service>`, `bootstrap --list`, `stow -n`) goes through
-`python3 run.py` directly.
+`python3 run.py makefile` writes the `Makefile`: one target per registered command. Each target runs
+`python3 run.py <command>` with no arguments, so anything that takes an option or an argument
+(`nas-provision --tags ...`, `nas-deploy --dry-run`, `bootstrap --list`, `stow -n`) goes through `python3 run.py`
+directly. `make nas-deploy` works without an argument because the command prompts for a service.
 
 ```bash
 # Generate Makefile
@@ -362,6 +362,7 @@ make help
 make update-inventory
 make clean
 make pre
+make nas-deploy         # prompts for a service to deploy
 ```
 
 ## Project Structure<a name="project-structure"></a>

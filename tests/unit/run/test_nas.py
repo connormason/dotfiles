@@ -17,12 +17,44 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import run
 
+# ==================================================================================================
+# Helpers
+# ==================================================================================================
+
 
 def _done(returncode: int = 0, stdout: str = '', stderr: str = '') -> subprocess.CompletedProcess[str]:
     """
     Build a fake CompletedProcess
     """
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+def _output(capsys: pytest.CaptureFixture[str]) -> str:
+    """
+    Return captured stdout with ANSI styling removed
+    """
+    return run.unstyle(capsys.readouterr().out)
+
+
+def _provision_args(**overrides: Any) -> argparse.Namespace:  # Any: free-form Namespace field overrides
+    """
+    Build the Namespace nas-provision receives, with every option at its default unless overridden
+    """
+    fields: dict[str, Any] = {  # Any: heterogeneous Namespace fields
+        'tags':       None,
+        'limit':      None,
+        'check':      False,
+        'diff':       False,
+        'extra_vars': None,
+        'verbose':    0,
+    }
+    fields.update(overrides)
+    return argparse.Namespace(**fields)
+
+
+# ==================================================================================================
+# Fixtures
+# ==================================================================================================
 
 
 class FakeShell:
@@ -59,11 +91,9 @@ def fake_shell(monkeypatch: pytest.MonkeyPatch) -> FakeShell:
     return fake
 
 
-def _output(capsys: pytest.CaptureFixture[str]) -> str:
-    """
-    Return captured stdout with ANSI styling removed
-    """
-    return run.unstyle(capsys.readouterr().out)
+# ==================================================================================================
+# Unit tests
+# ==================================================================================================
 
 
 class TestPrintfFlush:
@@ -106,7 +136,6 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(
             stdout=json.dumps({'ansible_host': 'nas.example.ts.net', 'ansible_user': 'tester'}),
         )
-
         assert run.resolve_ssh_target_from_inventory_host('nas') == ('nas.example.ts.net', 'tester')
 
         cmd, kwargs = fake_shell.find('ansible-inventory')
@@ -243,6 +272,123 @@ class TestResolveReachableNas:
         assert fake_shell.find('ssh')[0][-2] == 'u@h'
 
 
+class TestListServices:
+    """
+    Tests for list_services
+    """
+    def test_lists_directories_that_hold_a_compose_file(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """
+        Test that only service directories with a compose.yml are listed, sorted by name
+        """
+        for name in ('plex', 'glance'):
+            (tmp_path / name).mkdir()
+            (tmp_path / name / 'compose.yml').write_text('services: {}\n')
+
+        (tmp_path / 'empty').mkdir()
+        (tmp_path / 'compose.base.yml').write_text('services: {}\n')
+        monkeypatch.setattr(run, 'SERVICES_DIR', tmp_path)
+
+        assert run.list_services() == ['glance', 'plex']
+
+    def test_matches_the_services_in_the_repo(self) -> None:
+        """
+        Test that the real services/ tree yields services and never the shared base file
+        """
+        services = run.list_services()
+        assert 'glance'               in services
+        assert 'compose.base.yml' not in services
+        assert services == sorted(services)
+
+
+class TestSelectOption:
+    """
+    Tests for select_option
+    """
+    @staticmethod
+    def _answer(monkeypatch: pytest.MonkeyPatch, *answers: str) -> None:
+        """
+        Feed the given answers to input(), raising EOFError once they run out
+        """
+        remaining = iter(answers)
+
+        def fake_input(_prompt: str = '') -> str:
+            try:
+                return next(remaining)
+            except StopIteration:
+                raise EOFError from None
+
+        monkeypatch.setattr('builtins.input', fake_input)
+
+    @pytest.mark.parametrize(
+        ('answer', 'expected'),
+        [
+            ('1',     'all'),
+            ('3',     'caddy'),
+            (' 2 ',   'autoplex'),
+            ('caddy', 'caddy'),
+            ('all',   'all'),
+        ],
+    )
+    def test_accepts_a_number_or_a_name(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        answer: str,
+        expected: str,
+    ) -> None:
+        """
+        Test that an entry selects the option by its 1-based number or by its exact name
+        """
+        self._answer(monkeypatch, answer)
+        assert run.select_option('Pick one:', ['all', 'autoplex', 'caddy']) == expected
+
+    @pytest.mark.parametrize('bad_answer', ['0', '4', '-1', 'plex', 'CADDY'])
+    def test_reprompts_on_an_unrecognized_entry(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        bad_answer: str,
+    ) -> None:
+        """
+        Test that an out-of-range number or unknown name is reported and the prompt repeats
+        """
+        self._answer(monkeypatch, bad_answer, '2')
+
+        assert run.select_option('Pick one:', ['all', 'autoplex', 'caddy']) == 'autoplex'
+        assert f'Not a valid choice: {bad_answer}' in _output(capsys)
+
+    def test_lists_every_option_with_its_number(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that the heading and the numbered options are printed before the prompt
+        """
+        self._answer(monkeypatch, '1')
+        run.select_option('Pick one:', ['all', 'caddy'])
+
+        lines = [line.strip() for line in _output(capsys).splitlines()]
+        assert lines[:3] == ['Pick one:', '1) all', '2) caddy']
+
+    def test_empty_entry_cancels(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that pressing Enter without typing selects nothing
+        """
+        self._answer(monkeypatch, '')
+        assert run.select_option('Pick one:', ['all']) is None
+
+    def test_closed_stdin_cancels(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that EOF selects nothing instead of raising
+        """
+        self._answer(monkeypatch)
+        assert run.select_option('Pick one:', ['all']) is None
+
+
 class TestNasDeploy:
     """
     Tests for the nas-deploy command
@@ -254,13 +400,101 @@ class TestNasDeploy:
         """
         monkeypatch.setattr(run, 'resolve_reachable_nas', lambda: ('h', 'u'))
 
-    def test_registered_as_a_script_only_nas_command(self) -> None:
+    def test_registered_in_the_deploy_group_and_makefile(self) -> None:
         """
-        Test that nas-deploy is grouped under NAS and kept out of the Makefile (its argument is required)
+        Test that nas-deploy is grouped under Bootstrap & Deploy and gets a Makefile target (its service is optional)
         """
         cmd = run.REGISTERED_COMMANDS['nas-deploy']
         assert cmd.group       == 'Bootstrap & Deploy'
-        assert cmd.script_only is True
+        assert cmd.script_only is False
+
+    def test_service_argument_is_optional(self) -> None:
+        """
+        Test that the parser accepts nas-deploy with and without a service
+        """
+        parser = argparse.ArgumentParser()
+        run.get_commands()['nas-deploy'].add_arguments(parser)
+
+        assert parser.parse_args([]).service            is None
+        assert parser.parse_args(['glance']).service    == 'glance'
+        assert parser.parse_args(['--dry-run']).dry_run is True
+
+    def test_prompts_for_a_service_when_none_is_given(
+        self,
+        fake_shell: FakeShell,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """
+        Test that the chosen service is deployed, with 'all' offered first and every service listed after it
+        """
+        offered: list[list[str]] = []
+
+        def choose(_prompt: str, options: list[str]) -> str:
+            offered.append(options)
+            return options[-1]
+
+        monkeypatch.setattr(sys.stdin,   'isatty',        lambda: True)
+        monkeypatch.setattr(run,         'list_services', lambda: ['caddy', 'glance'])
+        monkeypatch.setattr(run,         'select_option', choose)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run.get_commands()['nas-deploy'](argparse.Namespace(service=None, dry_run=False))
+
+        assert exc_info.value.code == 0
+        assert offered             == [['all', 'caddy', 'glance']]
+        assert fake_shell.find('bash')[0] == ['bash', str(run.NAS_DEPLOY_SCRIPT), 'glance']
+
+    def test_a_given_service_skips_the_prompt(self, fake_shell: FakeShell, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that naming a service never prompts, even on a terminal
+        """
+        def unexpected(*_args: object, **_kwargs: object) -> str:
+            raise AssertionError('the prompt must not run when a service is given')
+
+        monkeypatch.setattr(sys.stdin, 'isatty',        lambda: True)
+        monkeypatch.setattr(run,       'select_option', unexpected)
+
+        with pytest.raises(SystemExit):
+            run.get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
+
+        assert fake_shell.find('bash')[0][-1] == 'glance'
+
+    def test_cancelling_the_prompt_deploys_nothing(
+        self,
+        fake_shell: FakeShell,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that an empty answer exits as user-cancelled before the NAS is probed or anything runs
+        """
+        monkeypatch.setattr(sys.stdin, 'isatty',        lambda: True)
+        monkeypatch.setattr(run,       'select_option', lambda *_args, **_kwargs: None)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run.get_commands()['nas-deploy'](argparse.Namespace(service=None, dry_run=False))
+
+        assert exc_info.value.code == run.ExitCode.USER_CANCELLED
+        assert 'Cancelled' in _output(capsys)
+        assert fake_shell.calls == []
+
+    def test_no_service_without_a_terminal_fails_instead_of_hanging(
+        self,
+        fake_shell: FakeShell,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that a missing service with no terminal to prompt on exits 1 with a remedy
+        """
+        monkeypatch.setattr(sys.stdin, 'isatty', lambda: False)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run.get_commands()['nas-deploy'](argparse.Namespace(service=None, dry_run=False))
+
+        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert "pass a service or 'all'" in _output(capsys)
+        assert fake_shell.calls == []
 
     def test_runs_the_shared_script_with_the_resolved_target(self, fake_shell: FakeShell) -> None:
         """
@@ -310,22 +544,6 @@ class TestNasDeploy:
         with pytest.raises(SystemExit):
             run.get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
         assert 'uncommitted' not in _output(capsys)
-
-
-def _provision_args(**overrides: Any) -> argparse.Namespace:  # Any: free-form Namespace field overrides
-    """
-    Build the Namespace nas-provision receives, with every option at its default unless overridden
-    """
-    fields: dict[str, Any] = {  # Any: heterogeneous Namespace fields
-        'tags':       None,
-        'limit':      None,
-        'check':      False,
-        'diff':       False,
-        'extra_vars': None,
-        'verbose':    0,
-    }
-    fields.update(overrides)
-    return argparse.Namespace(**fields)
 
 
 class TestBuildNasProvisionCommand:
