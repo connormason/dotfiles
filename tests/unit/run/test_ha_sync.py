@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import io
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -70,47 +71,96 @@ class FakeVM(NamedTuple):
     """
     Local stand-ins for the Home Assistant VM and the repo checkout
     """
-    remote: Path    # the VM's /config
-    local:  Path    # homeassistant/config/ in the repo
-    log:    Path    # one line per `ha ...` invocation
+    remote:   Path    # the VM's /config
+    local:    Path    # homeassistant/config/ in the repo
+    log:      Path    # one line per `ha ...` invocation
+    sudo_log: Path    # one line per `sudo ...` invocation
+
+
+def _write_shim(path: Path, body: str) -> None:
+    """
+    Write an executable sh script
+    """
+    path.write_text(f'#!/bin/sh\n{body}', encoding='utf-8')
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
 
 @pytest.fixture
 def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
     """
     Point run.py at a fake VM (local sh + temp /config + fake ha CLI) and a temp repo directory
+
+    The VM's SSH login is an unprivileged user and its /config is root-owned: shims for ``tar -x`` and ``rm`` refuse to
+    write unless they were launched through the fake ``sudo``, as on the real Advanced SSH & Terminal app. The ``ha``
+    CLI likewise rejects calls that lack the Supervisor token, which only a login shell (``sh -lc``) provides
     """
-    remote = tmp_path / 'vm' / 'config'
-    local  = tmp_path / 'repo' / 'homeassistant' / 'config'
-    log    = tmp_path / 'ha.log'
-    bindir = tmp_path / 'bin'
+    remote   = tmp_path / 'vm' / 'config'
+    local    = tmp_path / 'repo' / 'homeassistant' / 'config'
+    log      = tmp_path / 'ha.log'
+    sudo_log = tmp_path / 'sudo.log'
+    bindir   = tmp_path / 'bin'
+    real_tar = shutil.which('tar')
+    real_rm  = shutil.which('rm')
+    real_sh  = shutil.which('sh')
 
     remote.mkdir(parents=True)
     local.mkdir(parents=True)
     bindir.mkdir()
 
-    ha = bindir / 'ha'
-    ha.write_text(
-        '#!/bin/sh\n'
+    _write_shim(
+        bindir / 'ha',
+        'if [ -z "$HA_FAKE_TOKEN" ]; then\n'
+        '    echo "Error: unauthorized: missing or invalid API token" >&2; exit 1\n'
+        'fi\n'
         'echo "$@" >> "$HA_FAKE_LOG"\n'
         'if [ "$1 $2" = "core check" ] && grep -q BROKEN "$HA_FAKE_CONFIG/configuration.yaml"; then\n'
         '    echo "Invalid config"; exit 1\n'
         'fi\n',
-        encoding='utf-8',
     )
-    ha.chmod(ha.stat().st_mode | stat.S_IXUSR)
+    _write_shim(
+        bindir / 'sh',
+        'if [ "$1" = "-lc" ]; then\n'
+        '    shift\n'
+        f'    HA_FAKE_TOKEN=1 exec {real_sh} -c "$@"\n'
+        'fi\n'
+        f'exec {real_sh} "$@"\n',
+    )
+    _write_shim(
+        bindir / 'sudo',
+        'echo "$@" >> "$HA_FAKE_SUDO_LOG"\n'
+        '[ "$1" = "-n" ] && shift\n'
+        'HA_FAKE_ROOT=1 exec "$@"\n',
+    )
+    _write_shim(
+        bindir / 'tar',
+        'if [ "$1" = "-xf" ] && [ -z "$HA_FAKE_ROOT" ]; then\n'
+        '    echo "tar: can\'t remove old file automations.yaml: Permission denied" >&2; exit 1\n'
+        'fi\n'
+        f'exec {real_tar} "$@"\n',
+    )
+    _write_shim(
+        bindir / 'rm',
+        'if [ -z "$HA_FAKE_ROOT" ]; then\n'
+        '    echo "rm: can\'t remove file: Permission denied" >&2; exit 1\n'
+        'fi\n'
+        f'exec {real_rm} "$@"\n',
+    )
 
-    monkeypatch.setenv('PATH',           f'{bindir}{os.pathsep}{os.environ["PATH"]}')
-    monkeypatch.setenv('HA_FAKE_LOG',    str(log))
-    monkeypatch.setenv('HA_FAKE_CONFIG', str(remote))
+    monkeypatch.setenv('PATH',             f'{bindir}{os.pathsep}{os.environ["PATH"]}')
+    monkeypatch.delenv('HA_FAKE_ROOT',     raising=False)
+    monkeypatch.delenv('HA_FAKE_TOKEN',    raising=False)
+    monkeypatch.setenv('HA_FAKE_LOG',      str(log))
+    monkeypatch.setenv('HA_FAKE_SUDO_LOG', str(sudo_log))
+    monkeypatch.setenv('HA_FAKE_CONFIG',   str(remote))
 
     monkeypatch.setattr(run, 'ha_ssh_command',              lambda remote_command: ['sh', '-c', remote_command])
+    monkeypatch.setattr(run, 'HA_USER',                     'connormason')
     monkeypatch.setattr(run, 'HA_REMOTE_CONFIG_DIR',        str(remote))
     monkeypatch.setattr(run, 'HA_CONFIG_DIR',               local)
     monkeypatch.setattr(run, 'DOTFILES_DIR',                tmp_path / 'repo')
     monkeypatch.setattr(run, 'ha_config_has_local_changes', lambda: False)
 
-    return FakeVM(remote=remote, local=local, log=log)
+    return FakeVM(remote=remote, local=local, log=log, sudo_log=sudo_log)
 
 
 # ==================================================================================================
@@ -288,6 +338,41 @@ class TestHaSshCommand:
         assert 'echo' in cmd[-1]
 
 
+class TestHaPrivileged:
+    """
+    Tests for ha_privileged
+    """
+    @pytest.mark.parametrize(
+        ('user', 'expected'),
+        [
+            ('root',        'tar -xf -'),
+            ('connormason', 'sudo -n tar -xf -'),
+        ],
+    )
+    def test_escalates_only_for_non_root_logins(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        user: str,
+        expected: str,
+    ) -> None:
+        """
+        Test that the snippet is prefixed with non-interactive sudo unless the SSH login is already root
+        """
+        monkeypatch.setattr(run, 'HA_USER', user)
+        assert run.ha_privileged('tar -xf -') == expected
+
+
+class TestHaCli:
+    """
+    Tests for ha_cli
+    """
+    def test_runs_the_subcommand_in_a_login_shell(self) -> None:
+        """
+        Test that the ha CLI is wrapped in a login shell, which is what supplies its Supervisor token
+        """
+        assert run.ha_cli('core check') == "sh -lc 'ha core check'"
+
+
 class TestHaConfigHasLocalChanges:
     """
     Tests for ha_config_has_local_changes
@@ -448,6 +533,35 @@ class TestHaPush:
             '.storage/auth':                 'keep me too',
         }
         assert vm.log.read_text(encoding='utf-8').splitlines() == ['core check']
+
+    def test_writes_to_root_owned_config_go_through_sudo(self, vm: FakeVM) -> None:
+        """
+        Test that the upload and the deletion are escalated, while the config check and the fetch are not
+        """
+        _write(vm.remote / 'configuration.yaml', 'old')
+        _write(vm.remote / 'scripts.yaml',       'delete me')
+        _write(vm.local  / 'configuration.yaml', 'new')
+
+        _push()
+
+        assert vm.sudo_log.read_text(encoding='utf-8').splitlines() == [
+            '-n tar -xf -',
+            '-n rm -f -- scripts.yaml',
+        ]
+
+    def test_root_login_writes_without_sudo(self, vm: FakeVM, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that a root SSH login never invokes sudo
+        """
+        monkeypatch.setattr(run, 'HA_USER', 'root')
+        monkeypatch.setenv('HA_FAKE_ROOT', '1')
+        _write(vm.remote / 'configuration.yaml', 'old')
+        _write(vm.local  / 'configuration.yaml', 'new')
+
+        _push()
+
+        assert _tree(vm.remote) == {'configuration.yaml': 'new'}
+        assert not vm.sudo_log.exists()
 
     def test_uploaded_files_get_mode_0644(self, vm: FakeVM) -> None:
         """
