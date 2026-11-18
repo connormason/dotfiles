@@ -3758,9 +3758,8 @@ class HaPullCommand(Command):
     """
     Pull the tracked Home Assistant YAML from the HAOS VM into homeassistant/config/
     """
-    name:        ClassVar[str]  = 'ha-pull'
-    group:       ClassVar[str]  = 'Bootstrap & Deploy'
-    script_only: ClassVar[bool] = True
+    name:  ClassVar[str]  = 'ha-pull'
+    group: ClassVar[str]  = 'Bootstrap & Deploy'
 
     class Args(argparse.Namespace):
         dry_run: bool       # --dry-run
@@ -3810,11 +3809,10 @@ class HaPullCommand(Command):
 
 class HaPushCommand(Command):
     """
-    Push homeassistant/config/ to the HAOS VM, validate it with `ha core check`, and roll back on failure
+    Push homeassistant/config/ to the HAOS VM, validate it with 'ha core check', and roll back on failure
     """
-    name:        ClassVar[str]  = 'ha-push'
-    group:       ClassVar[str]  = 'Bootstrap & Deploy'
-    script_only: ClassVar[bool] = True
+    name:  ClassVar[str]  = 'ha-push'
+    group: ClassVar[str]  = 'Bootstrap & Deploy'
 
     class Args(argparse.Namespace):
         dry_run: bool       # --dry-run
