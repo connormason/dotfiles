@@ -35,9 +35,12 @@ deleted on the other, so the allowlisted part of the two trees always ends up id
    that runs `run.py` in its `authorized_keys` option, and start it. Password logins are not used: both commands run
    `ssh` with `BatchMode=yes`.
 
-2. Check the connection: `ssh root@homeassistant.local true`. The defaults can be overridden per machine with
+2. Check the connection: `ssh connormason@homeassistant.local true`. The defaults can be overridden per machine with
    `DOTFILES_HA_HOST`, `DOTFILES_HA_USER` and `DOTFILES_HA_PORT`. A machine outside the LAN (the Mac away from home)
    reaches the VM through the NAS with a `ProxyJump` entry for the VM's host in `~/.ssh/config`.
+
+   Unless `DOTFILES_HA_USER` is `root`, the login needs passwordless `sudo` on the VM: `/config` and its files are
+   root-owned, so `ha-push` writes and deletes through `sudo -n`.
 
 3. Seed the repo from the live instance and commit the result:
 
@@ -52,20 +55,17 @@ deleted on the other, so the allowlisted part of the two trees always ends up id
 python3 run.py ha-pull              # VM -> repo (refuses when tracked files have uncommitted edits; --force overrides)
 $EDITOR homeassistant/config/automations.yaml
 python3 run.py ha-push --dry-run    # show the diff the VM would get
-python3 run.py ha-push              # confirm, upload, `ha core check`, roll back if the check fails
+python3 run.py ha-push              # confirm, upload, `ha core check`, roll back if the upload or the check fails
 python3 run.py ha-push --restart    # same, then restart Core (configuration.yaml changes need it)
 ```
 
 - Both commands diff against the VM first. `ha-pull` prints what the VM has that the repo lacks; `ha-push` prints
   exactly what it will change on the VM.
-- `ha-push` fetches a snapshot of the VM's tracked files before it writes. When `ha core check` rejects the result, it
-  uploads the snapshot back, so a bad push leaves the VM as it was.
+- `ha-push` fetches a snapshot of the VM's tracked files before it writes. When the upload fails partway or
+  `ha core check` rejects the result, it uploads the snapshot back, so a bad push leaves the VM as it was. If the
+  rollback itself fails, the output says the VM may hold a partial push.
+- The `ha` CLI authenticates with a Supervisor token that the VM's login shell exports, so `ha-push` runs it through
+  `sh -lc`; a bare `ssh host 'ha ...'` fails with `unauthorized: missing or invalid API token`.
 - Pull before editing. The UI automation editor rewrites `automations.yaml` wholesale, so an edit made in the UI and
   another made in the repo cannot be merged. `ha-push` overwrites whatever the VM has with the repo's version.
 - `ha-push` refuses to run when the repo holds no tracked files, so an empty checkout cannot wipe the VM.
-
-## Clarifications needed
-
-- Whether `ha core check` is on `PATH` for a non-interactive `ssh host command` in the Advanced SSH & Terminal app (it
-  needs the Supervisor token). The first `ha-push` will show: if the check fails to run, the push rolls back, and the
-  printed output says why.
