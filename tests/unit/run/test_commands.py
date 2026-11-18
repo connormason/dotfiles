@@ -111,7 +111,7 @@ class TestCommandRegistration:
         """
         assert list(run.REGISTERED_COMMANDS) == [
             'install', 'dev', 'shell', 'status', 'doctor', 'clean',
-            'bootstrap', 'nas-provision', 'nas-deploy',
+            'bootstrap', 'nas-provision', 'nas-deploy', 'ha-pull', 'ha-push',
             'stow', 'render', 'track-claude',
             'inventory-hosts', 'inventory-status', 'update-inventory', 'vault-decrypt', 'vault-encrypt',
             'install-uv', 'install-hatch',

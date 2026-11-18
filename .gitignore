@@ -402,6 +402,10 @@ inventory/
 # Ansible Vault password
 vault_password.txt
 
+# Home Assistant secrets and UI-managed state (only the YAML allowlist in run.py HA_SYNC_PATHS is tracked)
+/homeassistant/config/secrets.yaml
+/homeassistant/config/.storage/
+
 # Temp cache data
 .ansible/.lock
 .tmp/

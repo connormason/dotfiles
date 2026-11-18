@@ -15,6 +15,10 @@ python3 run.py nas-provision
 # Deploy Compose services to the NAS (the script CI uses); --dry-run previews
 python3 run.py nas-deploy glance --dry-run
 python3 run.py nas-deploy glance
+
+# Home Assistant YAML (the HAOS VM's /config <-> homeassistant/config/, over SSH); --dry-run previews both
+python3 run.py ha-pull
+python3 run.py ha-push --restart
 ```
 
 ## Running Ansible Playbooks (NAS)
@@ -143,9 +147,10 @@ python3 run.py docs-audit
 
 ## Using Make (auto-generated)
 
-`python3 run.py makefile` writes the `Makefile`: one target per registered command except the script-only `nas-deploy`,
-each running `python3 run.py <command>` with no arguments. Anything that takes an option or an argument
-(`nas-provision --tags ...`, `nas-deploy <svc>`, `bootstrap --list`, `stow -n`) goes through `python3 run.py`.
+`python3 run.py makefile` writes the `Makefile`: one target per registered command, each running
+`python3 run.py <command>` with no arguments. Anything that takes an option or an argument
+(`nas-provision --tags ...`, `nas-deploy --dry-run`, `bootstrap --list`, `stow -n`) goes through `python3 run.py`.
+`make nas-deploy` prompts for a service instead.
 
 ```bash
 # Show available targets
@@ -155,6 +160,7 @@ make help
 make update-inventory
 make clean
 make pre
+make nas-deploy
 ```
 
 ## Git Hooks (prek)

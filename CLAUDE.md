@@ -22,7 +22,8 @@ For detailed reference, load on-demand:
    deploys Compose services. CI does the same on pushes to `main` that touch `services/`: `.github/workflows/deploy.yml`
    calls `scripts/nas/deploy-services.sh`, the script behind `nas-deploy`.
 3. **`run.py`** — repository-management CLI (inventory and vault helpers, codebase chores and prek hook management
-   (`run-hooks`, `prepare-hooks`, `install-hooks`), NAS provisioning and deploy, wrappers for the stow engine, and
+   (`run-hooks`, `prepare-hooks`, `install-hooks`), NAS provisioning and deploy, Home Assistant YAML sync (`ha-pull`,
+   `ha-push`; the tracked files live in [`homeassistant/`](homeassistant/README.md)), wrappers for the stow engine, and
    `track-claude` for ingesting local Claude config). `Makefile` wraps these (`make help`). Full command reference in
    [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 

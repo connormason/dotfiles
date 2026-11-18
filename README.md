@@ -153,6 +153,7 @@ Configures the home NAS server with:
 | [`roles/`](roles/)                       | Ansible roles for the NAS                                                       | [roles/README.md](roles/README.md)                       |
 | [`services/`](services/)                 | Docker Compose definitions for the NAS stack                                    | [services/README.md](services/README.md)                 |
 | [`vms/`](vms/)                           | Virtual machines on the NAS (Home Assistant OS)                                 | [vms/README.md](vms/README.md)                           |
+| [`homeassistant/`](homeassistant/)       | Tracked Home Assistant YAML, synced with the VM by `ha-pull` / `ha-push`        | [homeassistant/README.md](homeassistant/README.md)       |
 | [`tests/`](tests/)                       | pytest suite: unit and integration tests, fixtures                              | [tests/README.md](tests/README.md)                       |
 | [`archive/`](archive/)                   | Frozen reference material (retired Ansible macOS setup and YAML Home Assistant) | [archive/README.md](archive/README.md)                   |
 | [`docs/`](docs/)                         | Extended documentation, notes, and plans                                        | [docs/README.md](docs/README.md)                         |
@@ -347,10 +348,10 @@ See [Direct execution](playbooks/README.md#direct-execution) for the dry run and
 
 ### Using Make Targets<a name="using-make-targets"></a>
 
-`python3 run.py makefile` writes the `Makefile`: one target per registered command except `nas-deploy`, which is
-script-only. Each target runs `python3 run.py <command>` with no arguments, so anything that takes an option or an
-argument (`nas-provision --tags ...`, `nas-deploy <service>`, `bootstrap --list`, `stow -n`) goes through
-`python3 run.py` directly.
+`python3 run.py makefile` writes the `Makefile`: one target per registered command. Each target runs
+`python3 run.py <command>` with no arguments, so anything that takes an option or an argument
+(`nas-provision --tags ...`, `nas-deploy --dry-run`, `bootstrap --list`, `stow -n`) goes through `python3 run.py`
+directly. `make nas-deploy` works without an argument because the command prompts for a service.
 
 ```bash
 # Generate Makefile
@@ -361,6 +362,7 @@ make help
 make update-inventory
 make clean
 make pre
+make nas-deploy         # prompts for a service to deploy
 ```
 
 ## Project Structure<a name="project-structure"></a>
@@ -398,6 +400,9 @@ dotfiles/
 │
 ├── vms/                                    # Virtual machines on the NAS (libvirt/KVM)
 │   └── haos/                               # Home Assistant OS: README.md, bridge.sh, setup.sh
+│
+├── homeassistant/                          # Tracked Home Assistant YAML (`run.py ha-pull` / `ha-push`)
+│   └── config/                             # Mirror of the allowlisted part of the VM's /config
 │
 ├── archive/                                # Frozen reference material (not maintained)
 │   ├── ansible-macos/                      # Retired Ansible macOS setup (snapshot of 1ef973a)
@@ -460,7 +465,8 @@ Media server stack, defined in [`services/`](services/README.md):
 - **Network services**: Caddy reverse proxy serving a subset of the services over Tailscale HTTPS (the PiHole definition
   is disabled)
 - **Dashboard**: Glance
-- **Home automation** (outside `services/`): Home Assistant runs as a VM (see [`vms/haos/`](vms/haos/README.md))
+- **Home automation** (outside `services/`): Home Assistant runs as a VM (see [`vms/haos/`](vms/haos/README.md)); its
+  YAML configuration is tracked in [`homeassistant/`](homeassistant/README.md)
 - **Support**: Autoplex (copies completed downloads into the library trees)
 
 ### Python CLI (`run.py`)<a name="python-cli-runpy"></a>
