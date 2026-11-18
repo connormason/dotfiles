@@ -11,15 +11,18 @@ the tracked files between the two over SSH.
 `homeassistant/config/` mirrors these entries of the VM's `/config` (the `HA_SYNC_PATHS` allowlist in
 [`run.py`](../run.py)):
 
-| Entry                                                       | Purpose                                        |
-| ----------------------------------------------------------- | ---------------------------------------------- |
-| `configuration.yaml`                                        | Top-level configuration and `!include`s        |
-| `automations.yaml`, `scripts.yaml`, `scenes.yaml`           | Files the UI editors read and rewrite          |
-| `blueprints/`, `themes/`, `custom_components/`, `packages/` | Directories of the same names, when they exist |
+| Entry                                             | Purpose                                        |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `configuration.yaml`                              | Top-level configuration and `!include`s        |
+| `automations.yaml`, `scripts.yaml`, `scenes.yaml` | Files the UI editors read and rewrite          |
+| `blueprints/`, `themes/`, `packages/`             | Directories of the same names, when they exist |
 
 Everything else stays on the VM and is covered by Home Assistant's own [backups](../vms/haos/README.md#fresh-install):
 
 - `.storage/` (integrations, devices, entities, auth tokens), the recorder database, logs, `.cloud/`, `deps/`, `tts/`.
+- `custom_components/`. HACS installs and updates its integrations there, so the directory holds vendored upstream code
+  (HACS alone is about 50 MB) that a push would overwrite with a stale copy. HACS records what it installed in
+  `.storage/`.
 - `secrets.yaml`. Its real values never enter the repo. [`config/secrets.yaml.example`](config/secrets.yaml.example)
   lists the keys, and `.gitignore` blocks `secrets.yaml` here as a guard.
 

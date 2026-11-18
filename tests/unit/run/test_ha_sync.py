@@ -161,8 +161,9 @@ class TestDiffTrees:
 
         _write(new / 'secrets.yaml')
         _write(new / '.storage' / 'auth')
-        _write(new / 'custom_components' / 'x' / '__pycache__' / 'x.pyc')
-        _write(new / 'custom_components' / 'x' / '.DS_Store')
+        _write(new / 'custom_components' / 'hacs' / '__init__.py')
+        _write(new / 'packages' / 'x' / '__pycache__' / 'x.pyc')
+        _write(new / 'packages' / 'x' / '.DS_Store')
         _write(new / 'real.txt')
         (new / 'scripts.yaml').symlink_to(new / 'real.txt')
 
@@ -203,25 +204,25 @@ class TestTarStream:
         src = tmp_path / 'src'
         _write(src / 'configuration.yaml', 'cfg').chmod(0o600)
 
-        script = _write(src / 'custom_components' / 'x' / 'run.sh', '#!/bin/sh')
+        script = _write(src / 'packages' / 'x' / 'run.sh', '#!/bin/sh')
         script.chmod(0o700)
 
         buffer = io.BytesIO()
-        run.pack_ha_files(src, ['configuration.yaml', 'custom_components/x/run.sh'], buffer)
+        run.pack_ha_files(src, ['configuration.yaml', 'packages/x/run.sh'], buffer)
 
         buffer.seek(0)
         with tarfile.open(fileobj=buffer, mode='r:') as tar:
             members = {m.name: m for m in tar.getmembers()}
 
-        assert members['configuration.yaml'].mode         == 0o644
-        assert members['custom_components/x/run.sh'].mode == 0o755
+        assert members['configuration.yaml'].mode == 0o644
+        assert members['packages/x/run.sh'].mode  == 0o755
         assert all((m.uid, m.gid, m.uname, m.gname) == (0, 0, 'root', 'root') for m in members.values())
 
         buffer.seek(0)
         dest = tmp_path / 'dest'
         run.unpack_ha_stream(buffer, dest)
-        assert _tree(dest) == {'configuration.yaml': 'cfg', 'custom_components/x/run.sh': '#!/bin/sh'}
-        assert stat.S_IMODE((dest / 'custom_components' / 'x' / 'run.sh').stat().st_mode) == 0o644
+        assert _tree(dest) == {'configuration.yaml': 'cfg', 'packages/x/run.sh': '#!/bin/sh'}
+        assert stat.S_IMODE((dest / 'packages' / 'x' / 'run.sh').stat().st_mode) == 0o644
 
     @pytest.mark.parametrize('name', ['../escape.yaml', '/abs/escape.yaml', 'blueprints/../../escape.yaml'])
     def test_unpack_rejects_unsafe_paths(self, tmp_path: Path, name: str) -> None:
@@ -322,19 +323,20 @@ class TestHaPull:
         """
         Test that tracked files and directories arrive while secrets, .storage, and the database stay behind
         """
-        _write(vm.remote / 'configuration.yaml',                                'cfg')
-        _write(vm.remote / 'automations.yaml',                                  '[]')
-        _write(vm.remote / 'blueprints' / 'automation' / 'm.yaml',              'bp')
-        _write(vm.remote / 'custom_components' / 'x' / '__pycache__' / 'x.pyc', 'pyc')
-        _write(vm.remote / 'secrets.yaml',                                      'token: hunter2')
-        _write(vm.remote / '.storage' / 'auth',                                 'secret')
-        _write(vm.remote / 'home-assistant_v2.db',                              'db')
+        _write(vm.remote / 'configuration.yaml',                         'cfg')
+        _write(vm.remote / 'automations.yaml',                           '[]')
+        _write(vm.remote / 'blueprints' / 'automation' / 'm.yaml',       'bp')
+        _write(vm.remote / 'packages' / 'x' / '__pycache__' / 'x.pyc',   'pyc')
+        _write(vm.remote / 'custom_components' / 'hacs' / '__init__.py', 'hacs')
+        _write(vm.remote / 'secrets.yaml',                               'token: hunter2')
+        _write(vm.remote / '.storage' / 'auth',                          'secret')
+        _write(vm.remote / 'home-assistant_v2.db',                       'db')
 
         _pull()
         assert _tree(vm.local) == {
-            'configuration.yaml':                  'cfg',
-            'automations.yaml':                    '[]',
-            'blueprints/automation/m.yaml':        'bp',
+            'configuration.yaml':           'cfg',
+            'automations.yaml':             '[]',
+            'blueprints/automation/m.yaml': 'bp',
         }
 
     def test_second_pull_reports_already_in_sync(self, vm: FakeVM, capsys: pytest.CaptureFixture[str]) -> None:

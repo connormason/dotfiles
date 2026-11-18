@@ -190,7 +190,6 @@ HA_SYNC_PATHS: tuple[str, ...] = (
     'scenes.yaml',
     'blueprints',
     'themes',
-    'custom_components',
     'packages',
 )
 
