@@ -19,15 +19,20 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import quote
+from urllib.parse import urlparse
 
 import tomllib
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from collections.abc import Sequence
+    from typing import TextIO
 
 # ==================================================================================================
 # Constants and errors
@@ -175,3 +180,304 @@ def default_config_path() -> Path:
     base = os.environ.get('XDG_CONFIG_HOME')
     root = Path(base) if base else Path.home() / '.config'
     return root / 'gh-labels' / 'labels.toml'
+
+
+# ==================================================================================================
+# Text styling
+#
+# Reduced copy of run.py's style()/printf(): same names and semantics, limited to the options used here.
+# ==================================================================================================
+
+NO_COLOR = bool(os.environ.get('NO_COLOR'))
+
+ANSI_COLOR: dict[str, int] = {
+    'bright_red':    91,
+    'bright_green':  92,
+    'bright_yellow': 93,
+    'bright_cyan':   96,
+    'bright_white':  97,
+    'magenta':       35,
+}
+ANSI_RESET_ALL = '\033[0m'
+
+
+def style(text: object = '', *, fg: str | None = None, bold: bool | None = None, dim: bool | None = None) -> str:
+    """
+    Style text with ANSI escape codes. Returns the text unstyled when ``NO_COLOR`` is set.
+
+    :param text: the value to style
+    :param fg: foreground color name from ``ANSI_COLOR``
+    :param bold: enable or disable bold mode
+    :param dim: enable or disable dim mode
+    :return: styled text, ending with a reset code
+    """
+    if NO_COLOR:
+        return str(text)
+
+    bits: list[str] = []
+    if fg is not None:
+        bits.append(f'\033[{ANSI_COLOR[fg]}m')
+    if bold is not None:
+        bits.append(f'\033[{1 if bold else 22}m')
+    if dim is not None:
+        bits.append(f'\033[{2 if dim else 22}m')
+    bits.append(str(text))
+    bits.append(ANSI_RESET_ALL)
+    return ''.join(bits)
+
+
+def printf(text: object = '', *, indent: int = 0, file: TextIO | None = None) -> None:
+    """
+    Print text, optionally indented, to stdout or the given stream.
+
+    :param text: the value to print
+    :param indent: number of leading spaces
+    :param file: destination stream; defaults to the current ``sys.stdout``
+    """
+    print(f'{" " * indent}{text}', file=file or sys.stdout)
+
+
+# ==================================================================================================
+# GitHub access (via the gh CLI)
+# ==================================================================================================
+
+REPO_SPEC = re.compile(r'(?:(?P<host>[^/\s]+)/)?(?P<owner>[\w.-]+)/(?P<name>[\w.-]+)')
+
+
+@dataclass(frozen=True)
+class RepoRef:
+    """
+    A GitHub repository. ``host`` is set only when stated explicitly or detected from a remote URL.
+    """
+    host:  str | None
+    owner: str
+    name:  str
+
+    @property
+    def labels_endpoint(self) -> str:
+        """
+        REST endpoint of the repository's label collection.
+
+        :return: ``repos/OWNER/REPO/labels``
+        """
+        return f'repos/{self.owner}/{self.name}/labels'
+
+    def __str__(self) -> str:
+        return '/'.join(part for part in (self.host, self.owner, self.name) if part)
+
+
+def parse_repo(spec: str) -> RepoRef:
+    """
+    Parse ``[HOST/]OWNER/REPO``.
+
+    :param spec: repository spec as given on the command line
+    :raises LabelsError: if the spec is malformed
+    :return: the parsed reference
+    """
+    match = REPO_SPEC.fullmatch(spec)
+    if match is None:
+        raise LabelsError(f'invalid repo {spec!r}: expected [HOST/]OWNER/REPO')
+    return RepoRef(match['host'], match['owner'], match['name'])
+
+
+def run_gh(*args: str) -> str:
+    """
+    Run ``gh`` with the given arguments (no shell) and return its stdout.
+
+    :param args: arguments after ``gh``
+    :raises LabelsError: if ``gh`` is missing or exits non-zero
+    :return: captured standard output
+    """
+    try:
+        result = subprocess.run(['gh', *args], capture_output=True, text=True, check=True)
+    except FileNotFoundError:
+        raise LabelsError('the GitHub CLI (gh) is not installed or not on PATH') from None
+    except subprocess.CalledProcessError as e:
+        detail = (e.stderr or '').strip() or f'exit status {e.returncode}'
+        raise LabelsError(f'gh {args[0]} failed: {detail}') from e
+    return result.stdout
+
+
+def gh_api(
+    repo: RepoRef,
+    endpoint: str,
+    *,
+    method: str = 'GET',
+    fields: Mapping[str, str] | None = None,
+    paginate: bool = False,
+) -> str:
+    """
+    Call the GitHub REST API through ``gh api``.
+
+    :param repo: repository whose host (if any) selects the API host
+    :param endpoint: REST path, e.g. ``repos/OWNER/REPO/labels``
+    :param method: HTTP method
+    :param fields: string fields sent as raw request parameters
+    :param paginate: follow pagination and slurp every page into one JSON array
+    :return: response body
+    """
+    args = ['api', endpoint, '--method', method]
+    if repo.host:
+        args += ['--hostname', repo.host]
+    if paginate:
+        args += ['--paginate', '--slurp']
+    for key, value in (fields or {}).items():
+        args += ['--raw-field', f'{key}={value}']
+    return run_gh(*args)
+
+
+def current_repo() -> RepoRef:
+    """
+    Detect the repository of the current working directory via ``gh repo view``.
+
+    :raises LabelsError: if the directory is not a GitHub repository
+    :return: the repository, with the host taken from its URL
+    """
+    try:
+        url = json.loads(run_gh('repo', 'view', '--json', 'url'))['url']
+    except LabelsError as e:
+        raise LabelsError(f'{e}; pass --repo to choose a repository') from e
+    parsed = urlparse(url)
+    owner, name = parsed.path.strip('/').split('/')[:2]
+    return RepoRef(parsed.hostname, owner, name)
+
+
+def resolve_repo(spec: str | None) -> RepoRef:
+    """
+    Resolve the target repository.
+
+    :param spec: ``--repo`` value, or ``None`` to use the current directory's repository
+    :return: the repository to operate on
+    """
+    return parse_repo(spec) if spec else current_repo()
+
+
+def labels_from_api(rows: Sequence[Mapping[str, object]]) -> list[Label]:
+    """
+    Convert REST label objects to labels (lowercase color, ``None`` description as an empty string).
+
+    :param rows: label objects as returned by the API
+    :return: labels in API order
+    """
+    return [
+        Label(str(row['name']), str(row['color']).lower(), str(row.get('description') or ''))
+        for row in rows
+    ]
+
+
+def fetch_labels(repo: RepoRef) -> list[Label]:
+    """
+    Fetch every label of a repository.
+
+    :param repo: repository to read
+    :return: the repository's labels
+    """
+    pages = json.loads(gh_api(repo, f'{repo.labels_endpoint}?per_page=100', paginate=True))
+    return labels_from_api([row for page in pages for row in page])
+
+
+# ==================================================================================================
+# Reconciliation
+# ==================================================================================================
+
+
+@dataclass(frozen=True)
+class Plan:
+    """
+    The difference between the desired and existing label sets. ``update`` holds ``(existing, desired)`` pairs.
+    """
+    create:    list[Label]
+    update:    list[tuple[Label, Label]]
+    unchanged: list[Label]
+    extra:     list[Label]
+
+
+def build_plan(desired: Sequence[Label], existing: Sequence[Label]) -> Plan:
+    """
+    Diff the desired labels against a repository's labels, matching names case-insensitively.
+
+    :param desired: labels from the config
+    :param existing: labels currently on the repository
+    :return: what to create, update, leave alone, and what exists beyond the config
+    """
+    current = {label.name.casefold(): label for label in existing}
+    wanted  = {label.name.casefold() for label in desired}
+
+    create:    list[Label]                = []
+    update:    list[tuple[Label, Label]]  = []
+    unchanged: list[Label]                = []
+    for label in desired:
+        found = current.get(label.name.casefold())
+        if found is None:
+            create.append(label)
+        elif found == label:
+            unchanged.append(label)
+        else:
+            update.append((found, label))
+
+    extra = [label for label in existing if label.name.casefold() not in wanted]
+    return Plan(create, update, unchanged, extra)
+
+
+def label_fields(label: Label) -> dict[str, str]:
+    """
+    Build the request fields for creating a label.
+
+    :param label: the label to send
+    :return: ``name``, ``color``, and ``description`` as strings
+    """
+    return {'name': label.name, 'color': label.color, 'description': label.description}
+
+
+def _describe(label: Label) -> str:
+    """
+    Format a label as a styled ``name #color`` fragment.
+    """
+    return f'{style(label.name, fg="bright_white", bold=True)} {style("#" + label.color, dim=True)}'
+
+
+def apply_plan(repo: RepoRef, plan: Plan, *, prune: bool, dry_run: bool) -> None:
+    """
+    Report each action in a plan and, unless this is a dry run, perform it.
+
+    :param repo: repository to modify
+    :param plan: the computed difference
+    :param prune: delete labels that are not in the config
+    :param dry_run: print actions without calling the API
+    """
+    for label in plan.create:
+        printf(f'💾 {style("create", fg="bright_cyan")}  {_describe(label)}')
+        if not dry_run:
+            gh_api(repo, repo.labels_endpoint, method='POST', fields=label_fields(label))
+
+    for current, label in plan.update:
+        printf(f'🔄 {style("update", fg="bright_cyan")}  {_describe(current)} -> {_describe(label)}')
+        if not dry_run:
+            fields = {'new_name': label.name, 'color': label.color, 'description': label.description}
+            gh_api(repo, f'{repo.labels_endpoint}/{quote(current.name, safe="")}', method='PATCH', fields=fields)
+
+    for label in plan.extra:
+        if prune:
+            printf(f'🧹 {style("delete", fg="bright_cyan")}  {_describe(label)}')
+            if not dry_run:
+                gh_api(repo, f'{repo.labels_endpoint}/{quote(label.name, safe="")}', method='DELETE')
+        else:
+            printf(f'🟡 {style("extra", fg="bright_yellow")}   {_describe(label)}')
+
+
+def summarize(plan: Plan, *, prune: bool, dry_run: bool) -> None:
+    """
+    Print the closing summary of an apply run.
+
+    :param plan: the computed difference
+    :param prune: whether extras were (or would be) deleted
+    :param dry_run: whether nothing was changed
+    """
+    counts = f'{len(plan.create)} created, {len(plan.update)} updated, {len(plan.unchanged)} unchanged'
+    if dry_run:
+        printf(f'🟡 {style("Dry run, nothing changed", fg="bright_yellow")}: {counts}')
+    else:
+        printf(f'✅ {style("Done", fg="bright_green")}: {counts}')
+    if plan.extra:
+        verb = 'deleted' if prune and not dry_run else 'would be deleted' if prune else 'kept (use --prune to delete)'
+        printf(f'{len(plan.extra)} label(s) not in the config {verb}', indent=3)
