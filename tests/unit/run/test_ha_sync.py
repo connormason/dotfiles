@@ -117,7 +117,7 @@ def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
         'if [ -z "$HA_FAKE_TOKEN" ]; then\n'
         '    echo "Error: unauthorized: missing or invalid API token" >&2; exit 1\n'
         'fi\n'
-        'echo "$@" >> "$HA_FAKE_LOG"\n'
+        'printf "%s\\n" "$*" >> "$HA_FAKE_LOG"\n'
         'if [ "$1 $2" = "core check" ] && grep -q BROKEN "$HA_FAKE_CONFIG/configuration.yaml"; then\n'
         '    echo "Invalid config"; exit 1\n'
         'fi\n',
@@ -132,7 +132,7 @@ def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
     )
     _write_shim(
         bindir / 'sudo',
-        'echo "$@" >> "$HA_FAKE_SUDO_LOG"\n'
+        'printf "%s\\n" "$*" >> "$HA_FAKE_SUDO_LOG"\n'
         '[ "$1" = "-n" ] && shift\n'
         'HA_FAKE_ROOT=1 exec "$@"\n',
     )
