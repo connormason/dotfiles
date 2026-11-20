@@ -510,6 +510,66 @@ class TestApplyPlan:
         assert '--prune' in out
 
 
+class TestUpdateReport:
+    """
+    Tests for the per-field update lines printed by apply_plan
+    """
+    @staticmethod
+    def _update_line(
+        existing: tuple[str, str, str],
+        desired:  tuple[str, str, str],
+        capsys:   pytest.CaptureFixture[str],
+    ) -> str:
+        """
+        Dry-run a single update between two ``(name, color, description)`` triples and return the one line it printed.
+        """
+        plan = gh_labels.build_plan([Label(*desired)], [Label(*existing)])
+        gh_labels.apply_plan(REPO, plan, prune=False, dry_run=True)
+
+        lines = capsys.readouterr().out.splitlines()
+        assert len(lines) == 1
+        return lines[0]
+
+    def test_description_only_change(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that a description-only update shows both descriptions and omits the unchanged color
+        """
+        line = self._update_line(('bug', 'd73a4a', ''), ('bug', 'd73a4a', "Something isn't working"), capsys)
+
+        assert line.startswith('🔄 update')
+        assert 'bug' in line
+        assert 'description \'\' -> "Something isn\'t working"' in line
+        assert '#d73a4a' not in line
+
+    def test_color_only_change(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that a color-only update shows both colors and omits the unchanged description
+        """
+        line = self._update_line(('bug', 'd73a4a', 'Broken'), ('bug', '000000', 'Broken'), capsys)
+
+        assert 'color #d73a4a -> #000000' in line
+        assert 'description' not in line
+        assert 'Broken' not in line
+
+    def test_name_casing_change(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that a name-casing update shows both names and omits the unchanged color
+        """
+        line = self._update_line(('Docs', '0075ca', ''), ('docs', '0075ca', ''), capsys)
+
+        assert "name 'Docs' -> 'docs'" in line
+        assert '#0075ca' not in line
+        assert 'description' not in line
+
+    def test_several_fields_are_comma_separated(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that every differing field appears on one line, in name, color, description order
+        """
+        line = self._update_line(('Docs', '0075ca', ''), ('docs', '000000', 'Documentation'), capsys)
+
+        assert line.endswith("name 'Docs' -> 'docs', color #0075ca -> #000000, description '' -> 'Documentation'")
+
+
 @pytest.fixture
 def config_file(tmp_path: Path) -> Path:
     """

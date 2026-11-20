@@ -438,6 +438,24 @@ def _describe(label: Label) -> str:
     return f'{style(label.name, fg="bright_white", bold=True)} {style("#" + label.color, dim=True)}'
 
 
+def _describe_changes(current: Label, desired: Label) -> str:
+    """
+    Format a label update as its name followed by only the fields that differ, each as ``field old -> new``.
+
+    :param current: the label as it exists on the repository
+    :param desired: the label as the config defines it
+    :return: styled one-line summary; names and descriptions are quoted, colors shown as ``#rrggbb``
+    """
+    changes: list[str] = []
+    if current.name != desired.name:
+        changes.append(f'name {current.name!r} -> {desired.name!r}')
+    if current.color != desired.color:
+        changes.append(f'color #{current.color} -> #{desired.color}')
+    if current.description != desired.description:
+        changes.append(f'description {current.description!r} -> {desired.description!r}')
+    return f'{style(current.name, fg="bright_white", bold=True)}  {style(", ".join(changes), dim=True)}'
+
+
 def apply_plan(repo: RepoRef, plan: Plan, *, prune: bool, dry_run: bool) -> None:
     """
     Report each action in a plan and, unless this is a dry run, perform it.
@@ -453,7 +471,7 @@ def apply_plan(repo: RepoRef, plan: Plan, *, prune: bool, dry_run: bool) -> None
             gh_api(repo, repo.labels_endpoint, method='POST', fields=label_fields(label))
 
     for current, label in plan.update:
-        printf(f'🔄 {style("update", fg="bright_cyan")}  {_describe(current)} -> {_describe(label)}')
+        printf(f'🔄 {style("update", fg="bright_cyan")}  {_describe_changes(current, label)}')
         if not dry_run:
             fields = {'new_name': label.name, 'color': label.color, 'description': label.description}
             gh_api(repo, f'{repo.labels_endpoint}/{quote(current.name, safe="")}', method='PATCH', fields=fields)
