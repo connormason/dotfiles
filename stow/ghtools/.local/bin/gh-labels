@@ -50,6 +50,7 @@ class LabelsError(RuntimeError):
     """
     Raised for any user-facing failure: a bad config, bad arguments, or a failed ``gh`` call.
     """
+    pass
 
 # ==================================================================================================
 # Label model and config parsing
@@ -94,16 +95,18 @@ def parse_labels(data: Mapping[str, object]) -> list[Label]:
 
     labels: list[Label] = []
     seen:   set[str]    = set()
+
     for position, entry in enumerate(entries, start=1):
         if not isinstance(entry, dict):
             raise LabelsError(f'label #{position}: expected a table')
-        unknown = set(entry) - CONFIG_KEYS
-        if unknown:
+
+        if unknown := set(entry) - CONFIG_KEYS:
             raise LabelsError(f'label #{position}: unknown key(s) {sorted(unknown)}')
 
         name = entry.get('name')
         if not isinstance(name, str) or not name.strip():
             raise LabelsError(f'label #{position}: name must be a non-empty string')
+
         name = name.strip()
         if len(name) > NAME_MAX_LENGTH:
             raise LabelsError(f'label {name!r}: name exceeds {NAME_MAX_LENGTH} characters')
@@ -114,6 +117,7 @@ def parse_labels(data: Mapping[str, object]) -> list[Label]:
         color = entry.get('color')
         if not isinstance(color, str):
             raise LabelsError(f'label {name!r}: color must be a string')
+
         try:
             color = normalize_color(color)
         except LabelsError as e:
@@ -162,7 +166,7 @@ def render_toml(labels: Sequence[Label]) -> str:
     :param labels: labels to render, in output order
     :return: TOML text ending in a newline
     """
-    lines = ['# GitHub label definitions applied by `gh-labels apply`.', '']
+    lines: list[str] = ['# GitHub label definitions applied by `gh-labels apply`.', '']
     for label in labels:
         lines.append('[[label]]')
         lines.append(f'name        = {_toml_string(label.name)}')
@@ -185,7 +189,7 @@ def default_config_path() -> Path:
 
 
 # ==================================================================================================
-# Text styling
+# Text styling/formatting
 #
 # Reduced copy of run.py's style()/printf(): same names and semantics, limited to the options used here.
 # ==================================================================================================
@@ -223,6 +227,7 @@ def style(text: object = '', *, fg: str | None = None, bold: bool | None = None,
         bits.append(f'\033[{1 if bold else 22}m')
     if dim is not None:
         bits.append(f'\033[{2 if dim else 22}m')
+
     bits.append(str(text))
     bits.append(ANSI_RESET_ALL)
     return ''.join(bits)
@@ -237,6 +242,19 @@ def printf(text: object = '', *, indent: int = 0, file: TextIO | None = None) ->
     :param file: destination stream; defaults to the current ``sys.stdout``
     """
     print(f'{" " * indent}{text}', file=file or sys.stdout)
+
+
+def folduser(path: str | Path) -> str:
+    """
+    Replace the home directory prefix of a path with ``~`` for display.
+
+    :param path: path to display
+    :return: the folded path, or the path unchanged when it is outside the home directory
+    """
+    try:
+        return f'~/{Path(path).relative_to(Path.home())}'
+    except ValueError:
+        return str(path)
 
 
 # ==================================================================================================
@@ -318,7 +336,7 @@ def gh_api(
     :param paginate: follow pagination and slurp every page into one JSON array
     :return: response body
     """
-    args = ['api', endpoint, '--method', method]
+    args: list[str] = ['api', endpoint, '--method', method]
     if repo.host:
         args += ['--hostname', repo.host]
     if paginate:
@@ -339,7 +357,8 @@ def current_repo() -> RepoRef:
         url = json.loads(run_gh('repo', 'view', '--json', 'url'))['url']
     except LabelsError as e:
         raise LabelsError(f'{e}; pass --repo to choose a repository') from e
-    parsed = urlparse(url)
+
+    parsed      = urlparse(url)
     owner, name = parsed.path.strip('/').split('/')[:2]
     return RepoRef(parsed.hostname, owner, name)
 
@@ -408,6 +427,7 @@ def build_plan(desired: Sequence[Label], existing: Sequence[Label]) -> Plan:
     create:    list[Label]                = []
     update:    list[tuple[Label, Label]]  = []
     unchanged: list[Label]                = []
+
     for label in desired:
         found = current.get(label.name.casefold())
         if found is None:
@@ -453,6 +473,7 @@ def _describe_changes(current: Label, desired: Label) -> str:
         changes.append(f'color #{current.color} -> #{desired.color}')
     if current.description != desired.description:
         changes.append(f'description {current.description!r} -> {desired.description!r}')
+
     return f'{style(current.name, fg="bright_white", bold=True)}  {style(", ".join(changes), dim=True)}'
 
 
@@ -498,38 +519,27 @@ def summarize(plan: Plan, *, prune: bool, dry_run: bool) -> None:
         printf(f'🟡 {style("Dry run, nothing changed", fg="bright_yellow")}: {counts}')
     else:
         printf(f'✅ {style("Done", fg="bright_green")}: {counts}')
+
     if plan.extra:
         verb = 'deleted' if prune and not dry_run else 'would be deleted' if prune else 'kept (use --prune to delete)'
         printf(f'{len(plan.extra)} label(s) not in the config {verb}', indent=3)
+
 
 # ==================================================================================================
 # Command-line interface
 # ==================================================================================================
 
 
-def folduser(path: str | Path) -> str:
-    """
-    Replace the home directory prefix of a path with ``~`` for display.
-
-    :param path: path to display
-    :return: the folded path, or the path unchanged when it is outside the home directory
-    """
-    try:
-        return f'~/{Path(path).relative_to(Path.home())}'
-    except ValueError:
-        return str(path)
-
-
 class Args(argparse.Namespace):
     """
     Parsed command-line arguments.
     """
-    command: str
-    repo:    str | None
-    config:  Path
-    dry_run: bool
-    prune:   bool
-    output:  Path | None
+    command: str                # "apply" or "pull"
+    repo:    str | None         # --repo
+    config:  Path               # --config                  "apply" command only
+    dry_run: bool               # --dry-run                 "apply" command only
+    prune:   bool               # --prune                   "apply" command only
+    output:  Path | None        # --output                  "pull"  command only
 
 
 def _path(value: str) -> Path:
@@ -545,11 +555,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     :return: parser with ``apply`` and ``pull`` subcommands
     """
-    formatter = functools.partial(argparse.RawTextHelpFormatter, max_help_position=50)
     parser = argparse.ArgumentParser(
         prog='gh-labels',
         description="Sync GitHub labels from a TOML file, or export a repository's labels to one.",
-        formatter_class=formatter,
+        formatter_class=functools.partial(
+            argparse.RawTextHelpFormatter,
+            max_help_position=50,
+        ),
         add_help=False,
     )
     subparsers = parser.add_subparsers(dest='command', metavar='COMMAND', required=True)
@@ -557,38 +569,75 @@ def build_parser() -> argparse.ArgumentParser:
     def add_target_opts(sub: argparse.ArgumentParser) -> None:
         target_opts = sub.add_argument_group('Target options')
         target_opts.add_argument(
-            '-r', '--repo', metavar='[HOST/]OWNER/REPO',
-            help='Repository to operate on (default: the repository of the current directory).\n'
-                 'HOST is only needed off github.com, e.g. ghe.example.com/OWNER/REPO',
+            '-r',
+            '--repo',
+            metavar='[HOST/]OWNER/REPO',
+            help='\n'.join([
+                'Repository to operate on (default: the repository of the current directory).',
+                'HOST is only needed off github.com, e.g. ghe.example.com/OWNER/REPO',
+            ])
+        )
+
+    def add_apply_opts(sub: argparse.ArgumentParser) -> None:
+        sub = apply_parser.add_argument_group('Apply options')
+        sub.add_argument(
+            '-c',
+            '--config',
+            type=_path,
+            default=default_config_path(),
+            metavar='PATH',
+            help=f'Label definition file (default: {folduser(default_config_path())})',
+        )
+        sub.add_argument(
+            '-n',
+            '--dry-run',
+            action='store_true',
+            help='Show the changes without making them',
+        )
+        sub.add_argument(
+            '--prune',
+            action='store_true',
+            help='Also delete labels that are not in the config file',
+        )
+
+    def add_pull_opts(sub: argparse.ArgumentParser) -> None:
+        sub = pull_parser.add_argument_group('Pull options')
+        sub.add_argument(
+            '-o',
+            '--output',
+            type=_path,
+            metavar='PATH',
+            help='Write the TOML here instead of stdout',
         )
 
     def add_other_opts(sub: argparse.ArgumentParser) -> None:
         other_opts = sub.add_argument_group('Other options')
         other_opts.add_argument(
-            '-h', '--help', action='help', default=argparse.SUPPRESS, help='Show this help message and exit',
+            '-h',
+            '--help',
+            action='help',
+            default=argparse.SUPPRESS,
+            help='Show this help message and exit',
         )
 
     apply_parser = subparsers.add_parser(
-        'apply', help='Create and update labels to match the config file', formatter_class=formatter, add_help=False,
+        'apply',
+        help='Create and update labels to match the config file',
+        formatter_class=formatter,
+        add_help=False,
     )
     add_target_opts(apply_parser)
-    apply_opts = apply_parser.add_argument_group('Apply options')
-    apply_opts.add_argument(
-        '-c', '--config', type=_path, default=default_config_path(), metavar='PATH',
-        help=f'Label definition file (default: {folduser(default_config_path())})',
-    )
-    apply_opts.add_argument('-n', '--dry-run', action='store_true', help='Show the changes without making them')
-    apply_opts.add_argument(
-        '--prune', action='store_true', help='Also delete labels that are not in the config file',
-    )
+    add_apply_opts(apply_parser)
     add_other_opts(apply_parser)
 
     pull_parser = subparsers.add_parser(
-        'pull', help="Print a repository's labels as TOML", formatter_class=formatter, add_help=False,
+        'pull',
+        help="Print a repository's labels as TOML",
+        formatter_class=formatter,
+        add_help=False,
     )
     add_target_opts(pull_parser)
-    pull_opts = pull_parser.add_argument_group('Pull options')
-    pull_opts.add_argument('-o', '--output', type=_path, metavar='PATH', help='Write the TOML here instead of stdout')
+    add_pull_opts(pull_parser)
     add_other_opts(pull_parser)
 
     add_other_opts(parser)
