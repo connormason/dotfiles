@@ -1,0 +1,177 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""
+Apply a TOML-defined GitHub label set to a repository, or export a repository's labels to TOML.
+
+Examples
+--------
+    gh-labels apply --dry-run                         # preview changes for the repo in the current directory
+    gh-labels apply --repo OWNER/REPO                 # sync a specific repo
+    gh-labels pull --repo OWNER/REPO                  # print that repo's labels as TOML
+
+Requires the GitHub CLI (``gh``), authenticated for the repository's host.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import tomllib
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from collections.abc import Sequence
+
+# ==================================================================================================
+# Constants and errors
+# ==================================================================================================
+
+NAME_MAX_LENGTH        = 50
+DESCRIPTION_MAX_LENGTH = 100
+CONFIG_KEYS            = frozenset({'name', 'color', 'description'})
+HEX_COLOR              = re.compile(r'[0-9a-f]{6}')
+
+
+class LabelsError(RuntimeError):
+    """
+    Raised for any user-facing failure: a bad config, bad arguments, or a failed ``gh`` call.
+    """
+
+# ==================================================================================================
+# Label model and config parsing
+# ==================================================================================================
+
+
+@dataclass(frozen=True)
+class Label:
+    """
+    A GitHub label. ``color`` is six lowercase hex digits without a leading ``#``.
+    """
+    name:        str
+    color:       str
+    description: str = ''
+
+
+def normalize_color(raw: str) -> str:
+    """
+    Normalise a label color to six lowercase hex digits.
+
+    :param raw: color as written in the config, with or without a leading ``#``
+    :raises LabelsError: if the value is not six hex digits
+    :return: the color without ``#``, lowercased
+    """
+    color = raw.removeprefix('#').lower()
+    if not HEX_COLOR.fullmatch(color):
+        raise LabelsError(f'invalid color {raw!r}: expected six hex digits')
+    return color
+
+
+def parse_labels(data: Mapping[str, object]) -> list[Label]:
+    """
+    Validate decoded TOML and convert its ``[[label]]`` tables to labels.
+
+    :param data: the decoded TOML document
+    :raises LabelsError: if the document violates the schema or GitHub's limits
+    :return: labels in file order
+    """
+    entries = data.get('label')
+    if not isinstance(entries, list) or not entries:
+        raise LabelsError('config must define at least one [[label]] table')
+
+    labels: list[Label] = []
+    seen:   set[str]    = set()
+    for position, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise LabelsError(f'label #{position}: expected a table')
+        unknown = set(entry) - CONFIG_KEYS
+        if unknown:
+            raise LabelsError(f'label #{position}: unknown key(s) {sorted(unknown)}')
+
+        name = entry.get('name')
+        if not isinstance(name, str) or not name.strip():
+            raise LabelsError(f'label #{position}: name must be a non-empty string')
+        name = name.strip()
+        if len(name) > NAME_MAX_LENGTH:
+            raise LabelsError(f'label {name!r}: name exceeds {NAME_MAX_LENGTH} characters')
+        if name.casefold() in seen:
+            raise LabelsError(f'label {name!r}: duplicate name (names are case-insensitive)')
+        seen.add(name.casefold())
+
+        color = entry.get('color')
+        if not isinstance(color, str):
+            raise LabelsError(f'label {name!r}: color must be a string')
+        try:
+            color = normalize_color(color)
+        except LabelsError as e:
+            raise LabelsError(f'label {name!r}: {e}') from e
+
+        description = entry.get('description', '')
+        if not isinstance(description, str):
+            raise LabelsError(f'label {name!r}: description must be a string')
+        if len(description) > DESCRIPTION_MAX_LENGTH:
+            raise LabelsError(f'label {name!r}: description exceeds {DESCRIPTION_MAX_LENGTH} characters')
+
+        labels.append(Label(name, color, description))
+
+    return labels
+
+
+def load_labels(path: Path) -> list[Label]:
+    """
+    Read and validate a label definition file.
+
+    :param path: TOML file containing ``[[label]]`` tables
+    :raises LabelsError: if the file is missing, malformed, or invalid
+    :return: labels in file order
+    """
+    try:
+        with path.open('rb') as handle:
+            data = tomllib.load(handle)
+    except FileNotFoundError:
+        raise LabelsError(f'config not found: {path}') from None
+    except tomllib.TOMLDecodeError as e:
+        raise LabelsError(f'{path}: {e}') from e
+    return parse_labels(data)
+
+
+def _toml_string(value: str) -> str:
+    """
+    Quote a string as a TOML basic string (JSON string syntax is a subset of it).
+    """
+    return json.dumps(value, ensure_ascii=False)
+
+
+def render_toml(labels: Sequence[Label]) -> str:
+    """
+    Render labels as a ``labels.toml`` document.
+
+    :param labels: labels to render, in output order
+    :return: TOML text ending in a newline
+    """
+    lines = ['# GitHub label definitions applied by `gh-labels apply`.', '']
+    for label in labels:
+        lines.append('[[label]]')
+        lines.append(f'name        = {_toml_string(label.name)}')
+        lines.append(f'color       = {_toml_string(label.color)}')
+        if label.description:
+            lines.append(f'description = {_toml_string(label.description)}')
+        lines.append('')
+    return '\n'.join(lines)
+
+
+def default_config_path() -> Path:
+    """
+    Locate the default label definition file.
+
+    :return: ``$XDG_CONFIG_HOME/gh-labels/labels.toml``, or ``~/.config/gh-labels/labels.toml`` when unset
+    """
+    base = os.environ.get('XDG_CONFIG_HOME')
+    root = Path(base) if base else Path.home() / '.config'
+    return root / 'gh-labels' / 'labels.toml'
