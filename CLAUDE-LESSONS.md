@@ -122,3 +122,16 @@ Each lesson follows this pattern:
   backup sources) had no snapshots at all. A backup reading "the latest sanoid snapshot" would have found nothing there.
 - **Rule**: Before building on a statement about the live system, run the read-only command that proves it (`zfs list`,
   `lsblk`, `ss`). The backup job takes its own recursive snapshot instead of depending on another job's policy.
+
+### Verify with the suite CI runs, and regenerate the golden link set when adding a stow package
+
+- **Context**: Shipping the `ghtools` stow package (`gh-labels`). The plan's verification step and my own "all green"
+  report ran `tests/unit` only. CI and the user's local run execute the whole suite.
+- **Mistake**: `tests/integration/test_os_layout.py` stows the base layer into an empty `HOME` and compares the symlinks
+  with `tests/fixtures/os_layout/darwin-links.txt` (the Linux test derives its set from the same file). The new package
+  added `.config/gh-labels/labels.toml` and `.local/bin/gh-labels`, so three integration tests failed. The `yazi`
+  package PR had already updated this file, which was the precedent to find before claiming the branch was green.
+- **Rule**: Before reporting a branch green, run the same command CI runs (`uv run pytest`), not a hand-picked
+  subdirectory. When a change adds or removes a stow package, regenerate the golden file on macOS with
+  `DOTFILES_UPDATE_GOLDEN=1 uv run pytest tests/integration/test_os_layout.py::TestDarwinLayout::test_darwin_links_match_golden`
+  and check that `git diff` shows only the intended paths.
