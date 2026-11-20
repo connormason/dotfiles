@@ -16,6 +16,8 @@ Requires the GitHub CLI (``gh``), authenticated for the repository's host.
 """
 from __future__ import annotations
 
+import argparse
+import functools
 import json
 import os
 import re
@@ -481,3 +483,160 @@ def summarize(plan: Plan, *, prune: bool, dry_run: bool) -> None:
     if plan.extra:
         verb = 'deleted' if prune and not dry_run else 'would be deleted' if prune else 'kept (use --prune to delete)'
         printf(f'{len(plan.extra)} label(s) not in the config {verb}', indent=3)
+
+# ==================================================================================================
+# Command-line interface
+# ==================================================================================================
+
+
+def folduser(path: str | Path) -> str:
+    """
+    Replace the home directory prefix of a path with ``~`` for display.
+
+    :param path: path to display
+    :return: the folded path, or the path unchanged when it is outside the home directory
+    """
+    try:
+        return f'~/{Path(path).relative_to(Path.home())}'
+    except ValueError:
+        return str(path)
+
+
+class Args(argparse.Namespace):
+    """
+    Parsed command-line arguments.
+    """
+    command: str
+    repo:    str | None
+    config:  Path
+    dry_run: bool
+    prune:   bool
+    output:  Path | None
+
+
+def _path(value: str) -> Path:
+    """
+    Argparse type: a path with ``~`` expanded.
+    """
+    return Path(value).expanduser()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """
+    Build the ``gh-labels`` argument parser.
+
+    :return: parser with ``apply`` and ``pull`` subcommands
+    """
+    formatter = functools.partial(argparse.RawTextHelpFormatter, max_help_position=50)
+    parser = argparse.ArgumentParser(
+        prog='gh-labels',
+        description="Sync GitHub labels from a TOML file, or export a repository's labels to one.",
+        formatter_class=formatter,
+        add_help=False,
+    )
+    subparsers = parser.add_subparsers(dest='command', metavar='COMMAND', required=True)
+
+    def add_target_opts(sub: argparse.ArgumentParser) -> None:
+        target_opts = sub.add_argument_group('Target options')
+        target_opts.add_argument(
+            '-r', '--repo', metavar='[HOST/]OWNER/REPO',
+            help='Repository to operate on (default: the repository of the current directory).\n'
+                 'HOST is only needed off github.com, e.g. ghe.example.com/OWNER/REPO',
+        )
+
+    def add_other_opts(sub: argparse.ArgumentParser) -> None:
+        other_opts = sub.add_argument_group('Other options')
+        other_opts.add_argument(
+            '-h', '--help', action='help', default=argparse.SUPPRESS, help='Show this help message and exit',
+        )
+
+    apply_parser = subparsers.add_parser(
+        'apply', help='Create and update labels to match the config file', formatter_class=formatter, add_help=False,
+    )
+    add_target_opts(apply_parser)
+    apply_opts = apply_parser.add_argument_group('Apply options')
+    apply_opts.add_argument(
+        '-c', '--config', type=_path, default=default_config_path(), metavar='PATH',
+        help=f'Label definition file (default: {folduser(default_config_path())})',
+    )
+    apply_opts.add_argument('-n', '--dry-run', action='store_true', help='Show the changes without making them')
+    apply_opts.add_argument(
+        '--prune', action='store_true', help='Also delete labels that are not in the config file',
+    )
+    add_other_opts(apply_parser)
+
+    pull_parser = subparsers.add_parser(
+        'pull', help="Print a repository's labels as TOML", formatter_class=formatter, add_help=False,
+    )
+    add_target_opts(pull_parser)
+    pull_opts = pull_parser.add_argument_group('Pull options')
+    pull_opts.add_argument('-o', '--output', type=_path, metavar='PATH', help='Write the TOML here instead of stdout')
+    add_other_opts(pull_parser)
+
+    add_other_opts(parser)
+    return parser
+
+
+def cmd_apply(args: Args) -> int:
+    """
+    Run the ``apply`` subcommand.
+
+    :param args: parsed arguments
+    :raises LabelsError: on a bad config or a failed ``gh`` call
+    :return: process exit code
+    """
+    desired = load_labels(args.config)
+    repo    = resolve_repo(args.repo)
+
+    suffix = f' {style("(dry run)", dim=True)}' if args.dry_run else ''
+    printf(
+        f'🔎 {style("Applying", fg="bright_cyan")} {len(desired)} labels from '
+        f'{style(folduser(args.config), fg="magenta")} to {style(str(repo), fg="bright_white", bold=True)}{suffix}',
+    )
+
+    plan = build_plan(desired, fetch_labels(repo))
+    apply_plan(repo, plan, prune=args.prune, dry_run=args.dry_run)
+    summarize(plan, prune=args.prune, dry_run=args.dry_run)
+    return 0
+
+
+def cmd_pull(args: Args) -> int:
+    """
+    Run the ``pull`` subcommand.
+
+    :param args: parsed arguments
+    :raises LabelsError: on a failed ``gh`` call
+    :return: process exit code
+    """
+    repo   = resolve_repo(args.repo)
+    labels = sorted(fetch_labels(repo), key=lambda label: label.name.casefold())
+    text   = render_toml(labels)
+
+    if args.output is None:
+        sys.stdout.write(text)
+    else:
+        args.output.write_text(text, encoding='utf-8')
+        printf(
+            f'✅ {style("Wrote", fg="bright_green")} {len(labels)} labels to '
+            f'{style(folduser(args.output), fg="magenta")}',
+        )
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """
+    Entry point.
+
+    :param argv: arguments after the program name; defaults to ``sys.argv[1:]``
+    :return: process exit code (``0`` on success, ``1`` on any :class:`LabelsError`)
+    """
+    args = build_parser().parse_args(argv, namespace=Args())
+    try:
+        return cmd_apply(args) if args.command == 'apply' else cmd_pull(args)
+    except LabelsError as e:
+        printf(f'❌ {style("Error:", fg="bright_red", bold=True)} {style(e, fg="bright_red")}', file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

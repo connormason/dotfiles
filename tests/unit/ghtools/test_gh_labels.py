@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import json
+import os
 import sys
 from itertools import pairwise
 from pathlib import Path
@@ -507,3 +508,214 @@ class TestApplyPlan:
 
         assert '1 created, 1 updated, 1 unchanged' in out
         assert '--prune' in out
+
+
+@pytest.fixture
+def config_file(tmp_path: Path) -> Path:
+    """
+    Write the sample desired label set to a TOML file
+    """
+    path = tmp_path / 'labels.toml'
+    path.write_text(gh_labels.render_toml(DESIRED), encoding='utf-8')
+    return path
+
+
+class TestFolduser:
+    """
+    Tests for folduser
+    """
+    def test_folds_home_prefix(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that a path under the home directory is shown with a tilde
+        """
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path)
+
+        assert gh_labels.folduser(tmp_path / '.config' / 'x') == '~/.config/x'
+
+    def test_leaves_other_paths_alone(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that a path outside the home directory is returned unchanged
+        """
+        monkeypatch.setattr(Path, 'home', lambda: tmp_path / 'home')
+
+        assert gh_labels.folduser('/etc/hosts') == '/etc/hosts'
+
+
+class TestMainApply:
+    """
+    Tests for the apply subcommand
+    """
+    def test_creates_and_updates_but_keeps_extras(self, fake_gh: FakeGh, config_file: Path) -> None:
+        """
+        Test the full apply flow against the fake gh without --prune
+        """
+        code = gh_labels.main(['apply', '--repo', 'me/proj', '--config', str(config_file)])
+
+        assert code == 0
+        assert fake_gh.mutations == [
+            (
+                'POST',
+                'repos/me/proj/labels',
+                {'name': 'feature', 'color': '5ab1cd', 'description': 'New capability'},
+            ),
+            (
+                'PATCH',
+                'repos/me/proj/labels/Docs',
+                {'new_name': 'docs', 'color': '0075ca', 'description': 'Documentation'},
+            ),
+        ]
+
+    def test_prune_flag_deletes_extras(self, fake_gh: FakeGh, config_file: Path) -> None:
+        """
+        Test that --prune adds a DELETE for labels missing from the config
+        """
+        gh_labels.main(['apply', '--repo', 'me/proj', '--config', str(config_file), '--prune'])
+
+        assert ('DELETE', 'repos/me/proj/labels/wontfix', {}) in fake_gh.mutations
+
+    def test_dry_run_flag_changes_nothing(
+        self, fake_gh: FakeGh, config_file: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that --dry-run reports actions and makes no mutating call
+        """
+        code = gh_labels.main(['apply', '-r', 'me/proj', '-c', str(config_file), '-n'])
+
+        assert code == 0
+        assert fake_gh.mutations == []
+        assert 'create' in capsys.readouterr().out
+
+    def test_second_run_is_idempotent(self, monkeypatch: pytest.MonkeyPatch, config_file: Path) -> None:
+        """
+        Test that applying to a repository that already matches performs no mutations
+        """
+        fake = FakeGh(
+            [{'name': label.name, 'color': label.color, 'description': label.description} for label in DESIRED],
+        )
+        monkeypatch.setattr(gh_labels, 'run_gh', fake)
+
+        assert gh_labels.main(['apply', '--repo', 'me/proj', '--config', str(config_file)]) == 0
+        assert fake.mutations == []
+
+    def test_repo_defaults_to_current_directory_and_its_host(self, fake_gh: FakeGh, config_file: Path) -> None:
+        """
+        Test that omitting --repo uses gh repo view and passes the detected host to gh api
+        """
+        gh_labels.main(['apply', '--config', str(config_file), '--dry-run'])
+
+        api_calls = [call for call in fake_gh.calls if call[0] == 'api']
+        assert api_calls
+        for call in api_calls:
+            at = call.index('--hostname')
+            assert call[at:at + 2] == ('--hostname', 'ghe.example.com')
+
+    def test_missing_config_fails_with_exit_code_one(
+        self, fake_gh: FakeGh, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that an unreadable config returns 1, names the problem on stderr, and never calls gh
+        """
+        code = gh_labels.main(['apply', '--repo', 'me/proj', '--config', str(tmp_path / 'absent.toml')])
+
+        assert code == 1
+        assert 'config not found' in capsys.readouterr().err
+        assert fake_gh.calls == []
+
+    def test_gh_failure_returns_one(
+        self, monkeypatch: pytest.MonkeyPatch, config_file: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that a failing gh call is reported on stderr with exit code 1
+        """
+        def failing(*args: str) -> str:
+            raise gh_labels.LabelsError('gh api failed: HTTP 403')
+
+        monkeypatch.setattr(gh_labels, 'run_gh', failing)
+
+        assert gh_labels.main(['apply', '--repo', 'me/proj', '--config', str(config_file)]) == 1
+        assert 'HTTP 403' in capsys.readouterr().err
+
+    def test_config_defaults_to_xdg_location(
+        self, fake_gh: FakeGh, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        """
+        Test that --config defaults to the XDG config path
+        """
+        target = tmp_path / 'gh-labels' / 'labels.toml'
+        target.parent.mkdir()
+        target.write_text(gh_labels.render_toml(DESIRED), encoding='utf-8')
+        monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path))
+
+        assert gh_labels.main(['apply', '--repo', 'me/proj', '--dry-run']) == 0
+
+
+class TestMainPull:
+    """
+    Tests for the pull subcommand
+    """
+    def test_prints_sorted_toml_that_round_trips(self, fake_gh: FakeGh, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that pull emits valid, case-insensitively sorted TOML matching the repository
+        """
+        assert gh_labels.main(['pull', '--repo', 'me/proj']) == 0
+
+        labels = gh_labels.parse_labels(tomllib.loads(capsys.readouterr().out))
+        assert [label.name for label in labels] == ['bug', 'Docs', 'wontfix']
+        assert labels[0] == Label('bug', 'd73a4a', '')
+
+    def test_output_flag_writes_a_file(
+        self, fake_gh: FakeGh, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that --output writes the TOML to disk and keeps stdout to a status line
+        """
+        target = tmp_path / 'out.toml'
+
+        assert gh_labels.main(['pull', '--repo', 'me/proj', '--output', str(target)]) == 0
+
+        assert len(gh_labels.load_labels(target)) == len(EXISTING)
+        assert '[[label]]' not in capsys.readouterr().out
+
+
+USAGE_EXIT = 2  # argparse's exit status for a usage error
+
+
+class TestParser:
+    """
+    Tests for build_parser
+    """
+    def test_subcommand_is_required(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that running without a subcommand exits with a usage error
+        """
+        with pytest.raises(SystemExit) as exc_info:
+            gh_labels.main([])
+
+        assert exc_info.value.code == USAGE_EXIT
+
+    def test_help_lists_options(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that apply --help documents its options
+        """
+        with pytest.raises(SystemExit) as exc_info:
+            gh_labels.main(['apply', '--help'])
+
+        out = capsys.readouterr().out
+        assert exc_info.value.code == 0
+        assert all(option in out for option in ('--repo', '--config', '--dry-run', '--prune', '--help'))
+
+
+class TestScriptFile:
+    """
+    Tests for the shipped script file itself
+    """
+    def test_is_executable_with_uv_shebang_and_pep723_block(self) -> None:
+        """
+        Test that the script is executable, uses a uv shebang, and declares its Python floor inline
+        """
+        text = SCRIPT_PATH.read_text(encoding='utf-8')
+
+        assert os.access(SCRIPT_PATH, os.X_OK)
+        assert text.startswith('#!/usr/bin/env -S uv run --script\n')
+        assert '# requires-python = ">=3.11"' in text
+        assert '# dependencies = []' in text
