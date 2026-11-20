@@ -555,7 +555,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     :return: parser with ``apply`` and ``pull`` subcommands
     """
-    formatter = functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
+    formatter = functools.partial(argparse.RawTextHelpFormatter, max_help_position=50)
     parser    = argparse.ArgumentParser(
         prog='gh-labels',
         description="Sync GitHub labels from a TOML file, or export a repository's labels to one.",
