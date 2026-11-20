@@ -539,7 +539,7 @@ class TestUpdateReport:
         """
         line = self._update_line(('bug', 'd73a4a', ''), ('bug', 'd73a4a', "Something isn't working"), capsys)
 
-        assert line.startswith('🔄 update')
+        assert line.startswith('🔵 update')
         assert 'bug'                                            in line
         assert 'description \'\' -> "Something isn\'t working"' in line
         assert '#d73a4a'                                  not in line
