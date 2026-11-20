@@ -437,7 +437,7 @@ repos:
           - tomli
 
   - repo: https://github.com/google/keep-sorted
-    rev: v0.10.0
+    rev: v0.11.0
     hooks:
 
       # Language-agnostic auto-sorting between two markers
@@ -573,7 +573,7 @@ repos:
           )$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.4
+    rev: v0.17.5
     hooks:
 
       # Python lint auto-fixes
@@ -591,7 +591,7 @@ repos:
   # ========================================================================================
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.4
+    rev: v0.17.5
     hooks:
 
       # Python lint check (must happen after --fix-only stage above)
