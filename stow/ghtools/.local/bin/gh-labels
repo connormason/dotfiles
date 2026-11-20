@@ -487,19 +487,19 @@ def apply_plan(repo: RepoRef, plan: Plan, *, prune: bool, dry_run: bool) -> None
     :param dry_run: print actions without calling the API
     """
     for label in plan.create:
-        printf(f'💾 {style("create", fg="bright_cyan")}  {_describe(label)}')
+        printf(f'🟢 {style("create", fg="bright_green")}  {_describe(label)}')
         if not dry_run:
             gh_api(repo, repo.labels_endpoint, method='POST', fields=label_fields(label))
 
     for current, label in plan.update:
-        printf(f'🔄 {style("update", fg="bright_cyan")}  {_describe_changes(current, label)}')
+        printf(f'🔵 {style("update", fg="bright_cyan")}  {_describe_changes(current, label)}')
         if not dry_run:
             fields = {'new_name': label.name, 'color': label.color, 'description': label.description}
             gh_api(repo, f'{repo.labels_endpoint}/{quote(current.name, safe="")}', method='PATCH', fields=fields)
 
     for label in plan.extra:
         if prune:
-            printf(f'🧹 {style("delete", fg="bright_cyan")}  {_describe(label)}')
+            printf(f'🔴 {style("delete", fg="bright_red")}  {_describe(label)}')
             if not dry_run:
                 gh_api(repo, f'{repo.labels_endpoint}/{quote(label.name, safe="")}', method='DELETE')
         else:
