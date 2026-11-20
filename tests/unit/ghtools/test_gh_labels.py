@@ -63,9 +63,9 @@ class TestNormalizeColor:
     @pytest.mark.parametrize(
         ('raw', 'expected'),
         [
-            ('d73a4a',  'd73a4a'),
+            ('d73a4a',    'd73a4a'),
             ('#D73A4A', 'd73a4a'),
-            ('5AB1CD',  '5ab1cd'),
+            ('5AB1CD',    '5ab1cd'),
         ],
     )
     def test_valid_colors_are_normalised(self, raw: str, expected: str) -> None:
@@ -112,16 +112,16 @@ class TestParseLabels:
     @pytest.mark.parametrize(
         ('data', 'message'),
         [
-            ({},                                                              'at least one'),
-            ({'label': []},                                                   'at least one'),
-            ({'label': ['bug']},                                              'expected a table'),
-            ({'label': [{'name': 'a', 'color': 'ffffff', 'colour': 'x'}]},    'unknown key'),
-            ({'label': [{'color': 'ffffff'}]},                                'name must be'),
-            ({'label': [{'name': '  ', 'color': 'ffffff'}]},                  'name must be'),
-            ({'label': [{'name': 'x' * 51, 'color': 'ffffff'}]},              'exceeds 50'),
-            ({'label': [{'name': 'a'}]},                                      'color must be'),
-            ({'label': [{'name': 'a', 'color': 'nothex'}]},                   'invalid color'),
-            ({'label': [{'name': 'a', 'color': 'ffffff', 'description': 7}]}, 'description must be'),
+            ({},                                                                      'at least one'),
+            ({'label': []},                                                           'at least one'),
+            ({'label': ['bug']},                                                      'expected a table'),
+            ({'label': [{'name': 'a', 'color': 'ffffff', 'colour': 'x'}]},            'unknown key'),
+            ({'label': [{'color': 'ffffff'}]},                                        'name must be'),
+            ({'label': [{'name': '  ', 'color': 'ffffff'}]},                          'name must be'),
+            ({'label': [{'name': 'x' * 51, 'color': 'ffffff'}]},                      'exceeds 50'),
+            ({'label': [{'name': 'a'}]},                                              'color must be'),
+            ({'label': [{'name': 'a', 'color': 'nothex'}]},                           'invalid color'),
+            ({'label': [{'name': 'a', 'color': 'ffffff', 'description': 7}]},         'description must be'),
             ({'label': [{'name': 'a', 'color': 'ffffff', 'description': 'x' * 101}]}, 'exceeds 100'),
             (
                 {'label': [{'name': 'Bug', 'color': 'ffffff'}, {'name': 'bug', 'color': '000000'}]},
@@ -141,7 +141,6 @@ class TestParseLabels:
         Test that a 100 character description and a 50 character name are within limits
         """
         label = gh_labels.parse_labels({'label': [{'name': 'n' * 50, 'color': 'ffffff', 'description': 'd' * 100}]})[0]
-
         assert (len(label.name), len(label.description)) == (50, 100)
 
 
@@ -228,6 +227,7 @@ class FakeGh:
     def __init__(self, existing: list[dict[str, object]] | None = None) -> None:
         self.existing = existing or []
         self.repo_url = 'https://ghe.example.com/me/proj'
+
         self.calls: list[tuple[str, ...]] = []
 
     def __call__(self, *args: str) -> str:
@@ -243,19 +243,23 @@ class FakeGh:
         """
         Every non-GET ``gh api`` call as ``(method, endpoint, fields)``.
         """
-        found = []
+        found: list[tuple[str, str, dict[str, str]]] = []
+
         for args in self.calls:
             if args[0] != 'api':
                 continue
+
             method = args[args.index('--method') + 1]
             if method == 'GET':
                 continue
+
             fields = {
                 pair.partition('=')[0]: pair.partition('=')[2]
                 for flag, pair in pairwise(args)
                 if flag == '--raw-field'
             }
             found.append((method, args[1], fields))
+
         return found
 
 
@@ -289,9 +293,9 @@ class TestRepoRef:
     @pytest.mark.parametrize(
         ('spec', 'host', 'owner', 'name'),
         [
-            ('me/proj',                      None,              'me', 'proj'),
-            ('ghe.example.com/me/proj',      'ghe.example.com', 'me', 'proj'),
-            ('me/my.repo-name_2',            None,              'me', 'my.repo-name_2'),
+            ('me/proj',                 None,              'me', 'proj'),
+            ('ghe.example.com/me/proj', 'ghe.example.com', 'me', 'proj'),
+            ('me/my.repo-name_2',       None,              'me', 'my.repo-name_2'),
         ],
     )
     def test_valid_specs(self, spec: str, host: str | None, owner: str, name: str) -> None:
@@ -382,7 +386,6 @@ class TestGhApi:
         Test that paginated reads ask gh to slurp pages into one JSON array
         """
         gh_labels.gh_api(REPO, 'repos/me/proj/labels', paginate=True)
-
         assert fake_gh.calls[0][-2:] == ('--paginate', '--slurp')
 
     def test_current_repo_reads_host_from_url(self, fake_gh: FakeGh) -> None:
@@ -507,7 +510,7 @@ class TestApplyPlan:
         out = capsys.readouterr().out
 
         assert '1 created, 1 updated, 1 unchanged' in out
-        assert '--prune' in out
+        assert '--prune'                           in out
 
 
 class TestUpdateReport:
@@ -537,9 +540,9 @@ class TestUpdateReport:
         line = self._update_line(('bug', 'd73a4a', ''), ('bug', 'd73a4a', "Something isn't working"), capsys)
 
         assert line.startswith('🔄 update')
-        assert 'bug' in line
+        assert 'bug'                                            in line
         assert 'description \'\' -> "Something isn\'t working"' in line
-        assert '#d73a4a' not in line
+        assert '#d73a4a'                                  not in line
 
     def test_color_only_change(self, capsys: pytest.CaptureFixture[str]) -> None:
         """
@@ -548,8 +551,8 @@ class TestUpdateReport:
         line = self._update_line(('bug', 'd73a4a', 'Broken'), ('bug', '000000', 'Broken'), capsys)
 
         assert 'color #d73a4a -> #000000' in line
-        assert 'description' not in line
-        assert 'Broken' not in line
+        assert 'description'          not in line
+        assert 'Broken'               not in line
 
     def test_name_casing_change(self, capsys: pytest.CaptureFixture[str]) -> None:
         """
@@ -558,15 +561,14 @@ class TestUpdateReport:
         line = self._update_line(('Docs', '0075ca', ''), ('docs', '0075ca', ''), capsys)
 
         assert "name 'Docs' -> 'docs'" in line
-        assert '#0075ca' not in line
-        assert 'description' not in line
+        assert '#0075ca'         not in line
+        assert 'description'       not in line
 
     def test_several_fields_are_comma_separated(self, capsys: pytest.CaptureFixture[str]) -> None:
         """
         Test that every differing field appears on one line, in name, color, description order
         """
         line = self._update_line(('Docs', '0075ca', ''), ('docs', '000000', 'Documentation'), capsys)
-
         assert line.endswith("name 'Docs' -> 'docs', color #0075ca -> #000000, description '' -> 'Documentation'")
 
 
@@ -589,7 +591,6 @@ class TestFolduser:
         Test that a path under the home directory is shown with a tilde
         """
         monkeypatch.setattr(Path, 'home', lambda: tmp_path)
-
         assert gh_labels.folduser(tmp_path / '.config' / 'x') == '~/.config/x'
 
     def test_leaves_other_paths_alone(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -597,7 +598,6 @@ class TestFolduser:
         Test that a path outside the home directory is returned unchanged
         """
         monkeypatch.setattr(Path, 'home', lambda: tmp_path / 'home')
-
         assert gh_labels.folduser('/etc/hosts') == '/etc/hosts'
 
 
@@ -630,11 +630,13 @@ class TestMainApply:
         Test that --prune adds a DELETE for labels missing from the config
         """
         gh_labels.main(['apply', '--repo', 'me/proj', '--config', str(config_file), '--prune'])
-
         assert ('DELETE', 'repos/me/proj/labels/wontfix', {}) in fake_gh.mutations
 
     def test_dry_run_flag_changes_nothing(
-        self, fake_gh: FakeGh, config_file: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        fake_gh: FakeGh,
+        config_file: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that --dry-run reports actions and makes no mutating call
@@ -665,12 +667,16 @@ class TestMainApply:
 
         api_calls = [call for call in fake_gh.calls if call[0] == 'api']
         assert api_calls
+
         for call in api_calls:
             at = call.index('--hostname')
             assert call[at:at + 2] == ('--hostname', 'ghe.example.com')
 
     def test_missing_config_fails_with_exit_code_one(
-        self, fake_gh: FakeGh, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        fake_gh: FakeGh,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that an unreadable config returns 1, names the problem on stderr, and never calls gh
@@ -682,7 +688,10 @@ class TestMainApply:
         assert fake_gh.calls == []
 
     def test_gh_failure_returns_one(
-        self, monkeypatch: pytest.MonkeyPatch, config_file: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        config_file: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that a failing gh call is reported on stderr with exit code 1
@@ -696,7 +705,10 @@ class TestMainApply:
         assert 'HTTP 403' in capsys.readouterr().err
 
     def test_config_defaults_to_xdg_location(
-        self, fake_gh: FakeGh, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+        self,
+        fake_gh: FakeGh,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
     ) -> None:
         """
         Test that --config defaults to the XDG config path
@@ -724,13 +736,15 @@ class TestMainPull:
         assert labels[0] == Label('bug', 'd73a4a', '')
 
     def test_output_flag_writes_a_file(
-        self, fake_gh: FakeGh, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        fake_gh: FakeGh,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that --output writes the TOML to disk and keeps stdout to a status line
         """
         target = tmp_path / 'out.toml'
-
         assert gh_labels.main(['pull', '--repo', 'me/proj', '--output', str(target)]) == 0
 
         assert len(gh_labels.load_labels(target)) == len(EXISTING)
@@ -792,6 +806,5 @@ class TestSeedConfig:
         Test that the shipped label set parses, and that every label carries a description
         """
         labels = gh_labels.load_labels(self.SEED_PATH)
-
         assert labels
         assert all(label.description for label in labels)
