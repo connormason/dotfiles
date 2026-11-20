@@ -1,0 +1,61 @@
+# GitHub label definitions applied by `gh-labels apply`.
+
+[[label]]
+name        = "bug"
+color       = "d73a4a"
+description = "Something isn't working"
+
+[[label]]
+name        = "cleanup"
+color       = "5319e7"
+description = "Remove dead code or tidy up"
+
+[[label]]
+name        = "documentation"
+color       = "0075ca"
+description = "Improvements or additions to documentation"
+
+[[label]]
+name        = "enhancement"
+color       = "a2eeef"
+description = "Improvement to an existing feature"
+
+[[label]]
+name        = "feature"
+color       = "5ab1cd"
+description = "New user-facing capability"
+
+[[label]]
+name        = "infrastructure"
+color       = "7e5f0e"
+description = "CI, build, and tooling changes"
+
+[[label]]
+name        = "maintenance"
+color       = "403ac4"
+description = "Dependency bumps and routine upkeep"
+
+[[label]]
+name        = "refactoring"
+color       = "fef2c0"
+description = "Restructure code without changing behavior"
+
+[[label]]
+name        = "release"
+color       = "b33b9b"
+description = "Release preparation or version bump"
+
+[[label]]
+name        = "task"
+color       = "76600d"
+description = "Discrete unit of work"
+
+[[label]]
+name        = "unit tests"
+color       = "82cd44"
+description = "Adding or fixing unit tests"
+
+[[label]]
+name        = "work in progress"
+color       = "c5def5"
+description = "Not ready for review or merge"

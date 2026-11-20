@@ -20,6 +20,7 @@ enforces both directions, and also that the conf.d column matches the `.config/z
 | `claude`       | `~/.claude`: `CLAUDE.md`, rules, hooks, scripts, agents, commands, skills, plugin config, the statusline renderer, and the claude-devtools config | `32-claude.zsh`                                                                                                             |
 | `fzf`          | fzf shell integration (snippet only)                                                                                                              | `36-fzf.zsh`                                                                                                                |
 | `git`          | `~/.gitconfig`, global ignore, personal identity, `gh` config, worktrunk config, git-template pre-commit hook                                     | `40-git.zsh`                                                                                                                |
+| `ghtools`      | `gh-labels` (GitHub label sync CLI) in `~/.local/bin` and its label set in `~/.config/gh-labels/labels.toml`                                      | —                                                                                                                           |
 | `hammerspoon`  | `~/.hammerspoon/init.lua` and the ReloadConfiguration, SpoonInstall, and WifiNotifier Spoons (macOS only)                                         | —                                                                                                                           |
 | `hatch-darwin` | hatch global config at its macOS path (macOS only)                                                                                                | —                                                                                                                           |
 | `hatch-linux`  | hatch global config at its Linux path, a symlink to the `hatch-darwin` file (Linux only)                                                          | —                                                                                                                           |
@@ -77,6 +78,23 @@ setting overrides all of the above; without it, `user.name` still comes from the
 from the personal default in [`git/.gitconfig`](git/.gitconfig)). In this repository, the
 [leak guard](../scripts/hooks/README.md#check-leakspy)'s `--identity` check additionally rejects a commit whose identity
 matches its patterns.
+
+## GitHub labels
+
+The `ghtools` package ships `gh-labels`, which applies one TOML-defined label set to any GitHub repository. Edit
+[`ghtools/.config/gh-labels/labels.toml`](ghtools/.config/gh-labels/labels.toml) (each `[[label]]` takes `name`,
+`color`, and an optional `description`), then:
+
+```bash
+gh-labels apply --dry-run          # preview for the repo in the current directory
+gh-labels apply                    # create missing labels, update changed ones, keep extras
+gh-labels apply --prune            # also delete labels that are not in labels.toml
+gh-labels apply -r HOST/OWNER/REPO # a repo on a specific host
+gh-labels pull -r OWNER/REPO       # print an existing repo's labels as TOML (to seed or refresh the file)
+```
+
+`--prune` is opt-in because deleting a label removes it from every issue and pull request that carries it. Requires `gh`
+authenticated for the repository's host.
 
 ## Apply
 

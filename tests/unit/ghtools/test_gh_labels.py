@@ -719,3 +719,19 @@ class TestScriptFile:
         assert text.startswith('#!/usr/bin/env -S uv run --script\n')
         assert '# requires-python = ">=3.11"' in text
         assert '# dependencies = []' in text
+
+
+class TestSeedConfig:
+    """
+    Tests for the labels.toml shipped in the stow package
+    """
+    SEED_PATH = REPO_ROOT / 'stow' / 'ghtools' / '.config' / 'gh-labels' / 'labels.toml'
+
+    def test_seed_config_is_valid(self) -> None:
+        """
+        Test that the shipped label set parses, and that every label carries a description
+        """
+        labels = gh_labels.load_labels(self.SEED_PATH)
+
+        assert labels
+        assert all(label.description for label in labels)
