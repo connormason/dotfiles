@@ -167,6 +167,7 @@ exclude = [
 disallow_untyped_defs  = true
 exclude_gitignore      = true
 ignore_missing_imports = true
+mypy_path              = "services/medialink"
 python_version         = "3.10"
 warn_unused_configs    = true
 
@@ -193,6 +194,7 @@ line-length       = 120
 output-format     = "full"
 respect-gitignore = true
 show-fixes        = true
+src               = [".", "services/medialink"]
 target-version    = "py39"
 
 extend-exclude = [
@@ -405,6 +407,7 @@ quote-style           = "single"
 [tool.pytest.ini_options]
 minversion       = "3.11"
 testpaths        = ["tests"]
+pythonpath       = ["services/medialink"]
 python_files     = ["test_*.py"]
 python_classes   = ["Test*"]
 python_functions = ["test_*"]
