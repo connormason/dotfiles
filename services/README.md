@@ -268,7 +268,10 @@ inside its release folder. `dedupe` (below) removes the flat duplicates.
 Problems (a file missing on disk, a failed link, a failed extraction, an unclassifiable or out-of-tree torrent) log an
 error and publish one ntfy message each to the `nas-media` topic through `http://ntfy:80`, using the write-only
 `ntfy_alerts_token` that `env.j2` renders into `~/docker/medialink/.env` (the `nas-*` access rule from [`ntfy`](#ntfy)
-already covers the topic). After `MEDIALINK_MAX_RPC_FAILURES` (default 5) consecutive failed cycles it alerts once and
+already covers the topic). The variable falls back to empty when the vault does not define it; ntfy denies
+unauthenticated publishes, so until the token exists (create it as in [`ntfy`](#ntfy), add it to the vault, re-render
+with `nas-provision --tags secrets`, redeploy) alerts are only logged. The `.env` must exist before the first deploy
+(see [Secrets](#secrets)). After `MEDIALINK_MAX_RPC_FAILURES` (default 5) consecutive failed cycles it alerts once and
 exits with status 2, so `docker ps` and the restart policy show an outage instead of a healthy-looking log.
 
 Commands run inside the container (`python -m medialink <command>`):
@@ -415,11 +418,21 @@ reads it through `env_file: .env`, although no file under `services/glance/` ref
 its `compose.yml`. The path is relative to `~/docker`, because `deploy.sh` passes `--project-directory ~/docker`. The
 `services` role renders each `env.j2` to `~/docker/<svc>/.env` (mode `0600`) from inventory variables, but only for
 services that have a `compose.yml`. A disabled service therefore needs no inventory variable and gets no fresh `.env`.
-`pihole` is the only service with an `env.j2` today and is disabled, so nothing renders `pihole/.env`; a
-`~/docker/pihole/.env` already on the NAS stays in place, since the sync neither ships nor deletes `.env` files. Because
-rsync never deletes, a service disabled after it was deployed keeps its NAS `compose.yml` (so `deploy.sh all` keeps
-deploying it), but its `.env` is no longer re-rendered, since the role checks the `compose.yml` in the controller's
-checkout. Rotate such a service's secret only after removing the NAS copy.
+Two services have an `env.j2` today. `medialink` is enabled, so the `services` role renders its `.env` (see the first
+deploy note below). `pihole` is disabled, so nothing renders `pihole/.env`; a `~/docker/pihole/.env` already on the NAS
+stays in place, since the sync neither ships nor deletes `.env` files. Because rsync never deletes, a service disabled
+after it was deployed keeps its NAS `compose.yml` (so `deploy.sh all` keeps deploying it), but its `.env` is no longer
+re-rendered, since the role checks the `compose.yml` in the controller's checkout. Rotate such a service's secret only
+after removing the NAS copy.
+
+**First deploy of a service with an `env.j2`: render before CI deploys.** The CI deploy renders nothing, and `deploy.sh`
+fails the service with `env file …/<svc>/.env not found` when the file is absent, so a push that adds such a service
+fails its first `deploy-push` run. Render the file from a machine that can SSH to the NAS, then re-run the failed job
+(or `python3 run.py nas-deploy <svc>`):
+
+```bash
+python3 run.py nas-provision --tags secrets
+```
 
 To rotate a secret, change it in the vault, re-render, and redeploy the service:
 
