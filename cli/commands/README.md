@@ -18,6 +18,7 @@ of targets in the generated `Makefile`.
 | [`analysis.py`](analysis.py)         | Static Analysis     | `docs-audit`                                                                                |
 | [`dependencies.py`](dependencies.py) | Dependencies        | `lock`, `lock-check`, `lock-upgrade`, `lock-sync`                                           |
 | [`utilities.py`](utilities.py)       | Utilities           | `makefile`, `diagnose`                                                                      |
+| [`tool_config.py`](tool_config.py)   | Utilities           | `config`                                                                                    |
 
 The full option reference for each command is [`docs/RUN_PY_REFERENCE.md`](../../docs/RUN_PY_REFERENCE.md).
 

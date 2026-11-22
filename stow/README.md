@@ -115,6 +115,8 @@ blocking files to `~/.dotfiles-backup/<timestamp>/` first. Run `./stow.sh --help
    maps to `~/.config/foo/bar.conf`. Create a new top-level package directory if it is a new tool.
 2. Add or update the package's row in the table above.
 3. Run `./stow.sh -n <package>` to preview, then `./stow.sh <package>`.
+4. Register the file under its tool name in `TOOL_CONFIGS` ([`cli/infra/config.py`](../cli/infra/config.py)) so
+   `python3 run.py config <tool>` opens it; `--list` shows the names already taken.
 
 ## Clarifications needed
 

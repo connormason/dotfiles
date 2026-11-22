@@ -57,6 +57,7 @@ __all__ = [
     'STOW_DIR',
     'STOW_SCRIPT',
     'TESTS_DIR',
+    'TOOL_CONFIGS',
     'UNIT_TESTS_DIR',
     'UV_COMMON_EXECUTABLE_PATHS',
     'UV_PUBLIC_SCRIPT',
@@ -278,6 +279,74 @@ UNIT_TESTS_DIR:         Path = TESTS_DIR / 'unit'
 MAKEFILE:               Path = DOTFILES_DIR / 'Makefile'
 STOW_SCRIPT:            Path = DOTFILES_DIR / 'stow.sh'
 VAULT_PASSWORD:         Path = DOTFILES_DIR / VAULT_PASSWORD_FILENAME
+
+
+# ==================================================================================================
+# Tool config registry (`config` command)
+#
+# Maps a tool name to the repo files that configure it, primary file first (the one `config <tool>` opens; the rest
+# open with --all). Stow package names do not map onto tools (`os_tools` holds six of them), and settings files that
+# apps rewrite at runtime are rendered from `render/` fragments, so the fragment is registered instead of the target.
+# A unit test checks that every registered file exists.
+# ==================================================================================================
+
+
+def _stow_files(package: str, *relpaths: str) -> list[Path]:
+    """
+    Resolve files inside a stow package
+
+    :param package: directory name under ``stow/``
+    :param relpaths: file paths relative to the package root (which mirrors ``$HOME``)
+    :return: absolute paths, in the order given
+    """
+    return [STOW_DIR / package / relpath for relpath in relpaths]
+
+
+_ZSH_SNIPPETS: str = '.config/zsh/conf.d'
+
+TOOL_CONFIGS: dict[str, list[Path]] = {
+    'bash':            _stow_files('shell',        '.bashrc', '.bash_profile', '.profile'),
+    'brew':            [BOOTSTRAP_DIR / 'Brewfile', *_stow_files('homebrew', f'{_ZSH_SNIPPETS}/05-homebrew.zsh')],
+    'btop':            _stow_files('os_tools',     '.config/btop/btop.conf'),
+    'bun':             _stow_files('node',         f'{_ZSH_SNIPPETS}/44-node.zsh'),
+    'claude':          _stow_files('claude',       '.claude/CLAUDE.md', '.claude/plugins/config.json'),
+    'claude-settings': [RENDER_DIR / 'claude.json'],
+    'eza':             _stow_files('os_tools',     '.config/eza/theme.yml'),
+    'fastfetch':       _stow_files('os_tools',     '.config/fastfetch/config.jsonc'),
+    'fzf':             _stow_files('fzf',          f'{_ZSH_SNIPPETS}/36-fzf.zsh'),
+    'gh':              _stow_files('git',          '.config/gh/config.yml'),
+    'gh-labels':       _stow_files('ghtools',      '.config/gh-labels/labels.toml'),
+    'git':             _stow_files('git',          '.gitconfig', '.config/git/ignore', '.config/git/identity-personal'),
+    'hammerspoon':     _stow_files('hammerspoon',  '.hammerspoon/init.lua'),
+    'hatch':           _stow_files('hatch-darwin', 'Library/Application Support/hatch/config.toml'),
+    'htop':            _stow_files('os_tools',     '.config/htop/htoprc'),
+    'ipython':         _stow_files('python',       '.ipython/profile_default/startup/00-rich.py'),
+    'iterm2':          _stow_files('iterm2',       '.config/iterm2/com.googlecode.iterm2.plist'),
+    'ranger':          _stow_files(
+        'os_tools',
+        '.config/ranger/rc.conf',
+        '.config/ranger/rifle.conf',
+        '.config/ranger/commands.py',
+        '.config/ranger/scope.sh',
+    ),
+    'ssh':             _stow_files('ssh',          '.ssh/config', '.ssh/config.d/personal'),
+    'sshm':            _stow_files('os_tools',     '.config/sshm/config.json'),
+    'starship':        _stow_files('starship',     '.config/starship.toml'),
+    'tmux':            _stow_files('tmux',         '.config/tmux/tmux.conf', '.config/tmux/tmux.conf.local'),
+    'vscode':          _stow_files('vscode',       'Library/Application Support/Code/User/keybindings.json'),
+    'vscode-settings': [RENDER_DIR / 'vscode.json'],
+    'worktrunk':       _stow_files('git',          '.config/worktrunk/config.toml'),
+    'yazi':            _stow_files(
+        'yazi',
+        '.config/yazi/yazi.toml',
+        '.config/yazi/keymap.toml',
+        '.config/yazi/theme.toml',
+        '.config/yazi/init.lua',
+    ),
+    'zed':             _stow_files('zed',          '.config/zed/settings.json'),
+    'zoxide':          _stow_files('zoxide',       f'{_ZSH_SNIPPETS}/38-zoxide.zsh'),
+    'zsh':             _stow_files('shell',        '.zshrc', '.zprofile', f'{_ZSH_SNIPPETS}/40-aliases.zsh'),
+}
 
 
 # ==================================================================================================

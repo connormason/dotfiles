@@ -135,7 +135,7 @@ class TestCommandRegistration:
             'test', 'test-full', 'test-unit', 'test-integration', 'test-cov', 'test-analyze',
             'docs-audit',
             'lock', 'lock-check', 'lock-upgrade', 'lock-sync',
-            'makefile', 'diagnose',
+            'makefile', 'diagnose', 'config',
         ]
 
 
