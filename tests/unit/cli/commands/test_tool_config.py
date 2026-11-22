@@ -27,6 +27,11 @@ if TYPE_CHECKING:
 Call = tuple[list[str], dict[str, object]]
 
 
+# ==================================================================================================
+# Helpers
+# ==================================================================================================
+
+
 def _parse(*argv: str) -> argparse.Namespace:
     """
     Parse a run.py command line into the typed root namespace
@@ -35,7 +40,7 @@ def _parse(*argv: str) -> argparse.Namespace:
 
 
 # ==================================================================================================
-# TOOL_CONFIGS registry
+# Unit tests
 # ==================================================================================================
 
 
@@ -75,11 +80,6 @@ class TestToolConfigsRegistry:
         point at their render fragment instead of the (overwritten) target
         """
         assert TOOL_CONFIGS[tool][0] == primary
-
-
-# ==================================================================================================
-# config command
-# ==================================================================================================
 
 
 class TestConfigCommand:
@@ -223,7 +223,7 @@ class TestConfigCommand:
 
         out = unstyle(capsys.readouterr().out)
         assert "Unknown tool 'tmx'" in out
-        assert 'tmux' in out
+        assert 'tmux'               in out
         assert self.calls == []
 
     def test_unknown_tool_without_match_lists_valid_tools(self, capsys: pytest.CaptureFixture[str]) -> None:

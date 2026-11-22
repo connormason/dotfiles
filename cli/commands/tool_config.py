@@ -29,16 +29,6 @@ __all__ = [
 ]
 
 
-# ==================================================================================================
-# Tool config command
-#
-#   - config: open a tool's config file (registered in TOOL_CONFIGS) in $VISUAL / $EDITOR
-#     - Opens the tool's primary file; --all opens every registered file for the tool
-#     - --print-path prints the path(s) instead, for use in scripts and command substitution
-#     - --list shows every tool name with its primary file
-# ==================================================================================================
-
-
 DEFAULT_EDITOR: str = 'vi'
 
 
@@ -71,6 +61,16 @@ def _print_tools(*, indent: int = 0) -> None:
     for tool, paths in TOOL_CONFIGS.items():
         extra = f' {style(f"(+{len(paths) - 1} more)", dim=True)}' if len(paths) > 1 else ''
         printf(f'{style(tool.ljust(width), fg="white", bold=True)}  {_display_path(paths[0])}{extra}', indent=indent)
+
+
+# ==================================================================================================
+# Tool config command
+#
+#   - config: open a tool's config file (registered in TOOL_CONFIGS) in $VISUAL / $EDITOR
+#     - Opens the tool's primary file; --all opens every registered file for the tool
+#     - --print-path prints the path(s) instead, for use in scripts and command substitution
+#     - --list shows every tool name with its primary file
+# ==================================================================================================
 
 
 class ConfigCommand(Command):
@@ -140,16 +140,16 @@ class ConfigCommand(Command):
             else:
                 printf('Available tools:', indent=3)
                 _print_tools(indent=5)
+
             sys.exit(ExitCode.COMMAND_FAILED)
 
         paths = TOOL_CONFIGS[args.tool] if args.all_files else TOOL_CONFIGS[args.tool][:1]
-
         if args.print_path:
             for path in paths:
                 print(path)
             return
 
-        cmd = [*_editor_command(), *map(str, paths)]
+        cmd: list[str] = [*_editor_command(), *map(str, paths)]
         try:
             result = shell_command(cmd, check=False)
         except FileNotFoundError:
@@ -159,4 +159,5 @@ class ConfigCommand(Command):
                 fg='bright_red',
             )
             sys.exit(ExitCode.SETUP_ERROR)
-        sys.exit(result.returncode)
+        else:
+            sys.exit(result.returncode)
