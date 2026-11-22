@@ -11,10 +11,8 @@ import sys
 from typing import TYPE_CHECKING
 from typing import ClassVar
 
+from cli.infra import config
 from cli.infra.command import Command
-from cli.infra.config import CLAUDE_STOW_DIR
-from cli.infra.config import RENDER_SCRIPT
-from cli.infra.config import STOW_SCRIPT
 from cli.infra.config import ExitCode
 from cli.utils.claude import CLAUDE_CONFIG_DIR
 from cli.utils.claude import find_untracked_claude_files
@@ -89,7 +87,7 @@ class StowCommand(Command):
         )
 
     def run(self, args: Args) -> None:
-        cmd: list[str] = ['bash', str(STOW_SCRIPT)]
+        cmd: list[str] = ['bash', str(config.STOW_SCRIPT)]
         if args.simulate:
             cmd.append('-n')
         if args.backup_conflicts:
@@ -144,7 +142,7 @@ class RenderCommand(Command):
         )
 
     def run(self, args: Args) -> None:
-        cmd: list[str] = [sys.executable, str(RENDER_SCRIPT), *args.targets]
+        cmd: list[str] = [sys.executable, str(config.RENDER_SCRIPT), *args.targets]
         for flag, enabled in (
             ('--diff',  args.diff),
             ('--check', args.check),
@@ -183,7 +181,7 @@ class TrackClaudeCommand(Command):
 
         :return: ``None`` when stow would succeed, otherwise the first few lines of its output
         """
-        result = capture_command(['bash', str(STOW_SCRIPT), '-n', 'claude'])
+        result = capture_command(['bash', str(config.STOW_SCRIPT), '-n', 'claude'])
         if result.returncode == 0:
             return None
 
@@ -267,7 +265,7 @@ class TrackClaudeCommand(Command):
         conflicts: list[Path]              = []
         for src in untracked:
             rel = src.relative_to(CLAUDE_CONFIG_DIR)
-            dst = CLAUDE_STOW_DIR / rel
+            dst = config.CLAUDE_STOW_DIR / rel
             if os.path.lexists(dst):
                 conflicts.append(rel)
                 printf(f'{style("CONFLICT", fg="red")}  {rel}', indent=2)
@@ -360,7 +358,7 @@ class TrackClaudeCommand(Command):
         printf('')
         printf('🔗 Restowing claude package...', fg='bright_cyan')
         try:
-            shell_command(['bash', str(STOW_SCRIPT), 'claude'], indent=3)
+            shell_command(['bash', str(config.STOW_SCRIPT), 'claude'], indent=3)
         except subprocess.CalledProcessError:
             printf(
                 f'❌ Restow failed: {moved} file(s) are now in the repo but NOT linked back into ~/.claude '

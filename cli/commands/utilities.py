@@ -8,13 +8,9 @@ import sys
 from pathlib import Path
 from typing import ClassVar
 
+from cli.infra import config
 from cli.infra.command import Command
 from cli.infra.command import get_commands
-from cli.infra.config import DIAGNOSTIC_SCRIPT_PATH
-from cli.infra.config import DOTFILES_DIR
-from cli.infra.config import MAKEFILE
-from cli.infra.config import MAKEFILE_HELP_COL_SPACING
-from cli.infra.config import SCRIPT_PATH
 from cli.utils.scripts import check_script_validity
 from cli.utils.shell import shell_command
 from cli.utils.styling import printf
@@ -48,7 +44,7 @@ class MakefileCommand(Command):
     group:       ClassVar[str] = 'Utilities'
     description: ClassVar[str] = ' '.join([
         'Generate Makefile from project management script commands',
-        style(f'({SCRIPT_PATH.name})', dim=True),
+        style(f'({config.SCRIPT_PATH.name})', dim=True),
     ])
 
     class Args(argparse.Namespace):
@@ -62,11 +58,11 @@ class MakefileCommand(Command):
             dest='col_spacing',
             metavar='COLS',
             type=int,
-            default=MAKEFILE_HELP_COL_SPACING,
+            default=config.MAKEFILE_HELP_COL_SPACING,
             help=(
                 f'Width of spacing between command name and command description columns '
                 f'in generated Makefile help target\n'
-                f'(default: {MAKEFILE_HELP_COL_SPACING})'
+                f'(default: {config.MAKEFILE_HELP_COL_SPACING})'
             ),
         )
 
@@ -84,7 +80,7 @@ class MakefileCommand(Command):
             '#',
             "# Makefile for Connor's dotfiles",
             '#',
-            f'# Auto-generated via `{SCRIPT_PATH.name} makefile`',
+            f'# Auto-generated via `{config.SCRIPT_PATH.name} makefile`',
             '#',
             f'.PHONY: help {" ".join(command_names)}',
             '',
@@ -117,9 +113,13 @@ class MakefileCommand(Command):
                 target = f'{cmd_name}:'
                 if cmd_info.description:
                     target += f' ## {unstyle(cmd_info.description).splitlines()[0]}'
-                lines.extend([target, f'\t@python3 {SCRIPT_PATH.relative_to(DOTFILES_DIR)} {cmd_name}', ''])
+                lines.extend([
+                    target,
+                    f'\t@python3 {config.SCRIPT_PATH.relative_to(config.DOTFILES_DIR)} {cmd_name}',
+                    '',
+                ])
 
-        with MAKEFILE.open('w') as f:
+        with config.MAKEFILE.open('w') as f:
             f.write('\n'.join(lines))
         printf('✅ Makefile updated', fg='bright_green')
 
@@ -172,12 +172,12 @@ class DiagnoseCommand(Command):
         add_file_out_opts()
 
     def run(self, args: Args) -> None:
-        check_script_validity(DIAGNOSTIC_SCRIPT_PATH, 'python diagnostic script')
+        check_script_validity(config.DIAGNOSTIC_SCRIPT_PATH, 'python diagnostic script')
 
         printf('🔧 Running python diagnostic script...', fg='bright_cyan')
         shell_command([
             sys.executable,
-            str(DIAGNOSTIC_SCRIPT_PATH),
+            str(config.DIAGNOSTIC_SCRIPT_PATH),
             *(['--max-installed-packages', str(args.max_installed_packages)] if args.max_installed_packages else []),
             *(['--save']                                                     if args.save                   else []),
             *(['--json']                                                     if args.json                   else []),

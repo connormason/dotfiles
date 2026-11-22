@@ -7,8 +7,8 @@ import argparse
 import sys
 from typing import ClassVar
 
+from cli.infra import config
 from cli.infra.command import Command
-from cli.infra.config import DOTFILES_DIR
 from cli.utils.shell import shell_command
 from cli.utils.styling import printf
 
@@ -66,5 +66,5 @@ class DocsAuditCommand(Command):
         # Keep stdout machine-readable under --json
         if not args.json:
             printf('🔎 Auditing README documentation...', fg='bright_cyan')
-        result = shell_command(cmd, check=False, cwd=DOTFILES_DIR)
+        result = shell_command(cmd, check=False, cwd=config.DOTFILES_DIR)
         sys.exit(result.returncode)

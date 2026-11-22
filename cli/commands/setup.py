@@ -13,9 +13,8 @@ from typing import Any
 from typing import ClassVar
 from typing import cast
 
+from cli.infra import config
 from cli.infra.command import Command
-from cli.infra.config import DOTFILES_DIR
-from cli.infra.config import VENV_DIR
 from cli.infra.config import ExitCode
 from cli.utils.doctor_checks import check_hooks
 from cli.utils.doctor_checks import doctor_checks
@@ -179,7 +178,7 @@ class InstallCommand(Command):
             enter_venv()
             return
 
-        printf(f'✅ Environment ready: {pathstyle(VENV_DIR)}', fg='bright_green')
+        printf(f'✅ Environment ready: {pathstyle(config.VENV_DIR)}', fg='bright_green')
         if not active_venv:
             printf(f'Enter environment with: {style("make shell", fg="bright_magenta")}', fg='bright_white', indent=3)
 
@@ -214,7 +213,7 @@ class DevCommand(InstallCommand):
             enter_venv()
             return
 
-        printf(f'✅ Environment ready: {pathstyle(VENV_DIR)}', fg='bright_green')
+        printf(f'✅ Environment ready: {pathstyle(config.VENV_DIR)}', fg='bright_green')
         if not active_venv:
             printf(f'Enter environment with: {style("make shell", fg="bright_magenta")}', fg='bright_white', indent=3)
 
@@ -271,7 +270,7 @@ class StatusCommand(Command):
 
         # .venv (or external active venv if user manages their own)
         external_venv = get_external_active_venv()
-        target_venv   = external_venv or VENV_DIR
+        target_venv   = external_venv or config.VENV_DIR
         venv_label    = 'active venv' if external_venv else '.venv'
         venv_path     = external_venv or None
 
@@ -367,7 +366,7 @@ class DoctorCommand(Command):
                     continue
 
                 printf(f'🔧 {check.name}: {command}', fg='bright_cyan')
-                shell_command(check.fix, indent=3, check=False, cwd=DOTFILES_DIR)
+                shell_command(check.fix, indent=3, check=False, cwd=config.DOTFILES_DIR)
 
             checks = doctor_checks()
 
@@ -408,9 +407,9 @@ class CleanCommand(Command):
             printf(f'Cleaning {style(group, fg="bright_white")}...', indent=3)
 
             for pattern in patterns:
-                for path in DOTFILES_DIR.glob(pattern):
+                for path in config.DOTFILES_DIR.glob(pattern):
                     path     = cast('Path', path)
-                    rel_path = path.relative_to(DOTFILES_DIR)
+                    rel_path = path.relative_to(config.DOTFILES_DIR)
 
                     if path.is_dir():
                         dir_files = list(path.glob('**/*'))
@@ -421,7 +420,7 @@ class CleanCommand(Command):
                             indent=5,
                         )
                         for p in dir_files:
-                            printf(str(p.relative_to(DOTFILES_DIR)), debug=True, indent=7)
+                            printf(str(p.relative_to(config.DOTFILES_DIR)), debug=True, indent=7)
                         shutil.rmtree(path)
                         cleaned += len(dir_files)
 
