@@ -12,8 +12,6 @@ from typing import ClassVar
 
 from cli.infra import config
 from cli.infra.command import Command
-from cli.infra.config import INVENTORY_DIR
-from cli.infra.config import INVENTORY_REPO_URL
 from cli.infra.config import ExitCode
 from cli.utils.ansible import find_vault_files
 from cli.utils.ansible import require_inventory
@@ -134,10 +132,10 @@ class InventoryStatusCommand(Command):
         printf('')
 
         # Check if inventory directory exists
-        if not INVENTORY_DIR.exists():
+        if not config.INVENTORY_DIR.exists():
             printf('Status:   ', fg='bright_white', bold=True, reset=False)
             printf('Not found',  fg='red',          bold=True)
-            printf(f'Path:     {style(folduser(INVENTORY_DIR), fg="magenta", dim=True)}', dim=True)
+            printf(f'Path:     {style(folduser(config.INVENTORY_DIR), fg="magenta", dim=True)}', dim=True)
             printf('')
             printf(
                 f'💡 Run {style("python3 run.py update-inventory", fg="bright_magenta")} to clone the inventory',
@@ -147,11 +145,11 @@ class InventoryStatusCommand(Command):
 
         printf('Status:   ', fg='bright_white', bold=True, reset=False)
         printf('Found',      fg='green',        bold=True)
-        printf(f'Path:     {style(folduser(INVENTORY_DIR), fg="magenta", dim=True)}', dim=True)
+        printf(f'Path:     {style(folduser(config.INVENTORY_DIR), fg="magenta", dim=True)}', dim=True)
         printf('')
 
         # Check if it's a git repository
-        git_dir = INVENTORY_DIR / '.git'
+        git_dir = config.INVENTORY_DIR / '.git'
         if not git_dir.exists():
             printf('Type:     ', fg='bright_white', bold=True, reset=False)
             printf('Not a git repository', fg='yellow', bold=True)
@@ -168,7 +166,7 @@ class InventoryStatusCommand(Command):
         try:
             result = shell_command(
                 ['git', 'remote', 'get-url', 'origin'],
-                cwd=INVENTORY_DIR,
+                cwd=config.INVENTORY_DIR,
                 capture_output=True,
             )
             remote_url = result.stdout.strip()
@@ -182,7 +180,7 @@ class InventoryStatusCommand(Command):
         try:
             result = shell_command(
                 ['git', 'branch', '--show-current'],
-                cwd=INVENTORY_DIR,
+                cwd=config.INVENTORY_DIR,
                 capture_output=True,
             )
             branch = result.stdout.strip()
@@ -196,7 +194,7 @@ class InventoryStatusCommand(Command):
         try:
             result = shell_command(
                 ['git', 'log', '-1', '--format=%h - %s (%cr)'],
-                cwd=INVENTORY_DIR,
+                cwd=config.INVENTORY_DIR,
                 capture_output=True,
             )
             last_commit = result.stdout.strip()
@@ -209,7 +207,7 @@ class InventoryStatusCommand(Command):
         try:
             result = shell_command(
                 ['git', 'status', '--porcelain'],
-                cwd=INVENTORY_DIR,
+                cwd=config.INVENTORY_DIR,
                 capture_output=True,
             )
             if result.stdout.strip():
@@ -267,14 +265,14 @@ class UpdateInventoryCommand(Command):
             try:
                 result = shell_command(
                     ['git', 'status', '--porcelain'],
-                    cwd=INVENTORY_DIR,
+                    cwd=config.INVENTORY_DIR,
                     capture_output=True,
                 )
                 if result.stdout.strip():
                     printf('⚠️  Uncommitted changes detected, resetting...', fg='yellow', indent=3)
                     shell_command(
                         ['git', 'reset', '--hard', 'HEAD'],
-                        cwd=INVENTORY_DIR,
+                        cwd=config.INVENTORY_DIR,
                         indent=3,
                     )
             except subprocess.CalledProcessError:
@@ -283,7 +281,7 @@ class UpdateInventoryCommand(Command):
         try:
             cp = shell_command(
                 ['git', 'pull', 'origin', 'main'],
-                cwd=INVENTORY_DIR,
+                cwd=config.INVENTORY_DIR,
                 indent=3,
                 timeout=timeout,
                 **kwargs,
@@ -307,7 +305,7 @@ class UpdateInventoryCommand(Command):
         """
         try:
             cp = shell_command(
-                ['git', 'clone', '--no-progress', INVENTORY_REPO_URL, str(INVENTORY_DIR)],
+                ['git', 'clone', '--no-progress', config.INVENTORY_REPO_URL, str(config.INVENTORY_DIR)],
                 indent=3,
                 timeout=timeout,
                 **kwargs,
@@ -324,12 +322,12 @@ class UpdateInventoryCommand(Command):
         try:
 
             # Case 1: Inventory directory exists and is a git repo - pull latest changes
-            if INVENTORY_DIR.exists() and (INVENTORY_DIR / '.git').exists():
+            if config.INVENTORY_DIR.exists() and (config.INVENTORY_DIR / '.git').exists():
                 self.pull_inventory_repo(force=args.force)
 
             # Case 2: Inventory directory exists but isn't a git repo - remove and re-clone
-            elif INVENTORY_DIR.exists():
-                shutil.rmtree(INVENTORY_DIR)
+            elif config.INVENTORY_DIR.exists():
+                shutil.rmtree(config.INVENTORY_DIR)
                 self.clone_inventory_repo()
 
             # Case 3: Inventory directory does not exist - clone from remote
@@ -360,7 +358,7 @@ class VaultDecryptCommand(Command):
         printf('🔓 Decrypting vault files...', fg='bright_white')
         failed = 0
         for vault_file in vault_files:
-            relative = vault_file.relative_to(INVENTORY_DIR)
+            relative = vault_file.relative_to(config.INVENTORY_DIR)
             try:
                 shell_command(
                     ['ansible-vault', 'decrypt', str(vault_file)],
@@ -405,7 +403,7 @@ class VaultEncryptCommand(Command):
         printf('🔒 Encrypting vault files...', fg='bright_white')
         failed = 0
         for vault_file in vault_files:
-            relative = vault_file.relative_to(INVENTORY_DIR)
+            relative = vault_file.relative_to(config.INVENTORY_DIR)
             try:
                 shell_command(
                     ['ansible-vault', 'encrypt', str(vault_file)],
