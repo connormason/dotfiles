@@ -10,3 +10,4 @@ local_services_default:
   - {name: radarr, port: 7878}
   - {name: prowlarr, port: 9696}
   - {name: transmission, port: 9091}
+  - {name: filebrowser, port: 80}
