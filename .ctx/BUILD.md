@@ -145,6 +145,11 @@ python3 run.py test-full
 python3 run.py test-unit
 python3 run.py test-integration
 python3 run.py test-cov
+python3 run.py test-analyze
+
+# Options on every test command: -m/--marker EXPR, -q/--quick, -v, -d/--durations N, -c/--cov, --analyze,
+# --args="PYTEST ARGS" (see docs/RUN_PY_REFERENCE.md); make targets cannot forward flags
+python3 run.py test-full -q -d 10 --args="-x"
 
 # Audit per-directory README files: missing, stale, structural, broken links, forbidden patterns
 # (--json for machine-readable output, --no-fail to always exit 0; SCOPE paths narrow the audit)
