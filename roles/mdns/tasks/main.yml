@@ -1,0 +1,78 @@
+---
+- name: Require at least one local_services entry
+  ansible.builtin.assert:
+    that:
+      - local_services | length > 0
+    fail_msg: local_services is empty; there would be no hostnames to publish
+    quiet: true
+
+# The names reach the unit's ExecStart line, so they must be plain DNS labels. \Z, not $: $ also matches before a
+# trailing newline, which would start a new line in the unit file.
+- name: Require local_services names that are plain DNS labels
+  ansible.builtin.assert:
+    that:
+      - mdns_service.name is match('^[a-z0-9]([a-z0-9-]*[a-z0-9])?\Z')
+    fail_msg: "'{{ mdns_service.name }}' is not a lowercase DNS label, so it cannot be <name>.local"
+    quiet: true
+  loop: "{{ local_services }}"
+  loop_control:
+    loop_var: mdns_service
+    label: "{{ mdns_service.name }}"
+
+- name: Install Avahi
+  become: true
+  ansible.builtin.apt:
+    pkg:
+      - avahi-daemon
+      - avahi-utils
+
+- name: Configure Avahi
+  become: true
+  ansible.builtin.template:
+    src: avahi-daemon.conf.j2
+    dest: "{{ mdns_avahi_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Avahi
+
+- name: Install the mDNS name publisher
+  become: true
+  ansible.builtin.copy:
+    src: nas-mdns-publish
+    dest: "{{ mdns_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart the mDNS publisher
+
+- name: Install the mDNS publisher unit
+  become: true
+  ansible.builtin.template:
+    src: nas-mdns-publish.service.j2
+    dest: "{{ mdns_unit_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the mDNS publisher
+
+- name: Enable and start Avahi
+  become: true
+  ansible.builtin.service:
+    name: avahi-daemon
+    state: started
+    enabled: true
+
+# daemon_reload here picks up an edited unit before the restart handler runs at the end of the play
+- name: Enable and start the mDNS publisher
+  become: true
+  ansible.builtin.systemd:
+    name: nas-mdns-publish.service
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# Without this the restarts wait for the end of the play, so a later role failing would leave Avahi and the publisher
+# stale on a rerun that sees no change
+- name: Apply Avahi and publisher changes before the later roles
+  ansible.builtin.meta: flush_handlers

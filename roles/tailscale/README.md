@@ -11,6 +11,7 @@ Sets up [Tailscale VPN](https://tailscale.com/) on Debian systems.
 - [Required Variables](#required-variables)
 - [Optional Variables](#optional-variables)
 - [Service Routing](#service-routing)
+- [Local Hostnames](#local-hostnames)
 - [Post-Deployment Steps](#post-deployment-steps)
 - [Running](#running)
 - [Cert Renewal](#cert-renewal)
@@ -25,7 +26,8 @@ Sets up [Tailscale VPN](https://tailscale.com/) on Debian systems.
 - Enables Tailscale SSH on Linux hosts (`tailscale_ssh_enabled`; the NAS sets it to `false` so the CI deploy can use
   regular SSH, see [`services/README.md`](../../services/README.md#ci-deploys))
 - Provisions HTTPS certificates via `tailscale cert` (NAS only)
-- Renders the Caddyfile at `/etc/caddy/Caddyfile` (NAS only); the Caddy container itself is defined by
+- Renders the Caddyfile at `/etc/caddy/Caddyfile` (NAS only): the Tailscale HTTPS routes plus a plain-HTTP
+  `http://<name>.local` site per `local_services` entry; the Caddy container itself is defined by
   [`services/caddy/compose.yml`](../../services/caddy/compose.yml) and deployed by the
   [`services`](../services/README.md) role or `python3 run.py nas-deploy caddy`
 - Automatic weekly cert renewal via systemd timer
@@ -93,6 +95,14 @@ Services are accessible via `https://nas.<tailnet>.ts.net/<path>`:
 The Caddyfile template skips any `pihole` entry of `tailscale_services` in its loop and always emits its own `/pihole`
 route (prefix stripped, rewritten to `/admin`, proxied to `pihole:80`). The `pihole` entry above therefore has no
 effect, and the route has no container behind it while PiHole is disabled (`services/pihole/compose.yml.disabled`).
+
+## Local Hostnames<a name="local-hostnames"></a>
+
+The Caddyfile also gets one `http://<name>.local` site per entry of `local_services`, each proxying to `<name>:<port>`
+on `nas-network`. `local_services` is a play variable (defined in `playbooks/nas_bootstrap.yml` from
+`playbooks/vars/local_services.yml`), not a variable of this role; the template fails if it is undefined. The names
+themselves are announced by the [`mdns`](../mdns/README.md) role. See
+[`services/README.md`](../../services/README.md#local-hostnames) for the URL table.
 
 ## Post-Deployment Steps<a name="post-deployment-steps"></a>
 
