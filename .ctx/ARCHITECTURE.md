@@ -99,8 +99,7 @@ fails when this list drifts from the playbook):
 - `samba`: Samba file sharing
 - `mdns`: Avahi and a systemd publisher announcing `<name>.local` for each web UI in `local_services`
 - `docker`: Docker Engine and compose plugin (the v1 `docker-compose` package is removed), `daemon.json` log limits, a
-  weekly image-prune timer, docker-group membership, the `~/docker` skeleton and shared `.env`, the autoplex image
-  build, `deploy.sh`
+  weekly image-prune timer, docker-group membership, the `~/docker` skeleton and shared `.env`, `deploy.sh`
 - `tailscale`: Tailscale install and configuration, HTTPS certificates, and the Caddyfile Caddy reads
 - `dotfiles`: `$HOME` via the stow engine: clone, `profiles/nas` overlay, login shell, `bootstrap.sh`
 - `haos`: Home Assistant OS VM via `vms/haos/setup.sh` (never `bridge.sh`)
@@ -162,7 +161,7 @@ Media server stack defined by `services/compose.base.yml` plus one `services/<na
 - **Media**: Plex, Jellyfin, Radarr (movies), Sonarr (TV), Transmission (torrents), Prowlarr (indexer), Flaresolverr
 - **Network**: Caddy (reverse proxy: Tailscale HTTPS routes and plain-HTTP `.local` hostnames), PiHole (DNS/ad-blocking; disabled)
 - **Dashboard**: Glance
-- **Support**: Autoplex (copies completed downloads into the Plex layout)
+- **Support**: medialink (hardlinks completed downloads into the Plex/Jellyfin library trees)
 - **Home automation**: Home Assistant runs as a libvirt VM provisioned by `vms/haos/` scripts; its container definition
   is disabled. The VM's hand-editable YAML is tracked in `services/homeassistant/config/` and synced with `run.py ha-pull` /
   `ha-push` over SSH (not part of the Ansible flow)

@@ -170,7 +170,7 @@ Configures the home NAS server with:
 - **[Profiles](profiles/README.md)** - per-machine overlays
 - **[Playbook Workflows](playbooks/README.md)** - NAS playbook execution, tags, troubleshooting
 - **[Ansible Roles](roles/README.md)** - NAS role set and how to add one
-- **[Docker Role](roles/docker/README.md)** - Docker Engine, `~/docker` skeleton, autoplex image, `deploy.sh`
+- **[Docker Role](roles/docker/README.md)** - Docker Engine, `~/docker` skeleton, `deploy.sh`
 - **[Services Role](roles/services/README.md)** - sync of `services/` to the NAS, per-service secrets, deploy
 - **[dotfiles Role](roles/dotfiles/README.md)** - `$HOME` on the NAS via the stow engine
 - **[haos Role](roles/haos/README.md)** - Home Assistant OS VM provisioning from the playbook
@@ -323,7 +323,7 @@ python3 run.py nas-provision --tags dotfiles
 # Sync services/, render per-service secrets, and redeploy the Compose stack only
 python3 run.py nas-provision --tags services
 
-# Docker Engine, the ~/docker skeleton, the autoplex image, and deploy.sh (does not deploy the stack)
+# Docker Engine, the ~/docker skeleton, and deploy.sh (does not deploy the stack)
 python3 run.py nas-provision --tags docker
 
 # Deploy one Compose service (or `all`) without running the playbook
@@ -391,7 +391,7 @@ dotfiles/
 │   ├── backup/                             # Nightly restic backup to Backblaze B2
 │   ├── samba/                              # File sharing
 │   ├── mdns/                               # Avahi hostnames (<name>.local) for the web UIs
-│   ├── docker/                             # Docker Engine, ~/docker skeleton, autoplex image, deploy.sh
+│   ├── docker/                             # Docker Engine, ~/docker skeleton, deploy.sh
 │   ├── tailscale/                          # Tailscale VPN, HTTPS certificates, Caddyfile
 │   ├── dotfiles/                           # $HOME via the stow engine
 │   ├── haos/                               # Home Assistant OS VM (runs vms/haos/setup.sh)
@@ -469,7 +469,7 @@ Media server stack, defined in [`services/`](services/README.md):
 - **Home automation**: Home Assistant runs as a VM rather than a Compose service (see
   [`vms/haos/`](vms/haos/README.md)); its YAML configuration is tracked in
   [`services/homeassistant/`](services/homeassistant/README.md)
-- **Support**: Autoplex (copies completed downloads into the library trees)
+- **Support**: medialink (hardlinks completed downloads into the library trees)
 
 ### Python CLI (`run.py`)<a name="python-cli-runpy"></a>
 

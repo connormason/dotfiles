@@ -5,7 +5,7 @@
 Docker Compose definitions for the home NAS stack. Each subdirectory holds the `compose.yml` of one service;
 `compose.base.yml` provides the shared project name (`nas-stack`) and the `nas-network` bridge that ties them together.
 Besides the compose files, some services need inputs that exist only on the NAS, among them the shared `~/docker/.env`
-(Glance and Plex; see [Secrets](#secrets)), the locally built `autoplex` image (see [`autoplex`](#autoplex)), Caddy's
+(Glance and Plex; see [Secrets](#secrets)), the locally built `medialink` image (see [`medialink`](#medialink)), Caddy's
 `Caddyfile` and certificates (see [`caddy`](#caddy)), and, when re-enabled, PiHole's `pihole/.env` (see
 [`pihole`](#pihole)).
 
@@ -49,7 +49,7 @@ it. Remove the NAS copy by hand; for `homeassistant`, the steps are in the
   - [`jellyfin`](#jellyfin)
   - [`prowlarr`, `radarr`, `sonarr`, `transmission`](#prowlarr-radarr-sonarr-transmission)
   - [`flaresolverr`](#flaresolverr)
-  - [`autoplex`](#autoplex)
+  - [`medialink`](#medialink)
   - [`ntfy`](#ntfy)
 - [Data flow](#data-flow)
 - [Storage layout](#storage-layout)
@@ -80,7 +80,7 @@ All host ports below are bound on the NAS itself. Services without a host port a
 | `sonarr`         | `linuxserver/sonarr`                | `8989/tcp`                                      | TV library management                                           |
 | `transmission`   | `linuxserver/transmission`          | `9091/tcp`                                      | BitTorrent client (web UI)                                      |
 | `flaresolverr`   | `ghcr.io/flaresolverr/flaresolverr` | internal only (`8191/tcp`, not declared here)   | Cloudflare challenge solver for Prowlarr                        |
-| `autoplex`       | `danielmmetz/autoplex` (built)      | none                                            | Copies completed downloads into Plex layout                     |
+| `medialink`      | `nas-medialink:local` (built)       | none                                            | Hardlinks completed downloads into the media libraries          |
 | `ntfy`           | `binwiederhier/ntfy:v2.11.0`        | `127.0.0.1:2586` → 80 (loopback only)           | Push-notification channel for host alerts                       |
 
 The compose files declare neither the Home Assistant port `8123` nor the Flaresolverr port `8191`; both are upstream
@@ -132,7 +132,7 @@ container, through an `http://` site that the `tailscale` role renders into the 
 | `http://transmission.local` | `transmission:9091` |
 
 `homeassistant.local` is announced by Home Assistant OS itself and is not part of this list. `ntfy` is loopback-only,
-and `flaresolverr` and `autoplex` have no web UI, so none of the three has a name.
+and `flaresolverr` and `medialink` have no web UI, so none of the three has a name.
 
 Clients need mDNS support: macOS, iOS and Windows 10 and later have it; Linux needs `nss-mdns`. Without it, use
 `http://<nas-host>:<port>`.
@@ -225,17 +225,87 @@ Sidecar that solves Cloudflare challenges for Prowlarr. Publishes no port and mo
 `nas-network` bridge reach it by name as `http://flaresolverr:8191` (`8191` is not declared here; it is the upstream
 default, unverified in this repository).
 
-### `autoplex`<a name="autoplex"></a>
+### `medialink`<a name="medialink"></a>
 
-Copies completed downloads into the library trees. The image `danielmmetz/autoplex:latest` is built on the NAS by the
-`docker` role (a clone of the upstream repository in `~/docker/.build/autoplex`, branch `master`, tagged
-`danielmmetz/autoplex:latest`; see [`roles/docker/README.md`](../roles/docker/README.md#autoplex-image)). Its compose
-entry has no `build:` key and only names the image, so that build is what supplies it, and the playbook runs the
-`docker` role before `services`.
+Hardlinks completed Transmission downloads into the library trees, so Plex and Jellyfin serve the files while
+Transmission keeps seeding from `downloads/complete` with no second copy on disk, and unpacks RAR-packed releases. It
+replaces the third-party `autoplex`, which ran in `--mode copy` (every file stored twice), ignored any torrent not saved
+directly under `downloads/complete/tv` or `downloads/complete/movies`, and flattened video files into the library root.
 
-It starts with `--mode copy` and `--host transmission`, and two `--src`/`--dest` pairs: `/downloads/complete/tv` to
-`/tv` and `/downloads/complete/movies` to `/movies`. Those are the container paths of `/storage/media/downloads`,
-`/storage/media/tv`, and `/storage/media/movies`.
+The service is a Python package (standard library only) in [`medialink/medialink/`](medialink/medialink), built on the
+NAS from [`medialink/Dockerfile`](medialink/Dockerfile), which also installs RARLAB's `unrar` from Debian `non-free`
+(Debian's packaged `7zip` is built without RAR support). Its compose entry sets `build.context: medialink` (relative to
+`~/docker`, the `--project-directory` that `deploy.sh` passes) and `pull_policy: build`, so each deploy rebuilds the
+image from the synced sources and a code change takes effect. It runs as `1000:1000` and mounts `/storage/media` as
+**one** volume: hardlinks between separate bind mounts fail with `EXDEV` even when both sit on one filesystem.
+
+Every `MEDIALINK_INTERVAL` seconds (default 60) it asks Transmission for all torrents (RPC at
+`http://transmission:9091/transmission/rpc`). For each torrent with nothing left to download it:
+
+1. **Classifies** it as `movies` or `tv`: a Transmission label (`tv`, `movies`) wins, then the download directory (`tv`,
+   `movies`, and the singular `movie`; trailing slashes are ignored), then the release name (`S01E02`, `S01-S06`,
+   `Season 3` mean TV; a year means a movie). A torrent that cannot be classified is skipped and reported.
+2. **Links** every fully downloaded file to `<library>/<name as Transmission lists it>` (the torrent's own directory
+   layout, unchanged), creating parent directories. A file already linked is left alone; an independent file already at
+   the destination (an old autoplex copy) is reported as a legacy copy and never overwritten.
+3. **Extracts** RAR sets instead of linking them. The `.rar`/`.rNN` volumes are never linked; the first volume (`x.rar`,
+   or `x.part01.rar`) is unpacked into a staging directory beside the release folder in the library and the files are
+   then moved into place without replacing anything that already exists. A crash or failure therefore never leaves a
+   half-written file, and the set is retried on the next pass. Completed sets are remembered in the state file so
+   gigabytes of archive are not re-read every minute. Symlinks inside an archive are discarded. `MEDIALINK_EXTRACT=0`
+   turns extraction off, and RAR-packed torrents are then reported as problems.
+
+Because each pass re-checks every torrent, a torrent that finished during a restart or outage is linked on the next pass
+rather than lost. File names come from torrent metadata, so names that are absolute or contain `..` are refused.
+
+The library mirrors each release folder (`movies/<release>/…`, `tv/<release>/…`). Autoplex instead put most video files
+directly at the library root, so right after the first pass a title can appear twice: once as an old flat file and once
+inside its release folder. `dedupe` (below) removes the flat duplicates.
+
+Problems (a file missing on disk, a failed link, a failed extraction, an unclassifiable or out-of-tree torrent) log an
+error and publish one ntfy message each to the `nas-media` topic through `http://ntfy:80`, using the write-only
+`ntfy_alerts_token` that `env.j2` renders into `~/docker/medialink/.env` (the `nas-*` access rule from [`ntfy`](#ntfy)
+already covers the topic). After `MEDIALINK_MAX_RPC_FAILURES` (default 5) consecutive failed cycles it alerts once and
+exits with status 2, so `docker ps` and the restart policy show an outage instead of a healthy-looking log.
+
+Commands run inside the container (`python -m medialink <command>`):
+
+| Command                      | Effect                                                                                                    |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `run`                        | The service loop (container default)                                                                      |
+| `once [-n]`                  | One pass; `-n/--dry-run` reports what would be linked and changes nothing                                 |
+| `dedupe [--apply] [--quick]` | Cleans up what autoplex left, after verifying each file byte for byte (details below); dry run by default |
+
+`dedupe` handles two cases. A **mirrored legacy copy** (an independent file at the exact path medialink links to) is
+replaced by a hardlink through a temporary name and an atomic rename. A **flat duplicate** (a video at the library root
+whose name, size and content match a video inside a folder, as left by autoplex) is removed, and the foldered copy
+stays; flat files with no foldered twin, including everything you reorganised by hand, are never touched. `--quick`
+compares the size plus three 1 MiB samples instead of hashing whole files: far faster on multi-gigabyte video, but not a
+proof of equality. Run `once` first, because a flat file is only removed when its foldered twin exists.
+
+```bash
+docker exec medialink python -m medialink once --dry-run
+docker exec medialink python -m medialink dedupe
+docker exec medialink python -m medialink dedupe --apply
+```
+
+| Variable                                   | Default                                                                             | Meaning                                               |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `MEDIALINK_MEDIA_ROOT`                     | `/storage/media`                                                                    | Root holding `downloads/`, `movies/`, `tv/`           |
+| `MEDIALINK_TRANSMISSION_URL`               | `http://transmission:9091/transmission/rpc`                                         | RPC endpoint                                          |
+| `MEDIALINK_TRANSMISSION_USER`, `_PASSWORD` | empty                                                                               | Basic-auth credentials, if RPC authentication is on   |
+| `MEDIALINK_TRANSMISSION_DOWNLOADS`         | `/downloads`                                                                        | Download root as Transmission's container sees it     |
+| `MEDIALINK_INTERVAL`                       | `60`                                                                                | Seconds between passes                                |
+| `MEDIALINK_MAX_RPC_FAILURES`               | `5`                                                                                 | Consecutive failed cycles before exiting              |
+| `MEDIALINK_NTFY_URL`, `_TOPIC`, `_TOKEN`   | URL unset in code (compose sets `http://ntfy:80`), `nas-media`, token from `env.j2` | Notifications; a blank URL disables them              |
+| `MEDIALINK_STATE_PATH`                     | `<media root>/config/medialink/state.json`                                          | Remembers announced problems and finished extractions |
+| `MEDIALINK_EXTRACT`                        | `1`                                                                                 | `0`/`false`/`no`/`off` disables RAR extraction        |
+| `MEDIALINK_EXTRACTOR`                      | auto (`7zz`, `7z`, `unrar` on `PATH`)                                               | Extraction tool to use first                          |
+
+The `run` loop and `once` only ever add links and extracted files; nothing is deleted or renamed unless `dedupe --apply`
+is run. Reorganising them into Jellyfin's `Show/Season NN/` and `Movie (Year)/` naming, and an optional Transmission
+`script-torrent-done` trigger for instant linking, are planned follow-ups
+([plan](../docs/plans/2026-11/2026-11-22-medialink-plan.md)).
 
 ### `ntfy`<a name="ntfy"></a>
 
@@ -266,8 +336,8 @@ flow:
 1. **Search.** Sonarr (TV) and Radarr (movies) search through Prowlarr, which aggregates the indexers. Flaresolverr
    clears Cloudflare challenges for Prowlarr.
 2. **Download.** Sonarr and Radarr hand the release to Transmission, whose `/downloads` is `/storage/media/downloads`.
-3. **Copy.** Autoplex (started with `--mode copy --host transmission`) copies what is in `downloads/complete/tv` and
-   `downloads/complete/movies` into the `tv/` and `movies/` trees.
+3. **Link.** `medialink` polls Transmission and hardlinks each finished torrent's files from `downloads/complete` into
+   the `tv/` or `movies/` tree (see [`medialink`](#medialink)).
 4. **Serve.** Plex and Jellyfin mount `tv/`, `movies/`, and `music/`.
 
 ## Storage layout<a name="storage-layout"></a>
@@ -285,7 +355,7 @@ Every media bind mount comes from `/storage/media`. Nothing in this repository c
 │   ├── prowlarr/
 │   └── ntfy/
 ├── downloads/
-│   └── complete/           # the Autoplex sources
+│   └── complete/           # Transmission's download directory; medialink links from here
 │       ├── tv/
 │       └── movies/
 ├── watch/
@@ -297,10 +367,10 @@ Every media bind mount comes from `/storage/media`. Nothing in this repository c
 | Path (under `/storage/media`) | Mounted by                                                                                            |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `config/<name>`               | the app of the same name (`plex`, `jellyfin`, `transmission`, `sonarr`, `radarr`, `prowlarr`, `ntfy`) |
-| `downloads`                   | `transmission`, `sonarr`, `radarr`, `autoplex`                                                        |
+| `downloads`                   | `transmission`, `sonarr`, `radarr`, `medialink`                                                       |
 | `watch`                       | `transmission`                                                                                        |
-| `tv`                          | `plex`, `jellyfin`, `sonarr`, `autoplex`                                                              |
-| `movies`                      | `plex`, `jellyfin`, `radarr`, `autoplex`                                                              |
+| `tv`                          | `plex`, `jellyfin`, `sonarr`, `medialink`                                                             |
+| `movies`                      | `plex`, `jellyfin`, `radarr`, `medialink`                                                             |
 | `music`                       | `plex`, `jellyfin`                                                                                    |
 
 All of these mounts are read-write (no compose file sets `:ro` on them). `flaresolverr` mounts nothing. The mounts of
@@ -414,9 +484,9 @@ docker compose --project-directory ~/docker -f ~/docker/compose.base.yml -f ~/do
 
 ### Refreshing images<a name="refreshing-images"></a>
 
-`deploy.sh` runs `up -d`, which pulls an image only when it is missing locally (no compose file sets `pull_policy`), so
-a deploy never refreshes an image that is already present. To update a registry image, pull it, then redeploy so `up -d`
-recreates the container from the new image:
+`deploy.sh` runs `up -d`, which pulls an image only when it is missing locally (only `medialink` sets `pull_policy`), so
+a deploy never refreshes a registry image that is already present. To update a registry image, pull it, then redeploy so
+`up -d` recreates the container from the new image:
 
 ```bash
 docker compose --project-directory ~/docker -f ~/docker/compose.base.yml -f ~/docker/plex/compose.yml pull plex
@@ -426,18 +496,12 @@ docker compose --project-directory ~/docker -f ~/docker/compose.base.yml -f ~/do
 A `python3 run.py nas-provision` run after a manual pull recreates the updated container through `deploy.sh all` and
 reports it as changed (the `services` role matches `Recreated`, `Started`, `Created`, and `Pulled`).
 
-The `autoplex` image is the exception: the `docker` role's build supplies it, so refresh it by rebuilding. Re-running
-the role alone does not rebuild an image that already exists (see
-[`roles/docker/README.md`](../roles/docker/README.md#autoplex-image)). To rebuild it, remove the container that uses the
-image and the image itself, then re-run the role and redeploy:
+The `medialink` image is the exception: its compose entry sets `pull_policy: build`, so every deploy rebuilds it from
+the synced sources (cached layers make an unchanged rebuild quick) and recreates the container only when the image
+changed. Redeploying it is the whole refresh:
 
 ```bash
-docker rm -f autoplex
-docker rmi danielmmetz/autoplex:latest
-
-# From the laptop: the role refreshes the clone and builds the now-missing image, then the deploy recreates the container
-python3 run.py nas-provision --tags docker
-python3 run.py nas-deploy autoplex
+python3 run.py nas-deploy medialink
 ```
 
 ### Backups<a name="backups"></a>

@@ -52,7 +52,7 @@ The playbook:
 05. **samba** - file sharing via SMB/CIFS. Tags: `samba`, `configfile`
 06. **mdns** - Avahi and a publisher for the `<name>.local` hostnames of the web UIs. Tags: `mdns`
 07. **docker** - Docker Engine and compose plugin, docker-group membership, the `~/docker` skeleton and shared `.env`,
-    the autoplex image build, and `deploy.sh`; the stack itself is the `services` step. Tags: `docker`, `configfile`
+    and `deploy.sh`; the stack itself is the `services` step. Tags: `docker`, `configfile`
 08. **tailscale** - Tailscale install and configuration, HTTPS certificates, and the Caddyfile Caddy reads. Tags:
     `tailscale`
 09. **dotfiles** - hands `$HOME` to the stow engine (clone, `profiles/nas` overlay, login shell, `bootstrap.sh`). Tags:
