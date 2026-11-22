@@ -71,7 +71,6 @@ class TestBuildMedialinkCommand:
         Test that arguments with spaces or shell metacharacters reach medialink as single, literal arguments
         """
         cmd = build_medialink_command('tester', 'nas.example', ['once', 'a b', '$(reboot)', ';ls'], tty=False)
-
         assert cmd[-1].endswith("python -m medialink once 'a b' '$(reboot)' ';ls'")
 
     def test_destination_cannot_be_read_as_an_option(self) -> None:
@@ -79,7 +78,6 @@ class TestBuildMedialinkCommand:
         Test that -- precedes the destination, so a host or user starting with '-' is not parsed by ssh as an option
         """
         cmd = build_medialink_command('tester', '-oProxyCommand=x', [], tty=False)
-
         assert cmd.index('--') < cmd.index('tester@-oProxyCommand=x')
 
 
@@ -129,14 +127,13 @@ class TestMedialinkCommand:
 
         [(cmd, kwargs)] = self.calls
         assert cmd[-1] == f'docker exec {MEDIALINK_CONTAINER} python -m medialink dedupe --apply --quick -v'
-        assert kwargs == {'check': False}
+        assert kwargs  == {'check': False}
 
     def test_double_dash_lets_medialink_options_lead(self) -> None:
         """
         Test that a leading -- is consumed by run.py, so medialink can be given an option before its command
         """
         self._run('medialink', '--', '--verbose', 'once')
-
         assert self.calls[0][0][-1].endswith('python -m medialink --verbose once')
 
     def test_help_after_a_command_reaches_medialink(self) -> None:
@@ -144,7 +141,6 @@ class TestMedialinkCommand:
         Test that --help following a medialink command is forwarded, not answered by run.py
         """
         self._run('medialink', 'once', '--help')
-
         assert self.calls[0][0][-1].endswith('python -m medialink once --help')
 
     def test_targets_the_resolved_nas(self) -> None:
@@ -152,7 +148,6 @@ class TestMedialinkCommand:
         Test that ssh connects to user@host from the inventory lookup
         """
         self._run('medialink', 'once')
-
         assert 'tester@nas.example' in self.calls[0][0]
 
     @pytest.mark.parametrize('returncode', [0, 1, 2, 3, 255])
@@ -161,7 +156,6 @@ class TestMedialinkCommand:
         Test that medialink's exit status (or ssh's 255) becomes the command's exit status
         """
         self.returncode = returncode
-
         assert self._run('medialink', 'once') == returncode
 
 
