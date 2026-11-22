@@ -265,7 +265,7 @@ class TestDockerRole:
         assert task['diff'] is False
         assert task['ansible.builtin.template']['mode'] == '0600'
 
-    def test_autoplex_variables_carry_the_role_prefix(self) -> None:
+    def test_variables_carry_the_role_prefix(self) -> None:
         """
         Test that every default in the docker role starts with docker_
         """
@@ -443,7 +443,7 @@ class TestTagSelection:
 
         assert code == 0, output
         assert sorted(path.name for path in docker_dir.iterdir()) == ['.env', 'deploy.sh']
-        for task in ('Create docker directory structure', 'Install Docker engine', 'Build autoplex docker image'):
+        for task in ('Create docker directory structure', 'Install Docker engine'):
             assert task not in output, output
 
 

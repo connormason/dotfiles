@@ -126,7 +126,6 @@
         mode: "0755"
       loop:
         - "{{ docker_dir }}"
-        - "{{ docker_dir }}/.build"
       loop_control:
         loop_var: docker_dir_path
 
@@ -154,29 +153,6 @@
       diff: false
       tags:
         - configfile
-
-# ============================================================
-# Custom docker image builds
-# ============================================================
-- name: Setup autoplex
-  block:
-    - name: Clone autoplex repo
-      ansible.builtin.git:
-        repo: "{{ docker_autoplex_repo_url }}"
-        dest: "{{ docker_autoplex_repo_dest }}"
-        version: "{{ docker_autoplex_repo_branch }}"
-        clone: true
-        update: true
-        accept_hostkey: true
-
-    - name: Build autoplex docker image
-      community.docker.docker_image:
-        build:
-          path: "{{ docker_autoplex_repo_dest }}"
-        name: danielmmetz/autoplex
-        tag: latest
-        source: build
-      become: true
 
 # ============================================================
 # Deploy script (the services role runs it)

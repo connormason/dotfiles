@@ -1,0 +1,22 @@
+services:
+  medialink:
+    # deploy.sh runs compose with --project-directory ~/docker, so build and env_file paths are relative to that
+    # directory (the rsync puts this service's files in ~/docker/medialink/).
+    build:
+      context: medialink
+    image: nas-medialink:local
+    # `deploy.sh` runs a plain `up -d`; without this an existing image would never pick up a code change.
+    pull_policy: build
+    container_name: medialink
+    restart: unless-stopped
+    user: "1000:1000"
+    env_file:
+      - medialink/.env
+    environment:
+      - MEDIALINK_MEDIA_ROOT=/storage/media
+      - MEDIALINK_TRANSMISSION_URL=http://transmission:9091/transmission/rpc
+      - MEDIALINK_NTFY_URL=http://ntfy:80
+    volumes:
+      # One mount for the whole tree: hardlinks between separate bind mounts fail with EXDEV even on one filesystem.
+      - /storage/media:/storage/media
+    command: ["run"]

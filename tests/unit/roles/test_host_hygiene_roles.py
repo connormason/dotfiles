@@ -657,7 +657,8 @@ class TestComposeV1Removal:
         candidates: list[Path] = [
             ROLES / 'docker' / 'files' / 'deploy.sh',
             REPO_ROOT / 'scripts' / 'nas' / 'deploy-services.sh',
-            *(REPO_ROOT / 'services').rglob('*'),
+            # Bytecode from the medialink package is binary, not a script
+            *(path for path in (REPO_ROOT / 'services').rglob('*') if '__pycache__' not in path.parts),
             *(REPO_ROOT / '.github' / 'workflows').glob('*.yml'),
         ]
         callers = [
