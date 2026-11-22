@@ -1,15 +1,16 @@
-[Project Root](../README.md) > **Home Assistant**
+[Project Root](../../README.md) > [Services](../README.md) > **Home Assistant**
 
 # Home Assistant
 
 Version-controlled copy of the hand-editable YAML configuration of the Home Assistant instance running in the
-[HAOS VM](../vms/haos/README.md). The VM's own `/config` stays the live copy; `run.py ha-pull` and `run.py ha-push` move
-the tracked files between the two over SSH.
+[HAOS VM](../../vms/haos/README.md). The VM's own `/config` stays the live copy; `run.py ha-pull` and `run.py ha-push`
+move the tracked files between the two over SSH. The `compose.yml.disabled` and `shared/` beside `config/` belong to the
+retired container definition, described in [`services/README.md`](../README.md#home-assistant).
 
 ## What is tracked
 
-`homeassistant/config/` mirrors these entries of the VM's `/config` (the `HA_SYNC_PATHS` allowlist in
-[`run.py`](../run.py)):
+`services/homeassistant/config/` mirrors these entries of the VM's `/config` (the `HA_SYNC_PATHS` allowlist in
+[`run.py`](../../run.py)):
 
 | Entry                                             | Purpose                                        |
 | ------------------------------------------------- | ---------------------------------------------- |
@@ -17,7 +18,8 @@ the tracked files between the two over SSH.
 | `automations.yaml`, `scripts.yaml`, `scenes.yaml` | Files the UI editors read and rewrite          |
 | `blueprints/`, `themes/`, `packages/`             | Directories of the same names, when they exist |
 
-Everything else stays on the VM and is covered by Home Assistant's own [backups](../vms/haos/README.md#fresh-install):
+Everything else stays on the VM and is covered by Home Assistant's own
+[backups](../../vms/haos/README.md#fresh-install):
 
 - `.storage/` (integrations, devices, entities, auth tokens), the recorder database, logs, `.cloud/`, `deps/`, `tts/`.
 - `custom_components/`. HACS installs and updates its integrations there, so the directory holds vendored upstream code
@@ -46,14 +48,14 @@ deleted on the other, so the allowlisted part of the two trees always ends up id
 
    ```bash
    python3 run.py ha-pull
-   git diff homeassistant/ && git add homeassistant/config
+   git diff services/homeassistant/ && git add services/homeassistant/config
    ```
 
 ## Workflow
 
 ```bash
 python3 run.py ha-pull              # VM -> repo (refuses when tracked files have uncommitted edits; --force overrides)
-$EDITOR homeassistant/config/automations.yaml
+$EDITOR services/homeassistant/config/automations.yaml
 python3 run.py ha-push --dry-run    # show the diff the VM would get
 python3 run.py ha-push              # confirm, upload, `ha core check`, roll back if the upload or the check fails
 python3 run.py ha-push --restart    # same, then restart Core (configuration.yaml changes need it)

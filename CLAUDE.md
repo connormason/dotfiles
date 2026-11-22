@@ -23,9 +23,9 @@ For detailed reference, load on-demand:
    calls `scripts/nas/deploy-services.sh`, the script behind `nas-deploy`.
 3. **`run.py`** — repository-management CLI (inventory and vault helpers, codebase chores and prek hook management
    (`run-hooks`, `prepare-hooks`, `install-hooks`), NAS provisioning and deploy, Home Assistant YAML sync (`ha-pull`,
-   `ha-push`; the tracked files live in [`homeassistant/`](homeassistant/README.md)), wrappers for the stow engine, and
-   `track-claude` for ingesting local Claude config). `Makefile` wraps these (`make help`). Full command reference in
-   [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
+   `ha-push`; the tracked files live in [`services/homeassistant/`](services/homeassistant/README.md)), wrappers for the
+   stow engine, and `track-claude` for ingesting local Claude config). `Makefile` wraps these (`make help`). Full
+   command reference in [`docs/RUN_PY_REFERENCE.md`](docs/RUN_PY_REFERENCE.md).
 
 `run.py nas-provision` checks the inventory, vault password, and SSH reachability before running the NAS playbook in the
 uv environment. The Home Assistant OS VM is provisioned by the playbook's `haos` role, which runs `vms/haos/setup.sh`;
