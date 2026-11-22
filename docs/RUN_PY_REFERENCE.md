@@ -401,7 +401,10 @@ then runs `ansible-playbook playbooks/nas_bootstrap.yml` (with the inventory and
 playbook still runs with the collections already installed. The exit status is Ansible's. `--check --diff` previews the
 whole playbook on a converged host. On a fresh host, where `smbd` or `tailscale` is not installed yet, the Samba version
 probe fails and the Tailscale status probe returns nothing for the next task to parse, so `--check` stops there (the
-real run installs those tools first). Both probes are read-only and carry `check_mode: false`.
+real run installs those tools first). Both probes are read-only and carry `check_mode: false`. The `mdns` role also
+fails under `--check` on a host where it has never run: "Configure Avahi" fails because `/etc/avahi` does not exist
+(Avahi is not installed in check mode), and the two "Enable and start" tasks fail because the systemd module errors for
+a unit that does not exist yet, ignoring check mode. Run the real play for `mdns` first (`--tags mdns`).
 
 #### `nas-deploy`
 

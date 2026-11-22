@@ -71,3 +71,8 @@
     state: started
     enabled: true
     daemon_reload: true
+
+# Without this the restarts wait for the end of the play, so a later role failing would leave Avahi and the publisher
+# stale on a rerun that sees no change
+- name: Apply Avahi and publisher changes before the later roles
+  ansible.builtin.meta: flush_handlers

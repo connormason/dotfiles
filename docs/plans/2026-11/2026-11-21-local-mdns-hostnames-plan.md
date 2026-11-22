@@ -853,12 +853,13 @@ mdns_unit_path: /etc/systemd/system/nas-mdns-publish.service
 - name: Require local_services names that are plain DNS labels
   ansible.builtin.assert:
     that:
-      - item.name is match('^[a-z0-9]([a-z0-9-]*[a-z0-9])?\Z')
-    fail_msg: "'{{ item.name }}' is not a lowercase DNS label, so it cannot be <name>.local"
+      - mdns_service.name is match('^[a-z0-9]([a-z0-9-]*[a-z0-9])?\Z')
+    fail_msg: "'{{ mdns_service.name }}' is not a lowercase DNS label, so it cannot be <name>.local"
     quiet: true
   loop: "{{ local_services }}"
   loop_control:
-    label: "{{ item.name }}"
+    loop_var: mdns_service
+    label: "{{ mdns_service.name }}"
 
 - name: Install Avahi
   become: true
@@ -1307,44 +1308,55 @@ Expected: only the commits and files named in this plan, none from `gh-labels-sy
 
 These steps change the live NAS, so the owner runs them. The agent hands over the commands and records the answers.
 
-- [ ] **Step 1: Before deploying, confirm port 80 is free (on the NAS)**
+- [ ] **Step 1: Before anything else, confirm port 80 is free (on the NAS)**
 
 Run: `ss -ltn 'sport = :80'`
 Expected: no listener (Pi-hole is disabled; its UI is on 8053).
+This must come first: merging this branch redeploys the caddy container with port 80 published (CI runs
+`deploy.sh caddy` on any push to `main` that changes `services/`), and a held port 80 would stop caddy and with it the
+Tailscale HTTPS routes.
 
-- [ ] **Step 2: Preview, then provision the roles that changed (from the Mac)**
+- [ ] **Step 2: Provision from the branch checkout, before merging (from the Mac)**
 
-```bash
-python3 run.py nas-provision --check --diff --tags mdns,tailscale
-python3 run.py nas-provision --tags mdns,tailscale
-```
+Run: `python3 run.py nas-provision --tags mdns,tailscale`
+Do not run `--check` for the `mdns` role before its first run: it fails on a never-installed unit (see
+[`playbooks/README.md`](../../../playbooks/README.md)). `python3 run.py nas-provision --check --diff --tags tailscale`
+is fine as a preview of the Caddyfile change.
+Expected: the `mdns` role installs Avahi and the publisher; the `tailscale` role writes the new Caddyfile; the running
+caddy container still serves the old one and is unaffected.
 
-Expected: the `mdns` role installs Avahi and the publisher; the `tailscale` role rewrites the Caddyfile.
+- [ ] **Step 3: Merge the PR**
 
-- [ ] **Step 3: Recreate Caddy with port 80 (from the Mac)**
-
-Run: `python3 run.py nas-deploy caddy`
-Expected: the caddy container is recreated and publishes `80`, `443` and `32443`. Without this the Caddyfile on disk
-is not read, because it is a single-file bind mount.
+CI then runs `deploy.sh caddy`. Because `services/caddy/compose.yml` changed (port 80), the container is recreated and
+reads the Caddyfile written in Step 2. If CI did not run (for example the workflow was skipped), run
+`python3 run.py nas-deploy caddy` from the Mac.
+Expected: the caddy container publishes `80`, `443` and `32443`.
 
 - [ ] **Step 4: Check names and routes (on the NAS)**
 
 ```bash
 systemctl status nas-mdns-publish
 avahi-resolve -n jellyfin.local
-curl -sI http://jellyfin.local | head -3
+curl -sI -H 'Host: jellyfin.local' http://127.0.0.1 | head -3
 ```
 
+The plain `curl http://jellyfin.local` would need `libnss-mdns`, which the role does not install.
 Repeat the last two lines for each name in `local_services`.
 Expected: the publisher is `active (running)`, each name resolves to the NAS's LAN address, and each `curl` returns an
 HTTP status line (a `302` redirect is fine).
 
-- [ ] **Step 5: Check from another device on the LAN**
+- [ ] **Step 5: If a name resolves but its site does not answer on port 80 (on the NAS)**
+
+Run: `docker restart caddy`, then repeat Step 4.
+A running container keeps the old Caddyfile after Ansible replaces the file, because it is a single-file bind mount.
+A Caddyfile-only change at any later time needs the same restart.
+
+- [ ] **Step 6: Check from another device on the LAN**
 
 On a Mac: `dns-sd -G v4 jellyfin.local`, then open each `http://<name>.local` in a browser.
 Expected: every name loads its UI.
 
-- [ ] **Step 6: Resolve the open questions and update the docs**
+- [ ] **Step 7: Resolve the open questions and update the docs**
 
 Record, for `sonarr`, `radarr`, `prowlarr` and `transmission`, where `http://<name>.local/` ends up, and whether
 `http://transmission.local` loads or returns an error. Replace the two "Clarifications needed" bullets in

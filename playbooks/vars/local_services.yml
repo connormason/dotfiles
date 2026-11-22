@@ -1,7 +1,7 @@
 ---
 # Default hostnames for the NAS's web UIs. Each name becomes <name>.local, published over mDNS by the mdns role and
 # routed by a Caddy http:// site (rendered by the tailscale role) to <name>:<port> on nas-network. The inventory replaces
-# the whole list by setting local_services_override.
+# the whole list by setting local_services_override; an empty override is rejected by the mdns role (it fails the play).
 local_services_default:
   - {name: glance, port: 8080}
   - {name: plex, port: 32400}

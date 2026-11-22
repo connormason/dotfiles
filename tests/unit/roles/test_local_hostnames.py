@@ -344,6 +344,19 @@ class TestMdnsChecks:
         assert 'at least one' in output
 
 
+class TestMdnsHandlerFlush:
+    """
+    Structural test of the end of roles/mdns/tasks/main.yml
+    """
+    def test_final_task_flushes_handlers(self) -> None:
+        """
+        Test that handlers run inside the role, so a later role failing cannot leave Avahi or the publisher stale
+        """
+        tasks = yaml.safe_load((MDNS_ROLE / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+        final = {key: value for key, value in tasks[-1].items() if key != 'name'}
+        assert final == {'ansible.builtin.meta': 'flush_handlers'}
+
+
 # ==================================================================================================
 # mdns role: publisher script
 # ==================================================================================================

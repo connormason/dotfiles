@@ -11,7 +11,9 @@ network without a port. Runs between the `samba` and `docker` roles in
 A client resolving `jellyfin.local` asks the network over mDNS and gets the NAS's LAN address from Avahi. It then
 connects to port 80, where the `caddy` container's `http://jellyfin.local` site proxies to `jellyfin:8096`. This role is
 the first half. The second half is rendered by the [`tailscale`](../tailscale/README.md) role's `Caddyfile.j2` from the
-same `local_services` list, so a new name needs one edit.
+same `local_services` list. A new name needs one edit to `local_services`, a provision of the `mdns` and `tailscale`
+roles, and a restart of the caddy container (`docker restart caddy`): the Caddyfile is a single-file bind mount, and a
+running container does not re-read it after Ansible replaces the file.
 
 ## Tasks
 
@@ -27,8 +29,10 @@ All of `tasks/main.yml`, in order. Every step except the two assertions runs wit
 | 6    | Install the mDNS publisher unit             | Renders `nas-mdns-publish.service` with one name per `local_services` entry                        |
 | 7    | Enable and start Avahi                      | Starts and enables `avahi-daemon`                                                                  |
 | 8    | Enable and start the mDNS publisher         | Reloads systemd, then starts and enables `nas-mdns-publish.service`                                |
+| 9    | Apply Avahi and publisher changes           | Flushes the handlers, so the restarts happen before the later roles run                            |
 
-Handlers: `Restart Avahi` (after a config change) and `Restart the mDNS publisher` (after a script or unit change).
+Handlers (run at step 9): `Restart Avahi` (after a config change) and `Restart the mDNS publisher` (after a script or
+unit change).
 
 ## Variables
 
@@ -41,6 +45,14 @@ Handlers: `Restart Avahi` (after a config change) and `Restart the mDNS publishe
 | `mdns_unit_path`   | `/etc/systemd/system/nas-mdns-publish.service`          | Destination of the unit file                           |
 
 The default list is `playbooks/vars/local_services.yml`; set `local_services_override` in the inventory to replace it.
+
+An empty list is rejected by the role: the first task fails the whole play, so an inventory that sets
+`local_services_override: []` stops provisioning. To publish nothing, remove the `mdns` role from the run instead.
+
+`mdns_interface` is read when the role runs and written into `avahi-daemon.conf`. If the default-route interface changes
+afterwards (for example after running or undoing `vms/haos/bridge.sh`), re-run
+`python3 run.py nas-provision --tags mdns`; restarting the publisher alone does not change the interface Avahi announces
+on.
 
 ## The publisher
 
@@ -55,5 +67,8 @@ exits 1, and systemd restarts the set.
 systemctl status nas-mdns-publish
 avahi-resolve -n jellyfin.local        # on the NAS: prints the NAS's address
 dns-sd -G v4 jellyfin.local            # on a Mac on the same network
-curl -sI http://jellyfin.local         # needs the caddy container from the tailscale role's Caddyfile
+curl -sI -H 'Host: jellyfin.local' http://127.0.0.1   # on the NAS: asks the caddy container for the site
 ```
+
+The plain `curl -sI http://jellyfin.local` works from a client with mDNS support. On the NAS it would need mDNS name
+resolution in the libc resolver (`libnss-mdns`), which this role does not install.

@@ -153,7 +153,11 @@ The two probes that need an installed tool, samba's `Register Samba version` (`s
 role's `tailscale status --json`, are read-only and carry `check_mode: false`, like the other roles' probes, so they run
 under `--check` too. On a fresh host, where `smbd` or `tailscale` is not installed yet, the samba probe fails
 (`smbd --version` errors) and the tailscale probe returns nothing, so the next task's `from_json` fails; the real run
-installs those tools first.
+installs those tools first. The `mdns` role fails the same way on a host where it has never run: under `--check`, its
+"Configure Avahi" task fails because the destination directory `/etc/avahi` does not exist (Avahi is not installed in
+check mode), and the two "Enable and start" tasks fail because the systemd module errors for a unit that does not exist
+yet, ignoring check mode. So a full `nas-provision --check` on a host before its first `mdns` run fails there; run the
+real play for `mdns` first (`--tags mdns`).
 
 `--tags configfile` assumes `~/docker` exists, because the directory tasks do not carry the tag. On a host without it,
 the run fails (at the `.env` render once samba is installed); run `--tags docker` first. See
