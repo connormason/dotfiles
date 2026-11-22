@@ -507,8 +507,11 @@ See [roles/README.md](roles/README.md#adding-a-role).
 ### Testing Changes<a name="testing-changes"></a>
 
 ```bash
-# Run the test suite through the public-index uv wrapper
+# Run the fast unit tests (not marked slow) through the public-index uv wrapper
 python3 run.py test
+
+# Run the full suite (unit + integration), as CI does
+python3 run.py test-full
 
 # Run prek hooks (python3 run.py run-hooks --last-commit for just the files of the last commit)
 python3 run.py pre

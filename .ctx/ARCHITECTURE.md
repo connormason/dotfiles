@@ -126,7 +126,7 @@ fails when this list drifts from the playbook):
 - **Inventory**: `inventory-hosts`, `inventory-status`, `update-inventory`, `vault-decrypt`, `vault-encrypt`
 - **Tool Installation**: `install-uv`, `install-hatch`
 - **Hooks**: `install-hooks`, `prepare-hooks`, `uninstall-hooks`, `run-hooks`, `pre`
-- **Testing**: `test`
+- **Testing**: `test`, `test-full`, `test-unit`, `test-integration`, `test-cov`
 - **Dependencies**: `lock`, `lock-check`, `lock-upgrade`, `lock-sync`
 - **Utilities**: `makefile`, `diagnose`
 

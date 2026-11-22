@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean bootstrap nas-provision nas-deploy ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
+.PHONY: help install dev shell status doctor clean bootstrap nas-provision nas-deploy ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test test-full test-unit test-integration test-cov docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -52,7 +52,11 @@ help: ## Show this help message
 	@echo "  $(YELLOW)pre                 $(NC) Run prek (pre-commit) hooks on all project files"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Testing:$(NC)"
-	@echo "  $(YELLOW)test                $(NC) Run the test suite via uv (public-index wrapper)"
+	@echo "  $(YELLOW)test                $(NC) Run the unit tests that are not marked slow (fast feedback)"
+	@echo "  $(YELLOW)test-full           $(NC) Run the full test suite (unit + integration), as CI does"
+	@echo "  $(YELLOW)test-unit           $(NC) Run all unit tests, including slow ones"
+	@echo "  $(YELLOW)test-integration    $(NC) Run the integration tests"
+	@echo "  $(YELLOW)test-cov            $(NC) Run the full test suite under coverage and report the result"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Static Analysis:$(NC)"
 	@echo "  $(YELLOW)docs-audit          $(NC) Audit per-directory README documentation (missing, stale, structural, links, policy)"
@@ -153,8 +157,20 @@ pre: ## Run prek (pre-commit) hooks on all project files
 	@python3 run.py pre
 
 # Testing
-test: ## Run the test suite via uv (public-index wrapper)
+test: ## Run the unit tests that are not marked slow (fast feedback)
 	@python3 run.py test
+
+test-full: ## Run the full test suite (unit + integration), as CI does
+	@python3 run.py test-full
+
+test-unit: ## Run all unit tests, including slow ones
+	@python3 run.py test-unit
+
+test-integration: ## Run the integration tests
+	@python3 run.py test-integration
+
+test-cov: ## Run the full test suite under coverage and report the result
+	@python3 run.py test-cov
 
 # Static Analysis
 docs-audit: ## Audit per-directory README documentation (missing, stale, structural, links, policy)

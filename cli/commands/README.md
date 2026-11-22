@@ -14,7 +14,7 @@ of targets in the generated `Makefile`.
 | [`inventory.py`](inventory.py)       | Inventory           | `inventory-hosts`, `inventory-status`, `update-inventory`, `vault-decrypt`, `vault-encrypt` |
 | [`tools.py`](tools.py)               | Tool Installation   | `install-uv`, `install-hatch`                                                               |
 | [`hooks.py`](hooks.py)               | Hooks               | `install-hooks`, `prepare-hooks`, `uninstall-hooks`, `run-hooks`, `pre`                     |
-| [`testing.py`](testing.py)           | Testing             | `test`                                                                                      |
+| [`testing.py`](testing.py)           | Testing             | `test`, `test-full`, `test-unit`, `test-integration`, `test-cov`                            |
 | [`analysis.py`](analysis.py)         | Static Analysis     | `docs-audit`                                                                                |
 | [`dependencies.py`](dependencies.py) | Dependencies        | `lock`, `lock-check`, `lock-upgrade`, `lock-sync`                                           |
 | [`utilities.py`](utilities.py)       | Utilities           | `makefile`, `diagnose`                                                                      |

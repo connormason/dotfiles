@@ -654,13 +654,24 @@ The installers have more options of their own (`--ensure`, `--print-path`, `--ti
 
 ### Testing<a name="testing"></a>
 
-#### `test`
+Every testing command runs through the public-index uv wrapper (`scripts/hooks/uv-public.sh run --group test ...`),
+accepts optional `PATH...` arguments that replace its default target (the command's marker options still apply), and
+exits with the return code of the first failing step.
 
-Run the test suite through the public-index uv wrapper: `scripts/hooks/uv-public.sh run --group test pytest [PATH...]`
-(default path: `tests`). Exits with pytest's return code.
+| Command            | Runs                                                                       |
+| ------------------ | -------------------------------------------------------------------------- |
+| `test`             | `pytest tests/unit -m "not slow"`: fast feedback                           |
+| `test-full`        | `pytest tests`: the full suite (unit + integration), as CI does            |
+| `test-unit`        | `pytest tests/unit`: all unit tests, including slow ones                   |
+| `test-integration` | `pytest tests/integration`                                                 |
+| `test-cov`         | `coverage run -m pytest tests`, then `coverage html` and `coverage report` |
+
+`test-cov` writes the HTML report to `.reports/coverage` and fails when total coverage is under the `fail_under`
+threshold in `pyproject.toml`; `PATH...` narrows only the pytest step.
 
 ```bash
-python3 run.py test tests/unit/run
+python3 run.py test tests/unit/cli
+python3 run.py test-full
 ```
 
 ### Static Analysis<a name="static-analysis"></a>
