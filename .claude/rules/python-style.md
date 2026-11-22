@@ -5,15 +5,17 @@ globs: '**/*.py'
 # Python Style
 
 Self-contained Python style for this repository (does not depend on any global `~/.claude/rules/`). Python here is
-`run.py`, the engine tooling under `scripts/dotfiles/`, and helper scripts under `scripts/`.
+`run.py` and the [`cli/`](../../cli) package behind it, the engine tooling under `scripts/dotfiles/`, and helper scripts
+under `scripts/`.
 
 ## Tooling (non-negotiable)
 
 - Always run Python via **`uv`** (`uv run …`) — never bare `python`, `python3`, `pip`, or `hatch`.
 - `ruff check --fix` is encouraged. **Never** run `ruff format` — this repo does not use the formatter.
 - Config lives in `pyproject.toml`: ruff `line-length = 120`, `target-version = "py39"` (`keep-runtime-typing = true`),
-  space indent (width 4). `interrogate` enforces **70%** docstring coverage (`fail-under = 70`); `run.py` is excluded
-  (its `Command` overrides of `run` / `add_arguments` / nested `Args` inherit the base-class docs).
+  space indent (width 4). `interrogate` enforces **70%** docstring coverage (`fail-under = 70`); `run.py` and
+  `cli/commands/` are excluded (the `Command` overrides of `run` / `add_arguments` / nested `Args` inherit the
+  base-class docs).
 
 ## Imports
 
@@ -46,8 +48,14 @@ Self-contained Python style for this repository (does not depend on any global `
 
 ## `run.py` patterns
 
+`run.py` is only the entry point. Commands live in [`cli/commands/`](../../cli/commands) (one module per command group),
+the `Command` base and `main` in [`cli/infra/`](../../cli/infra), and shared helpers in [`cli/utils/`](../../cli/utils);
+a command module imports helpers by name from `cli.utils` and never from another command module.
+
 Commands are subclasses of the abstract `Command` base, which registers each one on class definition into a global
 registry that drives both argparse and Makefile generation. Set `name`/`group` as `ClassVar`s, put options in
 `add_arguments()` with a nested typed `Args(argparse.Namespace)`, and exit via `ExitCode`. Subprocess calls go through
-the typed `shell_command()` wrapper. Match these when adding commands. See
-[`.ctx/CONVENTIONS.md`](../../.ctx/CONVENTIONS.md).
+the typed `shell_command()` wrapper. A new command module must be imported in
+[`cli/commands/__init__.py`](../../cli/commands/__init__.py), whose order sets the help-text and Makefile order. Runtime
+flags that `main()` rewrites (`RUN_DEBUG`) are read as `config.RUN_DEBUG`, never copied with `from … import`. Match
+these when adding commands. See [`.ctx/CONVENTIONS.md`](../../.ctx/CONVENTIONS.md).

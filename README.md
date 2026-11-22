@@ -157,7 +157,8 @@ Configures the home NAS server with:
 | [`tests/`](tests/)                       | pytest suite: unit and integration tests, fixtures                              | [tests/README.md](tests/README.md)                       |
 | [`archive/`](archive/)                   | Frozen reference material (retired Ansible macOS setup and YAML Home Assistant) | [archive/README.md](archive/README.md)                   |
 | [`docs/`](docs/)                         | Extended documentation, notes, and plans                                        | [docs/README.md](docs/README.md)                         |
-| [`run.py`](run.py)                       | Python CLI for repository management                                            | [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md)     |
+| [`run.py`](run.py)                       | Python CLI entry point for repository management                                | [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md)     |
+| [`cli/`](cli/)                           | Implementation of `run.py`: infrastructure, utilities, and command modules      | [cli/README.md](cli/README.md)                           |
 | `inventory/`                             | Host definitions and encrypted vault files (gitignored)                         | Managed via `run.py update-inventory`                    |
 
 ## Documentation<a name="documentation"></a>
@@ -369,7 +370,8 @@ make nas-deploy         # prompts for a service to deploy
 
 ```
 dotfiles/
-├── run.py                                  # Python CLI for repository management
+├── run.py                                  # Python CLI entry point for repository management
+├── cli/                                    # Implementation of run.py: infra/, utils/, commands/
 ├── stow.sh                                 # Links stow packages into $HOME
 ├── Makefile                                # Auto-generated from run.py commands
 ├── ansible.cfg                             # Ansible defaults (roles_path, vault_password_file)

@@ -1,5 +1,5 @@
 """
-Unit tests for the run.py prek hook commands (run-hooks, pre, prepare-hooks)
+Unit tests for the prek hook commands (run-hooks, pre, prepare-hooks)
 """
 from __future__ import annotations
 
@@ -11,9 +11,13 @@ from typing import cast
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-import run
+import cli.commands  # noqa: F401  (registers every command)
+from cli.commands.hooks import RunHooksCommand
+from cli.infra.command import get_commands
+from cli.infra.main import Args
+from cli.infra.main import build_parser
 
 Call = tuple[list[str], dict[str, object]]
 
@@ -22,21 +26,21 @@ def _parse(*argv: str) -> argparse.Namespace:
     """
     Parse a run.py command line into the typed root namespace
     """
-    return run.build_parser().parse_args(list(argv), namespace=run.Args())
+    return build_parser().parse_args(list(argv), namespace=Args())
 
 
 def _build(*argv: str) -> list[str]:
     """
     Build the ``prek run`` command line for a run-hooks style invocation
     """
-    return run.RunHooksCommand.build_command(cast('run.RunHooksCommand.Args', _parse(*argv)))
+    return RunHooksCommand.build_command(cast('RunHooksCommand.Args', _parse(*argv)))
 
 
 def _option_strings(command: str) -> set[str]:
     """
     Get every option string a command's subparser accepts
     """
-    action = next(a for a in run.build_parser()._actions if isinstance(a, argparse._SubParsersAction))
+    action = next(a for a in build_parser()._actions if isinstance(a, argparse._SubParsersAction))
     return {opt for a in action.choices[command]._actions for opt in a.option_strings}
 
 
@@ -52,10 +56,10 @@ def _record(monkeypatch: pytest.MonkeyPatch, returncode: int = 0) -> list[Call]:
         calls.append((cmd, kwargs))
         return subprocess.CompletedProcess(cmd, returncode, stdout='', stderr='')
 
-    monkeypatch.setattr(run, 'check_python', lambda **_kwargs: None)
-    monkeypatch.setattr(run, 'ensure_uv',    lambda **_kwargs: None)
-    monkeypatch.setattr(run, 'ensure_venv',  lambda **_kwargs: None)
-    monkeypatch.setattr(run, 'uv_run',       fake_uv_run)
+    monkeypatch.setattr('cli.commands.hooks.check_python', lambda **_kwargs: None)
+    monkeypatch.setattr('cli.commands.hooks.ensure_uv',    lambda **_kwargs: None)
+    monkeypatch.setattr('cli.commands.hooks.ensure_venv',  lambda **_kwargs: None)
+    monkeypatch.setattr('cli.commands.hooks.uv_run',       fake_uv_run)
     return calls
 
 
@@ -105,7 +109,7 @@ class TestRunHooks:
         """
         calls = _record(monkeypatch, returncode=3)
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['run-hooks'](_parse('run-hooks', '-a'))
+            get_commands()['run-hooks'](_parse('run-hooks', '-a'))
 
         assert exc_info.value.code == 3
         assert calls == [(['prek', 'run', '--all-files'], {'check': False})]
@@ -114,7 +118,7 @@ class TestRunHooks:
         """
         Test the help description shown in the script help and Makefile
         """
-        assert run.get_commands()['run-hooks'].description == 'Run prek hooks on modified or specified project files'
+        assert get_commands()['run-hooks'].description == 'Run prek hooks on modified or specified project files'
 
 
 class TestPre:
@@ -127,7 +131,7 @@ class TestPre:
         """
         calls = _record(monkeypatch)
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['pre'](_parse('pre', 'mdformat', '--skip', 'mypy'))
+            get_commands()['pre'](_parse('pre', 'mdformat', '--skip', 'mypy'))
 
         assert exc_info.value.code == 0
         assert calls[0][0] == ['prek', 'run', 'mdformat', '--all-files', '--skip', 'mypy']
@@ -138,7 +142,7 @@ class TestPre:
         """
         calls = _record(monkeypatch, returncode=3)
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['pre'](_parse('pre'))
+            get_commands()['pre'](_parse('pre'))
 
         assert exc_info.value.code == 3
         assert calls == [(['prek', 'run', '--all-files'], {'check': False})]
@@ -156,7 +160,7 @@ class TestPre:
         """
         Test that the pre description (and therefore its Makefile line) is unchanged
         """
-        assert run.get_commands()['pre'].description == 'Run prek (pre-commit) hooks on all project files'
+        assert get_commands()['pre'].description == 'Run prek (pre-commit) hooks on all project files'
 
 
 class TestPrepareHooks:
@@ -169,7 +173,7 @@ class TestPrepareHooks:
         """
         calls = _record(monkeypatch)
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['prepare-hooks'](_parse('prepare-hooks', 'ruff', '--skip', 'mypy', '-v'))
+            get_commands()['prepare-hooks'](_parse('prepare-hooks', 'ruff', '--skip', 'mypy', '-v'))
 
         assert exc_info.value.code == 0
         expected = ['prek', 'prepare-hooks', 'ruff', '--skip', 'mypy', '--verbose']
@@ -181,5 +185,5 @@ class TestPrepareHooks:
         """
         _record(monkeypatch, returncode=2)
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['prepare-hooks'](_parse('prepare-hooks'))
+            get_commands()['prepare-hooks'](_parse('prepare-hooks'))
         assert exc_info.value.code == 2

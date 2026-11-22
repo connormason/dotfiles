@@ -18,10 +18,10 @@ from unittest.mock import patch
 
 import pytest
 
-# Import functions and classes from run.py
+# Import the shared styling helpers from the cli package
 sys.path.insert(0, str(Path(__file__).parents[4]))
 
-from run import unstyle
+from cli.utils.styling import unstyle
 
 if TYPE_CHECKING:
     from types import ModuleType

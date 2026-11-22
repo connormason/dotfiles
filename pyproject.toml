@@ -154,6 +154,7 @@ exclude = [
     ".worktrees/",
     "archive/",
     "build/",
+    "cli/commands/",
     "docs/",
     "run.py",
     "tests/",
@@ -178,7 +179,7 @@ exclude = [
 
 [[tool.mypy.overrides]]
 disable_error_code = ["override"]
-module             = ["run"]
+module             = ["cli.commands.*"]
 
 [[tool.mypy.overrides]]
 disable_error_code = ["arg-type"]
@@ -310,7 +311,6 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # keep-sorted start
 "cli/**/*.py"                              = ["BLE001", "S112"]
-"run.py"                                   = ["BLE001", "S112"]
 "scripts/**/*.py"                          = ["BLE001"]
 "scripts/docs_audit/report.py"             = ["E741"]
 "scripts/env/venvshell.py"                 = ["RUF001"]

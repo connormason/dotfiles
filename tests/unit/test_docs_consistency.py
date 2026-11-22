@@ -364,14 +364,15 @@ class TestRoleOrderDocs:
 
 def _registered_commands(repo: Path) -> set[str]:
     """
-    Return the command names registered in ``run.py``
+    Return the command names registered by ``run.py`` (every module in ``cli.commands``)
 
     :param repo: repository root
-    :return: names in ``run.REGISTERED_COMMANDS``
+    :return: names in ``cli.infra.command.REGISTERED_COMMANDS``
     """
     sys.path.insert(0, str(repo))
     try:
-        module = importlib.import_module('run')
+        importlib.import_module('cli.commands')
+        module = importlib.import_module('cli.infra.command')
     finally:
         sys.path.remove(str(repo))
     return set(module.REGISTERED_COMMANDS)

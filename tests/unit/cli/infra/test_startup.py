@@ -12,11 +12,15 @@ from typing import Any
 import pytest
 import tomllib
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-import run
+from cli import commands  # noqa: F401  (importing registers every command)
+from cli.commands import inventory
+from cli.infra.command import get_commands
+from cli.infra.config import ExitCode
+from cli.utils.styling import unstyle
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 
 # Reference regex from PEP 723
 PEP723_RE = re.compile(r'(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$')
@@ -75,15 +79,15 @@ class TestInventoryHostsDependency:
         """
         Test that a missing yaml module is not reported as an unparsable inventory
         """
-        inventory = tmp_path / 'inventory.yml'
-        inventory.write_text('all: {}\n', encoding='utf-8')
-        monkeypatch.setattr(run, 'INVENTORY_FILE', inventory)
+        inventory_file = tmp_path / 'inventory.yml'
+        inventory_file.write_text('all: {}\n', encoding='utf-8')
+        monkeypatch.setattr(inventory, 'INVENTORY_FILE', inventory_file)
         monkeypatch.setitem(sys.modules, 'yaml', None)      # makes `import yaml` raise ImportError
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['inventory-hosts'](argparse.Namespace())
+            get_commands()['inventory-hosts'](argparse.Namespace())
 
-        out = run.unstyle(capsys.readouterr().out)
-        assert exc_info.value.code == run.ExitCode.SETUP_ERROR
+        out = unstyle(capsys.readouterr().out)
+        assert exc_info.value.code == ExitCode.SETUP_ERROR
         assert 'PyYAML is required'  in out
         assert 'Failed to parse' not in out

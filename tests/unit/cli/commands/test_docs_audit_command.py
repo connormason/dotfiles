@@ -1,5 +1,5 @@
 """
-Unit tests for the run.py docs-audit command
+Unit tests for the docs-audit command
 """
 from __future__ import annotations
 
@@ -10,9 +10,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-import run
+import cli.commands  # noqa: F401  (registers every command)
+from cli.infra.command import REGISTERED_COMMANDS
+from cli.infra.config import DOTFILES_DIR
+from cli.infra.main import Args
+from cli.infra.main import build_parser
 
 if TYPE_CHECKING:
     import argparse
@@ -24,7 +28,7 @@ def _parse(*argv: str) -> argparse.Namespace:
     """
     Parse a run.py command line into the typed root namespace
     """
-    return run.build_parser().parse_args(list(argv), namespace=run.Args())
+    return build_parser().parse_args(list(argv), namespace=Args())
 
 
 def _record(monkeypatch: pytest.MonkeyPatch, returncode: int = 0) -> list[Call]:
@@ -37,7 +41,7 @@ def _record(monkeypatch: pytest.MonkeyPatch, returncode: int = 0) -> list[Call]:
         calls.append((cmd, kwargs))
         return subprocess.CompletedProcess(cmd, returncode, stdout='', stderr='')
 
-    monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+    monkeypatch.setattr('cli.commands.analysis.shell_command', fake_shell_command)
     return calls
 
 
@@ -68,12 +72,12 @@ class TestDocsAudit:
         calls = _record(monkeypatch)
 
         with pytest.raises(SystemExit):
-            run.REGISTERED_COMMANDS['docs-audit'](_parse('docs-audit', *argv))
+            REGISTERED_COMMANDS['docs-audit'](_parse('docs-audit', *argv))
 
         assert len(calls) == 1
         cmd, kwargs = calls[0]
         assert cmd == [sys.executable, '-m', 'scripts.docs_audit', *expected_args]
-        assert kwargs['cwd'] == run.DOTFILES_DIR
+        assert kwargs['cwd'] == DOTFILES_DIR
         assert kwargs['check'] is False
 
     @pytest.mark.parametrize('returncode', [0, 1, 2])
@@ -84,7 +88,7 @@ class TestDocsAudit:
         _record(monkeypatch, returncode=returncode)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.REGISTERED_COMMANDS['docs-audit'](_parse('docs-audit'))
+            REGISTERED_COMMANDS['docs-audit'](_parse('docs-audit'))
 
         assert exc_info.value.code == returncode
 
@@ -99,7 +103,7 @@ class TestDocsAudit:
         _record(monkeypatch)
 
         with pytest.raises(SystemExit):
-            run.REGISTERED_COMMANDS['docs-audit'](_parse('docs-audit'))
+            REGISTERED_COMMANDS['docs-audit'](_parse('docs-audit'))
 
         assert 'Auditing README documentation' in capsys.readouterr().out
 
@@ -114,7 +118,7 @@ class TestDocsAudit:
         _record(monkeypatch)
 
         with pytest.raises(SystemExit):
-            run.REGISTERED_COMMANDS['docs-audit'](_parse('docs-audit', '--json'))
+            REGISTERED_COMMANDS['docs-audit'](_parse('docs-audit', '--json'))
 
         assert capsys.readouterr().out == ''
 
@@ -122,7 +126,7 @@ class TestDocsAudit:
         """
         Test that the command is grouped under Static Analysis with a docstring-derived description
         """
-        command = run.REGISTERED_COMMANDS['docs-audit']
+        command = REGISTERED_COMMANDS['docs-audit']
 
         assert command.group == 'Static Analysis'
         assert command.description is not None

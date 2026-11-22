@@ -2,7 +2,8 @@
 
 Python CLI tool for managing the dotfiles repository. Provides commands for the Python environment (install, status,
 doctor, lock), prek hooks, inventory management, NAS provisioning and service deploys, tool installers, and the layered
-dev environment (stow, bootstrap, render, track-claude), with ANSI styling and retry logic for robustness.
+dev environment (stow, bootstrap, render, track-claude), with ANSI styling and retry logic for robustness. `run.py` is
+the entry point; the code behind it lives in the [`cli/`](../cli/README.md) package.
 
 <!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
 

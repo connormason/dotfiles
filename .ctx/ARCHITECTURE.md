@@ -109,7 +109,14 @@ fails when this list drifts from the playbook):
 
 ## Python Management Script (`run.py`)
 
-`run.py` provides a CLI interface to repository operations.
+`run.py` provides a CLI interface to repository operations. It is only the entry point (PEP 723 header, imports
+`cli.commands`, calls `main()`); the implementation is the [`cli/`](../cli/README.md) package:
+
+- `cli/infra/`: `config.py` (constants, env vars, project paths, `ExitCode`, the mutable `RUN_DEBUG` flag), `types.py`,
+  `command.py` (the `Command` base and registry), `main.py` (argparse construction and `main()`)
+- `cli/utils/`: styling, subprocess execution, and the uv / venv / ansible / NAS / Home Assistant / doctor helpers
+- `cli/commands/`: one module per command group; `cli/commands/__init__.py` imports them in the order the groups appear
+  in help text and in the generated `Makefile`
 
 **Command categories** (the `group` class attribute of each `Command` subclass):
 

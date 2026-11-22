@@ -657,6 +657,7 @@ repos:
               ^\.worktrees/|
               ^archive/|
               ^build/|
+              ^cli/commands/|
               ^docs/|
               ^run\.py$|
               ^tests/
