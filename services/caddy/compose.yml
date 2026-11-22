@@ -5,6 +5,7 @@ services:
     container_name: caddy
     restart: unless-stopped
     ports:
+      - "80:80"
       - "443:443"
       - "32443:32443"
     volumes:

@@ -61,7 +61,7 @@ EXCLUDE_SUFFIXES: tuple[str, ...] = (
 )
 
 # Filenames that hold a directory in version control without contributing documentable content. A directory whose only
-# entries are placeholders (e.g. ``services/homeassistant/config`` seeded with ``.gitkeep``) carries nothing worth a
+# entries are placeholders (e.g. ``services/homeassistant/shared`` seeded with ``.gitkeep``) carries nothing worth a
 # README and is treated as EXEMPT.
 PLACEHOLDER_FILENAMES: frozenset[str] = frozenset({
     '.gitkeep',

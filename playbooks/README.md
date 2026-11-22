@@ -50,14 +50,15 @@ The playbook:
 04. **backup** - nightly restic backup of a ZFS snapshot to Backblaze B2; inert until `backup_b2_bucket` is set. Tags:
     `backup`
 05. **samba** - file sharing via SMB/CIFS. Tags: `samba`, `configfile`
-06. **docker** - Docker Engine and compose plugin, docker-group membership, the `~/docker` skeleton and shared `.env`,
+06. **mdns** - Avahi and a publisher for the `<name>.local` hostnames of the web UIs. Tags: `mdns`
+07. **docker** - Docker Engine and compose plugin, docker-group membership, the `~/docker` skeleton and shared `.env`,
     the autoplex image build, and `deploy.sh`; the stack itself is the `services` step. Tags: `docker`, `configfile`
-07. **tailscale** - Tailscale install and configuration, HTTPS certificates, and the Caddyfile Caddy reads. Tags:
+08. **tailscale** - Tailscale install and configuration, HTTPS certificates, and the Caddyfile Caddy reads. Tags:
     `tailscale`
-08. **dotfiles** - hands `$HOME` to the stow engine (clone, `profiles/nas` overlay, login shell, `bootstrap.sh`). Tags:
+09. **dotfiles** - hands `$HOME` to the stow engine (clone, `profiles/nas` overlay, login shell, `bootstrap.sh`). Tags:
     `dotfiles`
-09. **haos** - Home Assistant OS VM via `vms/haos/setup.sh`. Tags: `haos`
-10. **services** - Compose sync, per-service secrets, deploy. Tags: `services`, `secrets`
+10. **haos** - Home Assistant OS VM via `vms/haos/setup.sh`. Tags: `haos`
+11. **services** - Compose sync, per-service secrets, deploy. Tags: `services`, `secrets`
 
 The tags listed are the ones on the role's include; [Tags](#tags) explains what each reaches.
 
@@ -134,12 +135,12 @@ inside the role run only if they carry a selected tag, and `apply` gives every o
 role-name tag therefore runs the whole role, whereas `configfile` and `secrets` reach only the few tasks inside those
 roles that carry them.
 
-| Tag                                                                                       | Runs                                                                                                                                                                                                                                                                               |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debian`, `zfs`, `samba`, `docker`, `tailscale`, `dotfiles`, `haos`, `services`, `backup` | The whole role                                                                                                                                                                                                                                                                     |
-| `configfile`                                                                              | In `docker`: the `.env` render and the `deploy.sh` copy. In `samba`: the `smb.conf` task. Only those tasks run, plus the `always` ones and any handler they notify (a changed `smb.conf` still restarts Samba); the other roles, including `dotfiles` and `haos`, are not selected |
-| `secrets`                                                                                 | In `services`: the three secret tasks (find the `env.j2` templates, create the directories, render the files); not the sync or the deploy                                                                                                                                          |
-| `always`                                                                                  | Setting the become password and refreshing the apt index on every run, plus samba's `Register Samba version` whenever the `samba` include is selected (so with `configfile` or `samba`)                                                                                            |
+| Tag                                                                                               | Runs                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debian`, `zfs`, `samba`, `mdns`, `docker`, `tailscale`, `dotfiles`, `haos`, `services`, `backup` | The whole role                                                                                                                                                                                                                                                                     |
+| `configfile`                                                                                      | In `docker`: the `.env` render and the `deploy.sh` copy. In `samba`: the `smb.conf` task. Only those tasks run, plus the `always` ones and any handler they notify (a changed `smb.conf` still restarts Samba); the other roles, including `dotfiles` and `haos`, are not selected |
+| `secrets`                                                                                         | In `services`: the three secret tasks (find the `env.j2` templates, create the directories, render the files); not the sync or the deploy                                                                                                                                          |
+| `always`                                                                                          | Setting the become password and refreshing the apt index on every run, plus samba's `Register Samba version` whenever the `samba` include is selected (so with `configfile` or `samba`)                                                                                            |
 
 ```bash
 python3 run.py nas-provision --tags docker          # the whole docker role
@@ -152,7 +153,11 @@ The two probes that need an installed tool, samba's `Register Samba version` (`s
 role's `tailscale status --json`, are read-only and carry `check_mode: false`, like the other roles' probes, so they run
 under `--check` too. On a fresh host, where `smbd` or `tailscale` is not installed yet, the samba probe fails
 (`smbd --version` errors) and the tailscale probe returns nothing, so the next task's `from_json` fails; the real run
-installs those tools first.
+installs those tools first. The `mdns` role fails the same way on a host where it has never run: under `--check`, its
+"Configure Avahi" task fails because the destination directory `/etc/avahi` does not exist (Avahi is not installed in
+check mode), and the two "Enable and start" tasks fail because the systemd module errors for a unit that does not exist
+yet, ignoring check mode. So a full `nas-provision --check` on a host before its first `mdns` run fails there; run the
+real play for `mdns` first (`--tags mdns`).
 
 `--tags configfile` assumes `~/docker` exists, because the directory tasks do not carry the tag. On a host without it,
 the run fails (at the `.env` render once samba is installed); run `--tags docker` first. See

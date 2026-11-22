@@ -1,0 +1,42 @@
+---
+- id: '1795346369331'
+  alias: Turn off exterior lights at 1:00am
+  description: ''
+  triggers:
+  - trigger: time
+    at: 01:00:00
+    weekday:
+    - sun
+    - mon
+    - tue
+    - wed
+    - thu
+    - fri
+    - sat
+  conditions: []
+  actions:
+  - action: light.turn_off
+    metadata: {}
+    target:
+      area_id: exterior
+    data: {}
+  mode: single
+- id: '1795346468594'
+  alias: Turn on exterior lights at sunset
+  description: ''
+  triggers:
+  - trigger: sun.sunset
+    options:
+      offset:
+        days: 0
+        hours: 0
+        minutes: 0
+        seconds: 0
+  conditions: []
+  actions:
+  - action: light.turn_on
+    metadata: {}
+    target:
+      area_id: exterior
+    data: {}
+  mode: single

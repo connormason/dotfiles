@@ -10,5 +10,6 @@ services:
       - ./glance/assets:/app/assets
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /storage/media:/mnt/media:ro
     ports:
       - "8080:8080"

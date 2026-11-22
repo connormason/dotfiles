@@ -2,7 +2,8 @@
 
 Python CLI tool for managing the dotfiles repository. Provides commands for the Python environment (install, status,
 doctor, lock), prek hooks, inventory management, NAS provisioning and service deploys, tool installers, and the layered
-dev environment (stow, bootstrap, render, track-claude), with ANSI styling and retry logic for robustness.
+dev environment (stow, bootstrap, render, track-claude), with ANSI styling and retry logic for robustness. `run.py` is
+the entry point; the code behind it lives in the [`cli/`](../cli/README.md) package.
 
 <!-- mdformat-toc start --slug=github --maxlevel=3 --minlevel=2 -->
 
@@ -401,7 +402,10 @@ then runs `ansible-playbook playbooks/nas_bootstrap.yml` (with the inventory and
 playbook still runs with the collections already installed. The exit status is Ansible's. `--check --diff` previews the
 whole playbook on a converged host. On a fresh host, where `smbd` or `tailscale` is not installed yet, the Samba version
 probe fails and the Tailscale status probe returns nothing for the next task to parse, so `--check` stops there (the
-real run installs those tools first). Both probes are read-only and carry `check_mode: false`.
+real run installs those tools first). Both probes are read-only and carry `check_mode: false`. The `mdns` role also
+fails under `--check` on a host where it has never run: "Configure Avahi" fails because `/etc/avahi` does not exist
+(Avahi is not installed in check mode), and the two "Enable and start" tasks fail because the systemd module errors for
+a unit that does not exist yet, ignoring check mode. Run the real play for `mdns` first (`--tags mdns`).
 
 #### `nas-deploy`
 
@@ -423,10 +427,10 @@ before it syncs anything. It is the same script CI uses (see [`scripts/nas/READM
 #### Home Assistant commands<a name="home-assistant-commands"></a>
 
 `ha-pull` and `ha-push` sync the tracked part of the Home Assistant VM's `/config` (the `HA_SYNC_PATHS` allowlist in
-`run.py`) with [`homeassistant/config/`](../homeassistant/README.md). They talk to the VM directly rather than through
-the NAS inventory: `ssh` with `BatchMode=yes` to `DOTFILES_HA_USER@DOTFILES_HA_HOST` on `DOTFILES_HA_PORT` (defaults
-`root@homeassistant.local:22`, the Advanced SSH & Terminal app). Both probe the connection first and exit 1 with a
-remedy when it fails, and both declare `script_only = True`.
+`run.py`) with [`services/homeassistant/config/`](../services/homeassistant/README.md). They talk to the VM directly
+rather than through the NAS inventory: `ssh` with `BatchMode=yes` to `DOTFILES_HA_USER@DOTFILES_HA_HOST` on
+`DOTFILES_HA_PORT` (defaults `root@homeassistant.local:22`, the Advanced SSH & Terminal app). Both probe the connection
+first and exit 1 with a remedy when it fails, and both declare `script_only = True`.
 
 | Command   | Does                                                                                           | Options                                 |
 | --------- | ---------------------------------------------------------------------------------------------- | --------------------------------------- |
@@ -442,7 +446,7 @@ python3 run.py ha-push --restart         # confirm, upload, check, restart Core
 
 `ha-push` snapshots the VM's tracked files before writing and uploads the snapshot back when the check rejects the
 result. It refuses to run when the repo holds no tracked files. `secrets.yaml`, `.storage/`, the database, and logs are
-never transferred. See [`homeassistant/README.md`](../homeassistant/README.md) for setup and workflow.
+never transferred. See [`services/homeassistant/README.md`](../services/homeassistant/README.md) for setup and workflow.
 
 ### Dotfiles<a name="dotfiles"></a>
 
@@ -650,13 +654,40 @@ The installers have more options of their own (`--ensure`, `--print-path`, `--ti
 
 ### Testing<a name="testing"></a>
 
-#### `test`
+Every testing command runs through the public-index uv wrapper (`scripts/hooks/uv-public.sh run --group test ...`),
+accepts optional `PATH...` arguments that replace its default target, takes the options below, and exits with the return
+code of the first failing step.
 
-Run the test suite through the public-index uv wrapper: `scripts/hooks/uv-public.sh run --group test pytest [PATH...]`
-(default path: `tests`). Exits with pytest's return code.
+| Command            | Runs                                                            |
+| ------------------ | --------------------------------------------------------------- |
+| `test`             | `pytest tests/unit -m "not slow"`: fast feedback                |
+| `test-full`        | `pytest tests`: the full suite (unit + integration), as CI does |
+| `test-unit`        | `pytest tests/unit`: all unit tests, including slow ones        |
+| `test-integration` | `pytest tests/integration`                                      |
+| `test-cov`         | `test-full --coverage`                                          |
+| `test-analyze`     | `test-full --analyze`: coverage plus the slowest-test durations |
+
+| Option                      | Effect                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `-m`, `--marker EXPR`       | Mark expression, AND-ed with the command's own (`test -m timing` runs `(timing) and (not slow)`) |
+| `-q`, `--quick`             | Exclude slow tests (`-m "not slow"`); not offered by `test`, which already does                  |
+| `-v`, `--verbose`           | pytest verbosity; repeat for more (`-vv`)                                                        |
+| `-d`, `--durations N`       | Show the N slowest tests (`--durations=N`)                                                       |
+| `-c`, `--cov`, `--coverage` | Run `coverage run -m pytest ...`, then `coverage html` and `coverage report`                     |
+| `--analyze`                 | Shortcut for `--durations 20 --coverage`; not offered by `test-analyze`                          |
+| `--args="..."`              | Extra pytest arguments, split like a shell command line                                          |
+
+Use the `=` form for `--args` (`--args="-x -k foo"`): argparse reads a bare `--args -x` as a missing value. Coverage
+runs delete stale `.coverage*` data files first and write the HTML report to `.reports/coverage`; they fail when total
+coverage is under the `fail_under` threshold in `pyproject.toml`, and `PATH...` narrows only the pytest step. The
+generated `Makefile` cannot forward flags, so `make test-cov` and `make test-analyze` are the flag-free presets; use
+`run.py` for the rest.
 
 ```bash
-python3 run.py test tests/unit/run
+python3 run.py test tests/unit/cli
+python3 run.py test-full -q -d 10
+python3 run.py test-integration -m integration --args="-x"
+python3 run.py test-analyze
 ```
 
 ### Static Analysis<a name="static-analysis"></a>

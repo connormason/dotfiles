@@ -9,3 +9,4 @@ theme:
 
 pages:
   - $include: home.yml
+  - $include: infrastructure.yml

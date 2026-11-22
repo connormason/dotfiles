@@ -97,6 +97,7 @@ fails when this list drifts from the playbook):
 - `backup`: nightly restic backup of a ZFS snapshot of `config` and `backups` to Backblaze B2 (systemd timer, prune,
   failure alert through `nas-notify`); does nothing until `backup_b2_bucket` is set
 - `samba`: Samba file sharing
+- `mdns`: Avahi and a systemd publisher announcing `<name>.local` for each web UI in `local_services`
 - `docker`: Docker Engine and compose plugin (the v1 `docker-compose` package is removed), `daemon.json` log limits, a
   weekly image-prune timer, docker-group membership, the `~/docker` skeleton and shared `.env`, the autoplex image
   build, `deploy.sh`
@@ -108,7 +109,14 @@ fails when this list drifts from the playbook):
 
 ## Python Management Script (`run.py`)
 
-`run.py` provides a CLI interface to repository operations.
+`run.py` provides a CLI interface to repository operations. It is only the entry point (PEP 723 header, imports
+`cli.commands`, calls `main()`); the implementation is the [`cli/`](../cli/README.md) package:
+
+- `cli/infra/`: `config.py` (constants, env vars, project paths, `ExitCode`, the mutable `RUN_DEBUG` flag), `types.py`,
+  `command.py` (the `Command` base and registry), `main.py` (argparse construction and `main()`)
+- `cli/utils/`: styling, subprocess execution, and the uv / venv / ansible / NAS / Home Assistant / doctor helpers
+- `cli/commands/`: one module per command group; `cli/commands/__init__.py` imports them in the order the groups appear
+  in help text and in the generated `Makefile`
 
 **Command categories** (the `group` class attribute of each `Command` subclass):
 
@@ -118,7 +126,7 @@ fails when this list drifts from the playbook):
 - **Inventory**: `inventory-hosts`, `inventory-status`, `update-inventory`, `vault-decrypt`, `vault-encrypt`
 - **Tool Installation**: `install-uv`, `install-hatch`
 - **Hooks**: `install-hooks`, `prepare-hooks`, `uninstall-hooks`, `run-hooks`, `pre`
-- **Testing**: `test`
+- **Testing**: `test`, `test-full`, `test-unit`, `test-integration`, `test-cov`, `test-analyze`
 - **Dependencies**: `lock`, `lock-check`, `lock-upgrade`, `lock-sync`
 - **Utilities**: `makefile`, `diagnose`
 
@@ -152,11 +160,11 @@ Media server stack defined by `services/compose.base.yml` plus one `services/<na
 **Services**:
 
 - **Media**: Plex, Jellyfin, Radarr (movies), Sonarr (TV), Transmission (torrents), Prowlarr (indexer), Flaresolverr
-- **Network**: Caddy (reverse proxy), PiHole (DNS/ad-blocking; disabled)
+- **Network**: Caddy (reverse proxy: Tailscale HTTPS routes and plain-HTTP `.local` hostnames), PiHole (DNS/ad-blocking; disabled)
 - **Dashboard**: Glance
 - **Support**: Autoplex (copies completed downloads into the Plex layout)
 - **Home automation**: Home Assistant runs as a libvirt VM provisioned by `vms/haos/` scripts; its container definition
-  is disabled. The VM's hand-editable YAML is tracked in `homeassistant/config/` and synced with `run.py ha-pull` /
+  is disabled. The VM's hand-editable YAML is tracked in `services/homeassistant/config/` and synced with `run.py ha-pull` /
   `ha-push` over SSH (not part of the Ansible flow)
 
 **Disabling a service**: rename its `compose.yml` to `compose.yml.disabled` (`pihole` and `homeassistant` today).

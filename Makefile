@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean bootstrap nas-provision nas-deploy ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
+.PHONY: help install dev shell status doctor clean bootstrap nas-provision nas-deploy ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test test-full test-unit test-integration test-cov test-analyze docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -25,8 +25,8 @@ help: ## Show this help message
 	@echo "  $(YELLOW)bootstrap           $(NC) Run the layered bootstrap stages (bootstrap/bootstrap.sh) on local machine"
 	@echo "  $(YELLOW)nas-provision       $(NC) Provision the NAS with the Ansible playbook: system config, the stow engine, then services"
 	@echo "  $(YELLOW)nas-deploy          $(NC) Sync services/ to the NAS and run deploy.sh there (the same script CI uses)"
-	@echo "  $(YELLOW)ha-pull             $(NC) Pull the tracked Home Assistant YAML from the HAOS VM into homeassistant/config/"
-	@echo "  $(YELLOW)ha-push             $(NC) Push homeassistant/config/ to the HAOS VM, validate it with 'ha core check', and roll back on failure"
+	@echo "  $(YELLOW)ha-pull             $(NC) Pull the tracked Home Assistant YAML from the HAOS VM into services/homeassistant/config/"
+	@echo "  $(YELLOW)ha-push             $(NC) Push services/homeassistant/config/ to the HAOS VM, validate it with 'ha core check', and roll back on failure"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Dotfiles:$(NC)"
 	@echo "  $(YELLOW)stow                $(NC) Link stow packages from every layer into the home directory (stow.sh)"
@@ -52,7 +52,12 @@ help: ## Show this help message
 	@echo "  $(YELLOW)pre                 $(NC) Run prek (pre-commit) hooks on all project files"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Testing:$(NC)"
-	@echo "  $(YELLOW)test                $(NC) Run the test suite via uv (public-index wrapper)"
+	@echo "  $(YELLOW)test                $(NC) Run the unit tests that are not marked slow (fast feedback)"
+	@echo "  $(YELLOW)test-full           $(NC) Run the full test suite (unit + integration), as CI does"
+	@echo "  $(YELLOW)test-unit           $(NC) Run all unit tests, including slow ones"
+	@echo "  $(YELLOW)test-integration    $(NC) Run the integration tests"
+	@echo "  $(YELLOW)test-cov            $(NC) Run the full test suite under coverage and report the result"
+	@echo "  $(YELLOW)test-analyze        $(NC) Run the full test suite with coverage and timing analysis"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Static Analysis:$(NC)"
 	@echo "  $(YELLOW)docs-audit          $(NC) Audit per-directory README documentation (missing, stale, structural, links, policy)"
@@ -97,10 +102,10 @@ nas-provision: ## Provision the NAS with the Ansible playbook: system config, th
 nas-deploy: ## Sync services/ to the NAS and run deploy.sh there (the same script CI uses)
 	@python3 run.py nas-deploy
 
-ha-pull: ## Pull the tracked Home Assistant YAML from the HAOS VM into homeassistant/config/
+ha-pull: ## Pull the tracked Home Assistant YAML from the HAOS VM into services/homeassistant/config/
 	@python3 run.py ha-pull
 
-ha-push: ## Push homeassistant/config/ to the HAOS VM, validate it with 'ha core check', and roll back on failure
+ha-push: ## Push services/homeassistant/config/ to the HAOS VM, validate it with 'ha core check', and roll back on failure
 	@python3 run.py ha-push
 
 # Dotfiles
@@ -153,8 +158,23 @@ pre: ## Run prek (pre-commit) hooks on all project files
 	@python3 run.py pre
 
 # Testing
-test: ## Run the test suite via uv (public-index wrapper)
+test: ## Run the unit tests that are not marked slow (fast feedback)
 	@python3 run.py test
+
+test-full: ## Run the full test suite (unit + integration), as CI does
+	@python3 run.py test-full
+
+test-unit: ## Run all unit tests, including slow ones
+	@python3 run.py test-unit
+
+test-integration: ## Run the integration tests
+	@python3 run.py test-integration
+
+test-cov: ## Run the full test suite under coverage and report the result
+	@python3 run.py test-cov
+
+test-analyze: ## Run the full test suite with coverage and timing analysis
+	@python3 run.py test-analyze
 
 # Static Analysis
 docs-audit: ## Audit per-directory README documentation (missing, stale, structural, links, policy)

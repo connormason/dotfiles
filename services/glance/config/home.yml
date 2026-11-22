@@ -77,12 +77,24 @@
               name: Microsoft
 
         - type: releases
+          title: NAS releases
           cache: 1d
+          limit: 12
+          collapse-after: 6
           # Without authentication the Github API allows for up to 60 requests per hour. You can create a
           # read-only token from your Github account settings and use it here to increase the limit.
           # token: ...
+          # One entry per upstream project the NAS runs (Plex is closed source and has no GitHub releases).
           repositories:
+            - Sonarr/Sonarr
+            - Radarr/Radarr
+            - Prowlarr/Prowlarr
+            - jellyfin/jellyfin
+            - transmission/transmission
+            - FlareSolverr/FlareSolverr
+            - caddyserver/caddy
+            - binwiederhier/ntfy
+            - tailscale/tailscale
+            - home-assistant/core
+            - home-assistant/operating-system
             - glanceapp/glance
-            - go-gitea/gitea
-            - immich-app/immich
-            - syncthing/syncthing

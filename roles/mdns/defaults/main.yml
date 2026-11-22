@@ -1,0 +1,9 @@
+---
+# Interface Avahi announces on: the default-route interface (br0 on the NAS, where the HAOS bridge takes over the NIC),
+# so the names stay off Docker's bridges
+mdns_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+
+# local_services (the hostnames to publish) is a play variable, defined in playbooks/nas_bootstrap.yml
+mdns_avahi_conf: /etc/avahi/avahi-daemon.conf
+mdns_script_path: /usr/local/bin/nas-mdns-publish
+mdns_unit_path: /etc/systemd/system/nas-mdns-publish.service

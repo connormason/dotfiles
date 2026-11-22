@@ -39,6 +39,7 @@ it. Remove the NAS copy by hand; for `homeassistant`, the steps are in the
 
 - [Quick Reference](#quick-reference)
 - [Tailscale / HTTPS](#tailscale--https)
+- [Local hostnames](#local-hostnames)
 - [Services](#services-1)
   - [`caddy`](#caddy)
   - [`glance`](#glance)
@@ -66,28 +67,29 @@ it. Remove the NAS copy by hand; for `homeassistant`, the steps are in the
 All host ports below are bound on the NAS itself. Services without a host port are reachable only from inside the
 `nas-network` bridge.
 
-| Container        | Image                               | Host Port(s)                                    | Purpose                                     |
-| ---------------- | ----------------------------------- | ----------------------------------------------- | ------------------------------------------- |
-| `caddy`          | `caddy:2-alpine`                    | `443/tcp`, `32443/tcp`                          | Tailscale HTTPS reverse proxy (see below)   |
-| `glance`         | `glanceapp/glance`                  | `8080/tcp`                                      | Dashboard / homepage                        |
-| `home-assistant` | `homeassistant/home-assistant`      | host networking (`8123/tcp`, not declared here) | Home automation hub (**disabled**)          |
-| `pihole`         | `pihole/pihole:latest`              | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80   | DNS, ad-blocking, DHCP (**disabled**)       |
-| `plex`           | `linuxserver/plex`                  | `32400/tcp`                                     | Media streaming server                      |
-| `jellyfin`       | `linuxserver/jellyfin`              | `8096/tcp`, `7359/udp`                          | Media streaming server (Plex alternative)   |
-| `prowlarr`       | `linuxserver/prowlarr`              | `9696/tcp`                                      | Indexer aggregator for Sonarr/Radarr        |
-| `radarr`         | `linuxserver/radarr`                | `7878/tcp`                                      | Movie library management                    |
-| `sonarr`         | `linuxserver/sonarr`                | `8989/tcp`                                      | TV library management                       |
-| `transmission`   | `linuxserver/transmission`          | `9091/tcp`                                      | BitTorrent client (web UI)                  |
-| `flaresolverr`   | `ghcr.io/flaresolverr/flaresolverr` | internal only (`8191/tcp`, not declared here)   | Cloudflare challenge solver for Prowlarr    |
-| `autoplex`       | `danielmmetz/autoplex` (built)      | none                                            | Copies completed downloads into Plex layout |
-| `ntfy`           | `binwiederhier/ntfy:v2.11.0`        | `127.0.0.1:2586` → 80 (loopback only)           | Push-notification channel for host alerts   |
+| Container        | Image                               | Host Port(s)                                    | Purpose                                                         |
+| ---------------- | ----------------------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
+| `caddy`          | `caddy:2-alpine`                    | `80/tcp`, `443/tcp`, `32443/tcp`                | Reverse proxy: Tailscale HTTPS and .local hostnames (see below) |
+| `glance`         | `glanceapp/glance`                  | `8080/tcp`                                      | Dashboard / homepage                                            |
+| `home-assistant` | `homeassistant/home-assistant`      | host networking (`8123/tcp`, not declared here) | Home automation hub (**disabled**)                              |
+| `pihole`         | `pihole/pihole:latest`              | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80   | DNS, ad-blocking, DHCP (**disabled**)                           |
+| `plex`           | `linuxserver/plex`                  | `32400/tcp`                                     | Media streaming server                                          |
+| `jellyfin`       | `linuxserver/jellyfin`              | `8096/tcp`, `7359/udp`                          | Media streaming server (Plex alternative)                       |
+| `prowlarr`       | `linuxserver/prowlarr`              | `9696/tcp`                                      | Indexer aggregator for Sonarr/Radarr                            |
+| `radarr`         | `linuxserver/radarr`                | `7878/tcp`                                      | Movie library management                                        |
+| `sonarr`         | `linuxserver/sonarr`                | `8989/tcp`                                      | TV library management                                           |
+| `transmission`   | `linuxserver/transmission`          | `9091/tcp`                                      | BitTorrent client (web UI)                                      |
+| `flaresolverr`   | `ghcr.io/flaresolverr/flaresolverr` | internal only (`8191/tcp`, not declared here)   | Cloudflare challenge solver for Prowlarr                        |
+| `autoplex`       | `danielmmetz/autoplex` (built)      | none                                            | Copies completed downloads into Plex layout                     |
+| `ntfy`           | `binwiederhier/ntfy:v2.11.0`        | `127.0.0.1:2586` → 80 (loopback only)           | Push-notification channel for host alerts                       |
 
 The compose files declare neither the Home Assistant port `8123` nor the Flaresolverr port `8191`; both are upstream
 defaults that nothing in this repository verifies.
 
 LAN access is `http://<nas-host>:<port>` (e.g. `http://nas.local:8989` for Sonarr). While PiHole is disabled, its admin
 UI (`http://<nas-host>:8053/admin`) is not deployed by this repository. Home Assistant now runs as a VM with its own LAN
-address (see [`vms/haos/`](../vms/haos/README.md)).
+address (see [`vms/haos/`](../vms/haos/README.md)). The web UIs also answer on `http://<name>.local`, without a port
+(see [Local hostnames](#local-hostnames)).
 
 ## Tailscale / HTTPS<a name="tailscale--https"></a>
 
@@ -111,20 +113,62 @@ The template skips the `pihole` entry of `tailscale_services` in its loop and em
 `pihole:80` instead. The route is therefore always in the Caddyfile, even while PiHole is disabled and nothing in this
 repository deploys that container.
 
+## Local hostnames<a name="local-hostnames"></a>
+
+Each web UI in `local_services` answers on `http://<name>.local` over plain HTTP on the home network. The `mdns` role
+announces the name over mDNS (all names point at the NAS's LAN address), and `caddy` routes it by `Host` header to the
+container, through an `http://` site that the `tailscale` role renders into the Caddyfile. The list lives in
+[`playbooks/vars/local_services.yml`](../playbooks/vars/local_services.yml); an inventory replaces it by setting
+`local_services_override`.
+
+| URL                         | Container:port      |
+| --------------------------- | ------------------- |
+| `http://glance.local`       | `glance:8080`       |
+| `http://plex.local`         | `plex:32400`        |
+| `http://jellyfin.local`     | `jellyfin:8096`     |
+| `http://sonarr.local`       | `sonarr:8989`       |
+| `http://radarr.local`       | `radarr:7878`       |
+| `http://prowlarr.local`     | `prowlarr:9696`     |
+| `http://transmission.local` | `transmission:9091` |
+
+`homeassistant.local` is announced by Home Assistant OS itself and is not part of this list. `ntfy` is loopback-only,
+and `flaresolverr` and `autoplex` have no web UI, so none of the three has a name.
+
+Clients need mDNS support: macOS, iOS and Windows 10 and later have it; Linux needs `nss-mdns`. Without it, use
+`http://<nas-host>:<port>`.
+
+The Caddyfile is a single-file bind mount, so a change that edits only the Caddyfile does not recreate the container;
+`docker restart caddy` makes it read the new file. A change to `compose.yml` (such as publishing port 80) is applied by
+`python3 run.py nas-deploy caddy`.
+
+**Clarifications needed** (only the NAS can answer these; see the checks in the
+[design doc](../docs/plans/2026-11/2026-11-21-local-mdns-hostnames-design.md)):
+
+- Whether `http://sonarr.local`, `radarr.local` and `prowlarr.local` redirect `/` to their `UrlBase` prefix, and
+  `transmission.local` to `/transmission/web/`.
+- Whether Transmission's RPC host whitelist accepts the `transmission.local` hostname.
+
 ## Services<a name="services-1"></a>
 
 ### `caddy`<a name="caddy"></a>
 
-Reverse proxy that serves the stack over HTTPS under the NAS's Tailscale hostname. Publishes `443` and `32443`, reads
-its `Caddyfile` from `/etc/caddy/` and TLS material from `/etc/tailscale/certs/` on the host (both mounted read-only and
-populated by the `tailscale` role), and keeps its own state in the `caddy_data` named volume.
+Reverse proxy that serves the stack over HTTPS under the NAS's Tailscale hostname. Publishes `80`, `443` and `32443`
+(port 80 serves the plain-HTTP `.local` sites, see [Local hostnames](#local-hostnames)), reads its `Caddyfile` from
+`/etc/caddy/` and TLS material from `/etc/tailscale/certs/` on the host (both mounted read-only and populated by the
+`tailscale` role), and keeps its own state in the `caddy_data` named volume.
 
 ### `glance`<a name="glance"></a>
 
-Web dashboard. Mounts `glance/config` and `glance/assets` from `~/docker/glance/`, `/etc/localtime`, and the Docker
-socket (read-only). Its `env_file: .env` resolves against `--project-directory ~/docker`, so it loads the shared
+Web dashboard. Mounts `glance/config` and `glance/assets` from `~/docker/glance/`, `/etc/localtime`, the Docker socket
+(read-only), and `/storage/media` (read-only, at `/mnt/media`, so the Infrastructure page's `server-stats` widget can
+report its free space). Its `env_file: .env` resolves against `--project-directory ~/docker`, so it loads the shared
 `~/docker/.env` rendered by the `docker` role (which holds only `ADVERTISE_IP`), not a `glance/.env`. See
 [Secrets](#secrets).
+
+Pages live in `glance/config/` and are included from `glance.yml`: `home.yml` (feeds, plus a releases widget listing the
+upstream projects the NAS runs) and `infrastructure.yml` (host stats, a `monitor` widget that probes each service by
+container name on `nas-network`, and the container list). A change to a page file is picked up by the running container;
+the added mount needs the container recreated (`python3 run.py nas-deploy glance`).
 
 ### `home-assistant`<a name="home-assistant"></a>
 
@@ -133,8 +177,9 @@ socket (read-only). Its `env_file: .env` resolves against `--project-directory ~
 
 The disabled definition uses `network_mode: host` and mounts `homeassistant/config` and `homeassistant/shared`
 (read-write) and `/etc/localtime` (read-only). Its service key is `homeassistant` and its container name is
-`home-assistant`. `homeassistant/config/` and `homeassistant/shared/` hold only a `.gitkeep` in the repository. The VM's
-YAML configuration is tracked in the top-level [`homeassistant/`](../homeassistant/README.md) directory instead.
+`home-assistant`. `homeassistant/shared/` holds only a `.gitkeep` in the repository. `homeassistant/config/` holds the
+VM's tracked YAML configuration rather than a container's; see [`homeassistant/README.md`](homeassistant/README.md).
+Like every disabled directory, it is still pushed to the NAS by the whole-tree sync.
 
 ### `pihole`<a name="pihole"></a>
 
