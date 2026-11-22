@@ -192,8 +192,9 @@ def run_loop(
     :param max_cycles: stop after this many cycles (tests); None runs until an outage
     :return: ``EXIT_RPC`` after a sustained outage, ``EXIT_OK`` when ``max_cycles`` is reached
     """
-    failures = 0
-    cycles   = 0
+    failures      = 0
+    cycles        = 0
+    last_problems = 0
     while (max_cycles is None) or (cycles < max_cycles):
         cycles += 1
         try:
@@ -222,7 +223,10 @@ def run_loop(
                 state.save()
 
             report  = reconcile(torrents, config, state=state, notifier=notifier, extractor=extractor)
-            changed = report.counts['linked'] or report.problems
+            # INFO only when something changed (new links or extractions, or the number of problems moved); a steady
+            # state, including a known stuck torrent, stays at DEBUG instead of logging every cycle
+            changed = report.counts['linked'] or report.counts['extracted'] or len(report.problems) != last_problems
+            last_problems = len(report.problems)
             logger.log(
                 logging.INFO if changed else logging.DEBUG,
                 'cycle ok: %d linked, %d already linked, %d problem(s), %d in progress',
@@ -286,7 +290,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # dedupe: inspect with a dry-run reconcile (creates nothing), then act on the legacy copies it found.
     # The flat scan runs second, so a foldered twin made by an earlier `once` is what justifies removing a flat file.
-    report    = reconcile(torrents, config, dry_run=True)
+    # `state` is passed so finished extractions are recognised (a dry run never writes it); without it every RAR set
+    # would be logged as "would extract" again.
+    report    = reconcile(torrents, config, dry_run=True, state=state)
     outcomes  = dedupe(report.results, apply=args.apply, quick=args.quick)
     outcomes += flat_duplicates((config.movies_root, config.tv_root), apply=args.apply, quick=args.quick)
     for outcome in outcomes:
