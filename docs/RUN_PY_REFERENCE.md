@@ -426,10 +426,10 @@ before it syncs anything. It is the same script CI uses (see [`scripts/nas/READM
 #### Home Assistant commands<a name="home-assistant-commands"></a>
 
 `ha-pull` and `ha-push` sync the tracked part of the Home Assistant VM's `/config` (the `HA_SYNC_PATHS` allowlist in
-`run.py`) with [`homeassistant/config/`](../homeassistant/README.md). They talk to the VM directly rather than through
-the NAS inventory: `ssh` with `BatchMode=yes` to `DOTFILES_HA_USER@DOTFILES_HA_HOST` on `DOTFILES_HA_PORT` (defaults
-`root@homeassistant.local:22`, the Advanced SSH & Terminal app). Both probe the connection first and exit 1 with a
-remedy when it fails, and both declare `script_only = True`.
+`run.py`) with [`services/homeassistant/config/`](../services/homeassistant/README.md). They talk to the VM directly
+rather than through the NAS inventory: `ssh` with `BatchMode=yes` to `DOTFILES_HA_USER@DOTFILES_HA_HOST` on
+`DOTFILES_HA_PORT` (defaults `root@homeassistant.local:22`, the Advanced SSH & Terminal app). Both probe the connection
+first and exit 1 with a remedy when it fails, and both declare `script_only = True`.
 
 | Command   | Does                                                                                           | Options                                 |
 | --------- | ---------------------------------------------------------------------------------------------- | --------------------------------------- |
@@ -445,7 +445,7 @@ python3 run.py ha-push --restart         # confirm, upload, check, restart Core
 
 `ha-push` snapshots the VM's tracked files before writing and uploads the snapshot back when the check rejects the
 result. It refuses to run when the repo holds no tracked files. `secrets.yaml`, `.storage/`, the database, and logs are
-never transferred. See [`homeassistant/README.md`](../homeassistant/README.md) for setup and workflow.
+never transferred. See [`services/homeassistant/README.md`](../services/homeassistant/README.md) for setup and workflow.
 
 ### Dotfiles<a name="dotfiles"></a>
 
