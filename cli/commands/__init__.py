@@ -15,3 +15,4 @@ from cli.commands import analysis
 from cli.commands import dependencies
 from cli.commands import utilities
 from cli.commands import tool_config
+from cli.commands import medialink

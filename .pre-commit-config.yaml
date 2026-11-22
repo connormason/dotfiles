@@ -67,6 +67,7 @@ repos:
           - "--format=requirements.txt"
           - "--output-file=requirements.txt"
           - "--frozen"
+          - "--no-emit-project"
           - "--no-hashes"
           - "--no-header"
 

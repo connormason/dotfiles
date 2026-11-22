@@ -32,6 +32,11 @@ dependencies = [
     # keep-sorted end
 ]
 
+# Project entry points
+# ====================
+[project.scripts]
+medialink = "medialink.cli:main"
+
 # Project URLs
 # ============
 [project.urls]
@@ -91,6 +96,19 @@ test = [
     # keep-sorted end
 ]
 
+
+# ####################################################################################################################
+# Build system
+# ####################################################################################################################
+# Exists so `uv sync` installs the project, which puts the `medialink` console script (see [project.scripts]) in the
+# venv. The only importable package is the standard-library-only service in services/medialink/.
+[build-system]
+requires      = ["uv_build >= 0.9, < 0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "medialink"
+module-root = "services/medialink"
 
 # ####################################################################################################################
 # Package management tool configuration
