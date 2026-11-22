@@ -186,8 +186,6 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 #     bootstrap/                    BOOTSTRAP_DIR
 #       bootstrap.sh                BOOTSTRAP_SCRIPT
 #     docs/                         DOCS_DIR
-#     homeassistant/
-#       config/                     HA_CONFIG_DIR
 #     inventory/                    INVENTORY_DIR
 #       inventory.yml               INVENTORY_FILE
 #     playbooks/                    PLAYBOOKS_DIR
@@ -216,6 +214,8 @@ INVENTORY_REPO_URL:         str  = os.getenv(INVENTORY_REPO_URL_ENVVAR, INVENTOR
 #         deploy-services.sh        NAS_DEPLOY_SCRIPT
 #       utility/
 #     services/                     SERVICES_DIR
+#       homeassistant/
+#         config/                   HA_CONFIG_DIR
 #     stow/                         STOW_DIR
 #       claude/
 #         .claude/                  CLAUDE_STOW_DIR
@@ -241,7 +241,7 @@ BOOTSTRAP_DIR:          Path = DOTFILES_DIR / 'bootstrap'
 BOOTSTRAP_SCRIPT:       Path = BOOTSTRAP_DIR / 'bootstrap.sh'
 
 DOCS_DIR:               Path = DOTFILES_DIR / 'docs'
-HA_CONFIG_DIR:          Path = DOTFILES_DIR / 'homeassistant' / 'config'
+HA_CONFIG_DIR:          Path = DOTFILES_DIR / 'services' / 'homeassistant' / 'config'
 PROFILES_DIR:           Path = DOTFILES_DIR / 'profiles'
 RENDER_DIR:             Path = DOTFILES_DIR / 'render'
 SERVICES_DIR:           Path = DOTFILES_DIR / 'services'

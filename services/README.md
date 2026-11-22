@@ -171,8 +171,9 @@ socket (read-only). Its `env_file: .env` resolves against `--project-directory ~
 
 The disabled definition uses `network_mode: host` and mounts `homeassistant/config` and `homeassistant/shared`
 (read-write) and `/etc/localtime` (read-only). Its service key is `homeassistant` and its container name is
-`home-assistant`. `homeassistant/config/` and `homeassistant/shared/` hold only a `.gitkeep` in the repository. The VM's
-YAML configuration is tracked in the top-level [`homeassistant/`](../homeassistant/README.md) directory instead.
+`home-assistant`. `homeassistant/shared/` holds only a `.gitkeep` in the repository. `homeassistant/config/` holds the
+VM's tracked YAML configuration rather than a container's; see [`homeassistant/README.md`](homeassistant/README.md).
+Like every disabled directory, it is still pushed to the NAS by the whole-tree sync.
 
 ### `pihole`<a name="pihole"></a>
 

@@ -164,7 +164,7 @@ Media server stack defined by `services/compose.base.yml` plus one `services/<na
 - **Dashboard**: Glance
 - **Support**: Autoplex (copies completed downloads into the Plex layout)
 - **Home automation**: Home Assistant runs as a libvirt VM provisioned by `vms/haos/` scripts; its container definition
-  is disabled. The VM's hand-editable YAML is tracked in `homeassistant/config/` and synced with `run.py ha-pull` /
+  is disabled. The VM's hand-editable YAML is tracked in `services/homeassistant/config/` and synced with `run.py ha-pull` /
   `ha-push` over SSH (not part of the Ansible flow)
 
 **Disabling a service**: rename its `compose.yml` to `compose.yml.disabled` (`pihole` and `homeassistant` today).

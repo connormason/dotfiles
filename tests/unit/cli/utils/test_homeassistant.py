@@ -87,7 +87,7 @@ class FakeVM(NamedTuple):
     Local stand-ins for the Home Assistant VM and the repo checkout
     """
     remote:   Path    # the VM's /config
-    local:    Path    # homeassistant/config/ in the repo
+    local:    Path    # services/homeassistant/config/ in the repo
     log:      Path    # one line per `ha ...` invocation
     sudo_log: Path    # one line per `sudo ...` invocation
 
@@ -111,7 +111,7 @@ def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
     ``tar`` shim sets COPYFILE_DISABLE so macOS bsdtar skips its ``._*`` xattr sidecars, matching the VM's busybox tar
     """
     remote   = tmp_path / 'vm' / 'config'
-    local    = tmp_path / 'repo' / 'homeassistant' / 'config'
+    local    = tmp_path / 'repo' / 'services' / 'homeassistant' / 'config'
     log      = tmp_path / 'ha.log'
     sudo_log = tmp_path / 'sudo.log'
     bindir   = tmp_path / 'bin'
@@ -404,7 +404,7 @@ class TestHaConfigHasLocalChanges:
         Test that an untracked allowlisted file counts as a change while an unlisted file does not
         """
         repo   = tmp_path / 'repo'
-        config = repo / 'homeassistant' / 'config'
+        config = repo / 'services' / 'homeassistant' / 'config'
         config.mkdir(parents=True)
 
         subprocess.run(['git', 'init', '-q'], cwd=repo, check=True)

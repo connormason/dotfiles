@@ -56,8 +56,8 @@ __all__ = [
 #   - bootstrap:     Run the layered bootstrap stages on local machine
 #   - nas-provision: Run the Ansible playbook (playbooks/nas_bootstrap.yml) against the inventory's ``nas`` host
 #   - nas-deploy:    Sync services/ to the NAS and run deploy.sh there (scripts/nas/deploy-services.sh, as CI does)
-#   - ha-pull:       Pull the tracked Home Assistant YAML from the HAOS VM into homeassistant/config/
-#   - ha-push:       Push homeassistant/config/ to the VM, validate with `ha core check`, roll back on failure
+#   - ha-pull:       Pull the tracked Home Assistant YAML from the HAOS VM into services/homeassistant/config/
+#   - ha-push:       Push services/homeassistant/config/ to the VM, validate with `ha core check`, roll back on failure
 # ==================================================================================================
 
 
@@ -262,7 +262,7 @@ class NasDeployCommand(Command):
 
 class HaPullCommand(Command):
     """
-    Pull the tracked Home Assistant YAML from the HAOS VM into homeassistant/config/
+    Pull the tracked Home Assistant YAML from the HAOS VM into services/homeassistant/config/
     """
     name:  ClassVar[str]  = 'ha-pull'
     group: ClassVar[str]  = 'Bootstrap & Deploy'
@@ -286,7 +286,11 @@ class HaPullCommand(Command):
 
     def run(self, args: Args) -> None:
         if ha_config_has_local_changes() and not (args.force or args.dry_run):
-            printf('❌ homeassistant/config/ has uncommitted changes that a pull would overwrite', fg='red', bold=True)
+            printf(
+                '❌ services/homeassistant/config/ has uncommitted changes that a pull would overwrite',
+                fg='red',
+                bold=True,
+            )
             printf('Commit or push them first (ha-push), or re-run with --force to discard them', indent=3)
             sys.exit(ExitCode.COMMAND_FAILED)
 
@@ -301,7 +305,7 @@ class HaPullCommand(Command):
 
             diff = diff_trees(HA_CONFIG_DIR, remote)
             if not diff.changed:
-                printf('✅ homeassistant/config/ already matches the VM', fg='bright_green')
+                printf('✅ services/homeassistant/config/ already matches the VM', fg='bright_green')
                 return
 
             printf(f'🔎 Changes the VM has relative to {pathstyle(folduser(HA_CONFIG_DIR))}:', fg='bright_cyan')
@@ -315,7 +319,7 @@ class HaPullCommand(Command):
 
 class HaPushCommand(Command):
     """
-    Push homeassistant/config/ to the HAOS VM, validate it with 'ha core check', and roll back on failure
+    Push services/homeassistant/config/ to the HAOS VM, validate it with 'ha core check', and roll back on failure
     """
     name:  ClassVar[str]  = 'ha-push'
     group: ClassVar[str]  = 'Bootstrap & Deploy'
@@ -357,7 +361,7 @@ class HaPushCommand(Command):
                 fetch_ha_config(snapshot)
                 diff = diff_trees(snapshot, HA_CONFIG_DIR)
                 if not diff.changed:
-                    printf('✅ The VM already matches homeassistant/config/', fg='bright_green')
+                    printf('✅ The VM already matches services/homeassistant/config/', fg='bright_green')
                     return
 
                 printf('🔎 Changes the push would make on the VM:', fg='bright_cyan')
