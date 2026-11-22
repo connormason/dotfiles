@@ -111,7 +111,7 @@ python3 run.py makefile
 ## Layered Dev Environment (`run.py` Dotfiles group)
 
 `bootstrap`, `stow`, and `render` wrap `bootstrap/bootstrap.sh`, `stow.sh`, and `scripts/dotfiles/render.py`; `doctor`
-and `track-claude` run their own logic in `run.py`; `test` runs the suite through the uv wrapper. (`doctor` belongs to
+and `track-claude` run their own logic in `run.py`; `test` and its `test-*` siblings run subsets of the suite through the uv wrapper. (`doctor` belongs to
 the Setup & Environment group and `bootstrap` to Bootstrap & Deploy; the grouping is only the help layout.) See
 [`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md) for options. They are stdlib-only, so bare
 `python3 run.py <command>` works (see the note above).
@@ -137,8 +137,14 @@ python3 run.py doctor --fix
 # Move local ~/.claude agents/commands/skills/hooks/rules into stow/claude and restow (--dry-run previews)
 python3 run.py track-claude
 
-# Run the test suite through the public-index uv wrapper
+# Run the unit tests not marked slow through the public-index uv wrapper (PATH... narrows the target)
 python3 run.py test
+
+# Other subsets: full suite (as CI does), all unit tests, integration tests, or the full suite under coverage
+python3 run.py test-full
+python3 run.py test-unit
+python3 run.py test-integration
+python3 run.py test-cov
 
 # Audit per-directory README files: missing, stale, structural, broken links, forbidden patterns
 # (--json for machine-readable output, --no-fail to always exit 0; SCOPE paths narrow the audit)

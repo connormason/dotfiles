@@ -447,13 +447,22 @@ class TestForwarding:
             get_commands()['render'](args)
         assert seen[0][2:] == ['claude', '--diff', '--check', '--force', '-v']
 
-    def test_test_defaults_to_tests_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_test_defaults_to_fast_unit_tests(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
-        Test that the test command runs pytest on tests/ through the public uv wrapper
+        Test that the test command runs the unit tests not marked slow through the public uv wrapper
         """
         seen = self._capture_cmd(monkeypatch)
         with pytest.raises(SystemExit):
             get_commands()['test'](argparse.Namespace(paths=[]))
+        assert seen[0] == [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', '-m', 'not slow', 'tests/unit']
+
+    def test_test_full_defaults_to_tests_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Test that the test-full command runs pytest on tests/ through the public uv wrapper
+        """
+        seen = self._capture_cmd(monkeypatch)
+        with pytest.raises(SystemExit):
+            get_commands()['test-full'](argparse.Namespace(paths=[]))
         assert seen[0] == [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', 'tests']
 
 

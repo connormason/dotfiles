@@ -2,8 +2,10 @@
 
 # Tests
 
-The pytest suite. Run it with `python3 run.py test [PATH...]` (or `make test`), which goes through the public-index `uv`
-wrapper; CI runs `uv run pytest` on macOS and Linux (see [`.ctx/BUILD.md`](../.ctx/BUILD.md#ci)).
+The pytest suite. `python3 run.py test [PATH...]` (or `make test`) runs the unit tests not marked `slow`, and
+`test-full` runs everything; both go through the public-index `uv` wrapper (the other subsets are in
+[`docs/RUN_PY_REFERENCE.md`](../docs/RUN_PY_REFERENCE.md#testing)). CI runs `uv run pytest` on macOS and Linux (see
+[`.ctx/BUILD.md`](../.ctx/BUILD.md#ci)).
 
 | Path                           | Contents                                                                                               |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
