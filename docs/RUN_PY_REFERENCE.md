@@ -789,6 +789,32 @@ python3 run.py diagnose --json --output diag.json
 | `-j/--json`                    | JSON output                                                      |
 | `-o/--output FILEPATH`         | explicit output path                                             |
 
+#### `config`
+
+Open a tool's config file in your editor, by tool name. The editor is `$VISUAL`, then `$EDITOR`, then `vi`; a multi-word
+value such as `code --wait` is split into command and arguments. The editor's exit code becomes the command's exit code.
+
+```bash
+python3 run.py config tmux            # open the primary file (stow/tmux/.config/tmux/tmux.conf)
+python3 run.py config yazi --all      # open every registered file for the tool, as editor arguments
+python3 run.py config --list          # tools with their primary file; "(+N more)" marks extra files for --all
+python3 run.py config git -p -a       # print the paths instead of opening an editor
+```
+
+| Option            | Effect                                                                        |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `TOOL`            | tool name; omitting it prints the tool list and exits 1                       |
+| `-a/--all`        | open every file registered for the tool, not just the first                   |
+| `-l/--list`       | list the tools with their primary file, paths relative to the repository root |
+| `-p/--print-path` | print the path(s), one per line and unstyled, instead of opening an editor    |
+
+The tool-to-file mapping is the `TOOL_CONFIGS` registry in [`cli/infra/config.py`](../cli/infra/config.py), the first
+file of each entry being the primary one. The registry is explicit because stow package names do not identify tools
+(`os_tools` holds btop, eza, fastfetch, htop, ranger, and sshm). Settings files that apps rewrite at runtime are not
+stowed, so `claude-settings` and `vscode-settings` point at their [`render/`](../render/) fragments, which is where an
+edit takes lasting effect. An unknown tool exits 1 with the closest names (or the full list when none is close); an
+editor that cannot be executed exits 2. A unit test fails when a registered file does not exist.
+
 ## Architecture<a name="architecture"></a>
 
 ### Command Registration System<a name="command-registration-system"></a>

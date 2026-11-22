@@ -27,6 +27,8 @@ Self-contained style rules live in [`.claude/rules/`](../.claude/rules) (they do
    refuses to link a render target.
 5. A package meant for one OS only carries a `.dotfiles-os` marker listing its OS ids (`darwin`, `linux`); without one,
    `stow.sh` links it on every OS, the NAS included. See [`stow/README.md`](../stow/README.md#os-specific-packages).
+6. Register the file under its tool name in `TOOL_CONFIGS` in [`cli/infra/config.py`](../cli/infra/config.py) so
+   `run.py config <tool>` opens it (`--list` shows the names); a unit test fails when a registered file is missing.
 
 ## Adding macOS Applications
 

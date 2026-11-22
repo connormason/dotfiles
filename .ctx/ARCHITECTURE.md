@@ -128,7 +128,7 @@ fails when this list drifts from the playbook):
 - **Hooks**: `install-hooks`, `prepare-hooks`, `uninstall-hooks`, `run-hooks`, `pre`
 - **Testing**: `test`, `test-full`, `test-unit`, `test-integration`, `test-cov`, `test-analyze`
 - **Dependencies**: `lock`, `lock-check`, `lock-upgrade`, `lock-sync`
-- **Utilities**: `makefile`, `diagnose`
+- **Utilities**: `makefile`, `diagnose`, `config`
 
 Every project-scoped `uv` call is built by `uv_command()` and runs through `scripts/hooks/uv-public.sh`, so `uv.lock`
 only references public PyPI. Hooks commands and `install`/`dev` call `ensure_uv()` / `ensure_venv()` first, so they work

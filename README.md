@@ -289,6 +289,9 @@ python3 run.py diagnose
 
 # Generate Makefile from run.py commands
 python3 run.py makefile
+
+# Open a tool's config file in $VISUAL / $EDITOR (--list shows the tools, --all opens every file for a tool)
+python3 run.py config tmux
 ```
 
 See [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md) for every command and option.
