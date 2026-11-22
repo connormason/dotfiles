@@ -1,9 +1,14 @@
 ---
 - name: Home NAS bootstrap
   hosts: nas
+  vars_files:
+    - vars/local_services.yml
   vars:
     # The NAS clone of this repository: the dotfiles role clones it, the haos role runs vms/haos/setup.sh from it
     dotfiles_repo_dir: "{{ ansible_facts['user_dir'] }}/dotfiles-personal"
+    # Web-UI hostnames, read by the mdns role (mDNS names) and the tailscale role (Caddy http:// sites). The default list
+    # is in vars/local_services.yml; an inventory sets local_services_override to replace it
+    local_services: "{{ local_services_override | default(local_services_default) }}"
   tasks:
 
     # Set become password so it can be used in any role
