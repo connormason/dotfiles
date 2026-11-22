@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean bootstrap nas-provision nas-deploy ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test test-full test-unit test-integration test-cov docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
+.PHONY: help install dev shell status doctor clean bootstrap nas-provision nas-deploy ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test test-full test-unit test-integration test-cov test-analyze docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -57,6 +57,7 @@ help: ## Show this help message
 	@echo "  $(YELLOW)test-unit           $(NC) Run all unit tests, including slow ones"
 	@echo "  $(YELLOW)test-integration    $(NC) Run the integration tests"
 	@echo "  $(YELLOW)test-cov            $(NC) Run the full test suite under coverage and report the result"
+	@echo "  $(YELLOW)test-analyze        $(NC) Run the full test suite with coverage and timing analysis"
 	@echo ""
 	@echo "$(BRIGHT_WHITE)Static Analysis:$(NC)"
 	@echo "  $(YELLOW)docs-audit          $(NC) Audit per-directory README documentation (missing, stale, structural, links, policy)"
@@ -171,6 +172,9 @@ test-integration: ## Run the integration tests
 
 test-cov: ## Run the full test suite under coverage and report the result
 	@python3 run.py test-cov
+
+test-analyze: ## Run the full test suite with coverage and timing analysis
+	@python3 run.py test-analyze
 
 # Static Analysis
 docs-audit: ## Audit per-directory README documentation (missing, stale, structural, links, policy)

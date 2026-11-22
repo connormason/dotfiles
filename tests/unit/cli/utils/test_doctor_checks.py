@@ -23,6 +23,7 @@ from cli.infra.config import GIT_HOOK_TYPES
 from cli.infra.config import RENDER_SCRIPT
 from cli.infra.config import STOW_SCRIPT
 from cli.infra.config import UV_PUBLIC_SCRIPT
+from cli.infra.main import build_parser
 from cli.utils import doctor_checks as checks
 from cli.utils.doctor_checks import DoctorCheck
 from cli.utils.styling import unstyle
@@ -453,7 +454,7 @@ class TestForwarding:
         """
         seen = self._capture_cmd(monkeypatch)
         with pytest.raises(SystemExit):
-            get_commands()['test'](argparse.Namespace(paths=[]))
+            get_commands()['test'](build_parser().parse_args(['test']))
         assert seen[0] == [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', '-m', 'not slow', 'tests/unit']
 
     def test_test_full_defaults_to_tests_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -462,7 +463,7 @@ class TestForwarding:
         """
         seen = self._capture_cmd(monkeypatch)
         with pytest.raises(SystemExit):
-            get_commands()['test-full'](argparse.Namespace(paths=[]))
+            get_commands()['test-full'](build_parser().parse_args(['test-full']))
         assert seen[0] == [str(UV_PUBLIC_SCRIPT), 'run', '--group', 'test', 'pytest', 'tests']
 
 

@@ -655,23 +655,39 @@ The installers have more options of their own (`--ensure`, `--print-path`, `--ti
 ### Testing<a name="testing"></a>
 
 Every testing command runs through the public-index uv wrapper (`scripts/hooks/uv-public.sh run --group test ...`),
-accepts optional `PATH...` arguments that replace its default target (the command's marker options still apply), and
-exits with the return code of the first failing step.
+accepts optional `PATH...` arguments that replace its default target, takes the options below, and exits with the return
+code of the first failing step.
 
-| Command            | Runs                                                                       |
-| ------------------ | -------------------------------------------------------------------------- |
-| `test`             | `pytest tests/unit -m "not slow"`: fast feedback                           |
-| `test-full`        | `pytest tests`: the full suite (unit + integration), as CI does            |
-| `test-unit`        | `pytest tests/unit`: all unit tests, including slow ones                   |
-| `test-integration` | `pytest tests/integration`                                                 |
-| `test-cov`         | `coverage run -m pytest tests`, then `coverage html` and `coverage report` |
+| Command            | Runs                                                            |
+| ------------------ | --------------------------------------------------------------- |
+| `test`             | `pytest tests/unit -m "not slow"`: fast feedback                |
+| `test-full`        | `pytest tests`: the full suite (unit + integration), as CI does |
+| `test-unit`        | `pytest tests/unit`: all unit tests, including slow ones        |
+| `test-integration` | `pytest tests/integration`                                      |
+| `test-cov`         | `test-full --coverage`                                          |
+| `test-analyze`     | `test-full --analyze`: coverage plus the slowest-test durations |
 
-`test-cov` writes the HTML report to `.reports/coverage` and fails when total coverage is under the `fail_under`
-threshold in `pyproject.toml`; `PATH...` narrows only the pytest step.
+| Option                      | Effect                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `-m`, `--marker EXPR`       | Mark expression, AND-ed with the command's own (`test -m timing` runs `(timing) and (not slow)`) |
+| `-q`, `--quick`             | Exclude slow tests (`-m "not slow"`); not offered by `test`, which already does                  |
+| `-v`, `--verbose`           | pytest verbosity; repeat for more (`-vv`)                                                        |
+| `-d`, `--durations N`       | Show the N slowest tests (`--durations=N`)                                                       |
+| `-c`, `--cov`, `--coverage` | Run `coverage run -m pytest ...`, then `coverage html` and `coverage report`                     |
+| `--analyze`                 | Shortcut for `--durations 20 --coverage`; not offered by `test-analyze`                          |
+| `--args="..."`              | Extra pytest arguments, split like a shell command line                                          |
+
+Use the `=` form for `--args` (`--args="-x -k foo"`): argparse reads a bare `--args -x` as a missing value. Coverage
+runs delete stale `.coverage*` data files first and write the HTML report to `.reports/coverage`; they fail when total
+coverage is under the `fail_under` threshold in `pyproject.toml`, and `PATH...` narrows only the pytest step. The
+generated `Makefile` cannot forward flags, so `make test-cov` and `make test-analyze` are the flag-free presets; use
+`run.py` for the rest.
 
 ```bash
 python3 run.py test tests/unit/cli
-python3 run.py test-full
+python3 run.py test-full -q -d 10
+python3 run.py test-integration -m integration --args="-x"
+python3 run.py test-analyze
 ```
 
 ### Static Analysis<a name="static-analysis"></a>
