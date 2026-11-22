@@ -144,7 +144,7 @@ class TestMarkerOptions:
         """
         Test that --quick is shorthand for -m "not slow" on commands that run slow tests by default
         """
-        assert _build(name, '-q')[0][4:6] == ['-m', 'not slow']
+        assert _build(name, '-q')[0][4:6]      == ['-m', 'not slow']
         assert _build(name, '--quick')[0][4:6] == ['-m', 'not slow']
 
     def test_quick_is_anded_with_marker(self) -> None:
@@ -158,7 +158,7 @@ class TestMarkerOptions:
         Test that the test command has no --quick option because it already excludes slow tests
         """
         assert '--quick' not in _option_strings('test')
-        assert '--quick' in _option_strings('test-full')
+        assert '--quick'     in _option_strings('test-full')
 
 
 class TestPassthroughOptions:
@@ -168,10 +168,10 @@ class TestPassthroughOptions:
     @pytest.mark.parametrize(
         ('flags', 'expected'),
         [
-            (['-v'],         ['-v']),
-            (['-vv'],        ['-vv']),
-            (['-v', '-v'],   ['-vv']),
-            (['-d', '5'],    ['--durations=5']),
+            (['-v'],               ['-v']),
+            (['-vv'],              ['-vv']),
+            (['-v', '-v'],         ['-vv']),
+            (['-d', '5'],          ['--durations=5']),
             (['--durations', '0'], ['--durations=0']),
         ],
     )
@@ -262,7 +262,7 @@ class TestCoverageOptions:
         Test that test-analyze omits the --analyze option it already implies
         """
         assert '--analyze' not in _option_strings('test-analyze')
-        assert '--analyze' in _option_strings('test-cov')
+        assert '--analyze'     in _option_strings('test-cov')
 
 
 class TestRun:
@@ -303,7 +303,8 @@ class TestRun:
         assert [step[3:5] for step in calls] == [['coverage', 'run'], ['coverage', 'html'], ['coverage', 'report']]
 
     def test_failing_step_exits_with_its_code_and_skips_the_rest(
-        self, shell: tuple[list[list[str]], list[int]],
+        self,
+        shell: tuple[list[list[str]], list[int]],
     ) -> None:
         """
         Test that a nonzero exit stops the sequence and is propagated as the process exit code
@@ -327,7 +328,9 @@ class TestRun:
         assert calls == [[*PYTEST_PREFIX, '-m', 'not slow', 'tests/unit']]
 
     def test_coverage_run_clears_stale_coverage_data(
-        self, shell: tuple[list[list[str]], list[int]], tmp_path: Path,
+        self,
+        shell: tuple[list[list[str]], list[int]],
+        tmp_path: Path,
     ) -> None:
         """
         Test that a coverage run deletes leftover coverage data files so results never mix with an earlier run
@@ -344,7 +347,9 @@ class TestRun:
         assert keep.exists()
 
     def test_run_without_coverage_leaves_coverage_data_alone(
-        self, shell: tuple[list[list[str]], list[int]], tmp_path: Path,
+        self,
+        shell: tuple[list[list[str]], list[int]],
+        tmp_path: Path,
     ) -> None:
         """
         Test that a plain run does not touch existing coverage data
@@ -358,7 +363,9 @@ class TestRun:
         assert data.exists()
 
     def test_banner_lists_active_modifiers(
-        self, shell: tuple[list[list[str]], list[int]], capsys: pytest.CaptureFixture[str],
+        self,
+        shell: tuple[list[list[str]], list[int]],
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that the output names the active coverage, timing, and slow-test-skipping modifiers
@@ -367,12 +374,14 @@ class TestRun:
             REGISTERED_COMMANDS['test-full'](_parse('test-full', '--analyze', '--quick'))
 
         out = capsys.readouterr().out
-        assert 'coverage' in out
-        assert 'timing' in out
+        assert 'coverage'            in out
+        assert 'timing'              in out
         assert 'skipping slow tests' in out
 
     def test_banner_omits_modifiers_for_plain_run(
-        self, shell: tuple[list[list[str]], list[int]], capsys: pytest.CaptureFixture[str],
+        self,
+        shell: tuple[list[list[str]], list[int]],
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that a plain run with no slow-test filter prints no modifier lines
@@ -381,6 +390,6 @@ class TestRun:
             REGISTERED_COMMANDS['test-full'](_parse('test-full'))
 
         out = capsys.readouterr().out
-        assert 'coverage' not in out
-        assert 'timing' not in out
+        assert 'coverage'            not in out
+        assert 'timing'              not in out
         assert 'skipping slow tests' not in out

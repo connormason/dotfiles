@@ -28,23 +28,6 @@ __all__ = [
 ANALYZE_DEFAULT_DURATIONS: int = 20
 
 
-# ==================================================================================================
-# Testing commands
-#
-# Every command runs pytest through the public-index uv wrapper and shares the same options (PATHS replace the
-# command's default target; marker, coverage, and timing options compose with the command's built-in settings).
-# The generated Makefile cannot forward flags, so presets (test-cov, test-analyze) cover the common combinations.
-#
-# Commands
-#   - test:             Run the unit tests that are not marked slow
-#   - test-full:        Run the full test suite
-#   - test-unit:        Run all unit tests, including slow ones
-#   - test-integration: Run the integration tests
-#   - test-cov:         Run the full test suite under coverage
-#   - test-analyze:     Run the full test suite with coverage and timing analysis
-# ==================================================================================================
-
-
 def _combine_markers(*exprs: str | None) -> str | None:
     """
     AND together mark expressions, skipping empty ones.
@@ -66,6 +49,23 @@ def _uv_test(*cmd: str) -> list[str]:
     :return: command line
     """
     return uv_command('run', '--group', 'test', *cmd)
+
+
+# ==================================================================================================
+# Testing commands
+#
+# Every command runs pytest through the public-index uv wrapper and shares the same options (PATHS replace the
+# command's default target; marker, coverage, and timing options compose with the command's built-in settings).
+# The generated Makefile cannot forward flags, so presets (test-cov, test-analyze) cover the common combinations.
+#
+# Commands
+#   - test:             Run the unit tests that are not marked slow
+#   - test-full:        Run the full test suite
+#   - test-unit:        Run all unit tests, including slow ones
+#   - test-integration: Run the integration tests
+#   - test-cov:         Run the full test suite under coverage
+#   - test-analyze:     Run the full test suite with coverage and timing analysis
+# ==================================================================================================
 
 
 class _PytestCommand(Command, register=False):
@@ -214,6 +214,7 @@ class _PytestCommand(Command, register=False):
 
         if not self._coverage(args):
             return [_uv_test(*pytest_cmd)]
+
         return [
             _uv_test('coverage', 'run', '-m', *pytest_cmd),
             _uv_test('coverage', 'html'),
@@ -242,6 +243,7 @@ class _PytestCommand(Command, register=False):
             returncode = shell_command(cmd, check=False).returncode
             if returncode != 0:
                 break
+
         sys.exit(returncode)
 
 
