@@ -18,8 +18,13 @@ from cli.infra.main import build_parser
 if TYPE_CHECKING:
     import argparse
 
-PYTEST_PREFIX = ['run', '--group', 'test', 'pytest']
+PYTEST_PREFIX   = ['run', '--group', 'test', 'pytest']
 COVERAGE_PREFIX = ['run', '--group', 'test', 'coverage']
+
+
+# ==================================================================================================
+# Helpers
+# ==================================================================================================
 
 
 def _parse(*argv: str) -> argparse.Namespace:
@@ -41,9 +46,14 @@ def _build(*argv: str) -> list[list[str]]:
     """
     Build the uv argument lists (wrapper stripped) a test command would run for the given command line
     """
-    args = _parse(*argv)
+    args    = _parse(*argv)
     command = cast('testing_commands._PytestCommand', REGISTERED_COMMANDS[argv[0]])
     return [_uv_args(cmd) for cmd in command.build_commands(args.paths)]
+
+
+# ==================================================================================================
+# Unit tests
+# ==================================================================================================
 
 
 class TestPytestCommands:
@@ -68,11 +78,22 @@ class TestPytestCommands:
     @pytest.mark.parametrize(
         ('argv', 'expected'),
         [
-            (['test', 'tests/unit/cli'],             [*PYTEST_PREFIX, '-m', 'not slow', 'tests/unit/cli']),
-            (['test-full', 'tests/unit/cli', 'x'],   [*PYTEST_PREFIX, 'tests/unit/cli', 'x']),
-            (['test-unit', 'tests/unit/stow'],       [*PYTEST_PREFIX, 'tests/unit/stow']),
-            (['test-integration', 'tests/integration/test_home.py'],
-                                                     [*PYTEST_PREFIX, 'tests/integration/test_home.py']),
+            (
+                ['test', 'tests/unit/cli'],
+                [*PYTEST_PREFIX, '-m', 'not slow', 'tests/unit/cli'],
+            ),
+            (
+                ['test-full', 'tests/unit/cli', 'x'],
+                [*PYTEST_PREFIX, 'tests/unit/cli', 'x'],
+            ),
+            (
+                ['test-unit', 'tests/unit/stow'],
+                [*PYTEST_PREFIX, 'tests/unit/stow'],
+            ),
+            (
+                ['test-integration', 'tests/integration/test_home.py'],
+                [*PYTEST_PREFIX, 'tests/integration/test_home.py'],
+            ),
         ],
     )
     def test_paths_replace_default_target(self, argv: list[str], expected: list[str]) -> None:
@@ -96,7 +117,7 @@ class TestPytestCommands:
         Test that paths given to test-cov narrow the pytest step and leave the report steps unchanged
         """
         steps = _build('test-cov', 'tests/unit')
-        assert steps[0] == [*COVERAGE_PREFIX, 'run', '-m', 'pytest', 'tests/unit']
+        assert steps[0]  == [*COVERAGE_PREFIX, 'run', '-m', 'pytest', 'tests/unit']
         assert steps[1:] == [[*COVERAGE_PREFIX, 'html'], [*COVERAGE_PREFIX, 'report']]
 
     @pytest.mark.parametrize('name', ['test', 'test-full', 'test-unit', 'test-integration', 'test-cov'])
