@@ -8,7 +8,12 @@ CLAUDE-LESSONS.md, "String-matching Ansible YAML is not verification: run the ro
 from __future__ import annotations
 
 import json
+import os
 import re
+import signal
+import subprocess
+import time
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 from typing import Any
 
@@ -22,6 +27,7 @@ from tests.unit.roles.test_alerting_roles import _run_tasks
 from tests.unit.roles.test_alerting_roles import needs_ansible
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 PLAYBOOK       = REPO_ROOT / 'playbooks' / 'nas_bootstrap.yml'
@@ -221,3 +227,279 @@ class TestCaddyCompose:
         """
         compose = yaml.safe_load((REPO_ROOT / 'services' / 'caddy' / 'compose.yml').read_text(encoding='utf-8'))
         assert '80:80' in compose['services']['caddy']['ports']
+
+
+# ==================================================================================================
+# mdns role: tasks
+# ==================================================================================================
+
+MDNS_ROLE      = ROLES / 'mdns'
+PUBLISH_SCRIPT = MDNS_ROLE / 'files' / 'nas-mdns-publish'
+
+TaskDict = dict[str, Any]  # Any: heterogeneous, yaml-loaded task structure
+
+FILE_TASKS  = ['Configure Avahi', 'Install the mDNS name publisher', 'Install the mDNS publisher unit']
+CHECK_TASKS = ['Require at least one local_services entry', 'Require local_services names that are plain DNS labels']
+
+
+def _runnable(task: TaskDict) -> TaskDict:
+    """
+    Adapt a role task to run outside the role as a non-root user
+
+    Sources become absolute, and ``owner``/``group`` are dropped because chown to root fails for an unprivileged user.
+    """
+    adapted = {key: value for key, value in task.items() if key not in {'notify', 'become'}}
+    for module in ('ansible.builtin.copy', 'ansible.builtin.template'):
+        if module in adapted:
+            args   = {key: value for key, value in adapted[module].items() if key not in {'owner', 'group'}}
+            subdir = 'files' if module.endswith('copy') else 'templates'
+            args['src'] = str(MDNS_ROLE / subdir / args['src'])
+            adapted[module] = args
+    return adapted
+
+
+def _tasks_named(names: list[str]) -> list[TaskDict]:
+    """
+    Load the named tasks from the role's tasks/main.yml, runnable in a scratch play
+    """
+    tasks   = yaml.safe_load((MDNS_ROLE / 'tasks' / 'main.yml').read_text(encoding='utf-8'))
+    by_name = {task['name']: task for task in tasks}
+    return [_runnable(by_name[name]) for name in names]
+
+
+def _vars(tmp_path: Path, **overrides: Any) -> list[str]:  # Any: JSON-serializable test values
+    """
+    Build the ``-e`` argument (JSON) that points the role at scratch paths and gives it complete settings
+    """
+    values = {
+        'local_services':   SAMPLE_SERVICES,
+        'mdns_interface':   'br0',
+        'mdns_avahi_conf':  str(tmp_path / 'avahi-daemon.conf'),
+        'mdns_script_path': str(tmp_path / 'nas-mdns-publish'),
+        'mdns_unit_path':   str(tmp_path / 'nas-mdns-publish.service'),
+        **overrides,
+    }
+    return ['-e', json.dumps(values)]
+
+
+@needs_ansible
+class TestMdnsFiles:
+    """
+    Real-run tests of the file-writing tasks in roles/mdns/tasks/main.yml
+    """
+    def test_writes_the_three_files_then_converges(self, tmp_path: Path) -> None:
+        """
+        Test that the first run writes the config, script and unit, and a second run changes nothing
+        """
+        code, output = _run_tasks(tmp_path, 'mdns', _tasks_named(FILE_TASKS), *_vars(tmp_path))
+        assert code == 0, output
+        assert 'changed=3' in output, output
+
+        conf = (tmp_path / 'avahi-daemon.conf').read_text(encoding='utf-8')
+        assert 'allow-interfaces=br0' in conf
+        assert 'use-ipv4=yes' in conf
+        assert 'use-ipv6=no' in conf
+
+        script = tmp_path / 'nas-mdns-publish'
+        unit   = (tmp_path / 'nas-mdns-publish.service').read_text(encoding='utf-8')
+        assert os.access(script, os.X_OK)
+        assert f'ExecStart={script} jellyfin sonarr\n' in unit
+        assert 'Requires=avahi-daemon.service' in unit
+
+        code, output = _run_tasks(tmp_path, 'mdns', _tasks_named(FILE_TASKS), *_vars(tmp_path))
+        assert code == 0, output
+        assert 'changed=0' in output, output
+
+
+@needs_ansible
+class TestMdnsChecks:
+    """
+    Real-run tests of the assertions that guard the unit's ExecStart line
+    """
+    @pytest.mark.parametrize('name', ['sonarr', 'my-app', 'a1', 'x'])
+    def test_plain_dns_labels_pass(self, tmp_path: Path, name: str) -> None:
+        """
+        Test that lowercase letters, digits and inner hyphens are accepted
+        """
+        variables    = _vars(tmp_path, local_services=[{'name': name, 'port': 1}])
+        code, output = _run_tasks(tmp_path, 'mdns', _tasks_named(CHECK_TASKS), *variables)
+        assert code == 0, output
+
+    @pytest.mark.parametrize('name', ['Sonarr', 'my_app', '-lead', 'trail-', 'a.b', '', 'sonarr\n'])
+    def test_other_names_fail(self, tmp_path: Path, name: str) -> None:
+        """
+        Test that uppercase, underscores, edge hyphens, dots, empty names and a trailing newline are all refused
+        """
+        variables    = _vars(tmp_path, local_services=[{'name': name, 'port': 1}])
+        code, output = _run_tasks(tmp_path, 'mdns', _tasks_named(CHECK_TASKS), *variables)
+        assert code != 0
+        assert 'DNS label' in output
+
+    def test_empty_list_fails(self, tmp_path: Path) -> None:
+        """
+        Test that publishing nothing is an error rather than a unit that exits at once
+        """
+        code, output = _run_tasks(tmp_path, 'mdns', _tasks_named(CHECK_TASKS), *_vars(tmp_path, local_services=[]))
+        assert code != 0
+        assert 'at least one' in output
+
+
+# ==================================================================================================
+# mdns role: publisher script
+# ==================================================================================================
+
+# ip -4 route get 1.1.1.1 (prints a source address unless FAKE_NO_ROUTE is set)
+FAKE_IP = """#!/usr/bin/env bash
+if [[ -n "${FAKE_NO_ROUTE:-}" ]]; then
+    echo 'RTNETLINK answers: Network is unreachable' >&2
+    exit 2
+fi
+echo '1.1.1.1 via 192.168.1.1 dev br0 src 192.168.1.50 uid 1000'
+echo '    cache'
+"""
+
+# avahi-publish -a -R NAME ADDRESS: log "pid args", then live until killed (one second when it is FAKE_SHORT_LIVED)
+FAKE_AVAHI_PUBLISH = """#!/usr/bin/env bash
+echo "$$ $*" >> "${FAKE_LOG}"
+if [[ "$3" == "${FAKE_SHORT_LIVED:-}" ]]; then
+    exec sleep 1
+fi
+exec sleep 60
+"""
+
+
+@pytest.fixture
+def stub_bin(tmp_path: Path) -> Path:
+    """
+    Create a directory holding stub ip and avahi-publish binaries
+
+    :return: the directory, to be put first on PATH
+    """
+    bindir = tmp_path / 'bin'
+    bindir.mkdir()
+    for name, body in (('ip', FAKE_IP), ('avahi-publish', FAKE_AVAHI_PUBLISH)):
+        stub = bindir / name
+        stub.write_text(body, encoding='utf-8')
+        stub.chmod(0o755)
+    return bindir
+
+
+@contextmanager
+def _publisher(tmp_path: Path, stub_bin: Path, *names: str, **extra: str) -> Iterator[subprocess.Popen[str]]:
+    """
+    Run the publisher script with the stubs on PATH, and make sure it is gone afterwards
+    """
+    env = {
+        **os.environ,
+        'PATH':     f'{stub_bin}:{os.environ["PATH"]}',
+        'FAKE_LOG': str(tmp_path / 'publish.log'),
+        **extra,
+    }
+    proc = subprocess.Popen(
+        [str(PUBLISH_SCRIPT), *names],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        yield proc
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait()
+        if proc.stderr is not None:
+            proc.stderr.close()
+
+
+def _wait_for_lines(log: Path, count: int) -> list[str]:
+    """
+    Wait up to ten seconds for the stub log to hold ``count`` lines, and return them
+    """
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        lines = log.read_text(encoding='utf-8').splitlines() if log.exists() else []
+        if len(lines) >= count:
+            return lines
+        time.sleep(0.05)
+    raise AssertionError(f'expected {count} publisher starts in {log}')
+
+
+def _gone(pid: int) -> bool:
+    """
+    Return whether a process has exited, allowing it up to three seconds to do so
+    """
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _stderr(proc: subprocess.Popen[str]) -> str:
+    """
+    Read what the finished process wrote to stderr
+    """
+    assert proc.stderr is not None
+    return proc.stderr.read()
+
+
+class TestPublishScript:
+    """
+    Real-run tests of roles/mdns/files/nas-mdns-publish with stub ip and avahi-publish binaries
+    """
+    def test_publishes_an_address_record_per_name(self, tmp_path: Path, stub_bin: Path) -> None:
+        """
+        Test that each name is published as <name>.local at the default-route address, and SIGTERM exits 0
+        """
+        with _publisher(tmp_path, stub_bin, 'jellyfin', 'sonarr') as proc:
+            lines = _wait_for_lines(tmp_path / 'publish.log', 2)
+            proc.send_signal(signal.SIGTERM)
+            assert proc.wait(timeout=10) == 0
+
+        published = sorted(line.split(' ', 1)[1] for line in lines)
+        assert published == ['-a -R jellyfin.local 192.168.1.50', '-a -R sonarr.local 192.168.1.50']
+
+    def test_sigterm_stops_every_publisher(self, tmp_path: Path, stub_bin: Path) -> None:
+        """
+        Test that stopping the script also stops the avahi-publish processes it started
+        """
+        with _publisher(tmp_path, stub_bin, 'jellyfin', 'sonarr') as proc:
+            lines = _wait_for_lines(tmp_path / 'publish.log', 2)
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=10)
+
+        assert all(_gone(int(line.split(' ', 1)[0])) for line in lines)
+
+    def test_exits_1_and_stops_the_rest_when_a_publisher_dies(self, tmp_path: Path, stub_bin: Path) -> None:
+        """
+        Test that one publisher exiting ends the script with status 1 and takes the survivors down with it
+        """
+        with _publisher(tmp_path, stub_bin, 'jellyfin', 'sonarr', FAKE_SHORT_LIVED='sonarr.local') as proc:
+            lines = _wait_for_lines(tmp_path / 'publish.log', 2)
+            assert proc.wait(timeout=15) == 1
+            assert 'exited' in _stderr(proc)
+
+        jellyfin_pid = next(int(line.split(' ', 1)[0]) for line in lines if 'jellyfin.local' in line)
+        assert _gone(jellyfin_pid)
+
+    def test_no_default_route_exits_1_without_publishing(self, tmp_path: Path, stub_bin: Path) -> None:
+        """
+        Test that a missing IPv4 default route is reported and nothing is published
+        """
+        with _publisher(tmp_path, stub_bin, 'jellyfin', FAKE_NO_ROUTE='1') as proc:
+            assert proc.wait(timeout=10) == 1
+            assert 'no IPv4 address' in _stderr(proc)
+
+        assert not (tmp_path / 'publish.log').exists()
+
+    def test_no_names_exits_2(self, tmp_path: Path, stub_bin: Path) -> None:
+        """
+        Test that running without names is a usage error
+        """
+        with _publisher(tmp_path, stub_bin) as proc:
+            assert proc.wait(timeout=10) == 2
+            assert 'no names' in _stderr(proc)

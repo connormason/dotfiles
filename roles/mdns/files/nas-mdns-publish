@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Publish <name>.local address records for the NAS's LAN IPv4 address, one avahi-publish per name, until stopped.
+#
+# Usage: nas-mdns-publish NAME...
+#
+# The address is the one the default route uses, read once when the script starts. If any publisher exits (for example
+# because avahi-daemon restarted), the script stops the rest and exits 1, so systemd restarts the whole set with a fresh
+# address lookup. SIGTERM and SIGINT stop every publisher and exit 0.
+set -o errexit -o nounset -o pipefail
+
+(($# > 0)) || {
+    echo 'nas-mdns-publish: no names given' >&2
+    exit 2
+}
+
+ip_address="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' || true)"
+[[ -n "${ip_address}" ]] || {
+    echo 'nas-mdns-publish: no IPv4 address on the default route' >&2
+    exit 1
+}
+
+pids=()
+for name in "$@"; do
+    avahi-publish -a -R "${name}.local" "${ip_address}" &
+    pids+=("$!")
+done
+
+stop_publishers() {
+    kill "${pids[@]}" 2>/dev/null || true
+    wait "${pids[@]}" 2>/dev/null || true
+}
+trap 'stop_publishers; exit 0' TERM INT
+
+while :; do
+    for pid in "${pids[@]}"; do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            echo "nas-mdns-publish: publisher ${pid} exited; stopping the set so it restarts" >&2
+            stop_publishers
+            exit 1
+        fi
+    done
+    sleep 1 &
+    wait "$!"
+done

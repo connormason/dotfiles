@@ -24,7 +24,7 @@ python3 run.py ha-push --restart
 ## Running Ansible Playbooks (NAS)
 
 ```bash
-# Run specific tags only (system: debian,zfs,samba,docker,tailscale; $HOME: dotfiles; VM: haos; stack: services; off-site backup: backup)
+# Run specific tags only (system: debian,zfs,samba,mdns,docker,tailscale; $HOME: dotfiles; VM: haos; stack: services; off-site backup: backup)
 python3 run.py nas-provision --tags dotfiles,haos
 
 # Extra variables, e.g. test the dotfiles role against a branch

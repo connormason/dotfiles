@@ -389,6 +389,7 @@ dotfiles/
 │   ├── zfs/                                # ZFS installation
 │   ├── backup/                             # Nightly restic backup to Backblaze B2
 │   ├── samba/                              # File sharing
+│   ├── mdns/                               # Avahi hostnames (<name>.local) for the web UIs
 │   ├── docker/                             # Docker Engine, ~/docker skeleton, autoplex image, deploy.sh
 │   ├── tailscale/                          # Tailscale VPN, HTTPS certificates, Caddyfile
 │   ├── dotfiles/                           # $HOME via the stow engine

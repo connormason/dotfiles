@@ -71,6 +71,15 @@
         - samba
         - configfile
 
+    # mDNS: Avahi plus a publisher for the <name>.local hostnames of the web UIs (Caddy's http:// sites route them)
+    - name: Publish the .local hostnames
+      ansible.builtin.include_role:
+        name: roles/mdns
+        apply:
+          tags: mdns
+      tags:
+        - mdns
+
     # Tasks for Docker
     - name: Configure Docker and the container stack
       ansible.builtin.include_role:

@@ -1,0 +1,12 @@
+---
+- name: Restart Avahi
+  become: true
+  ansible.builtin.service:
+    name: avahi-daemon
+    state: restarted
+
+- name: Restart the mDNS publisher
+  become: true
+  ansible.builtin.systemd:
+    name: nas-mdns-publish.service
+    state: restarted
