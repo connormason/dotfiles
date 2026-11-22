@@ -3,7 +3,7 @@
 #
 # Auto-generated via `run.py makefile`
 #
-.PHONY: help install dev shell status doctor clean bootstrap nas-provision nas-deploy ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test test-full test-unit test-integration test-cov test-analyze docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose
+.PHONY: help install dev shell status doctor clean bootstrap nas-provision nas-deploy ha-pull ha-push stow render track-claude inventory-hosts inventory-status update-inventory vault-decrypt vault-encrypt install-uv install-hatch install-hooks prepare-hooks uninstall-hooks run-hooks pre test test-full test-unit test-integration test-cov test-analyze docs-audit lock lock-check lock-upgrade lock-sync makefile diagnose config
 
 BRIGHT_GREEN := \033[0;92m
 BRIGHT_WHITE := \033[0;97m
@@ -71,6 +71,7 @@ help: ## Show this help message
 	@echo "$(BRIGHT_WHITE)Utilities:$(NC)"
 	@echo "  $(YELLOW)makefile            $(NC) Generate Makefile from project management script commands (run.py)"
 	@echo "  $(YELLOW)diagnose            $(NC) Gather and output local Python environment information to help triage installation/configuration issues"
+	@echo "  $(YELLOW)config              $(NC) Open a tool's config file in $VISUAL / $EDITOR"
 	@echo ""
 
 # Setup & Environment
@@ -199,3 +200,6 @@ makefile: ## Generate Makefile from project management script commands (run.py)
 
 diagnose: ## Gather and output local Python environment information to help triage installation/configuration issues
 	@python3 run.py diagnose
+
+config: ## Open a tool's config file in $VISUAL / $EDITOR
+	@python3 run.py config

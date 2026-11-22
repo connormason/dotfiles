@@ -106,6 +106,9 @@ python3 run.py diagnose
 
 # Generate Makefile from run.py commands
 python3 run.py makefile
+
+# Open a tool's config file in $VISUAL / $EDITOR (--list names the tools, --all opens every registered file)
+python3 run.py config tmux
 ```
 
 ## Layered Dev Environment (`run.py` Dotfiles group)
