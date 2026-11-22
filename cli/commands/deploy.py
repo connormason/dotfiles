@@ -9,8 +9,12 @@ import tempfile
 from pathlib import Path
 from typing import ClassVar
 
-from cli.infra import config
 from cli.infra.command import Command
+from cli.infra.config import ANSIBLE_REQUIREMENTS
+from cli.infra.config import BOOTSTRAP_SCRIPT
+from cli.infra.config import DOTFILES_DIR
+from cli.infra.config import HA_CONFIG_DIR
+from cli.infra.config import NAS_DEPLOY_SCRIPT
 from cli.infra.config import ExitCode
 from cli.utils.ansible import build_nas_provision_command
 from cli.utils.formatting import folduser
@@ -112,7 +116,7 @@ class BootstrapCommand(Command):
         )
 
     def run(self, args: Args) -> None:
-        cmd: list[str] = ['bash', str(config.BOOTSTRAP_SCRIPT)]
+        cmd: list[str] = ['bash', str(BOOTSTRAP_SCRIPT)]
         for flag, enabled in (
             ('--dry-run', args.dry_run),
             ('--list',    args.list),
@@ -195,9 +199,9 @@ class NasProvisionCommand(Command):
 
         printf('📦 Installing Ansible collections', fg='bright_cyan')
         galaxy = shell_command(
-            uv_command('run', 'ansible-galaxy', 'collection', 'install', '-r', str(config.ANSIBLE_REQUIREMENTS)),
+            uv_command('run', 'ansible-galaxy', 'collection', 'install', '-r', str(ANSIBLE_REQUIREMENTS)),
             check=False,
-            cwd=config.DOTFILES_DIR,
+            cwd=DOTFILES_DIR,
         )
         if galaxy.returncode != 0:
             printf(
@@ -205,7 +209,7 @@ class NasProvisionCommand(Command):
                 fg='bright_yellow',
             )
 
-        result = shell_command(playbook_cmd, check=False, cwd=config.DOTFILES_DIR)
+        result = shell_command(playbook_cmd, check=False, cwd=DOTFILES_DIR)
         sys.exit(result.returncode)
 
 
@@ -247,7 +251,7 @@ class NasDeployCommand(Command):
         host, user = resolve_reachable_nas()
         warn_on_dirty_services()
 
-        cmd: list[str] = ['bash', str(config.NAS_DEPLOY_SCRIPT)]
+        cmd: list[str] = ['bash', str(NAS_DEPLOY_SCRIPT)]
         if args.dry_run:
             cmd.append('--dry-run')
         cmd.append(service)
@@ -299,17 +303,17 @@ class HaPullCommand(Command):
                 printf(f'❌ {e}', fg='red', bold=True)
                 sys.exit(ExitCode.COMMAND_FAILED)
 
-            diff = diff_trees(config.HA_CONFIG_DIR, remote)
+            diff = diff_trees(HA_CONFIG_DIR, remote)
             if not diff.changed:
                 printf('✅ services/homeassistant/config/ already matches the VM', fg='bright_green')
                 return
 
-            printf(f'🔎 Changes the VM has relative to {pathstyle(folduser(config.HA_CONFIG_DIR))}:', fg='bright_cyan')
+            printf(f'🔎 Changes the VM has relative to {pathstyle(folduser(HA_CONFIG_DIR))}:', fg='bright_cyan')
             print_tree_diff(diff, verbs=('new', 'changed', 'deleted on the VM'))
             if args.dry_run:
                 return
 
-            apply_tree_diff(remote, config.HA_CONFIG_DIR, diff)
+            apply_tree_diff(remote, HA_CONFIG_DIR, diff)
             printf('✅ Pulled; review with git diff, then commit', fg='bright_green')
 
 
@@ -345,8 +349,8 @@ class HaPushCommand(Command):
         )
 
     def run(self, args: Args) -> None:
-        if not list_ha_tree(config.HA_CONFIG_DIR):
-            printf(f'❌ No tracked files under {pathstyle(folduser(config.HA_CONFIG_DIR))}', fg='red', bold=True)
+        if not list_ha_tree(HA_CONFIG_DIR):
+            printf(f'❌ No tracked files under {pathstyle(folduser(HA_CONFIG_DIR))}', fg='red', bold=True)
             printf(f'Seed it from the VM first: {style("python3 run.py ha-pull", fg="bright_magenta")}', indent=3)
             sys.exit(ExitCode.COMMAND_FAILED)
 
@@ -355,7 +359,7 @@ class HaPushCommand(Command):
             snapshot = Path(tmp)
             try:
                 fetch_ha_config(snapshot)
-                diff = diff_trees(snapshot, config.HA_CONFIG_DIR)
+                diff = diff_trees(snapshot, HA_CONFIG_DIR)
                 if not diff.changed:
                     printf('✅ The VM already matches services/homeassistant/config/', fg='bright_green')
                     return
@@ -369,7 +373,7 @@ class HaPushCommand(Command):
                     sys.exit(ExitCode.USER_CANCELLED)
 
                 try:
-                    apply_ha_changes(config.HA_CONFIG_DIR, diff)
+                    apply_ha_changes(HA_CONFIG_DIR, diff)
 
                 # A failure mid-push can leave some files written; the rollback is idempotent, so it is safe then
                 except HASyncError as e:
@@ -417,6 +421,6 @@ class HaPushCommand(Command):
         :raises HASyncError: if the restore itself fails
         """
         try:
-            apply_ha_changes(snapshot, diff_trees(config.HA_CONFIG_DIR, snapshot))
+            apply_ha_changes(snapshot, diff_trees(HA_CONFIG_DIR, snapshot))
         except HASyncError as e:
             raise HASyncError(f'Rollback failed, so the VM may hold a partial push: {e}') from e

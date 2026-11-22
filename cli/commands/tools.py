@@ -5,19 +5,16 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import TYPE_CHECKING
 from typing import ClassVar
 
-from cli.infra import config
 from cli.infra.command import Command
+from cli.infra.config import INSTALLER_SCRIPTS
+from cli.infra.config import InstallableTool
 from cli.utils.scripts import check_script_validity
 from cli.utils.shell import shell_command
 from cli.utils.styling import HATCH
 from cli.utils.styling import UV
 from cli.utils.styling import style
-
-if TYPE_CHECKING:
-    from cli.infra.config import InstallableTool
 
 __all__ = [
     'InstallHatchCommand',
@@ -72,7 +69,7 @@ class _InstallToolCommand(Command, register=False):
         )
 
     def run(self, args: Args) -> None:
-        script_path = config.INSTALLER_SCRIPTS[self.tool_name]
+        script_path = INSTALLER_SCRIPTS[self.tool_name]
         check_script_validity(script_path, f'{self.tool_name} installer script')
 
         cmd: list[str] = [sys.executable, str(script_path)]

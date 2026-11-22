@@ -7,8 +7,8 @@ import argparse
 import sys
 from typing import ClassVar
 
-from cli.infra import config
 from cli.infra.command import Command
+from cli.infra.config import DERIVED_FILE_HOOK_IDS
 from cli.infra.config import ExitCode
 from cli.utils.python import check_python
 from cli.utils.styling import printf
@@ -46,11 +46,7 @@ def regenerate_derived_files(*, indent: int = 0) -> None:
     hooks that exit nonzero when they rewrite a file, so the run uses ``check=False``.
     """
     printf('📦 Regenerating files derived from uv.lock...', fg='bright_cyan', indent=indent)
-    uv_run(
-        ['prek', 'run', '--all-files', '--no-progress', *config.DERIVED_FILE_HOOK_IDS],
-        indent=indent + 3,
-        check=False,
-    )
+    uv_run(['prek', 'run', '--all-files', '--no-progress', *DERIVED_FILE_HOOK_IDS], indent=indent + 3, check=False)
 
 
 class LockCommand(Command):
