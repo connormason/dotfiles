@@ -194,7 +194,7 @@ line-length       = 120
 output-format     = "full"
 respect-gitignore = true
 show-fixes        = true
-src               = [".", "services/medialink"] # the medialink service package is first-party, not third-party
+src               = [".", "services/medialink"]
 target-version    = "py39"
 
 extend-exclude = [

@@ -63,9 +63,14 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
+REPO_ROOT   = Path(__file__).resolve().parents[3]
+SERVICE_DIR = REPO_ROOT / 'services' / 'medialink'
+
+
 # ==================================================================================================
 # Helpers
 # ==================================================================================================
+
 
 def make_torrent(
     name: str,
@@ -80,16 +85,16 @@ def make_torrent(
     Build a torrent; ``files`` maps torrent-relative name to length
     """
     return Torrent(
-        id           = 1,
-        hash         = f'hash-{name}',
-        name         = name,
-        download_dir = download_dir,
-        status       = 6,
-        left         = left,
-        error        = 0,
-        error_text   = '',
-        labels       = labels,
-        files        = tuple(TorrentFile(n, size, size if complete else 0) for n, size in files.items()),
+        id=1,
+        hash=f'hash-{name}',
+        name=name,
+        download_dir=download_dir,
+        status=6,
+        left=left,
+        error=0,
+        error_text='',
+        labels=labels,
+        files=tuple(TorrentFile(n, size, size if complete else 0) for n, size in files.items()),
     )
 
 
@@ -99,10 +104,44 @@ def write_source(config: Config, torrent: Torrent, content: bytes = b'x' * 10) -
     """
     local = map_download_dir(torrent.download_dir, config.transmission_downloads, config.downloads_root)
     assert local is not None
+
     for file in torrent.files:
         path = local / file.name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
+
+
+def _service() -> dict[str, Any]:  # Any: yaml-loaded compose structure
+    """
+    Load the medialink service definition from its compose file
+    """
+    return yaml.safe_load((SERVICE_DIR / 'compose.yml').read_text(encoding='utf-8'))['services']['medialink']
+
+
+def archive_torrent(name: str = 'Rel', volumes: tuple[str, ...] = ('rel.rar', 'rel.r00'), **kwargs: Any) -> Torrent:
+    """
+    A torrent whose payload is a RAR set (plus a loose .nfo)
+    """
+    files = {f'{name}/{volume}': 10 for volume in volumes}
+    files[f'{name}/{name}.nfo'] = 10
+    return make_torrent(name, files, **kwargs)
+
+
+def make_library(root: Path, flat: dict[str, bytes], nested: dict[str, bytes]) -> Path:
+    """
+    Create a library directory with video files at its root and inside folders
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    for name, data in {**flat, **nested}.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    return root
+
+
+# ==================================================================================================
+# Mock classes
+# ==================================================================================================
 
 
 class RecordingNotifier(Notifier):
@@ -132,6 +171,91 @@ class StubClient:
         return result
 
 
+class _RpcHandler(BaseHTTPRequestHandler):
+    """
+    Minimal Transmission: demands a session id (409 first), then serves one torrent
+    """
+    seen_auth: ClassVar[list[str | None]] = []
+    mode:      ClassVar[str]              = 'ok'
+
+    def do_POST(self) -> None:
+        self.rfile.read(int(self.headers.get('Content-Length', 0)))
+        type(self).seen_auth.append(self.headers.get('Authorization'))
+
+        if type(self).mode == 'error':
+            self.send_response(500)
+            self.end_headers()
+            return
+        if self.headers.get('X-Transmission-Session-Id') != 'sid-1':
+            self.send_response(409)
+            self.send_header('X-Transmission-Session-Id', 'sid-1')
+            self.end_headers()
+            return
+
+        body = json.dumps({
+            'result':    'success',
+            'arguments': {
+                'torrents': [{
+                    'id':            7,
+                    'hashString':    'abc',
+                    'name':          'Film.2020',
+                    'downloadDir':   '/downloads/complete/movies',
+                    'status':        6,
+                    'leftUntilDone': 0,
+                    'labels':        ['movies'],
+                    'error':         0,
+                    'errorString':   '',
+                    'files':         [{'name': 'Film.2020/film.mkv', 'length': 5, 'bytesCompleted': 5}],
+                }]
+            }
+        }).encode()
+
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args: object) -> None:
+        return
+
+
+class FakeRunner:
+    """
+    Stand-in for subprocess.run that "extracts" a fixed set of files into the output directory it is given
+    """
+    def __init__(
+        self,
+        files: dict[str, bytes] | None = None,
+        *,
+        returncode: int = 0,
+        stderr: str = '',
+        symlinks: dict[str, str] | None = None,
+    ) -> None:
+        self.files      = files or {}
+        self.returncode = returncode
+        self.stderr     = stderr
+        self.symlinks   = symlinks or {}
+
+        self.calls: list[list[str]] = []
+
+    def __call__(self, argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        self.calls.append(argv)
+
+        out = next((Path(a[2:]) for a in argv if a.startswith('-o') and len(a) > 2 and a[2] == '/'), Path(argv[-1]))
+        if self.returncode == 0:
+            for rel, data in self.files.items():
+                (out / rel).parent.mkdir(parents=True, exist_ok=True)
+                (out / rel).write_bytes(data)
+            for rel, target in self.symlinks.items():
+                (out / rel).symlink_to(target)
+
+        return subprocess.CompletedProcess(argv, self.returncode, '', self.stderr)
+
+
+# ==================================================================================================
+# Fixtures
+# ==================================================================================================
+
+
 @pytest.fixture
 def config(tmp_path: Path) -> Config:
     """
@@ -143,9 +267,28 @@ def config(tmp_path: Path) -> Config:
     return Config.from_env({'MEDIALINK_MEDIA_ROOT': str(media), 'MEDIALINK_NTFY_URL': 'http://ntfy.invalid'})
 
 
+@pytest.fixture
+def rpc_url() -> Iterator[str]:
+    """
+    Serve the stub RPC endpoint on an ephemeral port
+    """
+    _RpcHandler.seen_auth = []
+    _RpcHandler.mode      = 'ok'
+
+    server = HTTPServer(('127.0.0.1', 0), _RpcHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    yield f'http://127.0.0.1:{server.server_port}/transmission/rpc'
+
+    server.shutdown()
+    server.server_close()
+
+
 # ==================================================================================================
-# Config
+# Unit tests
 # ==================================================================================================
+
 
 class TestConfig:
     """
@@ -157,13 +300,13 @@ class TestConfig:
         """
         config = Config.from_env({})
 
-        assert config.rpc_url == 'http://transmission:9091/transmission/rpc'
+        assert config.rpc_url        == 'http://transmission:9091/transmission/rpc'
         assert config.downloads_root == Path('/storage/media/downloads')
-        assert config.movies_root == Path('/storage/media/movies')
-        assert config.tv_root == Path('/storage/media/tv')
-        assert config.interval == 60
-        assert config.state_path == Path('/storage/media/config/medialink/state.json')
-        assert config.ntfy_url == ''
+        assert config.movies_root    == Path('/storage/media/movies')
+        assert config.tv_root        == Path('/storage/media/tv')
+        assert config.interval       == 60
+        assert config.state_path     == Path('/storage/media/config/medialink/state.json')
+        assert config.ntfy_url       == ''
 
     def test_overrides_and_trailing_slashes(self) -> None:
         """
@@ -175,7 +318,6 @@ class TestConfig:
             'MEDIALINK_TRANSMISSION_DOWNLOADS': '/dl/',
             'MEDIALINK_INTERVAL':               '5',
         })
-
         assert (config.ntfy_url, config.transmission_downloads, config.interval) == ('http://ntfy:80', '/dl', 5)
 
     @pytest.mark.parametrize(
@@ -194,10 +336,6 @@ class TestConfig:
             Config.from_env({name: value})
 
 
-# ==================================================================================================
-# Classification
-# ==================================================================================================
-
 class TestClassify:
     """
     Tests for classify
@@ -205,31 +343,31 @@ class TestClassify:
     @pytest.mark.parametrize(
         ('name', 'download_dir', 'labels', 'expected'),
         [
-            ('Dune.Part.One.2021.2160p',        '/downloads/complete',         (),          'movies'),
-            ('Dexter.Original.Sin.S01E06.1080p', '/downloads/complete',        (),          'tv'),
-            ('The.Sopranos.S01-S06.DVDRiP',     '/downloads/complete',         (),          'tv'),
-            ('Community Season 3 Pack',         '/downloads/complete',         (),          'tv'),
-            ('Good Eats',                       '/downloads/complete/tv',      (),          'tv'),
-            ('Overboard 2018 1080p',            '/downloads/complete/movie',   (),          'movies'),
-            ('A Mistake (2024)',                '/downloads/complete/movies/', (),          'movies'),
-            ('Movie.2020.1080p',                '/downloads/complete/movies',  ('TV',),     'tv'),
-            ('Whatever',                        '/downloads/complete',         ('movies',), 'movies'),
-            ('Se7en.1995.1080p',                '/downloads/complete',         (),          'movies'),
-            ('The Let Them Theory.m4b',         '/downloads/complete',         (),          None),
+            ('Dune.Part.One.2021.2160p',         '/downloads/complete',         (),          'movies'),
+            ('Dexter.Original.Sin.S01E06.1080p', '/downloads/complete',         (),          'tv'),
+            ('The.Sopranos.S01-S06.DVDRiP',      '/downloads/complete',         (),          'tv'),
+            ('Community Season 3 Pack',          '/downloads/complete',         (),          'tv'),
+            ('Good Eats',                        '/downloads/complete/tv',      (),          'tv'),
+            ('Overboard 2018 1080p',             '/downloads/complete/movie',   (),          'movies'),
+            ('A Mistake (2024)',                 '/downloads/complete/movies/', (),          'movies'),
+            ('Movie.2020.1080p',                 '/downloads/complete/movies',  ('TV',),     'tv'),
+            ('Whatever',                         '/downloads/complete',         ('movies',), 'movies'),
+            ('Se7en.1995.1080p',                 '/downloads/complete',         (),          'movies'),
+            ('The Let Them Theory.m4b',          '/downloads/complete',         (),          None),
         ],
     )
     def test_precedence_and_heuristics(
-        self, name: str, download_dir: str, labels: tuple[str, ...], expected: str | None,
+        self,
+        name: str,
+        download_dir: str,
+        labels: tuple[str, ...],
+        expected: str | None,
     ) -> None:
         """
         Test label > directory > name heuristics, including the 'movie' directory and trailing slashes
         """
         assert classify(name, download_dir, labels) == expected
 
-
-# ==================================================================================================
-# Path handling
-# ==================================================================================================
 
 class TestPaths:
     """
@@ -265,10 +403,6 @@ class TestPaths:
         assert safe_join(Path('/base'), 'Show/S01/ep.mkv') == Path('/base/Show/S01/ep.mkv')
 
 
-# ==================================================================================================
-# Linking
-# ==================================================================================================
-
 class TestLinkTorrent:
     """
     Tests for link_torrent
@@ -286,8 +420,8 @@ class TestLinkTorrent:
         write_source(config, torrent)
 
         results = self._link(config, torrent)
-
         assert [r.status for r in results] == [LINKED, LINKED]
+
         for file in torrent.files:
             source = config.downloads_root / 'complete' / 'movies' / file.name
             dest   = config.movies_root / file.name
@@ -301,7 +435,6 @@ class TestLinkTorrent:
         write_source(config, torrent)
 
         self._link(config, torrent)
-
         assert (config.movies_root / 'Film.2020.mkv').is_file()
 
     def test_rerun_is_idempotent(self, config: Config) -> None:
@@ -310,8 +443,8 @@ class TestLinkTorrent:
         """
         torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})
         write_source(config, torrent)
-        self._link(config, torrent)
 
+        self._link(config, torrent)
         assert [r.status for r in self._link(config, torrent)] == [EXISTS]
 
     def test_completes_a_partially_linked_torrent(self, config: Config) -> None:
@@ -320,11 +453,11 @@ class TestLinkTorrent:
         """
         torrent = make_torrent('Show', {'Show/e1.mkv': 10, 'Show/e2.mkv': 10}, download_dir='/downloads/complete/tv')
         write_source(config, torrent)
+
         local = config.downloads_root / 'complete' / 'tv'
         link_torrent(make_torrent('Show', {'Show/e1.mkv': 10}), local, config.tv_root)
 
         results = link_torrent(torrent, local, config.tv_root)
-
         assert [r.status for r in results] == [EXISTS, LINKED]
 
     def test_legacy_copy_is_left_untouched(self, config: Config) -> None:
@@ -333,11 +466,11 @@ class TestLinkTorrent:
         """
         torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})
         write_source(config, torrent, b'source-data')
+
         legacy = config.movies_root / 'Film.2020.mkv'
         legacy.write_bytes(b'legacy-data')
 
         results = self._link(config, torrent)
-
         assert [r.status for r in results] == [LEGACY_COPY]
         assert legacy.read_bytes() == b'legacy-data'
 
@@ -345,11 +478,10 @@ class TestLinkTorrent:
         """
         Test that missing sources, partial downloads and traversal names are classified, not linked
         """
-        torrent = make_torrent('T', {'T/gone.mkv': 10, '../evil.mkv': 10})
+        torrent    = make_torrent('T', {'T/gone.mkv': 10, '../evil.mkv': 10})
         incomplete = make_torrent('U', {'U/part.mkv': 10}, complete=False)
 
         results = self._link(config, torrent) + self._link(config, incomplete)
-
         assert [r.status for r in results] == [SOURCE_MISSING, UNSAFE, INCOMPLETE]
         assert not (config.movies_root.parent / 'evil.mkv').exists()
 
@@ -361,12 +493,13 @@ class TestLinkTorrent:
         write_source(config, torrent)
 
         results = self._link(config, torrent, dry_run=True)
-
         assert [r.status for r in results] == [LINKED]
         assert not (config.movies_root / 'Film.2020.mkv').exists()
 
     def test_cross_device_failure_is_reported_with_a_hint(
-        self, config: Config, monkeypatch: pytest.MonkeyPatch,
+        self,
+        config: Config,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """
         Test that EXDEV surfaces as FAILED and tells the operator to mount a common parent
@@ -382,57 +515,6 @@ class TestLinkTorrent:
 
         assert result.status == FAILED
         assert 'common parent' in result.detail
-
-
-# ==================================================================================================
-# Transmission RPC client
-# ==================================================================================================
-
-class _RpcHandler(BaseHTTPRequestHandler):
-    """
-    Minimal Transmission: demands a session id (409 first), then serves one torrent
-    """
-    seen_auth: ClassVar[list[str | None]] = []
-    mode:      ClassVar[str]              = 'ok'
-
-    def do_POST(self) -> None:
-        self.rfile.read(int(self.headers.get('Content-Length', 0)))
-        type(self).seen_auth.append(self.headers.get('Authorization'))
-        if type(self).mode == 'error':
-            self.send_response(500)
-            self.end_headers()
-            return
-        if self.headers.get('X-Transmission-Session-Id') != 'sid-1':
-            self.send_response(409)
-            self.send_header('X-Transmission-Session-Id', 'sid-1')
-            self.end_headers()
-            return
-        body = json.dumps({'result': 'success', 'arguments': {'torrents': [{
-            'id': 7, 'hashString': 'abc', 'name': 'Film.2020', 'downloadDir': '/downloads/complete/movies',
-            'status': 6, 'leftUntilDone': 0, 'labels': ['movies'], 'error': 0, 'errorString': '',
-            'files': [{'name': 'Film.2020/film.mkv', 'length': 5, 'bytesCompleted': 5}],
-        }]}}).encode()
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, *_args: object) -> None:
-        return
-
-
-@pytest.fixture
-def rpc_url() -> Iterator[str]:
-    """
-    Serve the stub RPC endpoint on an ephemeral port
-    """
-    _RpcHandler.seen_auth = []
-    _RpcHandler.mode      = 'ok'
-    server = HTTPServer(('127.0.0.1', 0), _RpcHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield f'http://127.0.0.1:{server.server_port}/transmission/rpc'
-    server.shutdown()
-    server.server_close()
 
 
 class TestTransmissionClient:
@@ -474,10 +556,6 @@ class TestTransmissionClient:
         with pytest.raises(TransmissionError, match='unreachable'):
             TransmissionClient('http://127.0.0.1:1/transmission/rpc', timeout=1).get_torrents()
 
-
-# ==================================================================================================
-# Notifications and state
-# ==================================================================================================
 
 class TestNotify:
     """
@@ -529,7 +607,7 @@ class TestState:
         state.save()
 
         reloaded = State(path)
-        assert 'link:a' in reloaded
+        assert 'link:a'     in reloaded
         assert 'link:b' not in reloaded
         assert 'rpc-outage' in reloaded
 
@@ -539,13 +617,8 @@ class TestState:
         """
         path = tmp_path / 'state.json'
         path.write_text('{not json', encoding='utf-8')
-
         assert 'anything' not in State(path)
 
-
-# ==================================================================================================
-# Reconcile engine
-# ==================================================================================================
 
 class TestReconcile:
     """
@@ -578,8 +651,7 @@ class TestReconcile:
         Test that torrents still downloading are skipped and counted
         """
         torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10}, left=5)
-
-        report = reconcile([torrent], config)
+        report  = reconcile([torrent], config)
 
         assert report.pending == 1
         assert not report.results
@@ -588,8 +660,11 @@ class TestReconcile:
         """
         Test that a torrent that cannot be placed alerts once, not every cycle
         """
-        torrent  = make_torrent('The Let Them Theory.m4b', {'The Let Them Theory.m4b': 10},
-                                download_dir='/downloads/complete')
+        torrent = make_torrent(
+            'The Let Them Theory.m4b',
+            {'The Let Them Theory.m4b': 10},
+            download_dir='/downloads/complete',
+        )
         notifier = RecordingNotifier()
         state    = State(tmp_path / 'state.json')
 
@@ -628,6 +703,7 @@ class TestReconcile:
         linkable   = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})
         unplaceable = make_torrent('Mystery', {'Mystery': 10}, download_dir='/downloads/complete')
         write_source(config, linkable)
+
         notifier = RecordingNotifier()
         state    = State(tmp_path / 'state.json')
 
@@ -639,16 +715,19 @@ class TestReconcile:
         assert not (tmp_path / 'state.json').exists()
 
 
-# ==================================================================================================
-# Service loop and CLI
-# ==================================================================================================
-
 class TestRunLoop:
     """
     Tests for run_loop
     """
     def _loop(self, config: Config, client: StubClient, state: State, notifier: RecordingNotifier, cycles: int) -> int:
-        return run_loop(config, client, notifier, state, sleep=lambda _s: None, max_cycles=cycles)  # type: ignore[arg-type]
+        return run_loop(
+            config,
+            client,                     # type: ignore[arg-type]
+            notifier,
+            state,
+            sleep=lambda _s: None,
+            max_cycles=cycles,
+        )
 
     def test_exits_nonzero_and_alerts_once_after_sustained_outage(self, config: Config, tmp_path: Path) -> None:
         """
@@ -685,8 +764,8 @@ class TestRunLoop:
         """
         torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})
         write_source(config, torrent)
-        client = StubClient([], [torrent])
 
+        client = StubClient([], [torrent])
         self._loop(config, client, State(tmp_path / 'state.json'), RecordingNotifier(), 2)
 
         assert (config.movies_root / 'Film.2020.mkv').exists()
@@ -696,8 +775,12 @@ class TestMain:
     """
     Tests for the argument parser and command dispatch
     """
-    def test_once_dry_run_reports_via_exit_code(self, config: Config, monkeypatch: pytest.MonkeyPatch,
-                                                capsys: pytest.CaptureFixture[str]) -> None:
+    def test_once_dry_run_reports_via_exit_code(
+        self,
+        config: Config,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
         """
         Test that once --dry-run prints a summary and returns 1 when a torrent cannot be placed
         """
@@ -725,13 +808,8 @@ class TestMain:
         Test that an invalid MEDIALINK_INTERVAL is reported without a traceback
         """
         monkeypatch.setenv('MEDIALINK_INTERVAL', 'nope')
-
         assert main(['once']) == 3
 
-
-# ==================================================================================================
-# Dedupe
-# ==================================================================================================
 
 class TestDedupe:
     """
@@ -750,8 +828,8 @@ class TestDedupe:
         results = self._legacy_results(config, b'same-bytes', b'same-bytes')
 
         (outcome,) = dedupe(results)
-
         assert outcome.action == 'would-replace'
+
         source = config.downloads_root / 'complete' / 'movies' / 'Film.2020.mkv'
         assert not os.path.samestat(source.stat(), outcome.dest.stat())
 
@@ -778,21 +856,6 @@ class TestDedupe:
 
         assert outcome.action == 'differs'
         assert outcome.dest.read_bytes() == b'bbbbbbbbbb'
-
-
-# ==================================================================================================
-# Deployment files
-# ==================================================================================================
-
-REPO_ROOT   = Path(__file__).resolve().parents[3]
-SERVICE_DIR = REPO_ROOT / 'services' / 'medialink'
-
-
-def _service() -> dict[str, Any]:  # Any: yaml-loaded compose structure
-    """
-    Load the medialink service definition from its compose file
-    """
-    return yaml.safe_load((SERVICE_DIR / 'compose.yml').read_text(encoding='utf-8'))['services']['medialink']
 
 
 class TestDeployFiles:
@@ -825,9 +888,9 @@ class TestDeployFiles:
         """
         dockerfile = (SERVICE_DIR / 'Dockerfile').read_text(encoding='utf-8')
 
-        assert 'non-free' in dockerfile
+        assert 'non-free'        in dockerfile
         assert 'apt-get install' in dockerfile
-        assert 'unrar' in dockerfile
+        assert 'unrar'           in dockerfile
 
     def test_runs_as_the_media_owner_and_reaches_its_peers_by_name(self) -> None:
         """
@@ -852,51 +915,7 @@ class TestDeployFiles:
         Test that the vault variable reaches the env file and an unset token renders empty
         """
         template = jinja2.Template((SERVICE_DIR / 'env.j2').read_text(encoding='utf-8'))
-
         assert template.render(**variables).strip() == expected
-
-
-# ==================================================================================================
-# RAR extraction
-# ==================================================================================================
-
-class FakeRunner:
-    """
-    Stand-in for subprocess.run that "extracts" a fixed set of files into the output directory it is given
-    """
-    def __init__(
-        self,
-        files: dict[str, bytes] | None = None,
-        *,
-        returncode: int = 0,
-        stderr: str = '',
-        symlinks: dict[str, str] | None = None,
-    ) -> None:
-        self.files      = files or {}
-        self.returncode = returncode
-        self.stderr     = stderr
-        self.symlinks   = symlinks or {}
-        self.calls: list[list[str]] = []
-
-    def __call__(self, argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        self.calls.append(argv)
-        out = next((Path(a[2:]) for a in argv if a.startswith('-o') and len(a) > 2 and a[2] == '/'), Path(argv[-1]))
-        if self.returncode == 0:
-            for rel, data in self.files.items():
-                (out / rel).parent.mkdir(parents=True, exist_ok=True)
-                (out / rel).write_bytes(data)
-            for rel, target in self.symlinks.items():
-                (out / rel).symlink_to(target)
-        return subprocess.CompletedProcess(argv, self.returncode, '', self.stderr)
-
-
-def archive_torrent(name: str = 'Rel', volumes: tuple[str, ...] = ('rel.rar', 'rel.r00'), **kwargs: Any) -> Torrent:
-    """
-    A torrent whose payload is a RAR set (plus a loose .nfo)
-    """
-    files = {f'{name}/{volume}': 10 for volume in volumes}
-    files[f'{name}/{name}.nfo'] = 10
-    return make_torrent(name, files, **kwargs)
 
 
 class TestArchiveNames:
@@ -954,8 +973,8 @@ class TestExtractor:
         installed = {'7z': '/usr/bin/7z', 'unrar': '/usr/bin/unrar', 'mine': '/opt/mine'}
         monkeypatch.setattr(shutil, 'which', installed.get)
 
-        assert Extractor.discover('mine').binary == '/opt/mine'  # type: ignore[union-attr]
-        assert Extractor.discover().binary == '/usr/bin/7z'  # type: ignore[union-attr]
+        assert Extractor.discover('mine').binary == '/opt/mine'     # type: ignore[union-attr]
+        assert Extractor.discover().binary == '/usr/bin/7z'         # type: ignore[union-attr]
 
         monkeypatch.setattr(shutil, 'which', lambda _name: None)
         assert Extractor.discover() is None
@@ -988,6 +1007,7 @@ class TestExtractor:
         with zipfile.ZipFile(archive, 'w') as bundle:
             bundle.writestr('Episode.mkv', b'real-video-bytes')
             bundle.writestr('Subs/en.srt', b'subs')
+
         extractor = Extractor(shutil.which('7z') or '7z')
         staging   = tmp_path / 'staging'
 
@@ -1002,8 +1022,13 @@ class TestExtractTorrent:
     Tests for extract_torrent
     """
     def _run(
-        self, config: Config, torrent: Torrent, extractor: Extractor | None, state: State | None = None,
-        *, dry_run: bool = False,
+        self,
+        config: Config,
+        torrent: Torrent,
+        extractor: Extractor | None,
+        state: State | None = None,
+        *,
+        dry_run: bool = False,
     ) -> list[Any]:  # Any: LinkResult list
         write_source(config, torrent)
         local = map_download_dir(torrent.download_dir, config.transmission_downloads, config.downloads_root)
@@ -1078,6 +1103,7 @@ class TestExtractTorrent:
         torrent = archive_torrent()
         stale   = config.movies_root / 'Rel' / f'.medialink-extract-{torrent.hash[:8]}'
         stale.mkdir(parents=True)
+
         (stale / 'Rel.mkv').write_bytes(b'TRUNCATED')
         (stale / 'Leftover.mkv').write_bytes(b'HALF-WRITTEN')  # a file the fresh run does not regenerate
 
@@ -1157,9 +1183,9 @@ class TestReconcileWithArchives:
         """
         torrent = archive_torrent()
         write_source(config, torrent)
-        extractor = Extractor('/usr/bin/7z', FakeRunner({'Rel.mkv': b'video'}))
 
-        report = reconcile([torrent], config, extractor=extractor)
+        extractor = Extractor('/usr/bin/7z', FakeRunner({'Rel.mkv': b'video'}))
+        report    = reconcile([torrent], config, extractor=extractor)
 
         release = config.movies_root / 'Rel'
         assert report.ok
@@ -1176,6 +1202,7 @@ class TestReconcileWithArchives:
         """
         torrent  = archive_torrent()
         write_source(config, torrent)
+
         notifier = RecordingNotifier()
         state    = State(tmp_path / 'state.json')
 
@@ -1188,22 +1215,6 @@ class TestReconcileWithArchives:
         assert 'extract-failed' in notifier.sent[0][1]
 
 
-# ==================================================================================================
-# Flat-duplicate cleanup
-# ==================================================================================================
-
-def make_library(root: Path, flat: dict[str, bytes], nested: dict[str, bytes]) -> Path:
-    """
-    Create a library directory with video files at its root and inside folders
-    """
-    root.mkdir(parents=True, exist_ok=True)
-    for name, data in {**flat, **nested}.items():
-        path = root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-    return root
-
-
 class TestFileDigest:
     """
     Tests for file_digest
@@ -1214,6 +1225,7 @@ class TestFileDigest:
         """
         size  = 4 * 1024 * 1024
         base  = bytearray(b'a' * size)
+
         files = {}
         for label, offset in (('base', None), ('tail', size - 1), ('head', 0), ('gap', 1_200_000)):
             data = bytearray(base)
@@ -1287,7 +1299,6 @@ class TestFlatDuplicates:
             {'Ep.mkv': b'same', 'notes.txt': b'same', '.hidden.mkv': b'same'},
             {'.medialink-extract-abcd1234/Ep.mkv': b'same', 'Show/notes.txt': b'same', 'Show/.hidden.mkv': b'same'},
         )
-
         assert flat_duplicates([root], apply=True) == []
 
     def test_quick_mode_finds_identical_copies(self, tmp_path: Path) -> None:
@@ -1298,7 +1309,6 @@ class TestFlatDuplicates:
         root = make_library(tmp_path / 'movies', {'Big.mkv': data}, {'Big/Big.mkv': data})
 
         (outcome,) = flat_duplicates([root], quick=True)
-
         assert outcome.action == 'would-remove-flat'
 
 
@@ -1307,26 +1317,33 @@ class TestDedupeCommand:
     Tests for the dedupe CLI command
     """
     def test_dry_run_then_apply_reclaims_both_kinds(
-        self, config: Config, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+        self,
+        config: Config,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test one command handling a mirrored legacy copy and a flat duplicate, dry run first
         """
         torrent = make_torrent('Film.2020', {'Film.2020/film.mkv': 10})
         write_source(config, torrent, b'film-bytes')
+
         (config.movies_root / 'Film.2020').mkdir()
         (config.movies_root / 'Film.2020' / 'film.mkv').write_bytes(b'film-bytes')  # mirrored legacy copy
         (config.movies_root / 'film.mkv').write_bytes(b'film-bytes')                # flat duplicate
+
         monkeypatch.setenv('MEDIALINK_MEDIA_ROOT', str(config.media_root))
         monkeypatch.setattr(TransmissionClient, 'get_torrents', lambda _self: [torrent])
 
         assert main(['dedupe']) == EXIT_OK
+
         dry = capsys.readouterr().out
         assert 'reclaimable' in dry
         assert (config.movies_root / 'film.mkv').exists()
 
         assert main(['dedupe', '--apply', '--quick']) == EXIT_OK
         assert 'reclaimed' in capsys.readouterr().out
+
         source = config.downloads_root / 'complete' / 'movies' / 'Film.2020' / 'film.mkv'
         assert os.path.samestat(source.stat(), (config.movies_root / 'Film.2020' / 'film.mkv').stat())
         assert not (config.movies_root / 'film.mkv').exists()
@@ -1345,7 +1362,6 @@ class TestConfigExtraction:
         Test that extraction is on by default and the usual false spellings turn it off
         """
         env = {} if value is None else {'MEDIALINK_EXTRACT': value}
-
         assert Config.from_env(env).extract is expected
 
     def test_extractor_override(self) -> None:
