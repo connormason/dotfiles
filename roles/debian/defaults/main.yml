@@ -55,5 +55,9 @@ debian_smartd_schedule: "(S/../../7/03|L/../01/./04)"
 debian_unattended_origin_patterns:
   - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
 
+# SSH: key-only login. ssh.yml refuses password login "no" when the login user has no authorized key.
+debian_ssh_password_authentication: "no"
+debian_ssh_permit_root_login: "no"
+
 # When nas-reboot-check looks for a pending reboot
 debian_reboot_check_on_calendar: "*-*-* 09:00:00"

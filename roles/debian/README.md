@@ -14,6 +14,7 @@ the Linuxbrew prefix, the systemd sleep targets, alerting (SMART monitoring plus
 | apt packages     | `debian_engine_packages` + `debian_apt_packages`                                                                                                                                                                     |
 | Linuxbrew prefix | The parent of `debian_linuxbrew_prefix` (`/home/linuxbrew` by default; root, 0755) and `debian_linuxbrew_prefix` owned by `ansible_user`, so the engine's `50-brew` installs Homebrew without sudo                   |
 | Upgrades         | `unattended-upgrades` limited to the security origin with no automatic reboot, plus the `nas-reboot-check` timer (see [Unattended upgrades and reboots](#unattended-upgrades))                                       |
+| SSH              | Key-only login drop-in `sshd_config.d/00-nas-hardening.conf`, guarded and validated (see [SSH hardening](#ssh-hardening))                                                                                            |
 | Alerting         | `/usr/local/bin/nas-notify`, the `nas-notify-failure@.service` template, and `/etc/nas-notify.env` (0600, holds the ntfy token), then `/etc/smartd.conf` and the `smartmontools` service (see [Alerting](#alerting)) |
 
 ## Unattended upgrades and reboots<a name="unattended-upgrades"></a>
@@ -63,18 +64,30 @@ To start delivering to ntfy, create the token as described in the [ntfy section]
 the inventory vault as `ntfy_alerts_token`, and run `python3 run.py nas-provision --tags debian`. After any change,
 `nas-notify -t Test "hello"` on the NAS sends a test alert.
 
+## SSH hardening<a name="ssh-hardening"></a>
+
+`/etc/ssh/sshd_config.d/00-nas-hardening.conf` turns off password, keyboard-interactive and root login. sshd keeps the
+first value it reads for a keyword and `sshd_config` includes the directory at the top, so the `00-` name beats the main
+file and any later drop-in. Two guards protect against a lockout: the play asserts that the login user's
+`~/.ssh/authorized_keys` holds at least one key before it disables passwords, and the file is validated alone with
+`sshd -t -f` before it is installed. The handler reloads `ssh` rather than restarting it, so the session applying the
+change stays open. After the first run, confirm key login from a second terminal before closing the first, and check
+that `ssh -o PubkeyAuthentication=no nas` is refused.
+
 ## Variables
 
-| Variable                            | Default                                                                    | Purpose                                                        |
-| ----------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `systemd_allow_sleep` etc.          | `true`                                                                     | Whether each sleep target may run; overridden in the inventory |
-| `debian_engine_packages`            | `build-essential procps curl file git zsh python3`                         | Engine prerequisites checked by `bootstrap/00-preflight.sh`    |
-| `debian_apt_packages`               | `fzf exfat-fuse smartmontools unattended-upgrades`                         | Other packages                                                 |
-| `debian_linuxbrew_prefix`           | `/home/linuxbrew/.linuxbrew`                                               | Homebrew's Linux prefix                                        |
-| `debian_ntfy_url`                   | `http://127.0.0.1:2586`                                                    | Where `nas-notify` publishes                                   |
-| `debian_ntfy_topic`                 | `nas-alerts`                                                               | ntfy topic for alerts                                          |
-| `debian_ntfy_token`                 | `{{ ntfy_alerts_token \| default('') }}`                                   | Publisher token; `ntfy_alerts_token` is a vault variable       |
-| `debian_smartd_schedule`            | `(S/../../7/03\|L/../01/./04)`                                             | smartd self-test schedule regexp                               |
-| `debian_smartd_ignored_devices`     | the ST2000DM001's `/dev/disk/by-id` path                                   | Devices smartd skips; remove the entry when the drive is gone  |
-| `debian_unattended_origin_patterns` | `origin=Debian,codename=${distro_codename}-security,label=Debian-Security` | Origins upgraded automatically (replaces Debian's list)        |
-| `debian_reboot_check_on_calendar`   | `*-*-* 09:00:00`                                                           | When `nas-reboot-check` looks for a pending reboot             |
+| Variable                             | Default                                                                    | Purpose                                                        |
+| ------------------------------------ | -------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `systemd_allow_sleep` etc.           | `true`                                                                     | Whether each sleep target may run; overridden in the inventory |
+| `debian_engine_packages`             | `build-essential procps curl file git zsh python3`                         | Engine prerequisites checked by `bootstrap/00-preflight.sh`    |
+| `debian_apt_packages`                | `fzf exfat-fuse smartmontools unattended-upgrades`                         | Other packages                                                 |
+| `debian_linuxbrew_prefix`            | `/home/linuxbrew/.linuxbrew`                                               | Homebrew's Linux prefix                                        |
+| `debian_ntfy_url`                    | `http://127.0.0.1:2586`                                                    | Where `nas-notify` publishes                                   |
+| `debian_ntfy_topic`                  | `nas-alerts`                                                               | ntfy topic for alerts                                          |
+| `debian_ntfy_token`                  | `{{ ntfy_alerts_token \| default('') }}`                                   | Publisher token; `ntfy_alerts_token` is a vault variable       |
+| `debian_smartd_schedule`             | `(S/../../7/03\|L/../01/./04)`                                             | smartd self-test schedule regexp                               |
+| `debian_smartd_ignored_devices`      | the ST2000DM001's `/dev/disk/by-id` path                                   | Devices smartd skips; remove the entry when the drive is gone  |
+| `debian_unattended_origin_patterns`  | `origin=Debian,codename=${distro_codename}-security,label=Debian-Security` | Origins upgraded automatically (replaces Debian's list)        |
+| `debian_reboot_check_on_calendar`    | `*-*-* 09:00:00`                                                           | When `nas-reboot-check` looks for a pending reboot             |
+| `debian_ssh_password_authentication` | `"no"`                                                                     | `PasswordAuthentication` and `KbdInteractiveAuthentication`    |
+| `debian_ssh_permit_root_login`       | `"no"`                                                                     | `PermitRootLogin`                                              |

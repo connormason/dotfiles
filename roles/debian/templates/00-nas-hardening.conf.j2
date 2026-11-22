@@ -1,0 +1,5 @@
+# Managed by Ansible (roles/debian/tasks/ssh.yml). sshd keeps the first value it reads for a keyword and sshd_config
+# includes sshd_config.d at the top, so this file (named to sort first) beats later drop-ins and the main file.
+PasswordAuthentication {{ debian_ssh_password_authentication }}
+KbdInteractiveAuthentication {{ debian_ssh_password_authentication }}
+PermitRootLogin {{ debian_ssh_permit_root_login }}
