@@ -17,7 +17,7 @@ TV     = 'tv'
 
 # Transmission labels and download-directory names that carry an explicit category. 'movie' (singular) exists in the
 # wild: four torrents were added with that directory and silently skipped by the tool this one replaces.
-LABEL_CATEGORIES = {
+LABEL_CATEGORIES: dict[str, str] = {
     'tv':     TV,
     'shows':  TV,
     'movies': MOVIES,
@@ -41,8 +41,7 @@ def _from_labels(labels: tuple[str, ...]) -> str | None:
     :return: the category, or None when no label names one
     """
     for label in labels:
-        category = LABEL_CATEGORIES.get(label.strip().lower())
-        if category:
+        if category := LABEL_CATEGORIES.get(label.strip().lower()):
             return category
     return None
 
@@ -57,8 +56,7 @@ def _from_directory(download_dir: str) -> str | None:
     :return: the category, or None when the path names none (for example the bare ``complete`` directory)
     """
     for part in reversed(PurePosixPath(download_dir).parts):
-        category = LABEL_CATEGORIES.get(part.lower())
-        if category:
+        if category := LABEL_CATEGORIES.get(part.lower()):
             return category
     return None
 
@@ -84,6 +82,7 @@ def classify(name: str, download_dir: str, labels: tuple[str, ...] = ()) -> str 
     Precedence is label, then download directory, then release-name heuristics.
 
     Examples:
+
         >>> classify('Dune.2021.1080p', '/downloads/complete')
         'movies'
         >>> classify('Show.S01E02.1080p', '/downloads/complete/movie/')

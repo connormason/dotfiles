@@ -61,10 +61,10 @@ class Report:
     """
     Aggregate outcome of a reconcile pass
     """
-    counts:   Counter[str]       = field(default_factory=Counter)
-    results:  list[LinkResult]   = field(default_factory=list)
-    problems: list[Problem]      = field(default_factory=list)
-    pending:  int                = 0
+    counts:   Counter[str]     = field(default_factory=Counter)
+    results:  list[LinkResult] = field(default_factory=list)
+    problems: list[Problem]    = field(default_factory=list)
+    pending:  int              = 0
 
     @property
     def ok(self) -> bool:
@@ -110,21 +110,27 @@ def _handle_torrent(
     """
     category = classify(torrent.name, torrent.download_dir, torrent.labels)
     if category is None:
-        report.problems.append(Problem(
-            key     = f'unclassified:{torrent.hash}',
-            title   = 'Torrent not placed',
-            message = f'Cannot tell movie from TV: {torrent.name}\nSaved in {torrent.download_dir}. '
-                      'Add a "movies" or "tv" label in Transmission.',
-        ))
+        report.problems.append(
+            Problem(
+                key=f'unclassified:{torrent.hash}',
+                title='Torrent not placed',
+                message=(
+                    f'Cannot tell movie from TV: {torrent.name}\nSaved in {torrent.download_dir}. '
+                    'Add a "movies" or "tv" label in Transmission.'
+                ),
+            )
+        )
         return
 
     source_dir = map_download_dir(torrent.download_dir, config.transmission_downloads, config.downloads_root)
     if source_dir is None:
-        report.problems.append(Problem(
-            key     = f'outside:{torrent.hash}',
-            title   = 'Torrent outside download tree',
-            message = f'{torrent.name} is in {torrent.download_dir}, not under {config.transmission_downloads}',
-        ))
+        report.problems.append(
+            Problem(
+                key=f'outside:{torrent.hash}',
+                title='Torrent outside download tree',
+                message=f'{torrent.name} is in {torrent.download_dir}, not under {config.transmission_downloads}',
+            )
+        )
         return
 
     dest_root = config.movies_root if category == MOVIES else config.tv_root
@@ -138,16 +144,23 @@ def _handle_torrent(
         if result.status == LINKED:
             logger.info('%s %s -> %s', 'would link' if dry_run else 'linked', result.source, result.dest)
         elif result.status == EXTRACTED:
-            logger.info('%s %s -> %s (%s)', 'would extract' if dry_run else 'extracted', result.source, result.dest,
-                        result.detail)
+            logger.info(
+                '%s %s -> %s (%s)', 'would extract' if dry_run else 'extracted',
+                result.source,
+                result.dest,
+                result.detail,
+            )
         elif result.status in PROBLEM_STATUSES:
             logger.error('%s: %s (%s)', result.status, result.dest or result.source, result.detail)
+
     if any(r.status in PROBLEM_STATUSES for r in results):
-        report.problems.append(Problem(
-            key     = f'link:{torrent.hash}',
-            title   = 'Torrent linking failed',
-            message = f'{torrent.name} ({category})\n{_summarise(results)}',
-        ))
+        report.problems.append(
+            Problem(
+                key=f'link:{torrent.hash}',
+                title='Torrent linking failed',
+                message=f'{torrent.name} ({category})\n{_summarise(results)}',
+            )
+        )
 
 
 def reconcile(
@@ -181,7 +194,7 @@ def reconcile(
             continue
         _handle_torrent(torrent, config, report, dry_run=dry_run, state=state, extractor=extractor)
 
-    if dry_run or state is None:
+    if dry_run or (state is None):
         return report
 
     current = {problem.key for problem in report.problems}
@@ -190,6 +203,7 @@ def reconcile(
             if notifier is not None:
                 notifier.send(problem.title, problem.message, priority='high', tags='warning')
             state.add(problem.key)
+
     state.prune(PROBLEM_PREFIXES, keep=current)
     state.save()
     return report

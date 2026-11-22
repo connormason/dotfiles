@@ -51,11 +51,11 @@ class Args(argparse.Namespace):
     """
     Typed view of the parsed command line
     """
-    command: str
-    verbose: bool
-    dry_run: bool
-    apply:   bool
-    quick:   bool
+    command: str        # command
+    verbose: bool       # --verbose
+    dry_run: bool       # --dry-run         "once" command only
+    apply:   bool       # --apply           "dedupe" command only
+    quick:   bool       # --quick           "dedupe" command only
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -65,11 +65,11 @@ def _build_parser() -> argparse.ArgumentParser:
     :return: the configured parser
     """
     formatter = functools.partial(argparse.RawTextHelpFormatter, max_help_position=50)
-    parser    = argparse.ArgumentParser(
-        prog            = 'medialink',
-        description     = 'Hardlink finished Transmission torrents into the Jellyfin/Plex media directories.',
-        formatter_class = formatter,
-        add_help        = False,
+    parser = argparse.ArgumentParser(
+        prog='medialink',
+        description='Hardlink finished Transmission torrents into the Jellyfin/Plex media directories.',
+        formatter_class=formatter,
+        add_help=False,
     )
     commands = parser.add_subparsers(dest='command', required=True, metavar='COMMAND')
 
@@ -80,32 +80,71 @@ def _build_parser() -> argparse.ArgumentParser:
         :param sub: the subcommand parser
         """
         output_opts = sub.add_argument_group('Output options')
-        output_opts.add_argument('-v', '--verbose', action='store_true', help='Log every action, not only changes')
+        output_opts.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Log every action, not only changes',
+        )
         other_opts = sub.add_argument_group('Other options')
-        other_opts.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
-                                help='Show this help message and exit')
+        other_opts.add_argument(
+            '-h',
+            '--help',
+            action='help',
+            default=argparse.SUPPRESS,
+            help='Show this help message and exit',
+        )
 
-    run = commands.add_parser('run', formatter_class=formatter, add_help=False,
-                              help='Reconcile every MEDIALINK_INTERVAL seconds until stopped')
+    run = commands.add_parser(
+        'run',
+        formatter_class=formatter,
+        add_help=False,
+        help='Reconcile every MEDIALINK_INTERVAL seconds until stopped',
+    )
     add_common_opts(run)
 
-    once = commands.add_parser('once', formatter_class=formatter, add_help=False,
-                               help='Run a single reconcile pass and exit')
+    once = commands.add_parser(
+        'once',
+        formatter_class=formatter,
+        add_help=False,
+        help='Run a single reconcile pass and exit',
+    )
     once_opts = once.add_argument_group('Reconcile options')
-    once_opts.add_argument('-n', '--dry-run', action='store_true', help='Report what would be linked; change nothing')
+    once_opts.add_argument(
+        '-n',
+        '--dry-run',
+        action='store_true',
+        help='Report what would be linked; change nothing',
+    )
     add_common_opts(once)
 
-    dedupe_cmd = commands.add_parser('dedupe', formatter_class=formatter, add_help=False,
-                                     help='Replace identical legacy copies in the library with hardlinks')
+    dedupe_cmd = commands.add_parser(
+        'dedupe',
+        formatter_class=formatter,
+        add_help=False,
+        help='Replace identical legacy copies in the library with hardlinks',
+    )
     dedupe_opts = dedupe_cmd.add_argument_group('Dedupe options')
-    dedupe_opts.add_argument('--apply', action='store_true', help='Replace/remove files (default is a dry run)')
-    dedupe_opts.add_argument('--quick', action='store_true',
-                             help='Compare size plus sampled blocks instead of hashing whole files (much faster)')
+    dedupe_opts.add_argument(
+        '--apply',
+        action='store_true',
+        help='Replace/remove files (default is a dry run)',
+    )
+    dedupe_opts.add_argument(
+        '--quick',
+        action='store_true',
+        help='Compare size plus sampled blocks instead of hashing whole files (much faster)',
+    )
     add_common_opts(dedupe_cmd)
 
     other_opts = parser.add_argument_group('Other options')
-    other_opts.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
-                            help='Show this help message and exit')
+    other_opts.add_argument(
+        '-h',
+        '--help',
+        action='help',
+        default=argparse.SUPPRESS,
+        help='Show this help message and exit',
+    )
     return parser
 
 
@@ -117,8 +156,12 @@ def _print_report(report: Report, *, dry_run: bool) -> None:
     :param dry_run: whether nothing was changed
     """
     verb = 'would link' if dry_run else 'linked'
-    print(f'{verb}: {report.counts["linked"]}   already linked: {report.counts["exists"]}   '
-          f'legacy copies: {report.counts["legacy-copy"]}   in progress: {report.pending}')
+    print(
+        f'{verb}: {report.counts["linked"]}   '
+        f'already linked: {report.counts["exists"]}   '
+        f'legacy copies: {report.counts["legacy-copy"]}   '
+        f'in progress: {report.pending}'
+    )
     for problem in report.problems:
         print(f'PROBLEM  {problem.title}: {problem.message}')
 
@@ -151,7 +194,7 @@ def run_loop(
     """
     failures = 0
     cycles   = 0
-    while max_cycles is None or cycles < max_cycles:
+    while (max_cycles is None) or (cycles < max_cycles):
         cycles += 1
         try:
             torrents = client.get_torrents()
@@ -160,23 +203,35 @@ def run_loop(
             logger.error('cycle failed (%d/%d): %s', failures, config.max_failures, e)
             if failures >= config.max_failures:
                 if OUTAGE_KEY not in state:
-                    notifier.send('Transmission unreachable', f'{failures} consecutive failures: {e}',
-                                  priority='urgent', tags='rotating_light')
+                    notifier.send(
+                        'Transmission unreachable',
+                        f'{failures} consecutive failures: {e}',
+                        priority='urgent',
+                        tags='rotating_light',
+                    )
                     state.add(OUTAGE_KEY)
                     state.save()
                 return EXIT_RPC
         else:
             if failures:
                 logger.info('Transmission reachable again after %d failed cycle(s)', failures)
+
             failures = 0
             if OUTAGE_KEY in state:
                 state.discard(OUTAGE_KEY)
                 state.save()
-            report = reconcile(torrents, config, state=state, notifier=notifier, extractor=extractor)
+
+            report  = reconcile(torrents, config, state=state, notifier=notifier, extractor=extractor)
             changed = report.counts['linked'] or report.problems
-            logger.log(logging.INFO if changed else logging.DEBUG,
-                       'cycle ok: %d linked, %d already linked, %d problem(s), %d in progress',
-                       report.counts['linked'], report.counts['exists'], len(report.problems), report.pending)
+            logger.log(
+                logging.INFO if changed else logging.DEBUG,
+                'cycle ok: %d linked, %d already linked, %d problem(s), %d in progress',
+                report.counts['linked'],
+                report.counts['exists'],
+                len(report.problems),
+                report.pending,
+            )
+
         sleep(config.interval)
     return EXIT_OK
 
@@ -190,10 +245,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     args = _build_parser().parse_args(argv, namespace=Args())
     logging.basicConfig(
-        level  = logging.DEBUG if args.verbose else logging.INFO,
-        format = '%(asctime)s %(levelname)s %(message)s',
-        stream = sys.stderr,
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        stream=sys.stderr,
     )
+
     try:
         config = Config.from_env()
     except ConfigError as e:
@@ -205,12 +261,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     state    = State(config.state_path)
 
     extractor = Extractor.discover(config.extractor) if config.extract else None
-    if config.extract and extractor is None:
+    if config.extract and (extractor is None):
         logger.warning('no RAR extractor found (unrar / 7z); RAR-packed torrents will be reported as problems')
 
     if args.command == 'run':
-        logger.info('medialink starting: %s, every %ds, extractor: %s', config.media_root, config.interval,
-                    extractor.binary if extractor else 'none')
+        logger.info(
+            'medialink starting: %s, every %ds, extractor: %s',
+            config.media_root,
+            config.interval,
+            extractor.binary if extractor else 'none',
+        )
         return run_loop(config, client, notifier, state, extractor=extractor)
 
     try:
@@ -224,20 +284,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_report(report, dry_run=args.dry_run)
         return EXIT_OK if report.ok else EXIT_PROBLEMS
 
-    # dedupe: inspect with a dry-run reconcile (creates nothing), then act on the legacy copies it found. The flat scan
-    # runs second, so a foldered twin made by an earlier `once` is what justifies removing a flat file.
+    # dedupe: inspect with a dry-run reconcile (creates nothing), then act on the legacy copies it found.
+    # The flat scan runs second, so a foldered twin made by an earlier `once` is what justifies removing a flat file.
     report    = reconcile(torrents, config, dry_run=True)
     outcomes  = dedupe(report.results, apply=args.apply, quick=args.quick)
     outcomes += flat_duplicates((config.movies_root, config.tv_root), apply=args.apply, quick=args.quick)
     for outcome in outcomes:
         if outcome.action in {'differs', 'error'} or args.verbose:
             print(f'{outcome.action:18} {outcome.dest} {outcome.detail}'.rstrip())
+
     freed   = {'replaced', 'would-replace', 'removed-flat', 'would-remove-flat'}
     reclaim = sum(o.size for o in outcomes if o.action in freed)
     verb    = 'reclaimed' if args.apply else 'reclaimable'
+
     print(f'{verb}: {reclaim / GIB:.1f} GiB across {sum(o.action in freed for o in outcomes)} file(s)')
-    print(f'  mirrored copies -> links: {sum(o.action.endswith("replace") or o.action == "replaced" for o in outcomes)}'
-          f'   flat duplicates: {sum(o.action.endswith("flat") for o in outcomes)}'
-          f'   differing: {sum(o.action == "differs" for o in outcomes)}'
-          f'   errors: {sum(o.action == "error" for o in outcomes)}')
+    print(
+        f'  mirrored copies -> links: {sum(o.action.endswith("replace") or o.action == "replaced" for o in outcomes)}'
+        f'   flat duplicates: {sum(o.action.endswith("flat") for o in outcomes)}'
+        f'   differing: {sum(o.action == "differs" for o in outcomes)}'
+        f'   errors: {sum(o.action == "error" for o in outcomes)}'
+    )
+
     return EXIT_OK

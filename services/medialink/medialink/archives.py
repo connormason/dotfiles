@@ -43,7 +43,7 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 # A multi-volume set is `name.rar` + `name.r00`, `name.r01`, ... or `name.part01.rar`, `name.part02.rar`, ...
-_ARCHIVE_PART = re.compile(r'\.(rar|r\d{2,3})$', re.IGNORECASE)
+_ARCHIVE_PART = re.compile(r'\.(rar|r\d{2,3})$',   re.IGNORECASE)
 _PART_VOLUME  = re.compile(r'\.part0*(\d+)\.rar$', re.IGNORECASE)
 
 TEMP_PREFIX     = '.medialink-extract-'
@@ -55,6 +55,7 @@ class ExtractError(RuntimeError):
     """
     Raised when an archive cannot be unpacked
     """
+    pass
 
 
 def is_archive_part(name: str) -> bool:
@@ -79,8 +80,9 @@ def is_first_volume(name: str) -> bool:
     """
     if not name.lower().endswith('.rar'):
         return False
+
     match = _PART_VOLUME.search(name)
-    return match is None or int(match.group(1)) == 1
+    return (match is None) or (int(match.group(1)) == 1)
 
 
 def has_archives(torrent: Torrent) -> bool:
@@ -138,8 +140,7 @@ class Extractor:
         :return: an extractor, or None when none of the candidates is installed
         """
         for candidate in (preferred, *CANDIDATES):
-            found = shutil.which(candidate) if candidate else None
-            if found:
+            if found := shutil.which(candidate) if candidate else None:
                 return cls(found)
         return None
 
@@ -166,10 +167,15 @@ class Extractor:
         out_dir.mkdir(parents=True, exist_ok=True)
         try:
             proc = self.runner(
-                self.command(archive, out_dir), capture_output=True, text=True, check=False, timeout=self.timeout,
+                self.command(archive, out_dir),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=self.timeout,
             )
         except (OSError, subprocess.TimeoutExpired) as e:
             raise ExtractError(f'{Path(self.binary).name} failed to run: {e}') from e
+
         if proc.returncode != 0:
             raise ExtractError(
                 f'{Path(self.binary).name} exited {proc.returncode}: {_tail(proc.stderr or proc.stdout or "")}',
@@ -188,17 +194,21 @@ def _publish(staging: Path, dest_dir: Path) -> int:
     :return: number of files moved into place
     """
     moved = 0
+
     for dirpath, _, filenames in os.walk(staging):
         for filename in filenames:
             source = Path(dirpath) / filename
             if source.is_symlink():
                 continue
+
             target = dest_dir / source.relative_to(staging)
             if os.path.lexists(target):
                 continue
+
             target.parent.mkdir(parents=True, exist_ok=True)
             source.replace(target)
             moved += 1
+
     return moved
 
 
@@ -227,7 +237,7 @@ def _extract_one(
     parent   = PurePosixPath(volume_name).parent
     archive  = safe_join(source_dir, volume_name)
     dest_dir = dest_root if parent == PurePosixPath('.') else safe_join(dest_root, parent.as_posix())
-    if archive is None or dest_dir is None:
+    if (archive is None) or (dest_dir is None):
         return LinkResult(torrent.name, None, None, UNSAFE, volume_name)
 
     siblings = [f for f in torrent.files if is_archive_part(f.name) and PurePosixPath(f.name).parent == parent]
@@ -237,13 +247,18 @@ def _extract_one(
         return LinkResult(torrent.name, archive, dest_dir, SOURCE_MISSING)
 
     key = f'extracted:{torrent.hash}:{volume_name}'
-    if state is not None and key in state:
+    if (state is not None) and (key in state):
         return LinkResult(torrent.name, archive, dest_dir, EXISTS, 'extracted earlier')
     if dry_run:
         return LinkResult(torrent.name, archive, dest_dir, EXTRACTED, 'dry-run')
     if extractor is None:
-        return LinkResult(torrent.name, archive, dest_dir, EXTRACT_FAILED,
-                          'no RAR-capable extractor found (install unrar or 7-Zip with RAR support)')
+        return LinkResult(
+            torrent.name,
+            archive,
+            dest_dir,
+            EXTRACT_FAILED,
+            'no RAR-capable extractor found (install unrar or 7-Zip with RAR support)'
+        )
 
     staging = dest_dir / f'{TEMP_PREFIX}{torrent.hash[:8]}'
     try:
@@ -257,6 +272,7 @@ def _extract_one(
         shutil.rmtree(staging, ignore_errors=True)
         with contextlib.suppress(OSError):
             dest_dir.rmdir()  # drop a directory we created for nothing
+
     if state is not None:
         state.add(key)
     return LinkResult(torrent.name, archive, dest_dir, EXTRACTED, f'{moved} file(s)')

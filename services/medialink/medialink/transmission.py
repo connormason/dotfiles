@@ -20,7 +20,16 @@ __all__ = [
 
 SESSION_HEADER = 'X-Transmission-Session-Id'
 TORRENT_FIELDS = [
-    'id', 'hashString', 'name', 'downloadDir', 'status', 'leftUntilDone', 'labels', 'files', 'error', 'errorString',
+    'id',
+    'hashString',
+    'name',
+    'downloadDir',
+    'status',
+    'leftUntilDone',
+    'labels',
+    'files',
+    'error',
+    'errorString',
 ]
 
 
@@ -28,6 +37,7 @@ class TransmissionError(RuntimeError):
     """
     Raised when the RPC endpoint is unreachable or returns an unusable answer
     """
+    pass
 
 
 @dataclass(frozen=True)
@@ -83,16 +93,16 @@ class Torrent:
             for f in raw.get('files', [])
         )
         return cls(
-            id           = int(raw['id']),
-            hash         = str(raw.get('hashString', '')),
-            name         = str(raw['name']),
-            download_dir = str(raw['downloadDir']),
-            status       = int(raw.get('status', 0)),
-            left         = int(raw.get('leftUntilDone', 1)),
-            error        = int(raw.get('error', 0)),
-            error_text   = str(raw.get('errorString', '')),
-            labels       = tuple(str(label) for label in raw.get('labels', [])),
-            files        = files,
+            id=int(raw['id']),
+            hash=str(raw.get('hashString', '')),
+            name=str(raw['name']),
+            download_dir=str(raw['downloadDir']),
+            status=int(raw.get('status', 0)),
+            left=int(raw.get('leftUntilDone', 1)),
+            error=int(raw.get('error', 0)),
+            error_text=str(raw.get('errorString', '')),
+            labels=tuple(str(label) for label in raw.get('labels', [])),
+            files=files,
         )
 
 
@@ -130,6 +140,7 @@ class TransmissionClient:
             request.add_header(SESSION_HEADER, self.session_id)
             if self._auth:
                 request.add_header('Authorization', self._auth)
+
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310
                     return json.loads(response.read())
@@ -142,6 +153,7 @@ class TransmissionClient:
                 raise TransmissionError(f'RPC unreachable: {e}') from e
             except json.JSONDecodeError as e:
                 raise TransmissionError('RPC returned invalid JSON') from e
+
         raise TransmissionError('RPC kept rejecting the session id')
 
     def get_torrents(self) -> list[Torrent]:
@@ -155,6 +167,7 @@ class TransmissionClient:
         response = self._post(body)
         if response.get('result') != 'success':
             raise TransmissionError(f'torrent-get failed: {response.get("result")!r}')
+
         try:
             return [Torrent.from_rpc(raw) for raw in response['arguments']['torrents']]
         except (KeyError, TypeError, ValueError) as e:

@@ -71,17 +71,19 @@ class Notifier:
         """
         if not self.enabled:
             return False
-        request = urllib.request.Request(  # noqa: S310 - operator-set URL
+
+        request = urllib.request.Request(                   # noqa: S310
             f'{self.url}/{self.topic}',
             data=truncate(message).encode('utf-8'),
             method='POST',
         )
-        request.add_header('Title', title.encode('ascii', errors='replace').decode('ascii'))
+        request.add_header('Title',    title.encode('ascii', errors='replace').decode('ascii'))
         request.add_header('Priority', priority)
         if tags:
             request.add_header('Tags', tags)
         if self.token:
             request.add_header('Authorization', f'Bearer {self.token}')
+
         try:
             with urllib.request.urlopen(request, timeout=self.timeout):  # noqa: S310
                 return True

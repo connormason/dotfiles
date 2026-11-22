@@ -25,6 +25,7 @@ class ConfigError(ValueError):
     """
     Raised when an environment variable holds an unusable value
     """
+    pass
 
 
 def _int_env(env: dict[str, str], name: str, default: int, *, minimum: int = 1) -> int:
@@ -41,12 +42,14 @@ def _int_env(env: dict[str, str], name: str, default: int, *, minimum: int = 1) 
     raw = env.get(name, '').strip()
     if not raw:
         return default
+
     try:
         value = int(raw)
     except ValueError as e:
         raise ConfigError(f'{name} must be an integer, got {raw!r}') from e
     if value < minimum:
         raise ConfigError(f'{name} must be >= {minimum}, got {value}')
+
     return value
 
 
@@ -105,18 +108,19 @@ class Config:
         env        = dict(os.environ) if env is None else env
         media_root = Path(env.get('MEDIALINK_MEDIA_ROOT') or DEFAULT_MEDIA_ROOT)
         state      = env.get('MEDIALINK_STATE_PATH') or str(media_root / 'config' / 'medialink' / 'state.json')
+
         return cls(
-            media_root             = media_root,
-            rpc_url                = env.get('MEDIALINK_TRANSMISSION_URL') or DEFAULT_RPC_URL,
-            rpc_user               = env.get('MEDIALINK_TRANSMISSION_USER', ''),
-            rpc_password           = env.get('MEDIALINK_TRANSMISSION_PASSWORD', ''),
-            transmission_downloads = (env.get('MEDIALINK_TRANSMISSION_DOWNLOADS') or DEFAULT_DOWNLOADS).rstrip('/'),
-            interval               = _int_env(env, 'MEDIALINK_INTERVAL', DEFAULT_INTERVAL),
-            max_failures           = _int_env(env, 'MEDIALINK_MAX_RPC_FAILURES', DEFAULT_MAX_FAILURES),
-            ntfy_url               = env.get('MEDIALINK_NTFY_URL', '').rstrip('/'),
-            ntfy_topic             = env.get('MEDIALINK_NTFY_TOPIC') or DEFAULT_NTFY_TOPIC,
-            ntfy_token             = env.get('MEDIALINK_NTFY_TOKEN', ''),
-            state_path             = Path(state),
-            extract                = env.get('MEDIALINK_EXTRACT', '1').strip().lower() not in FALSE_VALUES,
-            extractor              = env.get('MEDIALINK_EXTRACTOR', '').strip(),
+            media_root=media_root,
+            rpc_url=env.get('MEDIALINK_TRANSMISSION_URL') or DEFAULT_RPC_URL,
+            rpc_user=env.get('MEDIALINK_TRANSMISSION_USER', ''),
+            rpc_password=env.get('MEDIALINK_TRANSMISSION_PASSWORD', ''),
+            transmission_downloads=(env.get('MEDIALINK_TRANSMISSION_DOWNLOADS') or DEFAULT_DOWNLOADS).rstrip('/'),
+            interval=_int_env(env, 'MEDIALINK_INTERVAL', DEFAULT_INTERVAL),
+            max_failures=_int_env(env, 'MEDIALINK_MAX_RPC_FAILURES', DEFAULT_MAX_FAILURES),
+            ntfy_url=env.get('MEDIALINK_NTFY_URL', '').rstrip('/'),
+            ntfy_topic=env.get('MEDIALINK_NTFY_TOPIC') or DEFAULT_NTFY_TOPIC,
+            ntfy_token=env.get('MEDIALINK_NTFY_TOKEN', ''),
+            state_path=Path(state),
+            extract=env.get('MEDIALINK_EXTRACT', '1').strip().lower() not in FALSE_VALUES,
+            extractor=env.get('MEDIALINK_EXTRACTOR', '').strip(),
         )

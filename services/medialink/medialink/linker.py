@@ -84,7 +84,7 @@ def safe_join(base: Path, name: str) -> Path | None:
     :return: the joined path, or None if the name is absolute, empty, or contains ``..``
     """
     parts = PurePosixPath(name).parts
-    if not parts or PurePosixPath(name).is_absolute() or '..' in parts:
+    if (not parts) or PurePosixPath(name).is_absolute() or ('..' in parts):
         return None
     return base.joinpath(*parts)
 
@@ -120,6 +120,7 @@ def _link_one(torrent: str, source: Path, dest: Path, *, dry_run: bool) -> LinkR
         return LinkResult(torrent, source, dest, status)
     if dry_run:
         return LinkResult(torrent, source, dest, LINKED, 'dry-run')
+
     try:
         dest.parent.mkdir(parents=True, exist_ok=True, mode=0o775)
         os.link(source, dest)
@@ -132,6 +133,7 @@ def _link_one(torrent: str, source: Path, dest: Path, *, dry_run: bool) -> LinkR
         if e.errno == errno.EXDEV:
             hint = ' (source and destination are on different mounts; mount one common parent)'
         return LinkResult(torrent, source, dest, FAILED, f'{e.strerror or e}{hint}')
+
     return LinkResult(torrent, source, dest, LINKED)
 
 
@@ -157,15 +159,18 @@ def link_torrent(
     :return: one result per file in the torrent
     """
     results: list[LinkResult] = []
+
     for file in torrent.files:
         source = safe_join(source_dir, file.name)
         dest   = safe_join(dest_root, file.name)
-        if source is None or dest is None:
+
+        if (source is None) or (dest is None):
             results.append(LinkResult(torrent.name, None, None, UNSAFE, file.name))
-        elif skip is not None and skip(file.name):
+        elif (skip is not None) and skip(file.name):
             results.append(LinkResult(torrent.name, source, dest, SKIPPED))
         elif not file.complete:
             results.append(LinkResult(torrent.name, source, dest, INCOMPLETE))
         else:
             results.append(_link_one(torrent.name, source, dest, dry_run=dry_run))
+
     return results

@@ -26,6 +26,7 @@ class State:
         :param path: JSON file location (parent directories are created on save)
         """
         self.path = path
+
         self._keys: set[str] = set()
         with contextlib.suppress(OSError, ValueError):
             data = json.loads(path.read_text(encoding='utf-8'))
