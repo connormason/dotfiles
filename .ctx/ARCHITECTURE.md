@@ -162,6 +162,7 @@ Media server stack defined by `services/compose.base.yml` plus one `services/<na
 - **Media**: Plex, Jellyfin, Radarr (movies), Sonarr (TV), Transmission (torrents), Prowlarr (indexer), Flaresolverr
 - **Network**: Caddy (reverse proxy: Tailscale HTTPS routes and plain-HTTP `.local` hostnames), PiHole (DNS/ad-blocking; disabled)
 - **Dashboard**: Glance
+- **Files**: FileBrowser Quantum (read-only web view of `/storage`)
 - **Support**: Autoplex (copies completed downloads into the Plex layout)
 - **Home automation**: Home Assistant runs as a libvirt VM provisioned by `vms/haos/` scripts; its container definition
   is disabled. The VM's hand-editable YAML is tracked in `services/homeassistant/config/` and synced with `run.py ha-pull` /

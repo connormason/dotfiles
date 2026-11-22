@@ -51,6 +51,10 @@
               url: http://transmission.local
               check-url: http://transmission:9091/transmission/web/
               icon: di:transmission
+            - title: FileBrowser
+              url: http://filebrowser.local
+              check-url: http://filebrowser:80
+              icon: di:filebrowser
             - title: FlareSolverr
               url: http://flaresolverr:8191/health
               icon: di:flaresolverr

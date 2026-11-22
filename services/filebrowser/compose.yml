@@ -1,0 +1,19 @@
+---
+services:
+  filebrowser:
+    image: ghcr.io/gtsteffaniak/filebrowser:stable
+    container_name: filebrowser
+    restart: unless-stopped
+    environment:
+      - FILEBROWSER_CONFIG=/home/filebrowser/config.yaml
+    volumes:
+      # Browse-only: the :ro mount makes the pool read-only for the app, whatever its users are permitted to do
+      - /storage:/storage:ro
+      - ./filebrowser/config.yaml:/home/filebrowser/config.yaml:ro
+      # Users, shares, and the thumbnail cache; a named volume so no host directory ownership has to be prepared
+      - filebrowser_data:/home/filebrowser/data
+    ports:
+      - "8085:80"
+
+volumes:
+  filebrowser_data: {}
