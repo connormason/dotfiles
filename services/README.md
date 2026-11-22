@@ -51,6 +51,7 @@ it. Remove the NAS copy by hand; for `homeassistant`, the steps are in the
   - [`flaresolverr`](#flaresolverr)
   - [`autoplex`](#autoplex)
   - [`ntfy`](#ntfy)
+  - [`filebrowser`](#filebrowser)
 - [Data flow](#data-flow)
 - [Storage layout](#storage-layout)
 - [Secrets](#secrets)
@@ -82,6 +83,7 @@ All host ports below are bound on the NAS itself. Services without a host port a
 | `flaresolverr`   | `ghcr.io/flaresolverr/flaresolverr` | internal only (`8191/tcp`, not declared here)   | Cloudflare challenge solver for Prowlarr                        |
 | `autoplex`       | `danielmmetz/autoplex` (built)      | none                                            | Copies completed downloads into Plex layout                     |
 | `ntfy`           | `binwiederhier/ntfy:v2.11.0`        | `127.0.0.1:2586` → 80 (loopback only)           | Push-notification channel for host alerts                       |
+| `filebrowser`    | `ghcr.io/gtsteffaniak/filebrowser`  | `8085/tcp` → 80                                 | Read-only web file browser for `/storage`                       |
 
 The compose files declare neither the Home Assistant port `8123` nor the Flaresolverr port `8191`; both are upstream
 defaults that nothing in this repository verifies.
@@ -130,6 +132,7 @@ container, through an `http://` site that the `tailscale` role renders into the 
 | `http://radarr.local`       | `radarr:7878`       |
 | `http://prowlarr.local`     | `prowlarr:9696`     |
 | `http://transmission.local` | `transmission:9091` |
+| `http://filebrowser.local`  | `filebrowser:80`    |
 
 `homeassistant.local` is announced by Home Assistant OS itself and is not part of this list. `ntfy` is loopback-only,
 and `flaresolverr` and `autoplex` have no web UI, so none of the three has a name.
@@ -257,6 +260,25 @@ A publish from the host then looks like
 the ntfy app once the server has a tailnet route (a `tailscale_services` entry in the inventory); no compose setting
 here exposes it beyond the NAS.
 
+### `filebrowser`<a name="filebrowser"></a>
+
+[FileBrowser Quantum](https://filebrowserquantum.com/en/), a web file browser for the whole `/storage` pool, on
+`http://filebrowser.local` (host port `8085`). The pool is mounted `:ro`, so the app cannot modify files whatever its
+users are permitted to do; making it read-write means dropping `:ro` in `compose.yml`. The same pool is already exposed
+on the LAN by the [`samba`](../roles/samba/README.md) role. Settings live in the tracked
+[`filebrowser/config.yaml`](filebrowser/config.yaml) (a single `Storage` source, granted to every user), mounted
+read-only. Users, shares and the thumbnail cache sit in the named volume `filebrowser_data`, which no backup job covers.
+
+No password is rendered from the repository. On the first start the app logs a one-time random admin password and
+requires a change at first login:
+
+```bash
+docker logs filebrowser 2>&1 | grep -i password
+```
+
+Like the Caddyfile, `config.yaml` is a single-file bind mount: after editing it, run `docker restart filebrowser`. The
+`stable` tag floats, so the image only updates through the manual pull in [Refreshing images](#refreshing-images).
+
 ## Data flow<a name="data-flow"></a>
 
 The compose files do not wire the apps together: they provide the shared `nas-network` bridge and the mounts below, and
@@ -303,9 +325,10 @@ Every media bind mount comes from `/storage/media`. Nothing in this repository c
 | `movies`                      | `plex`, `jellyfin`, `radarr`, `autoplex`                                                              |
 | `music`                       | `plex`, `jellyfin`                                                                                    |
 
-All of these mounts are read-write (no compose file sets `:ro` on them). `flaresolverr` mounts nothing. The mounts of
-the other services (Glance, Caddy, PiHole, Home Assistant) are listed in their sections above. Relative paths in the
-compose files resolve against `--project-directory ~/docker`.
+All of these mounts are read-write (no compose file sets `:ro` on them), except `filebrowser`, which mounts the whole
+`/storage` pool read-only. `flaresolverr` mounts nothing. The mounts of the other services (Glance, Caddy, PiHole, Home
+Assistant) are listed in their sections above. Relative paths in the compose files resolve against
+`--project-directory ~/docker`.
 
 ## Secrets<a name="secrets"></a>
 
