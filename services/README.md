@@ -159,10 +159,16 @@ Reverse proxy that serves the stack over HTTPS under the NAS's Tailscale hostnam
 
 ### `glance`<a name="glance"></a>
 
-Web dashboard. Mounts `glance/config` and `glance/assets` from `~/docker/glance/`, `/etc/localtime`, and the Docker
-socket (read-only). Its `env_file: .env` resolves against `--project-directory ~/docker`, so it loads the shared
+Web dashboard. Mounts `glance/config` and `glance/assets` from `~/docker/glance/`, `/etc/localtime`, the Docker socket
+(read-only), and `/storage/media` (read-only, at `/mnt/media`, so the Infrastructure page's `server-stats` widget can
+report its free space). Its `env_file: .env` resolves against `--project-directory ~/docker`, so it loads the shared
 `~/docker/.env` rendered by the `docker` role (which holds only `ADVERTISE_IP`), not a `glance/.env`. See
 [Secrets](#secrets).
+
+Pages live in `glance/config/` and are included from `glance.yml`: `home.yml` (feeds, plus a releases widget listing the
+upstream projects the NAS runs) and `infrastructure.yml` (host stats, a `monitor` widget that probes each service by
+container name on `nas-network`, and the container list). A change to a page file is picked up by the running container;
+the added mount needs the container recreated (`python3 run.py nas-deploy glance`).
 
 ### `home-assistant`<a name="home-assistant"></a>
 
