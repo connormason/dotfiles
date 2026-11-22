@@ -16,6 +16,8 @@ import pytest
 import yaml
 
 from tests.unit.roles.test_alerting_roles import REPO_ROOT
+from tests.unit.roles.test_alerting_roles import ROLES
+from tests.unit.roles.test_alerting_roles import _render
 from tests.unit.roles.test_alerting_roles import _run_tasks
 from tests.unit.roles.test_alerting_roles import needs_ansible
 
@@ -128,3 +130,94 @@ class TestLocalServicesWiring:
         """
         override = [{'name': 'kavita', 'port': 5000}]
         assert _resolved(tmp_path, '-e', json.dumps({'local_services_override': override})) == override
+
+
+# ==================================================================================================
+# Caddy
+# ==================================================================================================
+
+TAILSCALE_VARS = {
+    'tailscale_hostname':     'nas',
+    'tailscale_tailnet_name': 'tail1234.ts.net',
+    'tailscale_services':     [
+        {'name': 'sonarr', 'port': 8989, 'path': 'sonarr'},
+        {'name': 'plex', 'port': 32400, 'dedicated_port': 32443},
+    ],
+}
+
+SAMPLE_SERVICES = [{'name': 'jellyfin', 'port': 8096}, {'name': 'sonarr', 'port': 8989}]
+
+
+def _caddyfile(tmp_path: Path, local_services: list[ServiceDict]) -> str:
+    """
+    Render the tailscale role's Caddyfile through the real template module
+    """
+    values = {**TAILSCALE_VARS, 'local_services': local_services}
+    return _render(tmp_path, 'tailscale', 'Caddyfile.j2', '-e', json.dumps(values))
+
+
+@needs_ansible
+class TestCaddyfileLocalSites:
+    """
+    Real-render tests of roles/tailscale/templates/Caddyfile.j2
+    """
+    def test_each_entry_gets_a_plain_http_site(self, tmp_path: Path) -> None:
+        """
+        Test that every local_services entry becomes an http:// site proxying to its container
+        """
+        rendered = _caddyfile(tmp_path, SAMPLE_SERVICES)
+
+        assert 'http://jellyfin.local {\n    reverse_proxy jellyfin:8096\n}' in rendered
+        assert 'http://sonarr.local {\n    reverse_proxy sonarr:8989\n}' in rendered
+
+    def test_tailscale_routes_are_unchanged(self, tmp_path: Path) -> None:
+        """
+        Test that the Tailscale HTTPS blocks still render alongside the local sites
+        """
+        rendered = _caddyfile(tmp_path, SAMPLE_SERVICES)
+
+        assert 'https://nas.tail1234.ts.net {' in rendered
+        assert 'handle /sonarr/* {' in rendered
+        assert 'https://nas.tail1234.ts.net:32443 {' in rendered
+
+    def test_local_sites_are_never_https(self, tmp_path: Path) -> None:
+        """
+        Test that each name appears once, as an http:// address only
+        """
+        rendered = _caddyfile(tmp_path, SAMPLE_SERVICES)
+
+        assert 'https://jellyfin.local' not in rendered
+        assert rendered.count('http://jellyfin.local') == 1
+
+    def test_empty_list_renders_no_local_sites(self, tmp_path: Path) -> None:
+        """
+        Test that an empty list leaves the Caddyfile without any .local site
+        """
+        assert '.local' not in _caddyfile(tmp_path, [])
+
+    def test_missing_list_fails_loudly(self, tmp_path: Path) -> None:
+        """
+        Test that rendering without local_services fails instead of silently dropping the sites
+        """
+        task = {
+            'ansible.builtin.template': {
+                'src':  str(ROLES / 'tailscale' / 'templates' / 'Caddyfile.j2'),
+                'dest': str(tmp_path / 'rendered'),
+            },
+        }
+        code, output = _run_tasks(tmp_path, 'tailscale', [task], '-e', json.dumps(TAILSCALE_VARS))
+
+        assert code != 0
+        assert 'local_services' in output
+
+
+class TestCaddyCompose:
+    """
+    Tests for services/caddy/compose.yml
+    """
+    def test_publishes_port_80(self) -> None:
+        """
+        Test that the caddy container publishes host port 80 for the .local sites
+        """
+        compose = yaml.safe_load((REPO_ROOT / 'services' / 'caddy' / 'compose.yml').read_text(encoding='utf-8'))
+        assert '80:80' in compose['services']['caddy']['ports']

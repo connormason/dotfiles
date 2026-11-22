@@ -13,6 +13,7 @@ tailscale_tailnet_name: ""                      # e.g., "tail1234.ts.net"
 tailscale_cert_dir: "/etc/tailscale/certs"
 tailscale_caddy_config_dir: "/etc/caddy"
 tailscale_services: []                          # List of {name, port, path} dicts
+# local_services (the <name>.local sites) is a play variable, defined in playbooks/nas_bootstrap.yml
 tailscale_plex_port: 32443                      # Dedicated Caddy port for Plex
 
 # Platform
