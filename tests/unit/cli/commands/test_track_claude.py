@@ -1,9 +1,10 @@
 """
-Unit tests for the run.py track-claude command
+Unit tests for the track-claude command
 """
 from __future__ import annotations
 
 import argparse
+import shlex
 import shutil
 import subprocess
 import sys
@@ -11,23 +12,32 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-import run
+import cli.commands  # noqa: F401  (registers every command)
+from cli.infra.command import get_commands
+from cli.infra.config import DOTFILES_DIR
+from cli.infra.config import STOW_SCRIPT
+from cli.infra.config import ExitCode
+from cli.utils.claude import CLAUDE_IGNORE_DIRS
+from cli.utils.claude import find_untracked_claude_files
+from cli.utils.shell import ShellCommandError
+from cli.utils.styling import unstyle
 
 
 @pytest.fixture
 def claude(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Path, Path]:
     """
-    Point run.py at a throwaway ~/.claude and stow package; returns (config_dir, stow_dir)
+    Point the track-claude code at a throwaway ~/.claude and stow package; returns (config_dir, stow_dir)
     """
     config = tmp_path / 'home' / '.claude'
     stow   = tmp_path / 'repo' / 'stow' / 'claude' / '.claude'
     config.mkdir(parents=True)
     stow.mkdir(parents=True)
 
-    monkeypatch.setattr(run, 'CLAUDE_CONFIG_DIR', config)
-    monkeypatch.setattr(run, 'CLAUDE_STOW_DIR',   stow)
+    monkeypatch.setattr('cli.utils.claude.CLAUDE_CONFIG_DIR',       config)
+    monkeypatch.setattr('cli.commands.dotfiles.CLAUDE_CONFIG_DIR',  config)
+    monkeypatch.setattr('cli.commands.dotfiles.CLAUDE_STOW_DIR',    stow)
     return config, stow
 
 
@@ -52,7 +62,7 @@ class TestFindUntrackedClaudeFiles:
         b = _write(config / 'skills' / 'foo' / 'SKILL.md')
         a = _write(config / 'agents' / 'new.md')
         r = _write(config / 'rules' / 'mine.md')
-        assert run.find_untracked_claude_files() == sorted([a, b, r])
+        assert find_untracked_claude_files() == sorted([a, b, r])
 
     def test_ignores_symlinks_ds_store_and_untracked_subdirs(self, claude: tuple[Path, Path]) -> None:
         """
@@ -67,7 +77,7 @@ class TestFindUntrackedClaudeFiles:
         _write(config / 'projects' / 'session.jsonl')
         _write(config / 'plugins' / 'cache.json')
 
-        assert run.find_untracked_claude_files() == []
+        assert find_untracked_claude_files() == []
 
     def test_does_not_descend_into_symlinked_directories(self, claude: tuple[Path, Path]) -> None:
         """
@@ -78,7 +88,7 @@ class TestFindUntrackedClaudeFiles:
         (config / 'skills').mkdir()
         (config / 'skills' / 'linked').symlink_to(stow / 'skills' / 'linked')
 
-        assert run.find_untracked_claude_files() == []
+        assert find_untracked_claude_files() == []
 
     def test_skips_a_tracked_subdir_that_is_itself_a_symlink(self, claude: tuple[Path, Path]) -> None:
         """
@@ -88,7 +98,7 @@ class TestFindUntrackedClaudeFiles:
         _write(stow / 'hooks' / 'guard.sh')
         (config / 'hooks').symlink_to(stow / 'hooks')
 
-        assert run.find_untracked_claude_files() == []
+        assert find_untracked_claude_files() == []
 
     def test_skips_gitignored_backups_and_bytecode(self, claude: tuple[Path, Path]) -> None:
         """
@@ -102,7 +112,7 @@ class TestFindUntrackedClaudeFiles:
         _write(config / 'hooks' / '__pycache__' / 'y.cpython-312.pyc')
         _write(config / 'hooks' / 'z.pyc')
 
-        assert run.find_untracked_claude_files() == [real]
+        assert find_untracked_claude_files() == [real]
 
     @pytest.mark.skipif(not shutil.which('git'), reason='Git not available')
     @pytest.mark.parametrize(
@@ -117,17 +127,17 @@ class TestFindUntrackedClaudeFiles:
         """
         Test that each kind of junk track-claude skips is also ignored by the repo's .gitignore
         """
-        result = subprocess.run(['git', 'check-ignore', '-q', relpath], cwd=run.DOTFILES_DIR, check=False)
+        result = subprocess.run(['git', 'check-ignore', '-q', relpath], cwd=DOTFILES_DIR, check=False)
         assert result.returncode == 0
 
     @pytest.mark.skipif(not shutil.which('git'), reason='Git not available')
-    @pytest.mark.parametrize('dirname', sorted(run.CLAUDE_IGNORE_DIRS))
+    @pytest.mark.parametrize('dirname', sorted(CLAUDE_IGNORE_DIRS))
     def test_every_ignored_directory_name_is_gitignored(self, dirname: str) -> None:
         """
         Test that a directory name in CLAUDE_IGNORE_DIRS is covered by .gitignore, so the two cannot drift apart
         """
         relpath = f'stow/claude/.claude/skills/x/{dirname}/y.md.1.bak'
-        result = subprocess.run(['git', 'check-ignore', '-q', relpath], cwd=run.DOTFILES_DIR, check=False)
+        result = subprocess.run(['git', 'check-ignore', '-q', relpath], cwd=DOTFILES_DIR, check=False)
         assert result.returncode == 0
 
 
@@ -140,7 +150,7 @@ class TestTrackClaudeCommand:
         """
         Invoke track-claude through the registry
         """
-        run.get_commands()['track-claude'](argparse.Namespace(dry_run=dry_run))
+        get_commands()['track-claude'](argparse.Namespace(dry_run=dry_run))
 
     @staticmethod
     def _record_shell(monkeypatch: pytest.MonkeyPatch, returncode: int = 0) -> list[list[str]]:
@@ -152,10 +162,10 @@ class TestTrackClaudeCommand:
         def fake_shell_command(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             calls.append(cmd)
             if returncode:
-                raise run.ShellCommandError(returncode, run.shlex.join(cmd))
+                raise ShellCommandError(returncode, shlex.join(cmd))
             return subprocess.CompletedProcess(cmd, 0, stdout='', stderr='')
 
-        monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+        monkeypatch.setattr('cli.commands.dotfiles.shell_command',fake_shell_command)
         return calls
 
     @staticmethod
@@ -169,7 +179,7 @@ class TestTrackClaudeCommand:
             prompts.append(prompt_text)
             return answer
 
-        monkeypatch.setattr(run, 'confirm', fake_confirm)
+        monkeypatch.setattr('cli.commands.dotfiles.confirm',fake_confirm)
         return prompts
 
     @staticmethod
@@ -188,7 +198,7 @@ class TestTrackClaudeCommand:
             calls.append(cmd)
             return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
 
-        monkeypatch.setattr(run, 'capture_command', fake_capture)
+        monkeypatch.setattr('cli.commands.dotfiles.capture_command',fake_capture)
         return calls
 
     @pytest.fixture(autouse=True)
@@ -202,7 +212,7 @@ class TestTrackClaudeCommand:
         """
         Test that track-claude is a Dotfiles command
         """
-        assert 'track-claude' in run.get_commands(by_group=True)['Dotfiles']
+        assert 'track-claude' in get_commands(by_group=True)['Dotfiles']
 
     def test_nothing_to_track(
         self,
@@ -214,10 +224,10 @@ class TestTrackClaudeCommand:
         Test that an empty result reports success without prompting or restowing
         """
         calls = self._record_shell(monkeypatch)
-        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: pytest.fail('must not prompt'))
+        monkeypatch.setattr('cli.commands.dotfiles.confirm', lambda *args, **kwargs: pytest.fail('must not prompt'))
 
         self._run()
-        assert 'Nothing to track' in run.unstyle(capsys.readouterr().out)
+        assert 'Nothing to track' in unstyle(capsys.readouterr().out)
         assert calls == []
 
     def test_dry_run_moves_nothing(self, claude: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch) -> None:
@@ -228,7 +238,7 @@ class TestTrackClaudeCommand:
         src = _write(config / 'agents' / 'new.md')
 
         calls = self._record_shell(monkeypatch)
-        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: pytest.fail('must not prompt'))
+        monkeypatch.setattr('cli.commands.dotfiles.confirm', lambda *args, **kwargs: pytest.fail('must not prompt'))
 
         self._run(dry_run=True)
         assert src.exists()
@@ -247,7 +257,7 @@ class TestTrackClaudeCommand:
         src = _write(config / 'agents' / 'new.md')
 
         calls = self._record_shell(monkeypatch)
-        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: False)
+        monkeypatch.setattr('cli.commands.dotfiles.confirm', lambda *args, **kwargs: False)
 
         self._run()
         assert src.exists()
@@ -267,7 +277,10 @@ class TestTrackClaudeCommand:
         repo  = _write(stow / 'agents' / 'dup.md', 'repo')
 
         self._record_shell(monkeypatch)
-        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: pytest.fail('nothing movable, must not prompt'))
+        monkeypatch.setattr(
+            'cli.commands.dotfiles.confirm',
+            lambda *args, **kwargs: pytest.fail('nothing movable, must not prompt'),
+        )
 
         self._run()
         assert local.read_text(encoding='utf-8') == 'local'
@@ -296,7 +309,7 @@ class TestTrackClaudeCommand:
         assert dst.is_symlink()
         assert dst.readlink() == stow / 'agents' / 'missing.md'
         assert local.read_text(encoding='utf-8') == 'local'
-        assert 'CONFLICT' in run.unstyle(capsys.readouterr().out)
+        assert 'CONFLICT' in unstyle(capsys.readouterr().out)
         assert prompts == []
         assert calls   == []
 
@@ -329,7 +342,7 @@ class TestTrackClaudeCommand:
         assert len(prompts)    == 1
         assert 'restow' not in prompts[0]
 
-        out = run.unstyle(capsys.readouterr().out)
+        out = unstyle(capsys.readouterr().out)
         for expected in ('CONFLICT', 'stow claude', '--backup-conflicts', 'git add stow/claude/.claude'):
             assert expected in out
         assert 'absent from ~/.claude until the restow succeeds' in out
@@ -350,7 +363,7 @@ class TestTrackClaudeCommand:
         self._record_shell(monkeypatch)
 
         self._run(dry_run=True)
-        summary = next(line for line in run.unstyle(capsys.readouterr().out).splitlines() if 'Dry run' in line)
+        summary = next(line for line in unstyle(capsys.readouterr().out).splitlines() if 'Dry run' in line)
         assert 'would move 1 file(s)' in summary
         assert 'restow' not in summary
 
@@ -372,7 +385,7 @@ class TestTrackClaudeCommand:
             _write(stow / 'agents' / 'raced.md', 'appeared')
             return True
 
-        monkeypatch.setattr(run, 'confirm', confirm_then_race)
+        monkeypatch.setattr('cli.commands.dotfiles.confirm',confirm_then_race)
 
         self._run()
         assert raced.read_text(encoding='utf-8') == 'local'
@@ -381,7 +394,7 @@ class TestTrackClaudeCommand:
         assert (stow / 'agents' / 'clean.md').read_text(encoding='utf-8') == 'clean'
         assert calls == []
 
-        out = run.unstyle(capsys.readouterr().out)
+        out = unstyle(capsys.readouterr().out)
         assert 'CONFLICT'           in out
         assert '--backup-conflicts' in out
 
@@ -396,12 +409,12 @@ class TestTrackClaudeCommand:
         config, stow = claude
         _write(config / 'skills' / 'foo' / 'SKILL.md', 'skill')
         calls = self._record_shell(monkeypatch)
-        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: True)
+        monkeypatch.setattr('cli.commands.dotfiles.confirm', lambda *args, **kwargs: True)
 
         self._run()
         assert not (config / 'skills' / 'foo' / 'SKILL.md').exists()
         assert (stow / 'skills' / 'foo' / 'SKILL.md').read_text(encoding='utf-8') == 'skill'
-        assert calls == [['bash', str(run.STOW_SCRIPT), 'claude']]
+        assert calls == [['bash', str(STOW_SCRIPT), 'claude']]
 
     def test_failed_restow_exits_command_failed(
         self,
@@ -415,14 +428,14 @@ class TestTrackClaudeCommand:
         config, stow = claude
         _write(config / 'agents' / 'new.md')
         self._record_shell(monkeypatch, returncode=1)
-        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: True)
+        monkeypatch.setattr('cli.commands.dotfiles.confirm', lambda *args, **kwargs: True)
 
         with pytest.raises(SystemExit) as exc_info:
             self._run()
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert (stow / 'agents' / 'new.md').exists()
 
-        out = run.unstyle(capsys.readouterr().out)
+        out = unstyle(capsys.readouterr().out)
         assert '1 file(s) are now in the repo but NOT linked back into ~/.claude' in out
         assert 'all-or-nothing'                                                   in out
         assert 'python3 run.py stow claude'                                       in out
@@ -445,13 +458,13 @@ class TestTrackClaudeCommand:
             seen_at_prompt.append(len(preflight_calls))
             return True
 
-        monkeypatch.setattr(run, 'confirm', fake_confirm)
+        monkeypatch.setattr('cli.commands.dotfiles.confirm',fake_confirm)
 
         self._run()
-        assert preflight_calls == [['bash', str(run.STOW_SCRIPT), '-n', 'claude']]
+        assert preflight_calls == [['bash', str(STOW_SCRIPT), '-n', 'claude']]
         assert seen_at_prompt == [1]
         assert (stow / 'skills' / 'foo' / 'SKILL.md').exists()
-        assert calls == [['bash', str(run.STOW_SCRIPT), 'claude']]
+        assert calls == [['bash', str(STOW_SCRIPT), 'claude']]
 
     def test_failed_preflight_moves_nothing_and_exits_command_failed(
         self,
@@ -469,17 +482,17 @@ class TestTrackClaudeCommand:
         self._stub_preflight(monkeypatch, returncode=1, stderr='\n'.join(stow_lines) + '\n')
 
         calls = self._record_shell(monkeypatch)
-        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: pytest.fail('must not prompt'))
+        monkeypatch.setattr('cli.commands.dotfiles.confirm', lambda *args, **kwargs: pytest.fail('must not prompt'))
 
         with pytest.raises(SystemExit) as exc_info:
             self._run()
 
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert src.exists()
         assert not (stow / 'agents' / 'new.md').exists()
         assert calls == []
 
-        out = run.unstyle(capsys.readouterr().out)
+        out = unstyle(capsys.readouterr().out)
         assert 'nothing was moved'        in out
         assert 'stow: blocked path 0'     in out
         assert 'stow: blocked path 7'     in out
@@ -504,7 +517,7 @@ class TestTrackClaudeCommand:
         assert not (stow / 'agents' / 'new.md').exists()
         assert calls == []
 
-        out = run.unstyle(capsys.readouterr().out)
+        out = unstyle(capsys.readouterr().out)
         assert 'stow: blocked path' in out
         assert 'would fail'         in out
         assert 'Dry run'            in out
@@ -525,8 +538,8 @@ class TestTrackClaudeCommand:
         _write(config / 'agents' / 'b.md')
 
         calls = self._record_shell(monkeypatch)
-        monkeypatch.setattr(run, 'confirm', lambda *args, **kwargs: True)
-        real_move = run.shutil.move
+        monkeypatch.setattr('cli.commands.dotfiles.confirm', lambda *args, **kwargs: True)
+        real_move = shutil.move
 
         attempts: list[str] = []
 
@@ -536,7 +549,7 @@ class TestTrackClaudeCommand:
                 raise error_type('boom')
             return real_move(src, dst)
 
-        monkeypatch.setattr(run.shutil, 'move', flaky_move)
+        monkeypatch.setattr(shutil, 'move', flaky_move)
 
         with pytest.raises(error_type):
             self._run()
@@ -544,7 +557,7 @@ class TestTrackClaudeCommand:
         assert (config / 'agents' / 'b.md').exists()
         assert calls == []
 
-        report = run.unstyle(capsys.readouterr().out).split('already moved', 1)[1]
+        report = unstyle(capsys.readouterr().out).split('already moved', 1)[1]
         assert 'agents/a.md'                in report
         assert 'agents/b.md'            not in report
         assert 'python3 run.py stow claude' in report

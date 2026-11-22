@@ -36,7 +36,7 @@ StyleColor = Union[int, tuple[int, int, int], str]
 
 
 # ==================================================================================================
-# Console output + styling helpers (copied from run.py; run.py wins on disagreement)
+# Console output + styling helpers (copied from cli/utils/styling.py; that module wins on disagreement)
 # ==================================================================================================
 
 

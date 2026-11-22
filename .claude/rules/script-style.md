@@ -10,9 +10,10 @@ guide, with the color and emoji tables, output patterns, argparse setup, and a s
 
 ## Reference implementation
 
-The `# Text styling` section of [`run.py`](../../run.py) is the canonical implementation. Scripts under
-[`scripts/`](../../scripts) are standalone, so they carry copies of the helpers; copy from `run.py` verbatim rather than
-rewriting, and when a copy disagrees with `run.py`, `run.py` wins.
+The styling code in [`cli/utils/styling.py`](../../cli/utils/styling.py) (plus `folduser()` in
+[`cli/utils/formatting.py`](../../cli/utils/formatting.py)), the implementation behind `run.py`, is the canonical
+implementation. Scripts under [`scripts/`](../../scripts) are standalone, so they carry copies of the helpers; copy from
+`cli/utils/styling.py` verbatim rather than rewriting, and when a copy disagrees with it, `cli/utils/styling.py` wins.
 
 | Function     | Purpose                                                                   |
 | ------------ | ------------------------------------------------------------------------- |

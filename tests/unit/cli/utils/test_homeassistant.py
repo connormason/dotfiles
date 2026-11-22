@@ -1,5 +1,5 @@
 """
-Unit tests for the run.py Home Assistant config sync (ha-pull, ha-push) and its tree and tar helpers
+Unit tests for the Home Assistant config sync (ha-pull, ha-push) and its tree and tar helpers
 
 The end-to-end tests replace the ssh transport with a local ``sh -c`` and the VM's ``/config`` with a temp directory,
 so the real tar pipelines, diffing, rollback, and command flow all run
@@ -12,20 +12,23 @@ import os
 import shutil
 import stat
 import subprocess
-import sys
 import tarfile
-from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import NamedTuple
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-
-import run
+from cli import commands  # noqa: F401  (importing registers ha-pull and ha-push)
+from cli.commands import deploy as deploy_cmds
+from cli.infra.command import REGISTERED_COMMANDS
+from cli.infra.config import ExitCode
+from cli.utils import homeassistant as ha_utils
+from cli.utils.styling import unstyle
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Sequence
+    from pathlib import Path
 
 # ==================================================================================================
 # Helpers
@@ -52,18 +55,26 @@ def _tree(root: Path) -> dict[str, str]:
     }
 
 
+def _patch_ssh(monkeypatch: pytest.MonkeyPatch, fake: Callable[[str], list[str]]) -> None:
+    """
+    Replace ha_ssh_command in the helpers and in the commands module, which each hold their own binding
+    """
+    monkeypatch.setattr(ha_utils,     'ha_ssh_command', fake)
+    monkeypatch.setattr(deploy_cmds,  'ha_ssh_command', fake)
+
+
 def _pull(*, dry_run: bool = False, force: bool = False) -> None:
     """
     Run ha-pull
     """
-    run.REGISTERED_COMMANDS['ha-pull'](argparse.Namespace(dry_run=dry_run, force=force))
+    REGISTERED_COMMANDS['ha-pull'](argparse.Namespace(dry_run=dry_run, force=force))
 
 
 def _push(*, dry_run: bool = False, restart: bool = False, yes: bool = True) -> None:
     """
     Run ha-push
     """
-    run.REGISTERED_COMMANDS['ha-push'](argparse.Namespace(dry_run=dry_run, restart=restart, yes=yes))
+    REGISTERED_COMMANDS['ha-push'](argparse.Namespace(dry_run=dry_run, restart=restart, yes=yes))
 
 
 # ==================================================================================================
@@ -92,7 +103,7 @@ def _write_shim(path: Path, body: str) -> None:
 @pytest.fixture
 def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
     """
-    Point run.py at a fake VM (local sh + temp /config + fake ha CLI) and a temp repo directory
+    Point the ha commands at a fake VM (local sh + temp /config + fake ha CLI) and a temp repo directory
 
     The VM's SSH login is an unprivileged user and its /config is root-owned: shims for ``tar -x`` and ``rm`` refuse to
     write unless they were launched through the fake ``sudo``, as on the real Advanced SSH & Terminal app. The ``ha``
@@ -158,12 +169,14 @@ def vm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeVM:
     monkeypatch.setenv('HA_FAKE_SUDO_LOG', str(sudo_log))
     monkeypatch.setenv('HA_FAKE_CONFIG',   str(remote))
 
-    monkeypatch.setattr(run, 'ha_ssh_command',              lambda remote_command: ['sh', '-c', remote_command])
-    monkeypatch.setattr(run, 'HA_USER',                     'connormason')
-    monkeypatch.setattr(run, 'HA_REMOTE_CONFIG_DIR',        str(remote))
-    monkeypatch.setattr(run, 'HA_CONFIG_DIR',               local)
-    monkeypatch.setattr(run, 'DOTFILES_DIR',                tmp_path / 'repo')
-    monkeypatch.setattr(run, 'ha_config_has_local_changes', lambda: False)
+    _patch_ssh(monkeypatch, lambda remote_command: ['sh', '-c', remote_command])
+    monkeypatch.setattr(ha_utils,    'HA_USER',                     'connormason')
+    monkeypatch.setattr(ha_utils,    'HA_REMOTE_CONFIG_DIR',        str(remote))
+    monkeypatch.setattr(ha_utils,    'HA_CONFIG_DIR',               local)
+    monkeypatch.setattr(deploy_cmds, 'HA_CONFIG_DIR',               local)
+    monkeypatch.setattr(ha_utils,    'DOTFILES_DIR',                tmp_path / 'repo')
+    monkeypatch.setattr(deploy_cmds, 'DOTFILES_DIR',                tmp_path / 'repo')
+    monkeypatch.setattr(deploy_cmds, 'ha_config_has_local_changes', lambda: False)
 
     return FakeVM(remote=remote, local=local, log=log, sudo_log=sudo_log)
 
@@ -192,7 +205,7 @@ class TestDiffTrees:
         _write(new / 'blueprints' / 'b.yaml')
         _write(new / 'blueprints' / 'a.yaml')
 
-        diff = run.diff_trees(old, new)
+        diff = ha_utils.diff_trees(old, new)
         assert diff.added    == ['blueprints/a.yaml', 'blueprints/b.yaml']
         assert diff.modified == ['automations.yaml']
         assert diff.removed  == ['scripts.yaml']
@@ -204,7 +217,7 @@ class TestDiffTrees:
         """
         _write(tmp_path / 'a' / 'scenes.yaml', 'x')
         _write(tmp_path / 'b' / 'scenes.yaml', 'x')
-        assert not run.diff_trees(tmp_path / 'a', tmp_path / 'b').changed
+        assert not ha_utils.diff_trees(tmp_path / 'a', tmp_path / 'b').changed
 
     def test_ignores_untracked_names_and_excluded_files(self, tmp_path: Path) -> None:
         """
@@ -222,7 +235,7 @@ class TestDiffTrees:
         _write(new / 'real.txt')
         (new / 'scripts.yaml').symlink_to(new / 'real.txt')
 
-        assert not run.diff_trees(old, new).changed
+        assert not ha_utils.diff_trees(old, new).changed
 
 
 class TestApplyTreeDiff:
@@ -241,7 +254,7 @@ class TestApplyTreeDiff:
         _write(dest / 'configuration.yaml', 'old')
         _write(dest / 'themes' / 'dark' / 'dark.yaml')
 
-        run.apply_tree_diff(src, dest, run.diff_trees(dest, src))
+        ha_utils.apply_tree_diff(src, dest, ha_utils.diff_trees(dest, src))
 
         assert _tree(dest) == {'configuration.yaml': 'new', 'blueprints/automation/n.yaml': 'n'}
         assert not (dest / 'themes' / 'dark').exists()
@@ -263,7 +276,7 @@ class TestTarStream:
         script.chmod(0o700)
 
         buffer = io.BytesIO()
-        run.pack_ha_files(src, ['configuration.yaml', 'packages/x/run.sh'], buffer)
+        ha_utils.pack_ha_files(src, ['configuration.yaml', 'packages/x/run.sh'], buffer)
 
         buffer.seek(0)
         with tarfile.open(fileobj=buffer, mode='r:') as tar:
@@ -275,7 +288,7 @@ class TestTarStream:
 
         buffer.seek(0)
         dest = tmp_path / 'dest'
-        run.unpack_ha_stream(buffer, dest)
+        ha_utils.unpack_ha_stream(buffer, dest)
         assert _tree(dest) == {'configuration.yaml': 'cfg', 'packages/x/run.sh': '#!/bin/sh'}
         assert stat.S_IMODE((dest / 'packages' / 'x' / 'run.sh').stat().st_mode) == 0o644
 
@@ -291,8 +304,8 @@ class TestTarStream:
             tar.addfile(info, io.BytesIO(b'x'))
         buffer.seek(0)
 
-        with pytest.raises(run.HASyncError, match='unsafe path'):
-            run.unpack_ha_stream(buffer, tmp_path / 'dest')
+        with pytest.raises(ha_utils.HASyncError, match='unsafe path'):
+            ha_utils.unpack_ha_stream(buffer, tmp_path / 'dest')
         assert not (tmp_path / 'escape.yaml').exists()
 
     def test_unpack_skips_links_and_directories(self, tmp_path: Path) -> None:
@@ -317,7 +330,7 @@ class TestTarStream:
         buffer.seek(0)
 
         dest = tmp_path / 'dest'
-        run.unpack_ha_stream(buffer, dest)
+        ha_utils.unpack_ha_stream(buffer, dest)
         assert _tree(dest) == {'scenes.yaml': 'ok'}
         assert not (dest / 'scripts.yaml').is_symlink()
 
@@ -330,11 +343,11 @@ class TestHaSshCommand:
         """
         Test that the command uses batch mode, the configured port and login, and wraps the snippet in sh -c
         """
-        monkeypatch.setattr(run, 'HA_HOST', 'ha.example')
-        monkeypatch.setattr(run, 'HA_USER', 'hass')
-        monkeypatch.setattr(run, 'HA_PORT', '2222')
+        monkeypatch.setattr(ha_utils, 'HA_HOST', 'ha.example')
+        monkeypatch.setattr(ha_utils, 'HA_USER', 'hass')
+        monkeypatch.setattr(ha_utils, 'HA_PORT', '2222')
 
-        cmd = run.ha_ssh_command("echo 'hi'")
+        cmd = ha_utils.ha_ssh_command("echo 'hi'")
         assert cmd[0] == 'ssh'
         assert 'BatchMode=yes' in cmd
         assert cmd[cmd.index('-p') + 1] == '2222'
@@ -363,8 +376,8 @@ class TestHaPrivileged:
         """
         Test that the snippet is prefixed with non-interactive sudo unless the SSH login is already root
         """
-        monkeypatch.setattr(run, 'HA_USER', user)
-        assert run.ha_privileged('tar -xf -') == expected
+        monkeypatch.setattr(ha_utils, 'HA_USER', user)
+        assert ha_utils.ha_privileged('tar -xf -') == expected
 
 
 class TestHaCli:
@@ -375,7 +388,7 @@ class TestHaCli:
         """
         Test that the ha CLI is wrapped in a login shell, which is what supplies its Supervisor token
         """
-        assert run.ha_cli('core check') == "sh -lc 'ha core check'"
+        assert ha_utils.ha_cli('core check') == "sh -lc 'ha core check'"
 
 
 class TestHaConfigHasLocalChanges:
@@ -395,14 +408,14 @@ class TestHaConfigHasLocalChanges:
         config.mkdir(parents=True)
 
         subprocess.run(['git', 'init', '-q'], cwd=repo, check=True)
-        monkeypatch.setattr(run, 'DOTFILES_DIR',   repo)
-        monkeypatch.setattr(run, 'HA_CONFIG_DIR',  config)
+        monkeypatch.setattr(ha_utils, 'DOTFILES_DIR',   repo)
+        monkeypatch.setattr(ha_utils, 'HA_CONFIG_DIR',  config)
 
         _write(config / 'secrets.yaml.example')
-        assert not run.ha_config_has_local_changes()
+        assert not ha_utils.ha_config_has_local_changes()
 
         _write(config / 'automations.yaml', '[]')
-        assert run.ha_config_has_local_changes()
+        assert ha_utils.ha_config_has_local_changes()
 
 
 class TestHaPull:
@@ -438,7 +451,7 @@ class TestHaPull:
         capsys.readouterr()
 
         _pull()
-        assert 'already matches' in run.unstyle(capsys.readouterr().out)
+        assert 'already matches' in unstyle(capsys.readouterr().out)
 
     def test_dry_run_writes_nothing(self, vm: FakeVM, capsys: pytest.CaptureFixture[str]) -> None:
         """
@@ -448,7 +461,7 @@ class TestHaPull:
         _pull(dry_run=True)
 
         assert _tree(vm.local) == {}
-        assert '+ configuration.yaml' in run.unstyle(capsys.readouterr().out)
+        assert '+ configuration.yaml' in unstyle(capsys.readouterr().out)
 
     def test_mirrors_modifications_and_deletions(self, vm: FakeVM) -> None:
         """
@@ -471,12 +484,12 @@ class TestHaPull:
         """
         _write(vm.remote / 'configuration.yaml', 'remote')
         _write(vm.local  / 'configuration.yaml', 'local edit')
-        monkeypatch.setattr(run, 'ha_config_has_local_changes', lambda: True)
+        monkeypatch.setattr(deploy_cmds, 'ha_config_has_local_changes', lambda: True)
 
         with pytest.raises(SystemExit) as exc_info:
             _pull()
 
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert _tree(vm.local) == {'configuration.yaml': 'local edit'}
 
         _pull(force=True)
@@ -491,13 +504,13 @@ class TestHaPull:
         """
         Test that a failing ssh probe exits non-zero and names the SSH app
         """
-        monkeypatch.setattr(run, 'ha_ssh_command', lambda remote_command: ['sh', '-c', 'echo refused >&2; exit 255'])
+        _patch_ssh(monkeypatch, lambda remote_command: ['sh', '-c', 'echo refused >&2; exit 255'])
 
         with pytest.raises(SystemExit) as exc_info:
             _pull()
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
 
-        output = run.unstyle(capsys.readouterr().out)
+        output = unstyle(capsys.readouterr().out)
         assert 'Advanced SSH' in output
         assert 'refused'      in output
 
@@ -508,8 +521,8 @@ class TestHaPull:
         with pytest.raises(SystemExit) as exc_info:
             _pull()
 
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
-        assert 'Downloading the Home Assistant config failed (exit 3)' in run.unstyle(capsys.readouterr().out)
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
+        assert 'Downloading the Home Assistant config failed (exit 3)' in unstyle(capsys.readouterr().out)
 
 
 class TestHaPush:
@@ -558,7 +571,7 @@ class TestHaPush:
         """
         Test that a root SSH login never invokes sudo
         """
-        monkeypatch.setattr(run, 'HA_USER', 'root')
+        monkeypatch.setattr(ha_utils, 'HA_USER', 'root')
         monkeypatch.setenv('HA_FAKE_ROOT', '1')
         _write(vm.remote / 'configuration.yaml', 'old')
         _write(vm.local  / 'configuration.yaml', 'new')
@@ -589,7 +602,7 @@ class TestHaPush:
         _push(dry_run=True)
 
         assert _tree(vm.remote) == {'configuration.yaml': 'old'}
-        assert '~ configuration.yaml' in run.unstyle(capsys.readouterr().out)
+        assert '~ configuration.yaml' in unstyle(capsys.readouterr().out)
         assert not vm.log.exists()
 
     def test_in_sync_vm_is_a_no_op(self, vm: FakeVM, capsys: pytest.CaptureFixture[str]) -> None:
@@ -601,7 +614,7 @@ class TestHaPush:
 
         _push()
 
-        assert 'already matches' in run.unstyle(capsys.readouterr().out)
+        assert 'already matches' in unstyle(capsys.readouterr().out)
         assert not vm.log.exists()
 
     def test_declined_confirmation_cancels(self, vm: FakeVM, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -610,12 +623,12 @@ class TestHaPush:
         """
         _write(vm.remote / 'configuration.yaml', 'old')
         _write(vm.local  / 'configuration.yaml', 'new')
-        monkeypatch.setattr(run, 'confirm', lambda *a, **k: False)
+        monkeypatch.setattr(deploy_cmds, 'confirm', lambda *a, **k: False)
 
         with pytest.raises(SystemExit) as exc_info:
             _push(yes=False)
 
-        assert exc_info.value.code == run.ExitCode.USER_CANCELLED
+        assert exc_info.value.code == ExitCode.USER_CANCELLED
         assert _tree(vm.remote) == {'configuration.yaml': 'old'}
 
     def test_failed_check_rolls_back_every_change(self, vm: FakeVM, capsys: pytest.CaptureFixture[str]) -> None:
@@ -631,10 +644,10 @@ class TestHaPush:
         with pytest.raises(SystemExit) as exc_info:
             _push()
 
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert _tree(vm.remote) == before
 
-        output = run.unstyle(capsys.readouterr().out)
+        output = unstyle(capsys.readouterr().out)
         assert 'rejected the config' in output
         assert 'Invalid config'      in output
 
@@ -652,24 +665,24 @@ class TestHaPush:
         _write(vm.local  / 'configuration.yaml', 'new')
         before = _tree(vm.remote)
 
-        real_delete = run.delete_ha_files
+        real_delete = ha_utils.delete_ha_files
         calls: list[Sequence[str]] = []
 
         def flaky_delete(relpaths: Sequence[str]) -> None:
             calls.append(relpaths)
             if len(calls) == 1:
-                raise run.HASyncError('Deleting from the Home Assistant config failed: connection lost')
+                raise ha_utils.HASyncError('Deleting from the Home Assistant config failed: connection lost')
             real_delete(relpaths)
 
-        monkeypatch.setattr(run, 'delete_ha_files', flaky_delete)
+        monkeypatch.setattr(ha_utils, 'delete_ha_files', flaky_delete)
 
         with pytest.raises(SystemExit) as exc_info:
             _push()
 
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert _tree(vm.remote) == before
 
-        output = run.unstyle(capsys.readouterr().out)
+        output = unstyle(capsys.readouterr().out)
         assert 'connection lost' in output
         assert 'restored'        in output
         assert not vm.log.exists()
@@ -687,16 +700,16 @@ class TestHaPush:
         _write(vm.local  / 'configuration.yaml', 'new')
 
         def failing_upload(root: Path, relpaths: Sequence[str]) -> None:
-            raise run.HASyncError('Uploading to the Home Assistant config failed (exit 255): connection lost')
+            raise ha_utils.HASyncError('Uploading to the Home Assistant config failed (exit 255): connection lost')
 
-        monkeypatch.setattr(run, 'upload_ha_files', failing_upload)
+        monkeypatch.setattr(ha_utils, 'upload_ha_files', failing_upload)
 
         with pytest.raises(SystemExit) as exc_info:
             _push()
 
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
 
-        output = run.unstyle(capsys.readouterr().out)
+        output = unstyle(capsys.readouterr().out)
         assert 'Rollback failed' in output
         assert 'partial push'    in output
 
@@ -720,6 +733,6 @@ class TestHaPush:
         with pytest.raises(SystemExit) as exc_info:
             _push()
 
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
-        assert 'ha-pull' in run.unstyle(capsys.readouterr().out)
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
+        assert 'ha-pull' in unstyle(capsys.readouterr().out)
         assert _tree(vm.remote) == {'configuration.yaml': 'keep'}

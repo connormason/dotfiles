@@ -11,8 +11,8 @@ Self-contained style rules live in [`.claude/rules/`](../.claude/rules) (they do
 - [`python-style.md`](../.claude/rules/python-style.md) — ruff line-length 120, target py39, single quotes,
   `force-single-line` imports, **sphinx** docstring convention, interrogate 70%. Always run Python via `uv`; never run
   `ruff format`.
-- [`script-style.md`](../.claude/rules/script-style.md) — `run.py` is the reference implementation of the styling
-  contract.
+- [`script-style.md`](../.claude/rules/script-style.md) — `cli/utils/styling.py` (the code behind `run.py`) is the
+  reference implementation of the styling contract.
 - [`readme-guidelines.md`](../.claude/rules/readme-guidelines.md) — per-directory READMEs with breadcrumbs;
   auto-formatted with mdformat via prek (`.ctx/` and `docs/plans/` excluded).
 

@@ -34,12 +34,13 @@ always magenta, a command always bright magenta), status lines lead with an emoj
 
 Most scripts run standalone, before or outside the project venv (`install_uv.py`, `install_hatch.py`, `venvshell.py`,
 the prek hooks), so there is no shared styling package to import. The helpers are therefore copied into each script, and
-the copies stay consistent only if they track one reference. That reference is `run.py`.
+the copies stay consistent only if they track one reference. That reference is the styling code behind `run.py`.
 
 ## Canonical Implementation<a name="canonical-implementation"></a>
 
-The `# Text styling` section of [`run.py`](../run.py) is the source of truth for helper names, signatures, and behavior.
-When a script's copy disagrees with `run.py`, the script is wrong.
+[`cli/utils/styling.py`](../cli/utils/styling.py) (with `folduser()` in
+[`cli/utils/formatting.py`](../cli/utils/formatting.py)) is the source of truth for helper names, signatures, and
+behavior. When a script's copy disagrees with it, the script is wrong.
 
 ### Helper Reference<a name="helper-reference"></a>
 
@@ -62,7 +63,7 @@ keep `fg`, `bold`, `dim`) but must keep the names and semantics of those it reta
 
 ### Copying the Helpers Into a Script<a name="copying-the-helpers-into-a-script"></a>
 
-Lift the blocks from `run.py` verbatim rather than rewriting them, and keep these behaviors:
+Lift the blocks from `cli/utils/styling.py` verbatim rather than rewriting them, and keep these behaviors:
 
 - `style()` returns the text unstyled when `NO_COLOR` is set to a non-empty value (<https://no-color.org>), and appends
   the reset code unless `reset=False`. Read it once into a module-level `NO_COLOR` constant.
@@ -257,13 +258,13 @@ def add_other_opts() -> None:
 add_other_opts()
 ```
 
-`run.py` commands follow the same shape inside `Command.add_arguments()`; see
+`run.py` commands (in `cli/commands/`) follow the same shape inside `Command.add_arguments()`; see
 [`.ctx/CONVENTIONS.md`](../.ctx/CONVENTIONS.md).
 
 ## Script Skeleton<a name="script-skeleton"></a>
 
-Section layout for a new standalone script. Paste the helper blocks from `run.py` into the "Formatting / logging"
-section; do not retype them.
+Section layout for a new standalone script. Paste the helper blocks from `cli/utils/styling.py` into the "Formatting /
+logging" section; do not retype them.
 
 ```python
 #!/usr/bin/env python3
@@ -298,7 +299,7 @@ VERBOSE: bool = False
 # Formatting / logging
 # ====================================================================================================
 
-# style(), unstyle(), folduser(), printf() (+ pathstyle(), arg_note() if used), copied from run.py
+# style(), unstyle(), folduser(), printf() (+ pathstyle(), arg_note() if used), copied from cli/utils/styling.py
 
 # ====================================================================================================
 # Command-line arguments

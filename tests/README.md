@@ -15,17 +15,17 @@ wrapper; CI runs `uv run pytest` on macOS and Linux (see [`.ctx/BUILD.md`](../.c
 
 ## Unit tests<a name="unit-tests"></a>
 
-| Directory                            | Covers                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------- |
-| [`unit/bootstrap/`](unit/bootstrap/) | `bootstrap/` stage scripts and driver, including the NAS bootstrap and playbook |
-| [`unit/claude/`](unit/claude/)       | Stowed Claude tooling: the model router hook and the statusline                 |
-| [`unit/deploy/`](unit/deploy/)       | `scripts/nas/deploy-services.sh` and the deploy workflow                        |
-| [`unit/profiles/`](unit/profiles/)   | `profiles/` overlays                                                            |
-| [`unit/run/`](unit/run/)             | `run.py`: command registration, uv helpers, hooks, doctor, NAS, and styling     |
-| [`unit/scripts/`](unit/scripts/)     | `scripts/`: render, env, install, hook scripts, and the docs audit              |
-| [`unit/services/`](unit/services/)   | Per-service secrets and the `services` Ansible role                             |
-| [`unit/stow/`](unit/stow/)           | `stow.sh`, the stow summary, and the stow package tree                          |
-| [`unit/vms/`](unit/vms/)             | `vms/haos` setup                                                                |
+| Directory                            | Covers                                                                              |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| [`unit/bootstrap/`](unit/bootstrap/) | `bootstrap/` stage scripts and driver, including the NAS bootstrap and playbook     |
+| [`unit/claude/`](unit/claude/)       | Stowed Claude tooling: the model router hook and the statusline                     |
+| [`unit/deploy/`](unit/deploy/)       | `scripts/nas/deploy-services.sh` and the deploy workflow                            |
+| [`unit/profiles/`](unit/profiles/)   | `profiles/` overlays                                                                |
+| [`unit/cli/`](unit/cli/)             | `cli/` (behind `run.py`): infra, utils (uv, doctor, HA sync, styling), and commands |
+| [`unit/scripts/`](unit/scripts/)     | `scripts/`: render, env, install, hook scripts, and the docs audit                  |
+| [`unit/services/`](unit/services/)   | Per-service secrets and the `services` Ansible role                                 |
+| [`unit/stow/`](unit/stow/)           | `stow.sh`, the stow summary, and the stow package tree                              |
+| [`unit/vms/`](unit/vms/)             | `vms/haos` setup                                                                    |
 
 Two modules sit directly in `unit/` as repository guardrails: `test_docs_consistency.py` keeps hand-maintained
 documentation inventories in sync with the files they describe, and `test_repo_hygiene.py` checks that path-keyed config

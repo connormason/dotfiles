@@ -1,5 +1,5 @@
 """
-Unit tests for run.py shell_command real-time (pty) output path
+Unit tests for shell_command real-time (pty) output path
 """
 from __future__ import annotations
 
@@ -10,9 +10,11 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-import run
+from cli.utils import shell
+from cli.utils.shell import ShellCommandError
+from cli.utils.shell import shell_command
 
 # Generous upper bound: the child sleeps 30s, so anything near this means the timeout never fired
 PROMPT_SECONDS = 5
@@ -28,7 +30,7 @@ class TestShellCommandStreaming:
         """
         start = time.monotonic()
         with pytest.raises(subprocess.TimeoutExpired):
-            run.shell_command(['sleep', '30'], indent=0, timeout=0.3, check=True)
+            shell_command(['sleep', '30'], indent=0, timeout=0.3, check=True)
         assert time.monotonic() - start < PROMPT_SECONDS
 
     def test_timeout_returns_sentinel_when_check_false(self) -> None:
@@ -36,7 +38,7 @@ class TestShellCommandStreaming:
         Test that a timed-out command returns returncode -1 promptly when check is disabled
         """
         start = time.monotonic()
-        result = run.shell_command(['sleep', '30'], indent=0, timeout=0.3, check=False)
+        result = shell_command(['sleep', '30'], indent=0, timeout=0.3, check=False)
         assert result.returncode == -1
         assert time.monotonic() - start < PROMPT_SECONDS
 
@@ -44,7 +46,7 @@ class TestShellCommandStreaming:
         """
         Test that output produced before the timeout is preserved on the returned result
         """
-        result = run.shell_command(['sh', '-c', 'echo before; sleep 30'], indent=0, timeout=1, check=False)
+        result = shell_command(['sh', '-c', 'echo before; sleep 30'], indent=0, timeout=1, check=False)
         assert result.returncode == -1
         assert 'before' in result.stdout
 
@@ -52,7 +54,7 @@ class TestShellCommandStreaming:
         """
         Test that a command finishing inside the timeout returns its output and exit code
         """
-        result = run.shell_command(['sh', '-c', 'echo hello; exit 3'], indent=0, timeout=10, check=False)
+        result = shell_command(['sh', '-c', 'echo hello; exit 3'], indent=0, timeout=10, check=False)
         assert result.returncode == 3
         assert 'hello' in result.stdout
 
@@ -60,8 +62,8 @@ class TestShellCommandStreaming:
         """
         Test that a nonzero exit raises ShellCommandError rather than a timeout error
         """
-        with pytest.raises(run.ShellCommandError):
-            run.shell_command(['sh', '-c', 'exit 2'], indent=0, timeout=10, check=True)
+        with pytest.raises(ShellCommandError):
+            shell_command(['sh', '-c', 'exit 2'], indent=0, timeout=10, check=True)
 
     def test_read_loop_exception_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -70,6 +72,6 @@ class TestShellCommandStreaming:
         def boom(*args: object, **kwargs: object) -> None:
             raise RuntimeError('poll failed')
 
-        monkeypatch.setattr(run.select, 'select', boom)
+        monkeypatch.setattr(shell.select, 'select', boom)
         with pytest.raises(RuntimeError, match='poll failed'):
-            run.shell_command(['sleep', '30'], indent=0, timeout=0.3, check=False)
+            shell_command(['sleep', '30'], indent=0, timeout=0.3, check=False)

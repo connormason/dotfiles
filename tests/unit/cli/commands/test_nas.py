@@ -4,18 +4,42 @@ Unit tests for the run.py NAS commands (nas-deploy, nas-provision) with shell_co
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import subprocess
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import ClassVar
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+import cli.commands  # noqa: F401  (importing registers every command)
+from cli.commands import deploy as deploy_commands
+from cli.infra.command import REGISTERED_COMMANDS
+from cli.infra.command import get_commands
+from cli.infra.config import ANSIBLE_REQUIREMENTS
+from cli.infra.config import DOTFILES_DIR
+from cli.infra.config import INVENTORY_FILE
+from cli.infra.config import NAS_BOOTSTRAP_PLAYBOOK
+from cli.infra.config import NAS_DEPLOY_SCRIPT
+from cli.infra.config import UV_PUBLIC_SCRIPT
+from cli.infra.config import VAULT_PASSWORD
+from cli.infra.config import ExitCode
+from cli.infra.types import SSHTarget
+from cli.utils import ansible as ansible_utils
+from cli.utils import nas as nas_utils
+from cli.utils.ansible import build_nas_provision_command
+from cli.utils.ansible import resolve_ssh_target_from_inventory_host
+from cli.utils.nas import list_services
+from cli.utils.nas import require_nas_reachable
+from cli.utils.nas import resolve_reachable_nas
+from cli.utils.prompts import select_option
+from cli.utils.styling import printf
+from cli.utils.styling import unstyle
 
-import run
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ==================================================================================================
 # Helpers
@@ -33,7 +57,7 @@ def _output(capsys: pytest.CaptureFixture[str]) -> str:
     """
     Return captured stdout with ANSI styling removed
     """
-    return run.unstyle(capsys.readouterr().out)
+    return unstyle(capsys.readouterr().out)
 
 
 def _provision_args(**overrides: Any) -> argparse.Namespace:  # Any: free-form Namespace field overrides
@@ -59,7 +83,7 @@ def _provision_args(**overrides: Any) -> argparse.Namespace:  # Any: free-form N
 
 class FakeShell:
     """
-    Stand-in for run.shell_command: records every call and answers from canned results keyed by a command element
+    Stand-in for shell_command: records every call and answers from canned results keyed by a command element
     """
     def __init__(self) -> None:
         self.results: dict[str, subprocess.CompletedProcess[str]] = {}
@@ -84,10 +108,12 @@ class FakeShell:
 @pytest.fixture
 def fake_shell(monkeypatch: pytest.MonkeyPatch) -> FakeShell:
     """
-    Replace run.shell_command with a recording fake
+    Replace shell_command with a recording fake in every module on the NAS command paths
     """
     fake = FakeShell()
-    monkeypatch.setattr(run, 'shell_command', fake)
+    monkeypatch.setattr(ansible_utils,   'shell_command', fake)
+    monkeypatch.setattr(nas_utils,       'shell_command', fake)
+    monkeypatch.setattr(deploy_commands, 'shell_command', fake)
     return fake
 
 
@@ -119,7 +145,7 @@ class TestPrintfFlush:
                 self.events.append('flush')
 
         recorder = Recorder()
-        run.printf('hello', file=recorder)
+        printf('hello', file=recorder)
 
         assert recorder.events[-1] == 'flush'
         assert 'write' in recorder.events
@@ -136,12 +162,12 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(
             stdout=json.dumps({'ansible_host': 'nas.example.ts.net', 'ansible_user': 'tester'}),
         )
-        assert run.resolve_ssh_target_from_inventory_host('nas') == ('nas.example.ts.net', 'tester')
+        assert resolve_ssh_target_from_inventory_host('nas') == ('nas.example.ts.net', 'tester')
 
         cmd, kwargs = fake_shell.find('ansible-inventory')
         assert cmd[cmd.index('--host') + 1] == 'nas'
         assert kwargs['capture_output'] is True
-        assert kwargs['cwd']            == run.DOTFILES_DIR
+        assert kwargs['cwd']            == DOTFILES_DIR
 
     def test_falls_back_to_the_host_name_and_local_user(
         self,
@@ -152,8 +178,8 @@ class TestResolveNasTarget:
         Test that missing variables fall back to the inventory name and the local login, as ssh would
         """
         fake_shell.results['ansible-inventory'] = _done(stdout='{}')
-        monkeypatch.setattr(run.getpass, 'getuser', lambda: 'local')
-        assert run.resolve_ssh_target_from_inventory_host('nas') == ('nas', 'local')
+        monkeypatch.setattr(getpass, 'getuser', lambda: 'local')
+        assert resolve_ssh_target_from_inventory_host('nas') == ('nas', 'local')
 
     def test_inventory_failure_exits_with_the_error(
         self,
@@ -166,7 +192,7 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(1, stderr='bad vault password')
 
         with pytest.raises(SystemExit) as exc_info:
-            run.resolve_ssh_target_from_inventory_host('nas')
+            resolve_ssh_target_from_inventory_host('nas')
 
         assert exc_info.value.code == 1
         assert 'bad vault password' in _output(capsys)
@@ -178,7 +204,7 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(stdout='not json')
 
         with pytest.raises(SystemExit) as exc_info:
-            run.resolve_ssh_target_from_inventory_host('nas')
+            resolve_ssh_target_from_inventory_host('nas')
 
         assert exc_info.value.code == 1
         assert 'Unexpected' in _output(capsys)
@@ -196,7 +222,7 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(stdout=stdout)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.resolve_ssh_target_from_inventory_host('nas')
+            resolve_ssh_target_from_inventory_host('nas')
 
         assert exc_info.value.code == 1
         assert 'Unexpected ansible-inventory output for host "nas"' in _output(capsys)
@@ -208,7 +234,7 @@ class TestResolveNasTarget:
         fake_shell.results['ansible-inventory'] = _done(stdout=json.dumps({'ansible_host': '{{ nas_ip }}'}))
 
         with pytest.raises(SystemExit) as exc_info:
-            run.resolve_ssh_target_from_inventory_host('nas')
+            resolve_ssh_target_from_inventory_host('nas')
 
         assert exc_info.value.code == 1
         assert 'literal' in _output(capsys)
@@ -222,7 +248,7 @@ class TestRequireNasReachable:
         """
         Test that a successful probe returns quietly after one non-interactive ssh call
         """
-        run.require_nas_reachable('nas.example', 'tester')
+        require_nas_reachable('nas.example', 'tester')
 
         cmd, kwargs = fake_shell.find('ssh')
         assert cmd == ['ssh', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes', 'tester@nas.example', 'true']
@@ -235,7 +261,7 @@ class TestRequireNasReachable:
         fake_shell.results['ssh'] = _done(255, stderr='Connection timed out')
 
         with pytest.raises(SystemExit) as exc_info:
-            run.require_nas_reachable('nas.example', 'tester')
+            require_nas_reachable('nas.example', 'tester')
 
         out = _output(capsys)
         assert exc_info.value.code == 1
@@ -259,15 +285,15 @@ class TestResolveReachableNas:
         def check_vault() -> None:
             order.append('vault')
 
-        def resolve(host: str) -> run.SSHTarget:
+        def resolve(host: str) -> SSHTarget:
             order.append('resolve')
-            return run.SSHTarget('h', 'u')
+            return SSHTarget('h', 'u')
 
-        monkeypatch.setattr(run, 'require_inventory',                      check_inventory)
-        monkeypatch.setattr(run, 'require_vault_password',                 check_vault)
-        monkeypatch.setattr(run, 'resolve_ssh_target_from_inventory_host', resolve)
+        monkeypatch.setattr(nas_utils, 'require_inventory',                      check_inventory)
+        monkeypatch.setattr(nas_utils, 'require_vault_password',                 check_vault)
+        monkeypatch.setattr(nas_utils, 'resolve_ssh_target_from_inventory_host', resolve)
 
-        assert run.resolve_reachable_nas() == ('h', 'u')
+        assert resolve_reachable_nas() == ('h', 'u')
         assert order == ['inventory', 'vault', 'resolve']
         assert fake_shell.find('ssh')[0][-2] == 'u@h'
 
@@ -290,15 +316,15 @@ class TestListServices:
 
         (tmp_path / 'empty').mkdir()
         (tmp_path / 'compose.base.yml').write_text('services: {}\n')
-        monkeypatch.setattr(run, 'SERVICES_DIR', tmp_path)
+        monkeypatch.setattr(nas_utils, 'SERVICES_DIR', tmp_path)
 
-        assert run.list_services() == ['glance', 'plex']
+        assert list_services() == ['glance', 'plex']
 
     def test_matches_the_services_in_the_repo(self) -> None:
         """
         Test that the real services/ tree yields services and never the shared base file
         """
-        services = run.list_services()
+        services = list_services()
         assert 'glance'               in services
         assert 'compose.base.yml' not in services
         assert services == sorted(services)
@@ -343,7 +369,7 @@ class TestSelectOption:
         Test that an entry selects the option by its 1-based number or by its exact name
         """
         self._answer(monkeypatch, answer)
-        assert run.select_option('Pick one:', ['all', 'autoplex', 'caddy']) == expected
+        assert select_option('Pick one:', ['all', 'autoplex', 'caddy']) == expected
 
     @pytest.mark.parametrize('bad_answer', ['0', '4', '-1', 'plex', 'CADDY'])
     def test_reprompts_on_an_unrecognized_entry(
@@ -357,7 +383,7 @@ class TestSelectOption:
         """
         self._answer(monkeypatch, bad_answer, '2')
 
-        assert run.select_option('Pick one:', ['all', 'autoplex', 'caddy']) == 'autoplex'
+        assert select_option('Pick one:', ['all', 'autoplex', 'caddy']) == 'autoplex'
         assert f'Not a valid choice: {bad_answer}' in _output(capsys)
 
     def test_lists_every_option_with_its_number(
@@ -369,7 +395,7 @@ class TestSelectOption:
         Test that the heading and the numbered options are printed before the prompt
         """
         self._answer(monkeypatch, '1')
-        run.select_option('Pick one:', ['all', 'caddy'])
+        select_option('Pick one:', ['all', 'caddy'])
 
         lines = [line.strip() for line in _output(capsys).splitlines()]
         assert lines[:3] == ['Pick one:', '1) all', '2) caddy']
@@ -379,14 +405,14 @@ class TestSelectOption:
         Test that pressing Enter without typing selects nothing
         """
         self._answer(monkeypatch, '')
-        assert run.select_option('Pick one:', ['all']) is None
+        assert select_option('Pick one:', ['all']) is None
 
     def test_closed_stdin_cancels(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Test that EOF selects nothing instead of raising
         """
         self._answer(monkeypatch)
-        assert run.select_option('Pick one:', ['all']) is None
+        assert select_option('Pick one:', ['all']) is None
 
 
 class TestNasDeploy:
@@ -398,13 +424,13 @@ class TestNasDeploy:
         """
         Skip inventory resolution and the SSH probe
         """
-        monkeypatch.setattr(run, 'resolve_reachable_nas', lambda: ('h', 'u'))
+        monkeypatch.setattr(deploy_commands, 'resolve_reachable_nas', lambda: ('h', 'u'))
 
     def test_registered_in_the_deploy_group_and_makefile(self) -> None:
         """
         Test that nas-deploy is grouped under Bootstrap & Deploy and gets a Makefile target (its service is optional)
         """
-        cmd = run.REGISTERED_COMMANDS['nas-deploy']
+        cmd = REGISTERED_COMMANDS['nas-deploy']
         assert cmd.group       == 'Bootstrap & Deploy'
         assert cmd.script_only is False
 
@@ -413,7 +439,7 @@ class TestNasDeploy:
         Test that the parser accepts nas-deploy with and without a service
         """
         parser = argparse.ArgumentParser()
-        run.get_commands()['nas-deploy'].add_arguments(parser)
+        get_commands()['nas-deploy'].add_arguments(parser)
 
         assert parser.parse_args([]).service            is None
         assert parser.parse_args(['glance']).service    == 'glance'
@@ -433,16 +459,16 @@ class TestNasDeploy:
             offered.append(options)
             return options[-1]
 
-        monkeypatch.setattr(sys.stdin,   'isatty',        lambda: True)
-        monkeypatch.setattr(run,         'list_services', lambda: ['caddy', 'glance'])
-        monkeypatch.setattr(run,         'select_option', choose)
+        monkeypatch.setattr(sys.stdin,       'isatty',        lambda: True)
+        monkeypatch.setattr(deploy_commands, 'list_services', lambda: ['caddy', 'glance'])
+        monkeypatch.setattr(deploy_commands, 'select_option', choose)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['nas-deploy'](argparse.Namespace(service=None, dry_run=False))
+            get_commands()['nas-deploy'](argparse.Namespace(service=None, dry_run=False))
 
         assert exc_info.value.code == 0
         assert offered             == [['all', 'caddy', 'glance']]
-        assert fake_shell.find('bash')[0] == ['bash', str(run.NAS_DEPLOY_SCRIPT), 'glance']
+        assert fake_shell.find('bash')[0] == ['bash', str(NAS_DEPLOY_SCRIPT), 'glance']
 
     def test_a_given_service_skips_the_prompt(self, fake_shell: FakeShell, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -451,11 +477,11 @@ class TestNasDeploy:
         def unexpected(*_args: object, **_kwargs: object) -> str:
             raise AssertionError('the prompt must not run when a service is given')
 
-        monkeypatch.setattr(sys.stdin, 'isatty',        lambda: True)
-        monkeypatch.setattr(run,       'select_option', unexpected)
+        monkeypatch.setattr(sys.stdin,       'isatty',        lambda: True)
+        monkeypatch.setattr(deploy_commands, 'select_option', unexpected)
 
         with pytest.raises(SystemExit):
-            run.get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
+            get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
 
         assert fake_shell.find('bash')[0][-1] == 'glance'
 
@@ -468,13 +494,13 @@ class TestNasDeploy:
         """
         Test that an empty answer exits as user-cancelled before the NAS is probed or anything runs
         """
-        monkeypatch.setattr(sys.stdin, 'isatty',        lambda: True)
-        monkeypatch.setattr(run,       'select_option', lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(sys.stdin,       'isatty',        lambda: True)
+        monkeypatch.setattr(deploy_commands, 'select_option', lambda *_args, **_kwargs: None)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['nas-deploy'](argparse.Namespace(service=None, dry_run=False))
+            get_commands()['nas-deploy'](argparse.Namespace(service=None, dry_run=False))
 
-        assert exc_info.value.code == run.ExitCode.USER_CANCELLED
+        assert exc_info.value.code == ExitCode.USER_CANCELLED
         assert 'Cancelled' in _output(capsys)
         assert fake_shell.calls == []
 
@@ -490,9 +516,9 @@ class TestNasDeploy:
         monkeypatch.setattr(sys.stdin, 'isatty', lambda: False)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['nas-deploy'](argparse.Namespace(service=None, dry_run=False))
+            get_commands()['nas-deploy'](argparse.Namespace(service=None, dry_run=False))
 
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert "pass a service or 'all'" in _output(capsys)
         assert fake_shell.calls == []
 
@@ -503,11 +529,11 @@ class TestNasDeploy:
         fake_shell.results['bash'] = _done(3)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
+            get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
 
         cmd, kwargs = fake_shell.find('bash')
         assert exc_info.value.code == 3
-        assert cmd == ['bash', str(run.NAS_DEPLOY_SCRIPT), 'glance']
+        assert cmd == ['bash', str(NAS_DEPLOY_SCRIPT), 'glance']
         assert kwargs['env']   == {'NAS_HOST': 'h', 'NAS_USER': 'u'}
         assert kwargs['check'] is False
 
@@ -516,9 +542,9 @@ class TestNasDeploy:
         Test that --dry-run is forwarded ahead of the service name
         """
         with pytest.raises(SystemExit):
-            run.get_commands()['nas-deploy'](argparse.Namespace(service='all', dry_run=True))
+            get_commands()['nas-deploy'](argparse.Namespace(service='all', dry_run=True))
 
-        assert fake_shell.find('bash')[0] == ['bash', str(run.NAS_DEPLOY_SCRIPT), '--dry-run', 'all']
+        assert fake_shell.find('bash')[0] == ['bash', str(NAS_DEPLOY_SCRIPT), '--dry-run', 'all']
 
     def test_warns_about_a_dirty_services_tree_and_still_deploys(
         self,
@@ -531,7 +557,7 @@ class TestNasDeploy:
         fake_shell.results['git'] = _done(stdout=' M services/glance/compose.yml\n')
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
+            get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
 
         assert exc_info.value.code == 0
         assert 'uncommitted' in _output(capsys)
@@ -542,7 +568,7 @@ class TestNasDeploy:
         Test that a clean services/ tree produces no warning
         """
         with pytest.raises(SystemExit):
-            run.get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
+            get_commands()['nas-deploy'](argparse.Namespace(service='glance', dry_run=False))
         assert 'uncommitted' not in _output(capsys)
 
 
@@ -551,16 +577,16 @@ class TestBuildNasProvisionCommand:
     Tests for build_nas_provision_command
     """
     BASE: ClassVar[list[str]] = [
-        str(run.UV_PUBLIC_SCRIPT), 'run', 'ansible-playbook', str(run.NAS_BOOTSTRAP_PLAYBOOK),
-        '-i', str(run.INVENTORY_FILE),
-        '--vault-password-file', str(run.VAULT_PASSWORD),
+        str(UV_PUBLIC_SCRIPT), 'run', 'ansible-playbook', str(NAS_BOOTSTRAP_PLAYBOOK),
+        '-i', str(INVENTORY_FILE),
+        '--vault-password-file', str(VAULT_PASSWORD),
     ]
 
     def test_defaults_run_the_whole_playbook(self) -> None:
         """
         Test that no options yield only the playbook, inventory, and vault password file
         """
-        assert run.build_nas_provision_command(_provision_args()) == self.BASE
+        assert build_nas_provision_command(_provision_args()) == self.BASE
 
     def test_every_option_is_forwarded(self) -> None:
         """
@@ -575,7 +601,7 @@ class TestBuildNasProvisionCommand:
             verbose=2,
         )
 
-        assert run.build_nas_provision_command(args) == [
+        assert build_nas_provision_command(args) == [
             *self.BASE,
             '--tags', 'dotfiles,haos',
             '--limit', 'nas',
@@ -591,7 +617,7 @@ class TestBuildNasProvisionCommand:
         Test that an extra var without '=' is rejected before anything runs
         """
         with pytest.raises(SystemExit):
-            run.build_nas_provision_command(_provision_args(extra_vars=['oops']))
+            build_nas_provision_command(_provision_args(extra_vars=['oops']))
 
 
 class TestNasProvision:
@@ -603,13 +629,13 @@ class TestNasProvision:
         """
         Skip inventory resolution and the SSH probe
         """
-        monkeypatch.setattr(run, 'resolve_reachable_nas', lambda: ('h', 'u'))
+        monkeypatch.setattr(deploy_commands, 'resolve_reachable_nas', lambda: ('h', 'u'))
 
     def test_registered_in_the_nas_group_and_makefile(self) -> None:
         """
         Test that nas-provision is a NAS command that also gets a Makefile target
         """
-        cmd = run.REGISTERED_COMMANDS['nas-provision']
+        cmd = REGISTERED_COMMANDS['nas-provision']
         assert cmd.group       == 'Bootstrap & Deploy'
         assert cmd.script_only is False
 
@@ -620,16 +646,16 @@ class TestNasProvision:
         fake_shell.results['ansible-playbook'] = _done(4)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['nas-provision'](_provision_args(tags='services'))
+            get_commands()['nas-provision'](_provision_args(tags='services'))
 
         assert exc_info.value.code == 4
         assert [call[0][2] for call in fake_shell.calls] == ['ansible-galaxy', 'ansible-playbook']
 
         galaxy, galaxy_kwargs = fake_shell.find('ansible-galaxy')
-        assert galaxy[-2:] == ['-r', str(run.ANSIBLE_REQUIREMENTS)]
+        assert galaxy[-2:] == ['-r', str(ANSIBLE_REQUIREMENTS)]
 
         _playbook, playbook_kwargs = fake_shell.find('ansible-playbook')
-        assert galaxy_kwargs['cwd'] == playbook_kwargs['cwd'] == run.DOTFILES_DIR
+        assert galaxy_kwargs['cwd'] == playbook_kwargs['cwd'] == DOTFILES_DIR
 
     def test_collection_install_failure_warns_and_continues(
         self,
@@ -642,7 +668,7 @@ class TestNasProvision:
         fake_shell.results['ansible-galaxy'] = _done(1)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['nas-provision'](_provision_args())
+            get_commands()['nas-provision'](_provision_args())
 
         assert exc_info.value.code == 0
         assert 'Collection install failed' in _output(capsys)
@@ -655,10 +681,10 @@ class TestNasProvision:
         def unreachable() -> tuple[str, str]:
             raise SystemExit(1)
 
-        monkeypatch.setattr(run, 'resolve_reachable_nas', unreachable)
+        monkeypatch.setattr(deploy_commands, 'resolve_reachable_nas', unreachable)
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['nas-provision'](_provision_args())
+            get_commands()['nas-provision'](_provision_args())
 
         assert exc_info.value.code == 1
         assert fake_shell.calls == []
@@ -671,11 +697,11 @@ class TestNasProvision:
 
         def probe() -> tuple[str, str]:
             probed.append(True)
-            return run.SSHTarget('h', 'u')
+            return SSHTarget('h', 'u')
 
-        monkeypatch.setattr(run, 'resolve_reachable_nas', probe)
+        monkeypatch.setattr(deploy_commands, 'resolve_reachable_nas', probe)
 
         with pytest.raises(SystemExit):
-            run.get_commands()['nas-provision'](_provision_args(extra_vars=['oops']))
+            get_commands()['nas-provision'](_provision_args(extra_vars=['oops']))
 
         assert probed == []

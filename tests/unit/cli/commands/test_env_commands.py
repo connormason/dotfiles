@@ -11,9 +11,28 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-
-import run
+import cli.commands  # noqa: F401  (importing registers every command)
+from cli.commands import dependencies as dependencies_commands
+from cli.commands import setup as setup_commands
+from cli.commands import tools as tools_commands
+from cli.commands import utilities as utilities_commands
+from cli.infra.command import get_commands
+from cli.infra.config import DIAGNOSTIC_SCRIPT_PATH
+from cli.infra.config import INSTALLER_SCRIPTS
+from cli.infra.config import SCRIPT_PATH
+from cli.infra.config import ExitCode
+from cli.infra.main import Args
+from cli.infra.main import build_parser
+from cli.infra.types import ToolInfo
+from cli.utils import doctor_checks as doctor_checks_module
+from cli.utils.doctor_checks import DoctorCheck
+from cli.utils.doctor_checks import check_python_tool
+from cli.utils.doctor_checks import check_uv_tool
+from cli.utils.doctor_checks import check_venv
+from cli.utils.doctor_checks import doctor_checks
+from cli.utils.styling import unstyle
+from cli.utils.venv import VenvHealth
+from cli.utils.venv import VenvStatus
 
 Call = tuple[list[str], dict[str, object]]
 
@@ -22,7 +41,7 @@ def _parse(*argv: str) -> argparse.Namespace:
     """
     Parse a run.py command line into the typed root namespace
     """
-    return run.build_parser().parse_args(list(argv), namespace=run.Args())
+    return build_parser().parse_args(list(argv), namespace=Args())
 
 
 def _completed(cmd: list[str], returncode: int = 0) -> subprocess.CompletedProcess[str]:
@@ -45,8 +64,8 @@ class TestEnvironmentDoctorChecks:
         """
         Test that python passes when no minimum version is configured
         """
-        monkeypatch.setattr(run, 'MIN_PYTHON', None)
-        check = run.check_python_tool()
+        monkeypatch.setattr(doctor_checks_module, 'MIN_PYTHON', None)
+        check = check_python_tool()
         assert check.ok
         assert check.name == 'python'
 
@@ -54,8 +73,8 @@ class TestEnvironmentDoctorChecks:
         """
         Test that an unmet MIN_PYTHON fails the check without exiting
         """
-        monkeypatch.setattr(run, 'MIN_PYTHON', (99, 0))
-        check = run.check_python_tool()
+        monkeypatch.setattr(doctor_checks_module, 'MIN_PYTHON', (99, 0))
+        check = check_python_tool()
         assert not check.ok
         assert '99.0' in check.detail
 
@@ -63,8 +82,12 @@ class TestEnvironmentDoctorChecks:
         """
         Test that an installed uv reports its version
         """
-        monkeypatch.setattr(run, 'check_uv', lambda: run.ToolInfo(executable=Path('/x/uv'), version='0.9.1'))
-        check = run.check_uv_tool()
+        monkeypatch.setattr(
+            doctor_checks_module,
+            'check_uv',
+            lambda: ToolInfo(executable=Path('/x/uv'), version='0.9.1'),
+        )
+        check = check_uv_tool()
         assert check.ok
         assert '0.9.1' in check.detail
 
@@ -72,49 +95,53 @@ class TestEnvironmentDoctorChecks:
         """
         Test that a missing uv fails with the bundled installer script as the fix
         """
-        monkeypatch.setattr(run, 'check_uv', lambda: None)
-        check = run.check_uv_tool()
+        monkeypatch.setattr(doctor_checks_module, 'check_uv', lambda: None)
+        check = check_uv_tool()
         assert not check.ok
-        assert check.fix == [sys.executable, str(run.INSTALLER_SCRIPTS['uv']), '--ensure']
+        assert check.fix == [sys.executable, str(INSTALLER_SCRIPTS['uv']), '--ensure']
 
     @pytest.mark.parametrize(
         ('status', 'ok', 'has_fix'),
         [
-            (run.VenvStatus.HEALTHY,        True,  False),
-            (run.VenvStatus.NOT_ACTIVATED,  True,  False),
-            (run.VenvStatus.STALE_DEPS,     False, True),
-            (run.VenvStatus.MISSING,        False, True),
-            (run.VenvStatus.BROKEN_SYMLINK, False, True),
+            (VenvStatus.HEALTHY,        True,  False),
+            (VenvStatus.NOT_ACTIVATED,  True,  False),
+            (VenvStatus.STALE_DEPS,     False, True),
+            (VenvStatus.MISSING,        False, True),
+            (VenvStatus.BROKEN_SYMLINK, False, True),
         ],
     )
     def test_venv_status_mapping(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        status: run.VenvStatus,
+        status: VenvStatus,
         ok: bool,
         has_fix: bool,
     ) -> None:
         """
         Test that healthy and merely-inactive venvs pass while the rest fail with `run.py install` as the fix
         """
-        monkeypatch.setattr(run, 'get_external_active_venv', lambda: None)
-        monkeypatch.setattr(run, 'validate_venv', lambda venv_dir: run.VenvHealth(status=status, message='msg'))
+        monkeypatch.setattr(doctor_checks_module, 'get_external_active_venv', lambda: None)
+        monkeypatch.setattr(
+            doctor_checks_module,
+            'validate_venv',
+            lambda venv_dir: VenvHealth(status=status, message='msg'),
+        )
 
-        check = run.check_venv()
+        check = check_venv()
         assert check.ok is ok
-        assert (check.fix == [sys.executable, str(run.SCRIPT_PATH), 'install']) if has_fix else (check.fix is None)
+        assert (check.fix == [sys.executable, str(SCRIPT_PATH), 'install']) if has_fix else (check.fix is None)
 
     def test_external_venv_has_no_fix(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Test that a stale user-managed venv is reported without offering to repair it
         """
-        monkeypatch.setattr(run, 'get_external_active_venv', lambda: tmp_path)
+        monkeypatch.setattr(doctor_checks_module, 'get_external_active_venv', lambda: tmp_path)
         monkeypatch.setattr(
-            run,
+            doctor_checks_module,
             'validate_venv',
-            lambda venv_dir: run.VenvHealth(status=run.VenvStatus.STALE_DEPS, message='stale'),
+            lambda venv_dir: VenvHealth(status=VenvStatus.STALE_DEPS, message='stale'),
         )
-        assert run.check_venv().fix is None
+        assert check_venv().fix is None
 
     def test_included_in_full_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -124,9 +151,9 @@ class TestEnvironmentDoctorChecks:
             'check_tools', 'check_layers', 'check_python_tool', 'check_uv_tool', 'check_git_version',
             'check_hooks', 'check_venv', 'check_links', 'check_render', 'check_brewfiles',
         ):
-            monkeypatch.setattr(run, func, lambda func=func: run.DoctorCheck(func, True, 'ok'))
+            monkeypatch.setattr(doctor_checks_module, func, lambda func=func: DoctorCheck(func, True, 'ok'))
 
-        names = [c.name for c in run.doctor_checks()]
+        names = [c.name for c in doctor_checks()]
         assert {'check_python_tool', 'check_uv_tool', 'check_venv'} <= set(names)
 
 
@@ -151,16 +178,16 @@ class TestLockCommands:
             self.calls.append(kwargs)
             return _completed(['uv', 'lock'], self.returncode)
 
-        monkeypatch.setattr(run, 'check_python', lambda **_kwargs: None)
-        monkeypatch.setattr(run, 'ensure_uv',    lambda **_kwargs: None)
-        monkeypatch.setattr(run, 'uv_lock',      fake_uv_lock)
+        monkeypatch.setattr(dependencies_commands, 'check_python', lambda **_kwargs: None)
+        monkeypatch.setattr(dependencies_commands, 'ensure_uv',    lambda **_kwargs: None)
+        monkeypatch.setattr(dependencies_commands, 'uv_lock',      fake_uv_lock)
 
     def _run(self, *argv: str) -> int:
         """
         Run a command and return its exit code (0 when it returns normally)
         """
         try:
-            run.get_commands()[argv[0]](_parse(*argv))
+            get_commands()[argv[0]](_parse(*argv))
         except SystemExit as e:
             return int(e.code or 0)
         return 0
@@ -186,16 +213,16 @@ class TestLockCommands:
         """
         assert self._run('lock-check') == 0
         assert self.calls == [{'check_only': True, 'check': False, 'indent': 3}]
-        assert 'up to date' in run.unstyle(capsys.readouterr().out)
+        assert 'up to date' in unstyle(capsys.readouterr().out)
 
     def test_lock_check_stale_exits_1_with_hint(self, capsys: pytest.CaptureFixture[str]) -> None:
         """
         Test that a stale lock exits 1 and points at `make lock`
         """
         self.returncode = 1
-        assert self._run('lock-check') == run.ExitCode.COMMAND_FAILED
+        assert self._run('lock-check') == ExitCode.COMMAND_FAILED
 
-        out = run.unstyle(capsys.readouterr().out)
+        out = unstyle(capsys.readouterr().out)
         assert 'out of date' in out
         assert 'make lock'   in out
 
@@ -206,7 +233,7 @@ class TestLockCommands:
         assert self._run('lock-upgrade') == 0
         assert self.calls == [{'upgrade': True, 'upgrade_packages': None, 'check': False, 'indent': 3}]
 
-        out = run.unstyle(capsys.readouterr().out)
+        out = unstyle(capsys.readouterr().out)
         assert 'Regenerating files derived from uv.lock' in out
 
     def test_lock_upgrade_packages(self) -> None:
@@ -222,7 +249,7 @@ class TestLockCommands:
         """
         self.returncode = 1
         assert self._run('lock-upgrade') == 1
-        assert 'uv-export' not in run.unstyle(capsys.readouterr().out)
+        assert 'uv-export' not in unstyle(capsys.readouterr().out)
 
 
 # ==================================================================================================
@@ -252,12 +279,12 @@ class TestInstallAndDev:
             self.entered += 1
 
         monkeypatch.delenv('VIRTUAL_ENV', raising=False)
-        monkeypatch.setattr(run, 'check_python', lambda **_kwargs: None)
-        monkeypatch.setattr(run, 'ensure_uv',    lambda **_kwargs: None)
-        monkeypatch.setattr(run, 'ensure_venv',  lambda **kwargs: self.venv_calls.append(kwargs))
-        monkeypatch.setattr(run, 'uv_sync',      lambda **kwargs: self.sync_calls.append(kwargs))
-        monkeypatch.setattr(run, 'uv_run',       fake_uv_run)
-        monkeypatch.setattr(run, 'enter_venv',   enter)
+        monkeypatch.setattr(setup_commands, 'check_python', lambda **_kwargs: None)
+        monkeypatch.setattr(setup_commands, 'ensure_uv',    lambda **_kwargs: None)
+        monkeypatch.setattr(setup_commands, 'ensure_venv',  lambda **kwargs: self.venv_calls.append(kwargs))
+        monkeypatch.setattr(setup_commands, 'uv_sync',      lambda **kwargs: self.sync_calls.append(kwargs))
+        monkeypatch.setattr(setup_commands, 'uv_run',       fake_uv_run)
+        monkeypatch.setattr(setup_commands, 'enter_venv',   enter)
 
     @pytest.mark.parametrize('command', ['install', 'dev'])
     def test_all_option_is_not_offered(self, command: str) -> None:
@@ -272,7 +299,7 @@ class TestInstallAndDev:
         """
         Test that a plain install syncs without dev dependencies, hooks, or a subshell
         """
-        run.get_commands()['install'](_parse('install'))
+        get_commands()['install'](_parse('install'))
 
         assert self.venv_calls == [{'inexact': True, 'no_dev': True}]
         assert self.uv_runs    == []
@@ -282,7 +309,7 @@ class TestInstallAndDev:
         """
         Test that --dev, --hooks, and --shell include dev dependencies, force-install hooks, and enter the venv
         """
-        run.get_commands()['install'](_parse('install', '--dev', '--hooks', '--shell'))
+        get_commands()['install'](_parse('install', '--dev', '--hooks', '--shell'))
 
         assert self.venv_calls == [{'inexact': True, 'no_dev': False}]
         assert self.uv_runs    == [(['prek', 'install', '-f'], {'active': False, 'indent': 3})]
@@ -293,7 +320,7 @@ class TestInstallAndDev:
         Test that an active virtualenv is synced in place instead of creating .venv
         """
         monkeypatch.setenv('VIRTUAL_ENV', '/somewhere/venv')
-        run.get_commands()['install'](_parse('install'))
+        get_commands()['install'](_parse('install'))
 
         assert self.venv_calls == []
         assert self.sync_calls == [{'active': True, 'inexact': True, 'no_dev': True, 'indent': 3}]
@@ -302,7 +329,7 @@ class TestInstallAndDev:
         """
         Test that dev installs hooks and enters the subshell by default
         """
-        run.get_commands()['dev'](_parse('dev'))
+        get_commands()['dev'](_parse('dev'))
 
         assert self.venv_calls == [{'inexact': True}]
         assert self.uv_runs    == [(['prek', 'install'], {'active': False, 'indent': 3})]
@@ -312,7 +339,7 @@ class TestInstallAndDev:
         """
         Test that --no-hooks and --no-shell skip hook installation and the subshell
         """
-        run.get_commands()['dev'](_parse('dev', '--no-hooks', '--no-shell'))
+        get_commands()['dev'](_parse('dev', '--no-hooks', '--no-shell'))
 
         assert self.uv_runs == []
         assert self.entered == 0
@@ -338,16 +365,16 @@ class TestToolInstallers:
             calls.append((cmd, kwargs))
             return _completed(cmd)
 
-        monkeypatch.setattr(run, 'check_script_validity', lambda *args, **kwargs: None)
-        monkeypatch.setattr(run, 'shell_command',         fake_shell_command)
+        monkeypatch.setattr(tools_commands, 'check_script_validity', lambda *args, **kwargs: None)
+        monkeypatch.setattr(tools_commands, 'shell_command',         fake_shell_command)
 
         argv = [f'install-{tool}', '-f', '-v', '--retries', '3', '--retry-delay', '5']
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()[f'install-{tool}'](_parse(*argv))
+            get_commands()[f'install-{tool}'](_parse(*argv))
 
         assert exc_info.value.code == 0
         expected = [
-            sys.executable, str(run.INSTALLER_SCRIPTS[tool]),  # type: ignore[index]
+            sys.executable, str(INSTALLER_SCRIPTS[tool]),  # type: ignore[index]
             '--force', '--verbose', '--retries', '3', '--retry-delay', '5',
         ]
         assert calls == [(expected, {'check': False})]
@@ -356,21 +383,21 @@ class TestToolInstallers:
         """
         Test that a failing installer exits with its return code
         """
-        monkeypatch.setattr(run, 'check_script_validity', lambda *args, **kwargs: None)
-        monkeypatch.setattr(run, 'shell_command',         lambda cmd, **kwargs: _completed(cmd, 4))
+        monkeypatch.setattr(tools_commands, 'check_script_validity', lambda *args, **kwargs: None)
+        monkeypatch.setattr(tools_commands, 'shell_command',         lambda cmd, **kwargs: _completed(cmd, 4))
 
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['install-uv'](_parse('install-uv'))
+            get_commands()['install-uv'](_parse('install-uv'))
         assert exc_info.value.code == 4
 
     def test_missing_script_is_a_setup_error(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """
         Test that a missing installer script exits with SETUP_ERROR before anything runs
         """
-        monkeypatch.setitem(run.INSTALLER_SCRIPTS, 'uv', tmp_path / 'missing.py')
+        monkeypatch.setitem(INSTALLER_SCRIPTS, 'uv', tmp_path / 'missing.py')
         with pytest.raises(SystemExit) as exc_info:
-            run.get_commands()['install-uv'](_parse('install-uv'))
-        assert exc_info.value.code == run.ExitCode.SETUP_ERROR
+            get_commands()['install-uv'](_parse('install-uv'))
+        assert exc_info.value.code == ExitCode.SETUP_ERROR
 
 
 # ==================================================================================================
@@ -401,11 +428,11 @@ class TestDiagnose:
             calls.append((cmd, kwargs))
             return _completed(cmd)
 
-        monkeypatch.setattr(run, 'check_script_validity', lambda *args, **kwargs: None)
-        monkeypatch.setattr(run, 'shell_command',         fake_shell_command)
+        monkeypatch.setattr(utilities_commands, 'check_script_validity', lambda *args, **kwargs: None)
+        monkeypatch.setattr(utilities_commands, 'shell_command',         fake_shell_command)
 
-        run.get_commands()['diagnose'](_parse('diagnose', *argv))
-        assert calls == [([sys.executable, str(run.DIAGNOSTIC_SCRIPT_PATH), *extra], {'indent': 3})]
+        get_commands()['diagnose'](_parse('diagnose', *argv))
+        assert calls == [([sys.executable, str(DIAGNOSTIC_SCRIPT_PATH), *extra], {'indent': 3})]
 
 
 # ==================================================================================================
@@ -428,16 +455,24 @@ class TestStatus:
         """
         Test that the hooks row shows the doctor hooks check's detail and a failure marks the environment unhealthy
         """
-        python = run.ToolInfo(executable=Path('/p'), version='3.12.0')
-        monkeypatch.setattr(run, 'check_python',  lambda **_kwargs: python)
-        monkeypatch.setattr(run, 'check_uv',      lambda: run.ToolInfo(executable=Path('/x/uv'), version='0.9.1'))
-        monkeypatch.setattr(run, 'check_hooks',   lambda: run.DoctorCheck('hooks', hooks_ok, marker))
-        monkeypatch.setattr(run, 'validate_venv', lambda *args, **kwargs: run.VenvHealth(status=run.VenvStatus.HEALTHY))
-        monkeypatch.setattr(run, 'get_external_active_venv', lambda: None)
+        python = ToolInfo(executable=Path('/p'), version='3.12.0')
+        monkeypatch.setattr(setup_commands, 'check_python',  lambda **_kwargs: python)
+        monkeypatch.setattr(
+            setup_commands,
+            'check_uv',
+            lambda: ToolInfo(executable=Path('/x/uv'), version='0.9.1'),
+        )
+        monkeypatch.setattr(setup_commands, 'check_hooks', lambda: DoctorCheck('hooks', hooks_ok, marker))
+        monkeypatch.setattr(
+            setup_commands,
+            'validate_venv',
+            lambda *args, **kwargs: VenvHealth(status=VenvStatus.HEALTHY),
+        )
+        monkeypatch.setattr(setup_commands, 'get_external_active_venv', lambda: None)
 
-        run.get_commands()['status'](argparse.Namespace())
+        get_commands()['status'](argparse.Namespace())
 
-        out = run.unstyle(capsys.readouterr().out)
+        out = unstyle(capsys.readouterr().out)
         assert marker in out
         assert ('Environment ready.' in out) is hooks_ok
 
@@ -460,20 +495,20 @@ class TestClean:
             (tmp_path / name).mkdir()
             (tmp_path / name / 'file').write_text('x', encoding='utf-8')
         self.root = tmp_path
-        monkeypatch.setattr(run, 'DOTFILES_DIR', tmp_path)
+        monkeypatch.setattr(setup_commands, 'DOTFILES_DIR', tmp_path)
 
     def test_removes_everything_by_default(self) -> None:
         """
         Test that the virtual environment is removed along with artifacts and caches
         """
-        run.get_commands()['clean'](_parse('clean'))
+        get_commands()['clean'](_parse('clean'))
         assert not any((self.root / name).exists() for name in ('.venv', 'build', '.pytest_cache'))
 
     def test_no_envs_keeps_the_venv(self) -> None:
         """
         Test that --no-envs preserves .venv but still removes artifacts and caches
         """
-        run.get_commands()['clean'](_parse('clean', '--no-envs'))
+        get_commands()['clean'](_parse('clean', '--no-envs'))
 
         assert     (self.root / '.venv' / 'file').exists()
         assert not (self.root / 'build').exists()

@@ -7,35 +7,51 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 import types
-from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import ClassVar
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+import cli.commands  # noqa: F401  (importing registers every command)
+from cli.commands import inventory as inventory_commands
+from cli.commands import utilities as utilities_commands
+from cli.infra import command as command_module
+from cli.infra import config
+from cli.infra import main as main_module
+from cli.infra.command import Command
+from cli.infra.command import get_commands
+from cli.infra.config import DOTFILES_DIR
+from cli.infra.config import ExitCode
+from cli.infra.main import Args
+from cli.infra.main import build_parser
+from cli.infra.main import main
+from cli.utils import shell as shell_module
 
-import run
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
-def registry(monkeypatch: pytest.MonkeyPatch) -> dict[str, run.Command]:
+def registry(monkeypatch: pytest.MonkeyPatch) -> dict[str, Command]:
     """
     Swap in an empty command registry so test-defined commands never leak into the real one
     """
-    isolated: dict[str, run.Command] = {}
-    monkeypatch.setattr(run, 'REGISTERED_COMMANDS', isolated)
+    isolated: dict[str, Command] = {}
+    monkeypatch.setattr(command_module, 'REGISTERED_COMMANDS', isolated)
+    monkeypatch.setattr(main_module,    'REGISTERED_COMMANDS', isolated)
     return isolated
 
 
-def _make_command(cls_name: str, *, register: bool = True, **attrs: object) -> type[run.Command]:
+def _make_command(cls_name: str, *, register: bool = True, **attrs: object) -> type[Command]:
     """
     Define (and, by default, register) a no-op Command subclass with the given class attributes
     """
     namespace: dict[str, object] = {'run': lambda self, args: None, **attrs}
     return types.new_class(
         cls_name,
-        (run.Command,),
+        (Command,),
         {'register': register},
         lambda ns: ns.update(namespace),
     )
@@ -53,7 +69,7 @@ class TestCommandRegistration:
     """
     Tests for Command subclass auto-registration
     """
-    def test_subclass_registers_instance_under_derived_name(self, registry: dict[str, run.Command]) -> None:
+    def test_subclass_registers_instance_under_derived_name(self, registry: dict[str, Command]) -> None:
         """
         Test that defining a subclass registers an instance named after the class minus its Command suffix
         """
@@ -62,21 +78,21 @@ class TestCommandRegistration:
         assert isinstance(registry['sample'], cls)
         assert registry['sample'].description == 'Do a sample thing'
 
-    def test_derived_name_lowercases_and_dashes_underscores(self, registry: dict[str, run.Command]) -> None:
+    def test_derived_name_lowercases_and_dashes_underscores(self, registry: dict[str, Command]) -> None:
         """
         Test that underscores become dashes and CamelCase is lowercased (not kebab-cased)
         """
         _make_command('Multi_WordCommand')
         assert list(registry) == ['multi-word']
 
-    def test_explicit_name_and_description_win(self, registry: dict[str, run.Command]) -> None:
+    def test_explicit_name_and_description_win(self, registry: dict[str, Command]) -> None:
         """
         Test that explicit name and description class attributes override the derived values
         """
         _make_command('WhateverCommand', name='custom-name', description='Explicit', __doc__='Docstring')
         assert registry['custom-name'].description == 'Explicit'
 
-    def test_register_false_skips_registration(self, registry: dict[str, run.Command]) -> None:
+    def test_register_false_skips_registration(self, registry: dict[str, Command]) -> None:
         """
         Test that register=False keeps an intermediate base class out of the registry, but not its subclasses
         """
@@ -86,7 +102,7 @@ class TestCommandRegistration:
         types.new_class('ChildCommand', (base,), {}, lambda ns: ns.update({'__doc__': 'Child'}))
         assert list(registry) == ['child']
 
-    def test_script_only_and_makefile_only_conflict(self, registry: dict[str, run.Command]) -> None:
+    def test_script_only_and_makefile_only_conflict(self, registry: dict[str, Command]) -> None:
         """
         Test that a command cannot be both script-only and makefile-only
         """
@@ -94,7 +110,7 @@ class TestCommandRegistration:
             _make_command('BothCommand', script_only=True, makefile_only=True)
         assert registry == {}
 
-    def test_call_dispatches_to_run(self, registry: dict[str, run.Command]) -> None:
+    def test_call_dispatches_to_run(self, registry: dict[str, Command]) -> None:
         """
         Test that calling a command instance invokes its run method with the parsed args
         """
@@ -109,7 +125,7 @@ class TestCommandRegistration:
         """
         Test that every run.py command is registered, in definition order
         """
-        assert list(run.REGISTERED_COMMANDS) == [
+        assert list(command_module.REGISTERED_COMMANDS) == [
             'install', 'dev', 'shell', 'status', 'doctor', 'clean',
             'bootstrap', 'nas-provision', 'nas-deploy', 'ha-pull', 'ha-push',
             'stow', 'render', 'track-claude',
@@ -128,7 +144,7 @@ class TestGetCommands:
     Tests for get_commands filtering and grouping
     """
     @pytest.fixture(autouse=True)
-    def _commands(self, registry: dict[str, run.Command]) -> None:
+    def _commands(self, registry: dict[str, Command]) -> None:
         """
         Register two grouped commands plus one ungrouped command
         """
@@ -140,19 +156,19 @@ class TestGetCommands:
         """
         Test that commands are returned by name in registration order
         """
-        assert list(run.get_commands()) == ['alpha', 'beta', 'gamma']
+        assert list(get_commands()) == ['alpha', 'beta', 'gamma']
 
     def test_exclude(self) -> None:
         """
         Test that excluded names are dropped
         """
-        assert list(run.get_commands(exclude=['beta'])) == ['alpha', 'gamma']
+        assert list(get_commands(exclude=['beta'])) == ['alpha', 'gamma']
 
     def test_by_group_defaults_ungrouped_to_other_commands(self) -> None:
         """
         Test that grouping preserves insertion order and files ungrouped commands under Other commands
         """
-        groups = run.get_commands(by_group=True)
+        groups = get_commands(by_group=True)
         assert {group: list(cmds) for group, cmds in groups.items()} == {
             'G1':             ['alpha'],
             'G2':             ['beta'],
@@ -163,7 +179,7 @@ class TestGetCommands:
         """
         Test that listed groups come first and unlisted groups follow in insertion order
         """
-        groups = run.get_commands(by_group=True, group_order=['G2'])
+        groups = get_commands(by_group=True, group_order=['G2'])
         assert list(groups) == ['G2', 'G1', 'Other commands']
 
 
@@ -175,30 +191,30 @@ class TestBuildParser:
         """
         Test that each registered command gets a subparser
         """
-        assert set(_subparsers(run.build_parser())) == set(run.REGISTERED_COMMANDS)
+        assert set(_subparsers(build_parser())) == set(command_module.REGISTERED_COMMANDS)
 
     def test_help_option_in_other_options_group(self) -> None:
         """
         Test that subcommand -h/--help lives in a trailing Other options group
         """
-        for name, subparser in _subparsers(run.build_parser()).items():
+        for name, subparser in _subparsers(build_parser()).items():
             last_group = subparser._action_groups[-1]
             assert last_group.title == 'Other options', name
             assert ['-h', '--help'] in [a.option_strings for a in last_group._group_actions], name
 
-    def test_add_help_false_omits_help(self, registry: dict[str, run.Command]) -> None:
+    def test_add_help_false_omits_help(self, registry: dict[str, Command]) -> None:
         """
         Test that add_help=False suppresses the subcommand help option
         """
         _make_command('QuietCommand', add_help=False)
-        subparser = _subparsers(run.build_parser())['quiet']
+        subparser = _subparsers(build_parser())['quiet']
         assert not any('-h' in a.option_strings for a in subparser._actions)
 
     def test_parses_into_typed_args(self) -> None:
         """
         Test that subcommand options land on the root Args namespace
         """
-        args = run.build_parser().parse_args(['stow', '-n', 'zsh'], namespace=run.Args())
+        args = build_parser().parse_args(['stow', '-n', 'zsh'], namespace=Args())
         assert args.command  == 'stow'
         assert args.simulate is True
         assert args.packages == ['zsh']
@@ -216,8 +232,8 @@ class TestBuildParser:
         """
         Test the -d/--debug/--no-debug root option
         """
-        monkeypatch.setattr(run, 'RUN_DEBUG', False)
-        assert run.build_parser().parse_args(argv, namespace=run.Args()).debug is expected
+        monkeypatch.setattr(config, 'RUN_DEBUG', False)
+        assert build_parser().parse_args(argv, namespace=Args()).debug is expected
 
 
 class TestMain:
@@ -229,24 +245,24 @@ class TestMain:
         """
         Keep main() from leaking a debug-mode change into other tests
         """
-        monkeypatch.setattr(run, 'RUN_DEBUG', False)
+        monkeypatch.setattr(config, 'RUN_DEBUG', False)
 
     def test_no_command_prints_help_and_fails(self, capsys: pytest.CaptureFixture[str]) -> None:
         """
         Test that running without a command prints help and exits 1
         """
         with pytest.raises(SystemExit) as exc_info:
-            run.main([])
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+            main([])
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert "Runner script for Connor's dotfiles" in capsys.readouterr().out
 
-    def test_dispatches_to_command(self, registry: dict[str, run.Command]) -> None:
+    def test_dispatches_to_command(self, registry: dict[str, Command]) -> None:
         """
         Test that main() runs the selected command with the parsed args
         """
         seen: list[argparse.Namespace] = []
         _make_command('RecordCommand', run=lambda self, args: seen.append(args))
-        run.main(['record'])
+        main(['record'])
         assert [a.command for a in seen] == ['record']
 
     @pytest.mark.parametrize(
@@ -260,7 +276,7 @@ class TestMain:
     )
     def test_debug_flag_sets_run_debug(
         self,
-        registry: dict[str, run.Command],
+        registry: dict[str, Command],
         monkeypatch: pytest.MonkeyPatch,
         env_debug: bool,
         argv: list[str],
@@ -269,11 +285,11 @@ class TestMain:
         """
         Test that the parsed --debug/--no-debug value (defaulting to the env var) is what commands see as RUN_DEBUG
         """
-        monkeypatch.setattr(run, 'RUN_DEBUG', env_debug)
+        monkeypatch.setattr(config, 'RUN_DEBUG', env_debug)
 
         seen: list[bool] = []
-        _make_command('ProbeCommand', run=lambda self, args: seen.append(run.RUN_DEBUG))
-        run.main(argv)
+        _make_command('ProbeCommand', run=lambda self, args: seen.append(config.RUN_DEBUG))
+        main(argv)
         assert seen == [expected]
 
     @pytest.mark.parametrize(
@@ -285,7 +301,7 @@ class TestMain:
     )
     def test_uv_verbose_sets_rust_log(
         self,
-        registry: dict[str, run.Command],
+        registry: dict[str, Command],
         monkeypatch: pytest.MonkeyPatch,
         argv: list[str],
         expected: str | None,
@@ -293,23 +309,25 @@ class TestMain:
         """
         Test that --uv-verbose exports RUST_LOG=uv=debug to every subprocess the command runs
         """
-        monkeypatch.setattr(run, 'UV_VERBOSE',          False)
-        monkeypatch.setattr(run, 'RUN_COMMAND_ENVVARS', {})
+        envvars: dict[str, str] = {}
+        monkeypatch.setattr(main_module,  'UV_VERBOSE',          False)
+        monkeypatch.setattr(main_module,  'RUN_COMMAND_ENVVARS', envvars)
+        monkeypatch.setattr(shell_module, 'RUN_COMMAND_ENVVARS', envvars)
         _make_command('ProbeCommand')
-        run.main(argv)
-        assert run.RUN_COMMAND_ENVVARS.get('RUST_LOG') == expected
+        main(argv)
+        assert envvars.get('RUST_LOG') == expected
 
-    def test_keyboard_interrupt_exits_user_cancelled(self, registry: dict[str, run.Command]) -> None:
+    def test_keyboard_interrupt_exits_user_cancelled(self, registry: dict[str, Command]) -> None:
         """
         Test that Ctrl-C inside a command exits with USER_CANCELLED
         """
-        def interrupt(self: run.Command, args: argparse.Namespace) -> None:
+        def interrupt(self: Command, args: argparse.Namespace) -> None:
             raise KeyboardInterrupt
 
         _make_command('InterruptCommand', run=interrupt)
         with pytest.raises(SystemExit) as exc_info:
-            run.main(['interrupt'])
-        assert exc_info.value.code == run.ExitCode.USER_CANCELLED
+            main(['interrupt'])
+        assert exc_info.value.code == ExitCode.USER_CANCELLED
 
     @pytest.mark.parametrize(
         ('argv', 'traceback_shown'),
@@ -320,7 +338,7 @@ class TestMain:
     )
     def test_unexpected_error_exits_command_failed(
         self,
-        registry: dict[str, run.Command],
+        registry: dict[str, Command],
         capsys: pytest.CaptureFixture[str],
         argv: list[str],
         traceback_shown: bool,
@@ -328,15 +346,15 @@ class TestMain:
         """
         Test that an unexpected exception exits 1, with a traceback only in debug mode
         """
-        def explode(self: run.Command, args: argparse.Namespace) -> None:
+        def explode(self: Command, args: argparse.Namespace) -> None:
             raise RuntimeError('boom')
 
         _make_command('ExplodeCommand', run=explode)
         with pytest.raises(SystemExit) as exc_info:
-            run.main(argv)
+            main(argv)
 
         captured = capsys.readouterr()
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert 'Unexpected error: boom' in captured.out
         assert ('Traceback' in captured.err) is traceback_shown
 
@@ -354,9 +372,9 @@ class TestUpdateInventory:
         """
         Point the inventory at a temp dir, fake shell_command, and record every command it is asked to run
         """
-        monkeypatch.setattr(run,      'INVENTORY_DIR',        tmp_path / 'inventory')
-        monkeypatch.setattr(run,      'handle_command_error', lambda *args, **kwargs: None)
-        monkeypatch.setattr(run.time, 'sleep',                lambda seconds: None)
+        monkeypatch.setattr(inventory_commands, 'INVENTORY_DIR',        tmp_path / 'inventory')
+        monkeypatch.setattr(inventory_commands, 'handle_command_error', lambda *args, **kwargs: None)
+        monkeypatch.setattr(time,               'sleep',                lambda seconds: None)
 
         self.failing: set[str]        = set()
         self.dirty:   bool            = False
@@ -368,7 +386,7 @@ class TestUpdateInventory:
                 raise subprocess.CalledProcessError(1, cmd)
             return subprocess.CompletedProcess(cmd, 0, stdout=' M hosts.yml\n' if self.dirty else '')
 
-        monkeypatch.setattr(run, 'shell_command', fake_shell_command)
+        monkeypatch.setattr(inventory_commands, 'shell_command', fake_shell_command)
         return recorded
 
     @staticmethod
@@ -376,13 +394,13 @@ class TestUpdateInventory:
         """
         Invoke update-inventory through the registry
         """
-        run.get_commands()['update-inventory'](argparse.Namespace(force=force))
+        get_commands()['update-inventory'](argparse.Namespace(force=force))
 
     def test_pulls_existing_repo(self, calls: list[list[str]]) -> None:
         """
         Test that an existing git checkout is pulled without touching local changes
         """
-        (run.INVENTORY_DIR / '.git').mkdir(parents=True)
+        (inventory_commands.INVENTORY_DIR / '.git').mkdir(parents=True)
         self._run()
         assert calls == [self.PULL]
 
@@ -390,7 +408,7 @@ class TestUpdateInventory:
         """
         Test that --force discards uncommitted changes before pulling
         """
-        (run.INVENTORY_DIR / '.git').mkdir(parents=True)
+        (inventory_commands.INVENTORY_DIR / '.git').mkdir(parents=True)
         self.dirty = True
         self._run(force=True)
         assert calls == [self.STATUS, self.RESET, self.PULL]
@@ -399,7 +417,7 @@ class TestUpdateInventory:
         """
         Test that --force only resets when the status shows changes
         """
-        (run.INVENTORY_DIR / '.git').mkdir(parents=True)
+        (inventory_commands.INVENTORY_DIR / '.git').mkdir(parents=True)
         self._run(force=True)
         assert calls == [self.STATUS, self.PULL]
 
@@ -408,29 +426,33 @@ class TestUpdateInventory:
         Test that a missing inventory directory is cloned
         """
         self._run()
-        assert calls == [['git', 'clone', '--no-progress', run.INVENTORY_REPO_URL, str(run.INVENTORY_DIR)]]
+        assert calls == [[
+            'git', 'clone', '--no-progress',
+            inventory_commands.INVENTORY_REPO_URL,
+            str(inventory_commands.INVENTORY_DIR),
+        ]]
 
     def test_reclones_non_git_directory(self, calls: list[list[str]]) -> None:
         """
         Test that an inventory directory that is not a git repo is removed and re-cloned
         """
-        run.INVENTORY_DIR.mkdir()
-        (run.INVENTORY_DIR / 'stale.yml').write_text('x')
+        inventory_commands.INVENTORY_DIR.mkdir()
+        (inventory_commands.INVENTORY_DIR / 'stale.yml').write_text('x')
         self._run()
 
-        assert not (run.INVENTORY_DIR / 'stale.yml').exists()
+        assert not (inventory_commands.INVENTORY_DIR / 'stale.yml').exists()
         assert [cmd[1] for cmd in calls] == ['clone']
 
     def test_exhausted_retries_exit_command_failed(self, calls: list[list[str]]) -> None:
         """
         Test that a pull failing on every attempt is retried three times (re-running the force reset) then exits 1
         """
-        (run.INVENTORY_DIR / '.git').mkdir(parents=True)
+        (inventory_commands.INVENTORY_DIR / '.git').mkdir(parents=True)
         self.failing = {'pull'}
         with pytest.raises(SystemExit) as exc_info:
             self._run(force=True)
 
-        assert exc_info.value.code == run.ExitCode.COMMAND_FAILED
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert calls == [self.STATUS, self.PULL] * 3
 
 
@@ -443,9 +465,9 @@ class TestMakefileCommand:
         Test that regenerating the Makefile reproduces the checked-in file (drift guard)
         """
         generated = tmp_path / 'Makefile'
-        monkeypatch.setattr(run, 'MAKEFILE', generated)
-        run.get_commands()['makefile'](run.build_parser().parse_args(['makefile']))
-        assert generated.read_text() == (run.DOTFILES_DIR / 'Makefile').read_text()
+        monkeypatch.setattr(utilities_commands, 'MAKEFILE', generated)
+        get_commands()['makefile'](build_parser().parse_args(['makefile']))
+        assert generated.read_text() == (DOTFILES_DIR / 'Makefile').read_text()
 
     @pytest.mark.parametrize('no_color', [None, '1'])
     def test_generated_makefile_is_independent_of_no_color(self, tmp_path: Path, no_color: str | None) -> None:
@@ -459,11 +481,14 @@ class TestMakefileCommand:
 
         code = (
             'import sys; '
-            f'sys.path.insert(0, {str(run.DOTFILES_DIR)!r}); '
+            f'sys.path.insert(0, {str(DOTFILES_DIR)!r}); '
             'import run; '
             'from pathlib import Path; '
-            f'run.MAKEFILE = Path({str(generated)!r}); '
-            "run.get_commands()['makefile'](run.build_parser().parse_args(['makefile']))"
+            'from cli.commands import utilities; '
+            'from cli.infra.command import get_commands; '
+            'from cli.infra.main import build_parser; '
+            f'utilities.MAKEFILE = Path({str(generated)!r}); '
+            "get_commands()['makefile'](build_parser().parse_args(['makefile']))"
         )
         subprocess.run([sys.executable, '-c', code], env=env, capture_output=True, text=True, check=True)
-        assert generated.read_text() == (run.DOTFILES_DIR / 'Makefile').read_text()
+        assert generated.read_text() == (DOTFILES_DIR / 'Makefile').read_text()

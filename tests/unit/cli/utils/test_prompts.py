@@ -1,5 +1,5 @@
 """
-Unit tests for run.py interactive prompts
+Unit tests for interactive prompts
 """
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-import run
+from cli.utils.prompts import confirm
 
 
 class TestConfirm:
@@ -39,7 +39,7 @@ class TestConfirm:
         Test that yes/no answers are honored and an empty answer falls back to the default
         """
         monkeypatch.setattr('builtins.input', lambda prompt: answer)
-        assert run.confirm('Proceed?', default=default) is expected
+        assert confirm('Proceed?', default=default) is expected
 
     def test_prompt_shows_default_and_indent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -53,8 +53,8 @@ class TestConfirm:
 
         monkeypatch.setattr('builtins.input', fake_input)
 
-        run.confirm('Proceed?', indent=3)
-        run.confirm('Proceed?', default=False)
+        confirm('Proceed?', indent=3)
+        confirm('Proceed?', default=False)
         assert prompts == ['   Proceed? [Y/n]: ', 'Proceed? [y/N]: ']
 
     def test_eof_declines(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -65,7 +65,7 @@ class TestConfirm:
             raise EOFError
 
         monkeypatch.setattr('builtins.input', raise_eof)
-        assert run.confirm('Proceed?') is False
+        assert confirm('Proceed?') is False
 
     def test_ctrl_c_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -76,4 +76,4 @@ class TestConfirm:
 
         monkeypatch.setattr('builtins.input', raise_interrupt)
         with pytest.raises(KeyboardInterrupt):
-            run.confirm('Proceed?')
+            confirm('Proceed?')
