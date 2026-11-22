@@ -311,6 +311,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # keep-sorted start
 "cli/**/*.py"                              = ["BLE001", "S112"]
+"cli/commands/__init__.py"                 = ["F401"]
 "scripts/**/*.py"                          = ["BLE001"]
 "scripts/docs_audit/report.py"             = ["E741"]
 "scripts/env/venvshell.py"                 = ["RUF001"]
