@@ -458,7 +458,7 @@ wheels = [
 [[package]]
 name = "dotfiles"
 version = "0.0.1"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "ansible-core", version = "2.21.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
     { name = "ansible-core", version = "2.22.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },

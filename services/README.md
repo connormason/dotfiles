@@ -290,10 +290,16 @@ compares the size plus three 1 MiB samples instead of hashing whole files: far f
 proof of equality. Run `once` first, because a flat file is only removed when its foldered twin exists.
 
 ```bash
-docker exec medialink python -m medialink once --dry-run
-docker exec medialink python -m medialink dedupe
-docker exec medialink python -m medialink dedupe --apply
+python3 run.py medialink once --dry-run
+python3 run.py medialink dedupe
+python3 run.py medialink dedupe --apply
 ```
+
+`run.py medialink` runs the command in the container over SSH, and is the same as running
+`docker exec medialink python -m medialink …` on the NAS. The project also installs a `medialink` console script
+(`uv run medialink …`, from `[project.scripts]` in the root `pyproject.toml`), which runs the package from this checkout
+with the `MEDIALINK_*` variables of the calling shell instead of the container's; use it on a host that can reach
+Transmission and the media tree, since neither exists on the Mac.
 
 | Variable                                   | Default                                                                             | Meaning                                               |
 | ------------------------------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------------------- |

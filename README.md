@@ -292,6 +292,9 @@ python3 run.py makefile
 
 # Open a tool's config file in $VISUAL / $EDITOR (--list shows the tools, --all opens every file for a tool)
 python3 run.py config tmux
+
+# Run a medialink command (once, dedupe, ...) in its container on the NAS; arguments are forwarded unchanged
+python3 run.py medialink once --dry-run
 ```
 
 See [docs/RUN_PY_REFERENCE.md](docs/RUN_PY_REFERENCE.md) for every command and option.

@@ -109,6 +109,9 @@ python3 run.py makefile
 
 # Open a tool's config file in $VISUAL / $EDITOR (--list names the tools, --all opens every registered file)
 python3 run.py config tmux
+
+# Run a medialink command in its container on the NAS (arguments forwarded unchanged); `uv run medialink` runs it here
+python3 run.py medialink once --dry-run
 ```
 
 ## Layered Dev Environment (`run.py` Dotfiles group)

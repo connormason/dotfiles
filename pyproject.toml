@@ -39,6 +39,11 @@ Homepage   = "https://github.com/connormason/dotfiles"
 Repository = "https://github.com/connormason/dotfiles"
 Source     = "https://github.com/connormason/dotfiles"
 
+# Project entry points
+# ====================
+[project.scripts]
+medialink = "medialink.cli:main"
+
 # Project dependency groups
 # =========================
 [dependency-groups]
@@ -91,6 +96,17 @@ test = [
     # keep-sorted end
 ]
 
+
+# ####################################################################################################################
+# Build system
+# ####################################################################################################################
+[build-system]
+requires      = ["uv_build >= 0.9, < 0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "medialink"
+module-root = "services/medialink"
 
 # ####################################################################################################################
 # Package management tool configuration
