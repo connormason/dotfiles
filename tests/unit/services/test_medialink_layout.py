@@ -82,6 +82,25 @@ class TestPlace:
         assert placement.directory == 'Mission - Impossible - Fallout (2018)'
 
 
+class TestSubtitleLanguages:
+    """
+    Tests for the language suffix of scene-pack subtitle files
+    """
+    @pytest.mark.parametrize(
+        'code',
+        ['hin', 'lit', 'slo', 'slv', 'tam', 'tel', 'cat', 'glg'],
+    )
+    def test_scene_pack_language_codes_are_kept(self, code: str) -> None:
+        """
+        Test that each ISO 639-2 code seen in scene subtitle packs gets its own file name
+        """
+        torrent   = 'Film.2020.1080p.BluRay.x264-GRP'
+        placement = place('movies', torrent, f'{torrent}/Subs/{code}.srt')
+
+        assert placement is not None
+        assert placement.filename == f'Film (2020).{code}.srt'
+
+
 class TestPlacement:
     """
     Tests for Placement

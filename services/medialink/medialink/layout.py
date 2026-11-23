@@ -60,8 +60,8 @@ LANGUAGES: dict[str, str] = {
     'zh': 'zh', 'chi': 'zh', 'chinese': 'zh',
     # Languages seen in scene subtitle packs; their ISO 639-2 codes are kept as they are
     **{code: code for code in (
-        'ara', 'ces', 'cze', 'dan', 'fil', 'fin', 'gre', 'heb', 'hrv', 'hun', 'ind', 'may', 'nob', 'nor', 'pol', 'rum',
-        'swe', 'tha', 'tur', 'ukr', 'vie',
+        'ara', 'ces', 'cat', 'cze', 'dan', 'fil', 'fin', 'glg', 'gre', 'heb', 'hin', 'hrv', 'hun', 'ind', 'lit', 'may',
+        'nob', 'nor', 'pol', 'rum', 'slo', 'slv', 'swe', 'tam', 'tel', 'tha', 'tur', 'ukr', 'vie',
     )},
 }
 SUBTITLE_FLAGS = frozenset({'forced', 'sdh', 'cc', 'default'})
@@ -292,6 +292,11 @@ def _show_name(text: str) -> tuple[str, int | None]:
     if not marker:
         quality = _QUALITY.search(head)
         head    = head[: quality.start()] if quality else head
+
+    # A title written with separators ("Good.Eats.S00E01.Episode Name") stays dotted when only the rest of the name has
+    # spaces, so the title part is judged on its own
+    if ' ' not in head.strip():
+        head = head.replace('.', ' ').replace('_', ' ')
 
     year  = None
     years = [m for m in _YEAR.finditer(head) if m.start() > 0]
