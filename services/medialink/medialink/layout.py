@@ -86,7 +86,7 @@ _EPISODE = re.compile(
     re.IGNORECASE,
 )
 _EPISODE_X = re.compile(_BOUNDARY + r'(?P<season>\d{1,2})x(?P<ep>\d{2,3})' + _END, re.IGNORECASE)
-_MARKER     = re.compile(
+_MARKER    = re.compile(
     _BOUNDARY + r'(?:s\d{1,2}(?:[ ._-]?e\d{1,3})*|\d{1,2}x\d{2,3}|season[ ._-]?\d{1,2}|complete[ ._-]series)' + _END,
     re.IGNORECASE,
 )
@@ -135,6 +135,7 @@ class Placement:
         """
         if (self.category != MOVIES) or not self.version:
             return None
+
         suffix = PurePosixPath(self.filename).suffixes
         tail   = ''.join(suffix[-2:] if len(suffix) > 1 and len(suffix[-2]) <= 4 else suffix[-1:])
         stem   = self.filename[: len(self.filename) - len(tail)]
@@ -152,7 +153,9 @@ def kind(file_name: str) -> str:
     ext  = path.suffix.lower()
     if ext in VIDEO_EXTENSIONS:
         if any(re.match(r'sample\b', part, re.IGNORECASE) for part in path.parts[:-1]) or re.search(
-            _BOUNDARY + r'sample' + _END, path.stem, re.IGNORECASE
+            _BOUNDARY + r'sample' + _END,
+            path.stem,
+            re.IGNORECASE
         ):
             return JUNK
         return VIDEO
@@ -190,17 +193,21 @@ def load_overrides(path: Path) -> list[Override]:
         valid = isinstance(item, dict) and all(isinstance(item.get(k), str) for k in ('pattern', 'title'))
         if not valid:
             raise ConfigError(f'overrides {path} entry {i} needs string "pattern" and "title"')
+
         year     = item.get('year')
         category = item.get('category')
         if (year is not None) and (not isinstance(year, int) or isinstance(year, bool)):
             raise ConfigError(f'overrides {path} entry {i}: "year" must be an integer')
         if category not in {None, MOVIES, TV}:
             raise ConfigError(f'overrides {path} entry {i}: "category" must be "movies" or "tv"')
+
         try:
             pattern = re.compile(item['pattern'], re.IGNORECASE)
         except re.error as e:
             raise ConfigError(f'overrides {path} entry {i}: bad pattern: {e}') from e
+
         overrides.append(Override(pattern, item['title'].strip(), year, category))
+
     return overrides
 
 
@@ -244,6 +251,7 @@ def _movie_name(text: str) -> tuple[str, int] | None:
     years   = [m for m in _YEAR.finditer(text) if 0 < m.start() < limit]
     if not years:
         return None
+
     last  = years[-1]
     title = _tidy(text[: last.start()])
     return (title, int(last.group())) if title else None
@@ -263,9 +271,11 @@ def _episode_of(text: str) -> tuple[int, str] | None:
         if extra:
             label += '-' + '-'.join(f'E{int(e):02d}' for e in extra)
         return season, label
+
     if m := _EPISODE_X.search(text):
         season = int(m.group('season'))
         return season, f'S{season:02d}E{int(m.group("ep")):02d}'
+
     return None
 
 
@@ -285,9 +295,10 @@ def _show_name(text: str) -> tuple[str, int | None]:
 
     year  = None
     years = [m for m in _YEAR.finditer(head) if m.start() > 0]
-    if years and head[years[-1].end():].strip(' ()-') == '':
+    if years and (head[years[-1].end():].strip(' ()-') == ''):
         year = int(years[-1].group())
         head = head[: years[-1].start()]
+
     return _tidy(head), year
 
 
@@ -408,6 +419,7 @@ def place(
         return _place_episode(names, episode, extension, suffix, override=override, shows=shows)
     if category == TV:
         return None
+
     return _place_movie(names, extension, suffix, override)
 
 
@@ -494,4 +506,5 @@ def _place_movie(
             if _RESOLUTION.fullmatch(label):
                 version = label
                 break
+
     return Placement(MOVIES, name, f'{name}{suffix}{extension}', version=version, stem=name)

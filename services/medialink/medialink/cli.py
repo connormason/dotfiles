@@ -64,14 +64,14 @@ class Args(argparse.Namespace):
     """
     Typed view of the parsed command line
     """
-    command: str        # command
-    verbose: bool       # --verbose
-    dry_run: bool       # --dry-run         "once" command only
-    apply:   bool       # --apply           "dedupe" and "reorganize" commands
-    quick:   bool       # --quick           "dedupe" command only
-    limit:   int | None # --limit           "reorganize" command only
-    only:    str        # --only            "reorganize" command only
-    undo:    str | None # --undo            "reorganize" command only
+    command: str            # command
+    verbose: bool           # --verbose
+    dry_run: bool           # --dry-run         "once" command only
+    apply:   bool           # --apply           "dedupe" and "reorganize" commands
+    quick:   bool           # --quick           "dedupe" command only
+    limit:   int | None     # --limit           "reorganize" command only
+    only:    str            # --only            "reorganize" command only
+    undo:    str | None     # --undo            "reorganize" command only
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -270,9 +270,10 @@ def run_loop(
                 state.save()
 
             report  = reconcile(torrents, config, state=state, notifier=notifier, extractor=extractor)
+            changed = report.counts['linked'] or report.counts['extracted'] or len(report.problems) != last_problems
+
             # INFO only when something changed (new links or extractions, or the number of problems moved); a steady
             # state, including a known stuck torrent, stays at DEBUG instead of logging every cycle
-            changed = report.counts['linked'] or report.counts['extracted'] or len(report.problems) != last_problems
             last_problems = len(report.problems)
             logger.log(
                 logging.INFO if changed else logging.DEBUG,
@@ -297,6 +298,7 @@ def _shown(path: Path | None, config: Config) -> str:
     """
     if path is None:
         return ''
+
     try:
         return path.relative_to(config.media_root).as_posix()
     except ValueError:
@@ -351,9 +353,11 @@ def _run_undo(args: Args, config: Config) -> int:
     result = undo(config, Path(args.undo or ''), apply=args.apply)
     for error in result.errors:
         print(f'SKIPPED  {error}')
+
     print(f'{"restored" if args.apply else "would restore"}: {result.done}')
     if not args.apply:
         print('dry run: nothing was moved (use --apply)')
+
     return EXIT_PROBLEMS if result.errors else EXIT_OK
 
 

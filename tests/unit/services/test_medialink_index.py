@@ -23,6 +23,10 @@ from tests.unit.services.test_medialink import archive_torrent
 from tests.unit.services.test_medialink import make_torrent
 from tests.unit.services.test_medialink import write_source
 
+# ==================================================================================================
+# Fixtures
+# ==================================================================================================
+
 
 @pytest.fixture
 def config(tmp_path: Path) -> Config:
@@ -33,6 +37,11 @@ def config(tmp_path: Path) -> Config:
     for sub in ('downloads/complete', 'movies', 'tv'):
         (media / sub).mkdir(parents=True)
     return Config.from_env({'MEDIALINK_MEDIA_ROOT': str(media), 'MEDIALINK_NTFY_URL': 'http://ntfy.invalid'})
+
+
+# ==================================================================================================
+# Unit tests
+# ==================================================================================================
 
 
 class TestBuildIndex:
@@ -103,7 +112,6 @@ class TestMovedLinks:
         (config.movies_root / 'Film.2020.1080p' / 'film.mkv').unlink()
 
         report = reconcile([torrent], config)
-
         assert report.counts[LINKED] == 1
 
     def test_link_torrent_without_index_still_links(self, config: Config) -> None:
@@ -114,7 +122,6 @@ class TestMovedLinks:
         write_source(config, torrent)
 
         results = link_torrent(torrent, config.downloads_root / 'complete' / 'movies', config.movies_root)
-
         assert [r.status for r in results] == [LINKED]
 
     def test_extraction_is_not_repeated_after_its_output_moves(self, config: Config) -> None:
@@ -157,8 +164,8 @@ class TestStateOutputs:
         state.save()
 
         reloaded = State(path)
-
         assert reloaded.outputs == {'extracted:h:a.rar': ['tv/Show/a.mkv', 'tv/Show/b.mkv']}
+
         reloaded.outputs['x'] = []
         assert 'x' not in reloaded.outputs
 

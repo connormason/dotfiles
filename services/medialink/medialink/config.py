@@ -22,8 +22,8 @@ DEFAULT_INTERVAL     = 60
 DEFAULT_MAX_FAILURES = 5
 DEFAULT_NTFY_TOPIC   = 'nas-media'
 FALSE_VALUES         = frozenset({'0', 'false', 'no', 'off'})
-MIRROR               = 'mirror'     # library mirrors each torrent's own layout
-JELLYFIN             = 'jellyfin'   # Movie (Year)/ and Show/Season NN/, scene leftovers not linked
+MIRROR               = 'mirror'                     # library mirrors each torrent's own layout
+JELLYFIN             = 'jellyfin'                   # Movie (Year)/ and Show/Season NN/, scene leftovers not linked
 LAYOUTS              = (MIRROR, JELLYFIN)
 DEFAULT_LAYOUT       = MIRROR
 

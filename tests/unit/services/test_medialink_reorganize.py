@@ -48,7 +48,7 @@ TV_DIR    = '/downloads/complete/tv'
 
 
 # ==================================================================================================
-# Helpers and fixtures
+# Helpers
 # ==================================================================================================
 
 
@@ -90,8 +90,14 @@ def _config(tmp_path: Path, **extra: str) -> Config:
     media = tmp_path / 'media'
     for sub in ('downloads/complete', 'movies', 'tv'):
         (media / sub).mkdir(parents=True)
+
     env = {'MEDIALINK_MEDIA_ROOT': str(media), 'MEDIALINK_NTFY_URL': 'http://ntfy.invalid', **extra}
     return Config.from_env(env)
+
+
+# ==================================================================================================
+# Fixtures
+# ==================================================================================================
 
 
 @pytest.fixture
@@ -136,7 +142,6 @@ class TestDiscover:
         (config.movies_root / 'Gone.2018.1080p' / 'gone.mkv').rename(config.movies_root / 'Gone (2018)' / 'gone.mkv')
 
         found = discover([owned, copied, moved], config)
-
         assert [c.torrent for c in found] == ['Film.2020.1080p']
 
     def test_unfinished_and_unclassified_torrents_are_skipped(self, config: Config) -> None:
@@ -156,6 +161,7 @@ class TestDiscover:
         out     = config.movies_root / 'Rel.2020.1080p' / 'Rel.2020.1080p.mkv'
         out.parent.mkdir()
         out.write_bytes(b'video')
+
         state = State(config.state_path)
         key   = f'extracted:{torrent.hash}:Rel.2020.1080p/rel.rar'
         state.record_outputs(key, ['movies/Rel.2020.1080p/Rel.2020.1080p.mkv'])
@@ -163,8 +169,8 @@ class TestDiscover:
         [found] = discover([torrent], config, state)
 
         assert found.current == out
-        assert found.name == 'Rel.2020.1080p/Rel.2020.1080p.mkv'
-        assert found.source is None
+        assert found.name    == 'Rel.2020.1080p/Rel.2020.1080p.mkv'
+        assert found.source  is None
 
 
 class TestMakePlan:
@@ -176,8 +182,7 @@ class TestMakePlan:
         Test that a scene-named movie folder is planned as Title (Year)/Title (Year).ext
         """
         torrents = mirrored(config, movie('Film.2020.1080p-GRP', 'film.2020.1080p.mkv'))
-
-        [entry] = plan_for(config, torrents)
+        [entry]  = plan_for(config, torrents)
 
         assert entry.action == MOVE
         assert entry.target == config.movies_root / 'Film (2020)' / 'Film (2020).mkv'
@@ -187,8 +192,7 @@ class TestMakePlan:
         Test that single-episode torrents of one show end up in one show folder
         """
         torrents = mirrored(config, episode('Show.Name.S01E01.1080p'), episode('Show.Name.S01E02.1080p'))
-
-        targets = {e.target for e in plan_for(config, torrents)}
+        targets  = {e.target for e in plan_for(config, torrents)}
 
         assert targets == {
             config.tv_root / 'Show Name' / 'Season 01' / 'Show Name - S01E01.mkv',
@@ -216,7 +220,6 @@ class TestMakePlan:
         mirrored(config, placed, unplaced)
 
         actions = {e.current.name: e.action for e in plan_for(config, [placed, unplaced])}
-
         assert actions == {'film.mkv': MOVE, 'film.nfo': DROP, 'clip.mkv': UNPARSED, 'clip.nfo': KEEP}
 
     def test_file_already_in_its_target_directory_is_left_alone(self, config: Config) -> None:
@@ -227,7 +230,6 @@ class TestMakePlan:
         mirrored(config, torrent)
 
         [entry] = plan_for(config, [torrent])
-
         assert entry.action == IN_PLACE
 
     def test_season_in_the_movies_library_crosses_over(self, config: Config) -> None:
@@ -251,7 +253,6 @@ class TestMakePlan:
         mirrored(config, hd, uhd)
 
         targets = sorted(e.target.name for e in plan_for(config, [hd, uhd]) if e.target)
-
         assert targets == ['Film (2020) - 2160p.mkv', 'Film (2020).mkv']
 
     def test_duplicate_episode_is_a_conflict(self, config: Config) -> None:
@@ -263,7 +264,6 @@ class TestMakePlan:
         mirrored(config, a, b)
 
         actions = sorted(e.action for e in plan_for(config, [a, b]))
-
         assert actions == [CONFLICT, MOVE]
 
     def test_target_holding_the_same_file_is_redundant(self, config: Config) -> None:
@@ -272,13 +272,13 @@ class TestMakePlan:
         """
         torrent = movie('Film.2020.1080p', 'film.mkv')
         mirrored(config, torrent)
+
         old    = config.movies_root / 'Film.2020.1080p' / 'film.mkv'
         target = config.movies_root / 'Film (2020)' / 'Film (2020).mkv'
         target.parent.mkdir()
         os.link(old, target)
 
         [entry] = plan_for(config, [torrent])
-
         assert entry.action == REDUNDANT
 
     def test_target_held_by_a_different_file_is_a_conflict(self, config: Config) -> None:
@@ -287,12 +287,12 @@ class TestMakePlan:
         """
         torrent = episode('Show.S01E01.1080p')
         mirrored(config, torrent)
+
         target = config.tv_root / 'Show' / 'Season 01' / 'Show - S01E01.mkv'
         target.parent.mkdir(parents=True)
         target.write_bytes(b'mine')
 
         [entry] = plan_for(config, [torrent])
-
         assert entry.action == CONFLICT
 
     def test_non_media_files_are_kept(self, config: Config) -> None:
@@ -303,7 +303,6 @@ class TestMakePlan:
         mirrored(config, torrent)
 
         actions = {e.current.name: e.action for e in plan_for(config, [torrent])}
-
         assert actions['extra.iso'] == KEEP
 
 
@@ -320,7 +319,6 @@ class TestSelect:
         mirrored(config, a, b)
 
         chosen = select(plan_for(config, [a, b]), only='^alpha')
-
         assert [e.torrent for e in chosen] == ['Alpha.2020.1080p']
 
     def test_limit_keeps_whole_torrents_in_name_order(self, config: Config) -> None:
@@ -332,13 +330,7 @@ class TestSelect:
         mirrored(config, a, b)
 
         chosen = select(plan_for(config, [a, b]), limit=1)
-
         assert {e.torrent for e in chosen} == {'Alpha.2020.1080p'}
-
-
-# ==================================================================================================
-# apply_plan / undo
-# ==================================================================================================
 
 
 class TestApplyAndUndo:
@@ -351,8 +343,8 @@ class TestApplyAndUndo:
         """
         torrent = movie('Film.2020.1080p', 'film.mkv', 'film.nfo')
         mirrored(config, torrent)
-        source = config.downloads_root / 'complete' / 'movies' / 'Film.2020.1080p' / 'film.mkv'
 
+        source = config.downloads_root / 'complete' / 'movies' / 'Film.2020.1080p' / 'film.mkv'
         result = apply_plan(plan_for(config, [torrent]), config)
 
         target = config.movies_root / 'Film (2020)' / 'Film (2020).mkv'
@@ -362,6 +354,7 @@ class TestApplyAndUndo:
         assert source.stat().st_nlink == 2
         assert not (config.movies_root / 'Film.2020.1080p').exists()
         assert config.movies_root.is_dir()
+
         records = [json.loads(line) for line in config.journal_path.read_text(encoding='utf-8').splitlines()]
         assert sorted(r['op'] for r in records) == ['drop', 'move']
 
@@ -385,6 +378,7 @@ class TestApplyAndUndo:
         """
         torrent = movie('Film.2020.1080p', 'film.mkv')
         mirrored(config, torrent)
+
         entries = plan_for(config, [torrent])
         target  = config.movies_root / 'Film (2020)' / 'Film (2020).mkv'
         target.parent.mkdir()
@@ -417,7 +411,6 @@ class TestApplyAndUndo:
         assert snapshot() != before
 
         result = undo(config, config.journal_path, apply=True)
-
         assert result.done == 2
         assert not result.errors
         assert snapshot() == before
@@ -430,12 +423,12 @@ class TestApplyAndUndo:
         torrent = movie('Film.2020.1080p', 'film.mkv')
         mirrored(config, torrent)
         apply_plan(plan_for(config, [torrent]), config)
+
         occupied = config.movies_root / 'Film.2020.1080p' / 'film.mkv'
         occupied.parent.mkdir()
         occupied.write_bytes(b'someone else')
 
         result = undo(config, config.journal_path, apply=True)
-
         assert result.done == 0
         assert 'occupied' in result.errors[0]
         assert occupied.read_bytes() == b'someone else'
@@ -451,13 +444,7 @@ class TestApplyAndUndo:
         leftover.write_text('keep', encoding='utf-8')
 
         apply_plan(plan_for(config, [torrent]), config)
-
         assert leftover.exists()
-
-
-# ==================================================================================================
-# Jellyfin layout in the loop
-# ==================================================================================================
 
 
 class TestJellyfinLayoutInTheLoop:
@@ -486,7 +473,6 @@ class TestJellyfinLayoutInTheLoop:
         write_source(jellyfin, torrent)
 
         reconcile([torrent], jellyfin)
-
         assert (jellyfin.movies_root / 'Nameless' / 'clip.mkv').is_file()
 
     def test_existing_mirror_links_are_exists_not_duplicated(self, jellyfin: Config) -> None:
@@ -495,6 +481,7 @@ class TestJellyfinLayoutInTheLoop:
         """
         torrent = movie('Film.2020.1080p', 'film.mkv')
         mirror  = Config.from_env({'MEDIALINK_MEDIA_ROOT': str(jellyfin.media_root)})
+
         mirrored(mirror, torrent)
         assert (jellyfin.movies_root / 'Film.2020.1080p' / 'film.mkv').exists()
 
@@ -510,6 +497,7 @@ class TestJellyfinLayoutInTheLoop:
         """
         jellyfin.overrides_path.parent.mkdir(parents=True)
         jellyfin.overrides_path.write_text('{broken', encoding='utf-8')
+
         torrent = movie('Film.2020.1080p', 'film.mkv')
         write_source(jellyfin, torrent)
 
@@ -524,11 +512,6 @@ class TestJellyfinLayoutInTheLoop:
         """
         with pytest.raises(ConfigError):
             Config.from_env({'MEDIALINK_LAYOUT': 'plex'})
-
-
-# ==================================================================================================
-# Command
-# ==================================================================================================
 
 
 class TestReorganizeCommand:

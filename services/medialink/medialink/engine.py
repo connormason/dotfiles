@@ -157,6 +157,7 @@ def _layout_context(config: Config, report: Report) -> LayoutContext | None:
         shows = {p.name for p in config.tv_root.iterdir() if p.is_dir()}
     except OSError:
         shows = set()
+
     return LayoutContext(overrides, shows)
 
 
@@ -229,8 +230,15 @@ def _handle_torrent(
     if layout is not None:
         placer = _placer(category, torrent, config, layout)
         skip   = _skip_archives_and_junk
-    results   = link_torrent(
-        torrent, source_dir, dest_root, dry_run=dry_run, skip=skip, index=index, placer=placer,
+
+    results = link_torrent(
+        torrent,
+        source_dir,
+        dest_root,
+        dry_run=dry_run,
+        skip=skip,
+        index=index,
+        placer=placer,
     )
     if has_archives(torrent):
         results += extract_torrent(torrent, source_dir, dest_root, extractor, state, dry_run=dry_run)

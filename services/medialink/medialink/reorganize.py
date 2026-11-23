@@ -144,9 +144,11 @@ def discover(torrents: Iterable[Torrent], config: Config, state: State | None = 
     :return: owned files, unsorted
     """
     found: list[Candidate] = []
+
     for torrent in torrents:
         if not torrent.finished:
             continue
+
         category   = classify(torrent.name, torrent.download_dir, torrent.labels)
         source_dir = map_download_dir(torrent.download_dir, config.transmission_downloads, config.downloads_root)
         if (category is None) or (source_dir is None):
@@ -156,16 +158,18 @@ def discover(torrents: Iterable[Torrent], config: Config, state: State | None = 
         for file in torrent.files:
             source  = safe_join(source_dir, file.name)
             current = safe_join(root, file.name)
-            if (source is None) or (current is None) or not file.complete:
+            if (source is None) or (current is None) or (not file.complete):
                 continue
             if _regular(current) and _same(source, current):
                 found.append(Candidate(torrent.name, category, file.name, current, source))
 
         if state is None:
             continue
+
         for key, paths in state.outputs.items():
             if key.split(':', 2)[1:2] != [torrent.hash]:
                 continue
+
             for relative in paths:
                 current = config.media_root / relative
                 try:
@@ -174,6 +178,7 @@ def discover(torrents: Iterable[Torrent], config: Config, state: State | None = 
                     continue
                 if _regular(current):
                     found.append(Candidate(torrent.name, category, name, current, None))
+
     return found
 
 
@@ -209,6 +214,7 @@ def make_plan(candidates: Sequence[Candidate], config: Config, overrides: Sequen
             placements[c.current] = placement
             if placement and (placement.category == TV):
                 shows.add(placement.directory.split('/', 1)[0])
+
     placed_torrents = {c.torrent for c in ordered if placements.get(c.current) is not None}
 
     entries: list[Entry] = []
@@ -237,19 +243,23 @@ def make_plan(candidates: Sequence[Candidate], config: Config, overrides: Sequen
         for option in (placement, placement.with_version()):
             if option is None:
                 continue
+
             target = config.media_root / option.category / option.path
             if (target in claimed) or os.path.lexists(target):
                 if (target not in claimed) and _same(c.current, target):
                     entry = Entry(c.torrent, c.current, target, REDUNDANT, c.source)
                     break
                 continue
+
             claimed[target] = c.current
             action = MOVE if option.category == c.category else CROSS
             entry  = Entry(c.torrent, c.current, target, action, c.source)
             break
+
         if entry is None:
             detail = f'{first} is taken by a different file'
             entry  = Entry(c.torrent, c.current, first, CONFLICT, c.source, detail)
+
         entries.append(entry)
 
     return entries
@@ -310,8 +320,8 @@ def apply_plan(entries: Sequence[Entry], config: Config) -> ApplyResult:
     :param config: runtime configuration (journal location, library roots)
     :return: how many entries were applied, and a message for each that failed
     """
-    done   = 0
-    errors: list[str] = []
+    done = 0
+    errors:  list[str] = []
     touched: set[Path] = set()
 
     config.journal_path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,6 +329,7 @@ def apply_plan(entries: Sequence[Entry], config: Config) -> ApplyResult:
         for entry in entries:
             if entry.action not in ACTIONABLE:
                 continue
+
             try:
                 if (entry.action in {MOVE, CROSS}) and (entry.target is not None):
                     entry.target.parent.mkdir(parents=True, exist_ok=True, mode=0o775)
@@ -328,11 +339,12 @@ def apply_plan(entries: Sequence[Entry], config: Config) -> ApplyResult:
                     holder = entry.target if entry.action == REDUNDANT else entry.source
                     _record(journal, op='drop', old=str(entry.current), source=str(holder) if holder else None)
                 else:
-                    continue  # an actionable entry without what it needs (a move with no target): never unlink
+                    continue        # an actionable entry without what it needs (a move with no target): never unlink
                 entry.current.unlink()
             except OSError as e:
                 errors.append(f'{entry.current}: {e.strerror or e}')
                 continue
+
             touched.add(entry.current.parent)
             done += 1
 
@@ -391,4 +403,5 @@ def undo(config: Config, journal_path: Path, *, apply: bool) -> ApplyResult:
 
     if apply:
         _prune(touched, (config.movies_root, config.tv_root))
+
     return ApplyResult(done, tuple(errors))

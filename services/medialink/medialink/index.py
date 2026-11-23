@@ -28,7 +28,7 @@ def inode_key(path: Path) -> tuple[int, int] | None:
         stat = path.stat()
     except OSError:
         return None
-    return (stat.st_dev, stat.st_ino)
+    return stat.st_dev, stat.st_ino
 
 
 def build_index(*roots: Path) -> Index:
@@ -43,6 +43,7 @@ def build_index(*roots: Path) -> Index:
     :return: map from ``(st_dev, st_ino)`` to one path holding that inode
     """
     index: Index = {}
+
     for root in roots:
         for dirpath, _, filenames in os.walk(root):
             for filename in filenames:
@@ -51,6 +52,8 @@ def build_index(*roots: Path) -> Index:
                     stat = path.lstat()
                 except OSError:
                     continue
-                if (stat.st_nlink > 1) and S_ISREG(stat.st_mode):  # lstat: a symlink is never regular
+
+                if (stat.st_nlink > 1) and S_ISREG(stat.st_mode):           # lstat: a symlink is never regular
                     index.setdefault((stat.st_dev, stat.st_ino), path)
+
     return index

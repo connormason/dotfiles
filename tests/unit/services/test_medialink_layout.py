@@ -24,6 +24,11 @@ CASES_FILE = Path(__file__).parent / 'data' / 'release_names.json'
 CASES      = json.loads(CASES_FILE.read_text(encoding='utf-8'))
 
 
+# ==================================================================================================
+# Helpers
+# ==================================================================================================
+
+
 def _overrides(raw: list[dict[str, Any]]) -> list[Override]:  # Any: JSON fixture values
     """
     Build Override objects from fixture entries
@@ -32,6 +37,11 @@ def _overrides(raw: list[dict[str, Any]]) -> list[Override]:  # Any: JSON fixtur
         Override(re.compile(o['pattern'], re.IGNORECASE), o['title'], o.get('year'), o.get('category'))
         for o in raw
     ]
+
+
+# ==================================================================================================
+# Unit tests
+# ==================================================================================================
 
 
 class TestPlace:
@@ -81,8 +91,8 @@ class TestPlacement:
         Test that with_version appends the resolution before the extension
         """
         placement = place('movies', 'Deadpool.2016.1080p.BluRay', 'Deadpool.2016.1080p.BluRay.mkv')
-
         assert placement is not None
+
         alternate = placement.with_version()
         assert alternate is not None
         assert alternate.path == 'Deadpool (2016)/Deadpool (2016) - 1080p.mkv'
@@ -92,8 +102,8 @@ class TestPlacement:
         Test that the quality label goes before the language suffix of a subtitle
         """
         placement = place('movies', 'Film.2020.2160p.WEB', 'Film.2020.2160p.WEB/Subs/English.srt')
-
         assert placement is not None
+
         alternate = placement.with_version()
         assert alternate is not None
         assert alternate.filename == 'Film (2020) - 2160p.en.srt'
