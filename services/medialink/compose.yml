@@ -16,6 +16,7 @@ services:
       - MEDIALINK_MEDIA_ROOT=/storage/media
       - MEDIALINK_TRANSMISSION_URL=http://transmission:9091/transmission/rpc
       - MEDIALINK_NTFY_URL=http://ntfy:80
+      - MEDIALINK_LAYOUT=jellyfin
     volumes:
       # One mount for the whole tree: hardlinks between separate bind mounts fail with EXDEV even on one filesystem.
       - /storage/media:/storage/media
