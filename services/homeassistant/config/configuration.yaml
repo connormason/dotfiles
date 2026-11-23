@@ -6,6 +6,56 @@ default_config:
 frontend:
   themes: !include_dir_merge_named themes
 
+# Monitor Docker (HACS custom integration, https://github.com/ualex73/monitor_docker). Reads the NAS Docker daemon
+# through the read-only `docker-proxy` container (services/docker-proxy/). Switches and buttons stay off: the proxy
+# rejects writes, so they could never work. `containers` mirrors what Glance lists for the NAS stack.
+monitor_docker:
+  - name: NAS
+    url: !secret nas_docker_url
+    scan_interval: 30
+    containers:
+      - caddy
+      - docker-proxy
+      - filebrowser
+      - flaresolverr
+      - glance
+      - jellyfin
+      - medialink
+      - ntfy
+      - plex
+      - prowlarr
+      - radarr
+      - sonarr
+      - transmission
+    rename:
+      caddy: Caddy
+      docker-proxy: Docker Proxy
+      filebrowser: FileBrowser
+      flaresolverr: FlareSolverr
+      glance: Glance
+      jellyfin: Jellyfin
+      medialink: Medialink
+      ntfy: ntfy
+      plex: Plex
+      prowlarr: Prowlarr
+      radarr: Radarr
+      sonarr: Sonarr
+      transmission: Transmission
+    monitored_conditions:
+      - version
+      - containers_running
+      - containers_total
+      - containers_stopped
+      - state
+      - status
+      - health
+      - uptime
+      - cpu_percentage
+      - memory
+      - memory_percentage
+    switchenabled: false
+    buttonenabled: false
+
 automation: !include automations.yaml
 script: !include scripts.yaml
 scene: !include scenes.yaml

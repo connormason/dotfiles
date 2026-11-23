@@ -51,6 +51,7 @@ it. Remove the NAS copy by hand; for `homeassistant`, the steps are in the
   - [`flaresolverr`](#flaresolverr)
   - [`medialink`](#medialink)
   - [`ntfy`](#ntfy)
+  - [`docker-proxy`](#docker-proxy)
   - [`filebrowser`](#filebrowser)
 - [Data flow](#data-flow)
 - [Storage layout](#storage-layout)
@@ -68,22 +69,23 @@ it. Remove the NAS copy by hand; for `homeassistant`, the steps are in the
 All host ports below are bound on the NAS itself. Services without a host port are reachable only from inside the
 `nas-network` bridge.
 
-| Container        | Image                               | Host Port(s)                                    | Purpose                                                         |
-| ---------------- | ----------------------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
-| `caddy`          | `caddy:2-alpine`                    | `80/tcp`, `443/tcp`, `32443/tcp`                | Reverse proxy: Tailscale HTTPS and .local hostnames (see below) |
-| `glance`         | `glanceapp/glance`                  | `8080/tcp`                                      | Dashboard / homepage                                            |
-| `home-assistant` | `homeassistant/home-assistant`      | host networking (`8123/tcp`, not declared here) | Home automation hub (**disabled**)                              |
-| `pihole`         | `pihole/pihole:latest`              | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80   | DNS, ad-blocking, DHCP (**disabled**)                           |
-| `plex`           | `linuxserver/plex`                  | `32400/tcp`                                     | Media streaming server                                          |
-| `jellyfin`       | `linuxserver/jellyfin`              | `8096/tcp`, `7359/udp`                          | Media streaming server (Plex alternative)                       |
-| `prowlarr`       | `linuxserver/prowlarr`              | `9696/tcp`                                      | Indexer aggregator for Sonarr/Radarr                            |
-| `radarr`         | `linuxserver/radarr`                | `7878/tcp`                                      | Movie library management                                        |
-| `sonarr`         | `linuxserver/sonarr`                | `8989/tcp`                                      | TV library management                                           |
-| `transmission`   | `linuxserver/transmission`          | `9091/tcp`                                      | BitTorrent client (web UI)                                      |
-| `flaresolverr`   | `ghcr.io/flaresolverr/flaresolverr` | internal only (`8191/tcp`, not declared here)   | Cloudflare challenge solver for Prowlarr                        |
-| `medialink`      | `nas-medialink:local` (built)       | none                                            | Hardlinks completed downloads into the media libraries          |
-| `ntfy`           | `binwiederhier/ntfy:v2.11.0`        | `127.0.0.1:2586` → 80 (loopback only)           | Push-notification channel for host alerts                       |
-| `filebrowser`    | `ghcr.io/gtsteffaniak/filebrowser`  | `8085/tcp` → 80                                 | Read-only web file browser for `/storage`                       |
+| Container        | Image                                 | Host Port(s)                                    | Purpose                                                         |
+| ---------------- | ------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
+| `caddy`          | `caddy:2-alpine`                      | `80/tcp`, `443/tcp`, `32443/tcp`                | Reverse proxy: Tailscale HTTPS and .local hostnames (see below) |
+| `glance`         | `glanceapp/glance`                    | `8080/tcp`                                      | Dashboard / homepage                                            |
+| `home-assistant` | `homeassistant/home-assistant`        | host networking (`8123/tcp`, not declared here) | Home automation hub (**disabled**)                              |
+| `pihole`         | `pihole/pihole:latest`                | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80   | DNS, ad-blocking, DHCP (**disabled**)                           |
+| `plex`           | `linuxserver/plex`                    | `32400/tcp`                                     | Media streaming server                                          |
+| `jellyfin`       | `linuxserver/jellyfin`                | `8096/tcp`, `7359/udp`                          | Media streaming server (Plex alternative)                       |
+| `prowlarr`       | `linuxserver/prowlarr`                | `9696/tcp`                                      | Indexer aggregator for Sonarr/Radarr                            |
+| `radarr`         | `linuxserver/radarr`                  | `7878/tcp`                                      | Movie library management                                        |
+| `sonarr`         | `linuxserver/sonarr`                  | `8989/tcp`                                      | TV library management                                           |
+| `transmission`   | `linuxserver/transmission`            | `9091/tcp`                                      | BitTorrent client (web UI)                                      |
+| `flaresolverr`   | `ghcr.io/flaresolverr/flaresolverr`   | internal only (`8191/tcp`, not declared here)   | Cloudflare challenge solver for Prowlarr                        |
+| `medialink`      | `nas-medialink:local` (built)         | none                                            | Hardlinks completed downloads into the media libraries          |
+| `ntfy`           | `binwiederhier/ntfy:v2.11.0`          | `127.0.0.1:2586` → 80 (loopback only)           | Push-notification channel for host alerts                       |
+| `docker-proxy`   | `tecnativa/docker-socket-proxy:0.3.0` | `2375/tcp`                                      | Read-only Docker API for Home Assistant's Monitor Docker        |
+| `filebrowser`    | `ghcr.io/gtsteffaniak/filebrowser`    | `8085/tcp` → 80                                 | Read-only web file browser for `/storage`                       |
 
 The compose files declare neither the Home Assistant port `8123` nor the Flaresolverr port `8191`; both are upstream
 defaults that nothing in this repository verifies.
@@ -338,6 +340,15 @@ A publish from the host then looks like
 `curl -H "Authorization: Bearer <token>" -d "message" http://127.0.0.1:2586/nas-alerts`. Subscribe from a phone through
 the ntfy app once the server has a tailnet route (a `tailscale_services` entry in the inventory); no compose setting
 here exposes it beyond the NAS.
+
+### `docker-proxy`<a name="docker-proxy"></a>
+
+Read-only view of the NAS's Docker API for the Monitor Docker integration in Home Assistant, which runs in the HAOS VM
+and so cannot reach `/var/run/docker.sock`. The proxy allows only the `containers`, `images`, `info`, `events`,
+`version` and `ping` endpoints and, with `POST=0`, no write at all. Port `2375` is published on every interface, so keep
+it off the internet; the API still discloses container details, including environment variables, to anything on the LAN.
+Home Assistant reaches it at `http://<nas-lan-ip>:2375`; set that URL as `nas_docker_url` in the VM's `secrets.yaml`
+(see [`services/homeassistant/`](homeassistant/README.md#monitor-docker)).
 
 ### `filebrowser`<a name="filebrowser"></a>
 

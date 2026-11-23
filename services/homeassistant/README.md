@@ -71,3 +71,18 @@ python3 run.py ha-push --restart    # same, then restart Core (configuration.yam
 - Pull before editing. The UI automation editor rewrites `automations.yaml` wholesale, so an edit made in the UI and
   another made in the repo cannot be merged. `ha-push` overwrites whatever the VM has with the repo's version.
 - `ha-push` refuses to run when the repo holds no tracked files, so an empty checkout cannot wipe the VM.
+
+## Monitor Docker<a name="monitor-docker"></a>
+
+[`monitor_docker`](https://github.com/ualex73/monitor_docker) (a HACS integration, configured in YAML) reports the NAS
+containers as sensors. The `monitor_docker:` block in `configuration.yaml` lists the containers Glance shows for the
+stack. It reads the Docker API through the read-only [`docker-proxy`](../README.md#docker-proxy) service, because the VM
+cannot reach the NAS's Docker socket.
+
+1. Deploy the proxy: `python3 run.py nas-deploy docker-proxy`.
+2. Add `nas_docker_url: http://<nas-lan-ip>:2375` to `secrets.yaml` on the VM (the key is listed in
+   [`secrets.yaml.example`](config/secrets.yaml.example)), using the NAS's LAN IP and no trailing slash.
+3. `python3 run.py ha-push --restart`. `monitor_docker:` is read at startup, so a restart is required.
+
+Each container gets `state`, `status`, `health`, `uptime`, CPU and memory sensors; the host gets version and
+running/total/stopped counts. A container added to the stack needs an entry in both `containers` and `rename`.
