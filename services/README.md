@@ -219,16 +219,26 @@ Config persists at `/storage/media/config/jellyfin`.
 The \*arr and download stack (LinuxServer.io images, `PUID=1000/PGID=1000`). Each mounts its own
 `/storage/media/config/<name>` directory. Beyond that:
 
-- `sonarr` mounts `tv/` and `downloads/`.
-- `radarr` mounts `movies/` and `downloads/`.
-- `transmission` mounts `downloads/` and `watch/`.
+- `sonarr` and `radarr` each mount all of `/storage/media` as **one** volume at `/data`, so the library (`/data/tv`,
+  `/data/movies`) and `/data/downloads` share a mount. Imports are hardlinks (Transmission keeps seeding from
+  `downloads/complete`), and a hardlink between separate bind mounts fails with `EXDEV` even on one filesystem.
+- `transmission` mounts `downloads/` and `watch/`. It reports paths as `/downloads/...`, which the arrs translate to
+  `/data/downloads/...` with a remote path mapping.
 - `prowlarr` mounts nothing else; it sees neither the library nor the download trees.
+- `sonarr`, `radarr` and `prowlarr` set `SONARR__SERVER__URLBASE=/sonarr` (likewise `RADARR__…`, `PROWLARR__…`) so the
+  `UrlBase` the Tailscale routes need survives a wiped `/config`.
+
+The apps' settings live in their databases, not in compose. After a first start or a wipe of `/config`, run
+[`scripts/nas/arr_setup.py`](../scripts/nas/README.md#arr_setuppy) on the NAS: it reads each API key from `config.xml`
+and sets the root folders, the Transmission client and path mapping, Jellyfin-style naming, the FlareSolverr proxy,
+Sonarr and Radarr as Prowlarr applications, and the IPTorrents indexer. It is idempotent and has a `--dry-run`.
 
 ### `flaresolverr`<a name="flaresolverr"></a>
 
 Sidecar that solves Cloudflare challenges for Prowlarr. Publishes no port and mounts nothing; other containers on the
 `nas-network` bridge reach it by name as `http://flaresolverr:8191` (`8191` is not declared here; it is the upstream
-default, unverified in this repository).
+default). Prowlarr uses it as an indexer proxy: `arr_setup.py` creates the proxy and a `flaresolverr` tag, and only
+indexers carrying that tag (IPTorrents) are routed through it.
 
 ### `medialink`<a name="medialink"></a>
 
@@ -429,15 +439,18 @@ Like the Caddyfile, `config.yaml` is a single-file bind mount: after editing it,
 
 ## Data flow<a name="data-flow"></a>
 
-The compose files do not wire the apps together: they provide the shared `nas-network` bridge and the mounts below, and
-nothing in this repository configures Prowlarr's indexers or the download client of Sonarr and Radarr. The intended
-flow:
+The compose files provide the shared `nas-network` bridge and the mounts below; the wiring between the apps is applied
+by [`scripts/nas/arr_setup.py`](../scripts/nas/README.md#arr_setuppy) (see
+[`prowlarr`, `radarr`, `sonarr`, `transmission`](#prowlarr-radarr-sonarr-transmission)). The flow:
 
 1. **Search.** Sonarr (TV) and Radarr (movies) search through Prowlarr, which aggregates the indexers. Flaresolverr
    clears Cloudflare challenges for Prowlarr.
-2. **Download.** Sonarr and Radarr hand the release to Transmission, whose `/downloads` is `/storage/media/downloads`.
-3. **Link.** `medialink` polls Transmission and hardlinks each finished torrent's files from `downloads/complete` into
-   the `tv/` or `movies/` tree (see [`medialink`](#medialink)).
+2. **Download.** Sonarr and Radarr hand the release to Transmission, whose `/downloads` is `/storage/media/downloads`
+   (`/data/downloads` inside the arrs).
+3. **Import.** Sonarr and Radarr hardlink the finished download from `downloads/complete` into `tv/` or `movies/`,
+   renaming it to the Jellyfin layout. `medialink` does the same for torrents the arrs did not request, by mirroring the
+   torrent's own layout; two importers act on one library, so once the arrs own it, stop `medialink` (see
+   [`medialink`](#medialink)).
 4. **Serve.** Plex and Jellyfin mount `tv/`, `movies/`, and `music/`.
 
 ## Storage layout<a name="storage-layout"></a>
@@ -467,10 +480,10 @@ Every media bind mount comes from `/storage/media`. Nothing in this repository c
 | Path (under `/storage/media`) | Mounted by                                                                                            |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `config/<name>`               | the app of the same name (`plex`, `jellyfin`, `transmission`, `sonarr`, `radarr`, `prowlarr`, `ntfy`) |
-| `downloads`                   | `transmission`, `sonarr`, `radarr`, `medialink`                                                       |
+| `downloads`                   | `transmission`, `sonarr` (as `/data`), `radarr` (as `/data`), `medialink`                             |
 | `watch`                       | `transmission`                                                                                        |
-| `tv`                          | `plex`, `jellyfin`, `sonarr`, `medialink`                                                             |
-| `movies`                      | `plex`, `jellyfin`, `radarr`, `medialink`                                                             |
+| `tv`                          | `plex`, `jellyfin`, `sonarr` (as `/data/tv`), `medialink`                                             |
+| `movies`                      | `plex`, `jellyfin`, `radarr` (as `/data/movies`), `medialink`                                         |
 | `music`                       | `plex`, `jellyfin`                                                                                    |
 
 All of these mounts are read-write (no compose file sets `:ro` on them), except `filebrowser`, which mounts the whole

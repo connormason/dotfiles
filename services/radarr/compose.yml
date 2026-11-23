@@ -7,9 +7,11 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      # Served under /radarr (Tailscale route); set here so a wiped config comes back with it
+      - RADARR__SERVER__URLBASE=/radarr
     volumes:
       - /storage/media/config/radarr:/config
-      - /storage/media/movies:/movies
-      - /storage/media/downloads:/downloads
+      # One mount for libraries and downloads: imports are hardlinks, which fail across separate bind mounts (EXDEV)
+      - /storage/media:/data
     ports:
       - "7878:7878"

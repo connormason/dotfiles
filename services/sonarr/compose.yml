@@ -7,9 +7,11 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      # Served under /sonarr (Tailscale route); set here so a wiped config comes back with it
+      - SONARR__SERVER__URLBASE=/sonarr
     volumes:
       - /storage/media/config/sonarr:/config
-      - /storage/media/tv:/tv
-      - /storage/media/downloads:/downloads
+      # One mount for libraries and downloads: imports are hardlinks, which fail across separate bind mounts (EXDEV)
+      - /storage/media:/data
     ports:
       - "8989:8989"

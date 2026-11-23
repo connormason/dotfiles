@@ -339,6 +339,7 @@ ignore = [
 "tests/**"                                 = ["B", "S", "SIM", "PERF", "PLR0917"]
 "tests/unit/scripts/env/test_loadenv.py"   = ["E402"]
 "tests/unit/scripts/env/test_venvshell.py" = ["E402"]
+"tests/unit/scripts/nas/test_arr_setup.py" = ["E402"]
 # keep-sorted end
 
 # `ruff check` linter rule group-specific settings
