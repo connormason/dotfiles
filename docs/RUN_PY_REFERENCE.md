@@ -445,8 +445,11 @@ python3 run.py ha-push --restart         # confirm, upload, check, restart Core
 ```
 
 `ha-push` snapshots the VM's tracked files before writing and uploads the snapshot back when the check rejects the
-result. It refuses to run when the repo holds no tracked files. `secrets.yaml`, `.storage/`, the database, and logs are
-never transferred. See [`services/homeassistant/README.md`](../services/homeassistant/README.md) for setup and workflow.
+result. It refuses to run when the repo holds no tracked files. `.storage/`, the database, and logs are never
+transferred. `secrets.yaml` is not copied either: `ha-push` renders
+[`secrets.yaml.j2`](../services/homeassistant/config/secrets.yaml.j2) with Ansible from the inventory's `nas` host
+(vault included), uploads it with the config, and restores the previous file if the check fails. See
+[`services/homeassistant/README.md`](../services/homeassistant/README.md) for setup and workflow.
 
 ### Dotfiles<a name="dotfiles"></a>
 

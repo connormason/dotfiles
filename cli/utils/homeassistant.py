@@ -19,15 +19,21 @@ from typing import TYPE_CHECKING
 from typing import NamedTuple
 from typing import cast
 
+import yaml
+
 from cli.infra.config import DOTFILES_DIR
 from cli.infra.config import HA_CONFIG_DIR
 from cli.infra.config import HA_HOST_ENVVAR
 from cli.infra.config import HA_PORT_ENVVAR
 from cli.infra.config import HA_USER_ENVVAR
+from cli.infra.config import INVENTORY_FILE
+from cli.infra.config import NAS_INVENTORY_HOST
+from cli.infra.config import VAULT_PASSWORD
 from cli.infra.config import ExitCode
 from cli.utils.shell import shell_command
 from cli.utils.styling import optstyle
 from cli.utils.styling import printf
+from cli.utils.uv import uv_command
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -37,6 +43,8 @@ __all__ = [
     'HA_HOST',
     'HA_PORT',
     'HA_REMOTE_CONFIG_DIR',
+    'HA_SECRETS_FILE',
+    'HA_SECRETS_TEMPLATE_NAME',
     'HA_SSH_CONNECT_TIMEOUT',
     'HA_SYNC_EXCLUDED_NAMES',
     'HA_SYNC_PATHS',
@@ -46,18 +54,23 @@ __all__ = [
     'apply_ha_changes',
     'apply_tree_diff',
     'delete_ha_files',
+    'diff_ha_secrets',
     'diff_trees',
     'fetch_ha_config',
+    'fetch_ha_secrets',
     'ha_cli',
     'ha_config_has_local_changes',
     'ha_privileged',
+    'ha_secrets_template',
     'ha_ssh_command',
     'list_ha_tree',
     'pack_ha_files',
     'print_tree_diff',
+    'render_ha_secrets',
     'require_ha_reachable',
     'unpack_ha_stream',
     'upload_ha_files',
+    'write_ha_secrets',
 ]
 
 
@@ -80,6 +93,11 @@ HA_SYNC_PATHS: tuple[str, ...] = (
 
 # File and directory names skipped anywhere in a synced tree
 HA_SYNC_EXCLUDED_NAMES: frozenset[str] = frozenset({'__pycache__', '.DS_Store'})
+
+# `secrets.yaml` is outside HA_SYNC_PATHS because its values come from the Ansible vault: `ha-push` renders it from a
+# template in the repo instead of copying a file
+HA_SECRETS_FILE:          str = 'secrets.yaml'
+HA_SECRETS_TEMPLATE_NAME: str = 'secrets.yaml.j2'
 
 # Seconds ssh waits for the VM before giving up
 HA_SSH_CONNECT_TIMEOUT: int = 5
@@ -446,3 +464,124 @@ def ha_config_has_local_changes() -> bool:
         cwd=DOTFILES_DIR,
     )
     return (result.returncode == 0) and bool(result.stdout.strip())
+
+
+# ==================================================================================================
+# Home Assistant secrets (rendered from the Ansible vault by `ha-push`)
+# ==================================================================================================
+
+
+def ha_secrets_template() -> Path | None:
+    """
+    Locate the template that ``ha-push`` renders into the VM's ``secrets.yaml``
+
+    :return: the template path, or None when the repo has none (the VM's ``secrets.yaml`` is then left alone)
+    """
+    template = HA_CONFIG_DIR / HA_SECRETS_TEMPLATE_NAME
+    return template if template.is_file() else None
+
+
+def render_ha_secrets(template: Path) -> str:
+    """
+    Render the secrets template with the variables of the inventory's NAS host, vault included
+
+    Ansible does the rendering (an ad-hoc ``template`` run on the controller), so vault decryption and nested
+    variables resolve as they do for the NAS services' ``env.j2`` files. Neither the rendered text nor the variables
+    are printed
+
+    :param template: Jinja2 template to render
+    :raises HASyncError: if the inventory, the vault, or the template cannot be resolved
+    :return: the rendered ``secrets.yaml`` content
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        rendered = Path(tmp) / HA_SECRETS_FILE
+        result   = shell_command(
+            uv_command(
+                'run', 'ansible', NAS_INVENTORY_HOST,
+                '-i',                    str(INVENTORY_FILE),
+                '--vault-password-file', str(VAULT_PASSWORD),
+                '-e',                    'ansible_connection=local ansible_python_interpreter=auto_silent',
+                '-m',                    'ansible.builtin.template',
+                '-a',                    f'src={template} dest={rendered} mode=0600',
+            ),
+            capture_output=True,
+            check=False,
+            cwd=DOTFILES_DIR,
+        )
+        if result.returncode != 0:
+            detail = (result.stdout + result.stderr).strip() or 'no output'
+            raise HASyncError(
+                f'Rendering {template.name} from the "{NAS_INVENTORY_HOST}" inventory host failed '
+                f'(is the inventory cloned, the vault password present, and every variable defined?): {detail}',
+            )
+        return rendered.read_text(encoding='utf-8')
+
+
+def _secret_values(text: str | None) -> dict[str, object]:
+    """
+    Parse a ``secrets.yaml`` into its top-level mapping
+
+    :param text: file content, or None when the file does not exist
+    :return: the mapping, empty when the text is absent, not valid YAML, or not a mapping
+    """
+    try:
+        data = yaml.safe_load(text) if text else None
+    except yaml.YAMLError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def diff_ha_secrets(old: str | None, new: str) -> TreeDiff:
+    """
+    Compare two ``secrets.yaml`` contents by key, so the result is safe to print (it holds names, never values)
+
+    Formatting and comments are ignored: only a key whose parsed value differs counts as modified
+
+    :param old: the VM's current content, or None when it has no ``secrets.yaml``
+    :param new: the rendered content
+    :return: keys that are ``added``, ``modified``, or ``removed`` going from ``old`` to ``new``
+    """
+    before = _secret_values(old)
+    after  = _secret_values(new)
+    return TreeDiff(
+        added=sorted(after.keys() - before.keys()),
+        modified=sorted(k for k in before.keys() & after.keys() if before[k] != after[k]),
+        removed=sorted(before.keys() - after.keys()),
+    )
+
+
+def fetch_ha_secrets() -> str | None:
+    """
+    Read the VM's ``secrets.yaml``
+
+    :raises HASyncError: if ssh or the remote read fails
+    :return: the file content, or None when the VM has no ``secrets.yaml``
+    """
+    remote = (
+        f'cd {shlex.quote(HA_REMOTE_CONFIG_DIR)} || exit 1; '
+        f'[ -e {HA_SECRETS_FILE} ] || exit 3; '
+        f'{ha_privileged(f"cat {HA_SECRETS_FILE}")}'
+    )
+    result = shell_command(ha_ssh_command(remote), capture_output=True, check=False)
+    if result.returncode == 3:
+        return None
+    if result.returncode != 0:
+        raise HASyncError(f'Reading secrets.yaml from the Home Assistant VM failed: {result.stderr.strip()}')
+    return result.stdout
+
+
+def write_ha_secrets(content: str) -> None:
+    """
+    Write the VM's ``secrets.yaml`` readable by root only
+
+    :param content: complete file content
+    :raises HASyncError: if ssh or the remote write fails
+    """
+    remote = (
+        f'cd {shlex.quote(HA_REMOTE_CONFIG_DIR)} && umask 077 && '
+        f'{ha_privileged(f"tee {HA_SECRETS_FILE} >/dev/null")} && '
+        f'{ha_privileged(f"chmod 600 {HA_SECRETS_FILE}")}'
+    )
+    result = shell_command(ha_ssh_command(remote), input=content, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise HASyncError(f'Writing secrets.yaml to the Home Assistant VM failed: {result.stderr.strip()}')

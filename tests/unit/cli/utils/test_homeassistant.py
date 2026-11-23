@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import tarfile
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import NamedTuple
 
@@ -28,7 +29,6 @@ from cli.utils.styling import unstyle
 if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Sequence
-    from pathlib import Path
 
 # ==================================================================================================
 # Helpers
@@ -736,3 +736,208 @@ class TestHaPush:
         assert exc_info.value.code == ExitCode.COMMAND_FAILED
         assert 'ha-pull' in unstyle(capsys.readouterr().out)
         assert _tree(vm.remote) == {'configuration.yaml': 'keep'}
+
+
+# ==================================================================================================
+# Secrets rendered from the vault
+# ==================================================================================================
+
+
+class TestDiffHaSecrets:
+    """
+    Tests for diff_ha_secrets
+    """
+    @pytest.mark.parametrize(
+        ('old', 'new', 'expected'),
+        [
+            (None,                   'a: 1\nb: 2\n', (['a', 'b'], [],    [])),
+            ('a: 1\nb: 2\n',         'a: 1\nb: 3\n', ([],         ['b'], [])),
+            ('a: 1\nb: 2\nc: 3\n',   'a: 1\n',       ([],         [],    ['b', 'c'])),
+            ('# note\na:   1\n',     'a: 1\n',       ([],         [],    [])),
+            ('a: [unclosed\n',       'a: 1\n',       (['a'],      [],    [])),
+            ('- not a mapping\n',    'a: 1\n',       (['a'],      [],    [])),
+        ],
+    )
+    def test_compares_keys_and_parsed_values(
+        self,
+        old: str | None,
+        new: str,
+        expected: tuple[list[str], list[str], list[str]],
+    ) -> None:
+        """
+        Test that only added, changed and removed keys are reported, ignoring comments and spacing
+        """
+        assert tuple(ha_utils.diff_ha_secrets(old, new)) == expected
+
+
+class TestRenderHaSecrets:
+    """
+    Tests for render_ha_secrets
+    """
+    def test_renders_through_ansible_against_the_nas_host(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """
+        Test that the template goes through an ad-hoc ansible template run and the rendered file is returned
+        """
+        template = _write(tmp_path / 'secrets.yaml.j2', 'k: v')
+        calls: list[list[str]] = []
+
+        def fake_shell(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(cmd)
+            dest = next(a for a in cmd[cmd.index('-a') + 1].split() if a.startswith('dest=')).removeprefix('dest=')
+            _write(Path(dest), 'k: rendered\n')
+            return subprocess.CompletedProcess(cmd, 0, stdout='changed', stderr='')
+
+        monkeypatch.setattr(ha_utils, 'shell_command', fake_shell)
+
+        assert ha_utils.render_ha_secrets(template) == 'k: rendered\n'
+        (cmd,) = calls
+        assert 'nas' in cmd
+        assert 'ansible.builtin.template' in cmd
+        assert 'ansible_connection=local' in cmd[cmd.index('-e') + 1]
+
+    def test_failure_raises_with_the_ansible_output(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """
+        Test that an undefined variable or a missing vault surfaces as HASyncError
+        """
+        template = _write(tmp_path / 'secrets.yaml.j2', 'k: {{ missing }}')
+        monkeypatch.setattr(
+            ha_utils,
+            'shell_command',
+            lambda cmd, **_kw: subprocess.CompletedProcess(cmd, 2, stdout="'missing' is undefined", stderr=''),
+        )
+
+        with pytest.raises(ha_utils.HASyncError, match="'missing' is undefined"):
+            ha_utils.render_ha_secrets(template)
+
+
+class TestHaPushSecrets:
+    """
+    Tests for ha-push rendering secrets.yaml from the vault
+    """
+    RENDERED = 'nas_docker_url: "http://10.0.0.5:2375"\n'
+
+    @pytest.fixture(autouse=True)
+    def _template(self, vm: FakeVM, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Give the repo a secrets template and replace the Ansible render with a fixed result
+        """
+        template = _write(vm.local / 'secrets.yaml.j2', 'unused')
+        monkeypatch.setattr(deploy_cmds, 'ha_secrets_template', lambda: template)
+        monkeypatch.setattr(deploy_cmds, 'render_ha_secrets',   lambda _template: self.RENDERED)
+        _write(vm.local / 'configuration.yaml', 'good')
+
+    def test_writes_rendered_secrets_readable_by_root_only(self, vm: FakeVM) -> None:
+        """
+        Test that a VM without secrets.yaml receives the rendered file with mode 0600, written through sudo
+        """
+        _write(vm.remote / 'configuration.yaml', 'good')
+
+        _push()
+
+        secrets = vm.remote / 'secrets.yaml'
+        assert secrets.read_text(encoding='utf-8') == self.RENDERED
+        assert stat.S_IMODE(secrets.stat().st_mode) == 0o600
+        assert any('tee' in line for line in vm.sudo_log.read_text(encoding='utf-8').splitlines())
+
+    def test_secrets_only_change_is_pushed(self, vm: FakeVM) -> None:
+        """
+        Test that a stale secret is updated even when every tracked file already matches
+        """
+        _write(vm.remote / 'configuration.yaml', 'good')
+        _write(vm.remote / 'secrets.yaml',       'nas_docker_url: "http://10.0.0.9:2375"\n')
+
+        _push()
+
+        assert (vm.remote / 'secrets.yaml').read_text(encoding='utf-8') == self.RENDERED
+
+    def test_equal_secrets_are_left_untouched(self, vm: FakeVM, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that comments and quoting differences do not trigger a rewrite
+        """
+        existing = '# hand-written\nnas_docker_url:   http://10.0.0.5:2375\n'
+        _write(vm.remote / 'configuration.yaml', 'good')
+        _write(vm.remote / 'secrets.yaml',       existing)
+
+        _push()
+
+        assert (vm.remote / 'secrets.yaml').read_text(encoding='utf-8') == existing
+        assert 'already matches' in unstyle(capsys.readouterr().out)
+
+    def test_keys_missing_from_the_template_are_removed(self, vm: FakeVM, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that the template is authoritative and the removal is announced by key name
+        """
+        _write(vm.remote / 'configuration.yaml', 'good')
+        _write(vm.remote / 'secrets.yaml',       f'{self.RENDERED}stale_key: x\n')
+
+        _push()
+
+        assert (vm.remote / 'secrets.yaml').read_text(encoding='utf-8') == self.RENDERED
+        assert 'stale_key' in unstyle(capsys.readouterr().out)
+
+    def test_dry_run_prints_key_names_but_no_values(self, vm: FakeVM, capsys: pytest.CaptureFixture[str]) -> None:
+        """
+        Test that a dry run reports the pending secret by name only and writes nothing
+        """
+        _write(vm.remote / 'configuration.yaml', 'good')
+
+        _push(dry_run=True)
+
+        output = unstyle(capsys.readouterr().out)
+        assert 'nas_docker_url' in output
+        assert '10.0.0.5'       not in output
+        assert not (vm.remote / 'secrets.yaml').exists()
+
+    def test_failed_check_restores_the_previous_secrets(self, vm: FakeVM) -> None:
+        """
+        Test that a rejected config puts the VM's old secrets.yaml back, not only the tracked files
+        """
+        old = 'nas_docker_url: "http://10.0.0.9:2375"\nkeep: me\n'
+        _write(vm.remote / 'configuration.yaml', 'good')
+        _write(vm.remote / 'secrets.yaml',       old)
+        _write(vm.local  / 'configuration.yaml', 'BROKEN')
+
+        with pytest.raises(SystemExit):
+            _push()
+
+        assert (vm.remote / 'secrets.yaml').read_text(encoding='utf-8') == old
+        assert (vm.remote / 'configuration.yaml').read_text(encoding='utf-8') == 'good'
+
+    def test_failed_check_removes_secrets_the_vm_never_had(self, vm: FakeVM) -> None:
+        """
+        Test that rolling back a first-time secrets push deletes the file again
+        """
+        _write(vm.remote / 'configuration.yaml', 'good')
+        _write(vm.local  / 'configuration.yaml', 'BROKEN')
+
+        with pytest.raises(SystemExit):
+            _push()
+
+        assert not (vm.remote / 'secrets.yaml').exists()
+
+    def test_render_failure_aborts_before_touching_the_vm(
+        self,
+        vm: FakeVM,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """
+        Test that an unresolvable vault variable stops the push with the reason and changes nothing
+        """
+        def boom(_template: Path) -> str:
+            raise ha_utils.HASyncError("'nas_lan_ip' is undefined")
+
+        monkeypatch.setattr(deploy_cmds, 'render_ha_secrets', boom)
+        _write(vm.remote / 'configuration.yaml', 'old')
+        before = _tree(vm.remote)
+
+        with pytest.raises(SystemExit) as exc_info:
+            _push()
+
+        assert exc_info.value.code == ExitCode.COMMAND_FAILED
+        assert "'nas_lan_ip' is undefined" in unstyle(capsys.readouterr().out)
+        assert _tree(vm.remote) == before

@@ -25,8 +25,8 @@ Everything else stays on the VM and is covered by Home Assistant's own
 - `custom_components/`. HACS installs and updates its integrations there, so the directory holds vendored upstream code
   (HACS alone is about 50 MB) that a push would overwrite with a stale copy. HACS records what it installed in
   `.storage/`.
-- `secrets.yaml`. Its real values never enter the repo. [`config/secrets.yaml.example`](config/secrets.yaml.example)
-  lists the keys, and `.gitignore` blocks `secrets.yaml` here as a guard.
+- `secrets.yaml`. Its real values never enter the repo, but `ha-push` still builds it: see [Secrets](#secrets).
+  `.gitignore` blocks `secrets.yaml` here as a guard.
 
 Files that exist only locally under a tracked directory are uploaded by `ha-push`, and files deleted on one side are
 deleted on the other, so the allowlisted part of the two trees always ends up identical.
@@ -72,6 +72,24 @@ python3 run.py ha-push --restart    # same, then restart Core (configuration.yam
   another made in the repo cannot be merged. `ha-push` overwrites whatever the VM has with the repo's version.
 - `ha-push` refuses to run when the repo holds no tracked files, so an empty checkout cannot wipe the VM.
 
+## Secrets<a name="secrets"></a>
+
+[`config/secrets.yaml.j2`](config/secrets.yaml.j2) is the template of the VM's `/config/secrets.yaml`. `ha-push` renders
+it with Ansible against the inventory's `nas` host, so a value comes from the same place as in the services' `env.j2`
+files: `inventory/host_vars/nas/` (vault included), unlocked with `vault_password.txt`. The rendered text is never
+printed, written locally, or committed. For example, `nas_docker_url` is built from `nas_lan_ip`.
+
+- The template is the single source of truth. A key that exists only on the VM is deleted by the next push, so add every
+  `!secret <key>` the config uses to the template.
+- The confirmation prompt, `--dry-run`, and the summary list secrets by **key name** only (`+` new, `~` changed, `-`
+  removed). A rewrite is skipped when the parsed content already matches, so comments and quoting on the VM do not cause
+  churn.
+- The file is uploaded before the config, because the config may already reference a new key. It is written `0600`, and
+  the rollback described under [Workflow](#workflow) restores the previous `secrets.yaml` too (or deletes the file when
+  the VM had none).
+- A missing variable, inventory or vault password aborts the push before anything on the VM changes. Without a template,
+  `ha-push` leaves the VM's `secrets.yaml` alone.
+
 ## Monitor Docker<a name="monitor-docker"></a>
 
 [`monitor_docker`](https://github.com/ualex73/monitor_docker) (a HACS integration, configured in YAML) reports the NAS
@@ -79,9 +97,9 @@ containers as sensors. The `monitor_docker:` block in `configuration.yaml` lists
 stack. It reads the Docker API through the read-only [`docker-proxy`](../README.md#docker-proxy) service, because the VM
 cannot reach the NAS's Docker socket.
 
-1. Deploy the proxy: `python3 run.py nas-deploy docker-proxy`.
-2. Add `nas_docker_url: http://<nas-lan-ip>:2375` to `secrets.yaml` on the VM (the key is listed in
-   [`secrets.yaml.example`](config/secrets.yaml.example)), using the NAS's LAN IP and no trailing slash.
+1. Define `nas_lan_ip` (the NAS's LAN address) for the `nas` host in the inventory, in `host_vars/nas/vault.yml` or
+   `vars.yml`. `ha-push` turns it into `nas_docker_url` (see [Secrets](#secrets)); nothing is edited on the VM.
+2. Deploy the proxy: `python3 run.py nas-deploy docker-proxy`.
 3. `python3 run.py ha-push --restart`. `monitor_docker:` is read at startup, so a restart is required.
 
 Each container gets `state`, `status`, `health`, `uptime`, CPU and memory sensors; the host gets version and

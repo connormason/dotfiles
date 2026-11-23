@@ -347,8 +347,8 @@ Read-only view of the NAS's Docker API for the Monitor Docker integration in Hom
 and so cannot reach `/var/run/docker.sock`. The proxy allows only the `containers`, `images`, `info`, `events`,
 `version` and `ping` endpoints and, with `POST=0`, no write at all. Port `2375` is published on every interface, so keep
 it off the internet; the API still discloses container details, including environment variables, to anything on the LAN.
-Home Assistant reaches it at `http://<nas-lan-ip>:2375`; set that URL as `nas_docker_url` in the VM's `secrets.yaml`
-(see [`services/homeassistant/`](homeassistant/README.md#monitor-docker)).
+Home Assistant reaches it at `http://<nas-lan-ip>:2375`; `run.py ha-push` writes that URL into the VM's `secrets.yaml`
+from the inventory's `nas_lan_ip` (see [`services/homeassistant/`](homeassistant/README.md#monitor-docker)).
 
 ### `filebrowser`<a name="filebrowser"></a>
 
