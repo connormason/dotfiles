@@ -365,9 +365,8 @@ class HaPushCommand(Command):
         require_ha_reachable()
 
         # secrets.yaml is rendered from the vault; without a template in the repo the VM's file is left alone
-        secrets_template = ha_secrets_template()
         new_secrets: str | None = None
-        if secrets_template is not None:
+        if (secrets_template := ha_secrets_template()) is not None:
             try:
                 new_secrets = render_ha_secrets(secrets_template)
             except HASyncError as e:

@@ -528,7 +528,8 @@ def _secret_values(text: str | None) -> dict[str, object]:
         data = yaml.safe_load(text) if text else None
     except yaml.YAMLError:
         return {}
-    return data if isinstance(data, dict) else {}
+    else:
+        return data if isinstance(data, dict) else {}
 
 
 def diff_ha_secrets(old: str | None, new: str) -> TreeDiff:

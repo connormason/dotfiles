@@ -750,12 +750,12 @@ class TestDiffHaSecrets:
     @pytest.mark.parametrize(
         ('old', 'new', 'expected'),
         [
-            (None,                   'a: 1\nb: 2\n', (['a', 'b'], [],    [])),
-            ('a: 1\nb: 2\n',         'a: 1\nb: 3\n', ([],         ['b'], [])),
-            ('a: 1\nb: 2\nc: 3\n',   'a: 1\n',       ([],         [],    ['b', 'c'])),
-            ('# note\na:   1\n',     'a: 1\n',       ([],         [],    [])),
-            ('a: [unclosed\n',       'a: 1\n',       (['a'],      [],    [])),
-            ('- not a mapping\n',    'a: 1\n',       (['a'],      [],    [])),
+            (None,                 'a: 1\nb: 2\n', (['a', 'b'], [],    [])),
+            ('a: 1\nb: 2\n',       'a: 1\nb: 3\n', ([],         ['b'], [])),
+            ('a: 1\nb: 2\nc: 3\n', 'a: 1\n',       ([],         [],    ['b', 'c'])),
+            ('# note\na:   1\n',   'a: 1\n',       ([],         [],    [])),
+            ('a: [unclosed\n',     'a: 1\n',       (['a'],      [],    [])),
+            ('- not a mapping\n',  'a: 1\n',       (['a'],      [],    [])),
         ],
     )
     def test_compares_keys_and_parsed_values(
@@ -792,10 +792,10 @@ class TestRenderHaSecrets:
             return subprocess.CompletedProcess(cmd, 0, stdout='changed', stderr='')
 
         monkeypatch.setattr(ha_utils, 'shell_command', fake_shell)
-
         assert ha_utils.render_ha_secrets(template) == 'k: rendered\n'
+
         (cmd,) = calls
-        assert 'nas' in cmd
+        assert 'nas'                      in cmd
         assert 'ansible.builtin.template' in cmd
         assert 'ansible_connection=local' in cmd[cmd.index('-e') + 1]
 
@@ -835,7 +835,6 @@ class TestHaPushSecrets:
         Test that a VM without secrets.yaml receives the rendered file with mode 0600, written through sudo
         """
         _write(vm.remote / 'configuration.yaml', 'good')
-
         _push()
 
         secrets = vm.remote / 'secrets.yaml'
@@ -849,7 +848,6 @@ class TestHaPushSecrets:
         """
         _write(vm.remote / 'configuration.yaml', 'good')
         _write(vm.remote / 'secrets.yaml',       'nas_docker_url: "http://10.0.0.9:2375"\n')
-
         _push()
 
         assert (vm.remote / 'secrets.yaml').read_text(encoding='utf-8') == self.RENDERED
@@ -861,7 +859,6 @@ class TestHaPushSecrets:
         existing = '# hand-written\nnas_docker_url:   http://10.0.0.5:2375\n'
         _write(vm.remote / 'configuration.yaml', 'good')
         _write(vm.remote / 'secrets.yaml',       existing)
-
         _push()
 
         assert (vm.remote / 'secrets.yaml').read_text(encoding='utf-8') == existing
@@ -873,7 +870,6 @@ class TestHaPushSecrets:
         """
         _write(vm.remote / 'configuration.yaml', 'good')
         _write(vm.remote / 'secrets.yaml',       f'{self.RENDERED}stale_key: x\n')
-
         _push()
 
         assert (vm.remote / 'secrets.yaml').read_text(encoding='utf-8') == self.RENDERED
@@ -884,12 +880,11 @@ class TestHaPushSecrets:
         Test that a dry run reports the pending secret by name only and writes nothing
         """
         _write(vm.remote / 'configuration.yaml', 'good')
-
         _push(dry_run=True)
 
         output = unstyle(capsys.readouterr().out)
         assert 'nas_docker_url' in output
-        assert '10.0.0.5'       not in output
+        assert '10.0.0.5'   not in output
         assert not (vm.remote / 'secrets.yaml').exists()
 
     def test_failed_check_restores_the_previous_secrets(self, vm: FakeVM) -> None:
@@ -933,8 +928,8 @@ class TestHaPushSecrets:
 
         monkeypatch.setattr(deploy_cmds, 'render_ha_secrets', boom)
         _write(vm.remote / 'configuration.yaml', 'old')
-        before = _tree(vm.remote)
 
+        before = _tree(vm.remote)
         with pytest.raises(SystemExit) as exc_info:
             _push()
 
