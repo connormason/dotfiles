@@ -545,7 +545,7 @@ class TestConfigureProwlarr:
         )
 
         output = ''.join(capsys.readouterr())
-        for secret in (SECRET_COOKIE, 'SONARR-KEY-123', 'RADARR-KEY-456'):
+        for secret in (SECRET_COOKIE, 'SONARR-KEY-123', 'RADARR-KEY-456'):      # pragma: allowlist secret
             assert secret not in output
 
     def test_missing_cookie_skips_new_indexer_with_warning(self, capsys: pytest.CaptureFixture[str]) -> None:
