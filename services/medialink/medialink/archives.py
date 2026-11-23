@@ -182,7 +182,7 @@ class Extractor:
             )
 
 
-def _publish(staging: Path, dest_dir: Path) -> int:
+def _publish(staging: Path, dest_dir: Path) -> list[Path]:
     """
     Move freshly extracted files from the staging directory into the library
 
@@ -191,9 +191,9 @@ def _publish(staging: Path, dest_dir: Path) -> int:
 
     :param staging: directory the archive was unpacked into
     :param dest_dir: final library directory
-    :return: number of files moved into place
+    :return: the library paths of the files moved into place
     """
-    moved = 0
+    moved: list[Path] = []
 
     for dirpath, _, filenames in os.walk(staging):
         for filename in filenames:
@@ -207,7 +207,7 @@ def _publish(staging: Path, dest_dir: Path) -> int:
 
             target.parent.mkdir(parents=True, exist_ok=True)
             source.replace(target)
-            moved += 1
+            moved.append(target)
 
     return moved
 
@@ -275,7 +275,8 @@ def _extract_one(
 
     if state is not None:
         state.add(key)
-    return LinkResult(torrent.name, archive, dest_dir, EXTRACTED, f'{moved} file(s)')
+        state.record_outputs(key, [p.relative_to(dest_root.parent).as_posix() for p in moved])
+    return LinkResult(torrent.name, archive, dest_dir, EXTRACTED, f'{len(moved)} file(s)')
 
 
 def extract_torrent(
