@@ -71,7 +71,11 @@ against the library every 60 seconds, deployed through the existing `services/<n
 
 ### Task 6: Follow-up, Jellyfin-style reorganisation
 
-- [ ] Decide the target naming (`Show/Season NN/`, `Movie (Year)/`) and a title parser or an external matcher
+Design: [`2026-11-22-medialink-reorg-design.md`](2026-11-22-medialink-reorg-design.md); implementation plan:
+[`2026-11-22-medialink-reorg-plan.md`](2026-11-22-medialink-reorg-plan.md).
+
+- [x] Decide the target naming (`Show/Season NN/`, `Movie (Year)/`) and a title parser or an external matcher (offline
+      stdlib parser plus an overrides file)
 - [ ] Move library links, not files, so the seed copies stay linked
 - [ ] Dry-run report, then apply in batches with a rescan check in Jellyfin and Plex
 

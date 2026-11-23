@@ -1,7 +1,7 @@
 # medialink: Jellyfin-style library layout (Task 6)
 
-Status: **draft for review.** The decisions in [Open decisions](#open-decisions) need an owner's answer before a plan is
-written. Parent: [`2026-11-22-medialink-design.md`](2026-11-22-medialink-design.md) (follow-up 1) and
+Status: **approved 2026-11-22** with every recommendation in [Decisions](#decisions) accepted. Implementation plan:
+[`2026-11-22-medialink-reorg-plan.md`](2026-11-22-medialink-reorg-plan.md). Parent: [`2026-11-22-medialink-design.md`](2026-11-22-medialink-design.md) (follow-up 1) and
 [`2026-11-22-medialink-plan.md`](2026-11-22-medialink-plan.md) (Task 6).
 
 ## Problem
@@ -53,7 +53,7 @@ tv/Show Name (Year)/Season 00/...                       specials
   each have dubbed/alternate episodes).
 - Sidecars: `.srt`/`.sub`/`.idx`/`.ass` follow their video. `.nfo`, `.sfv`, `.png`, samples and `.txt` are scene
   junk (the `.nfo` files are release notes, not Kodi XML) and are **not** carried into the new layout; their old links
-  are removed with the old folder, the seed copies remain. *Decision 3.*
+  are removed with the old folder, the seed copies remain (Decision 3).
 
 ## Approach
 
@@ -65,7 +65,7 @@ and, later, by the linker for new downloads, so both always agree.
 - Parses season/episode (`S01E02`, `1x02`, `Season 3`, folder `S04`), year, and the title (everything before the first
   marker, with dots and underscores normalised, release-group and codec tokens stripped).
 - Returns `None` when it cannot decide. The caller falls back to today's mirror layout and reports the file.
-- A strong episodic marker on a file in `movies/` yields a `tv/` placement (cross-library move). *Decision 4.*
+- A strong episodic marker on a file in `movies/` yields a `tv/` placement (cross-library move, Decision 4).
 - A per-user override file (`config/medialink/overrides.json`: release-name pattern to canonical title/year) fixes the
   cases the parser gets wrong, without code changes. This is the escape hatch that makes "report, don't guess" workable.
 
@@ -114,8 +114,7 @@ for new torrents. `None` falls back to mirror, so a new release is never lost, o
 | Parser overreach (a regex "title extractor" is a rabbit hole)                          | Test against a fixture of the real names in this library; anything outside it is reported rather than handled    |
 
 Server refresh after moves: both servers watch the filesystem, but a full rescan after each batch is the dependable
-path. Triggering it through their APIs needs an API key/token in `env.j2`, so it is optional and manual (UI rescan)
-unless Decision 5 says otherwise.
+path. Triggering it through their APIs would need tokens in `env.j2`, so the rescan stays manual (Decision 5).
 
 ## Testing
 
@@ -135,15 +134,16 @@ unless Decision 5 says otherwise.
 5. Batched apply of the rest; final audit.
 6. `MEDIALINK_LAYOUT=jellyfin` for new downloads; update README and the parent plan.
 
-## Open decisions
+## Decisions
 
-1. **Title source.** Recommended: an offline stdlib parser plus the overrides file. Alternatives: the `guessit` library
-   (better coverage, breaks the stdlib-only rule, acceptable if confined to the one-shot command) or TMDB lookup (canonical
-   titles and years, but needs an API key, network and a failure mode for every ambiguous name). Reading titles back from
-   Jellyfin's API was rejected: it matches from the same messy names, so errors would be laundered into the layout, and
-   it ties the layout to one server.
-2. **Show-folder year.** Always `Show (Year)`, or only when needed to disambiguate (recommended)?
-3. **Sidecar policy.** Drop scene junk (`.nfo`, `.sfv`, `.png`) from the library as recommended, or keep carrying it?
-4. **Misfiled seasons.** Move `S01`-style files found in `movies/` into `tv/` (recommended), or only report them?
-5. **Server refresh.** Manual rescan after each batch (recommended), or add Jellyfin/Plex tokens so `reorganize` triggers
-   it?
+All five were approved as recommended.
+
+1. **Title source: offline stdlib parser plus the overrides file.** Rejected: the `guessit` library (better coverage but
+   breaks the stdlib-only rule) and TMDB lookup (API key, network, and a failure mode for every ambiguous name). Reading
+   titles back from Jellyfin's API was also rejected: it matches from the same messy names, so errors would be laundered
+   into the layout, and it ties the layout to one server. Revisit TMDB only if the overrides file grows unmanageable.
+2. **Show-folder year:** only when needed to disambiguate or when the release gives one and another show shares the title.
+3. **Sidecars:** subtitles follow their video; scene junk (`.nfo`, `.sfv`, `.png`, samples, `.txt`) is dropped from the
+   library. Seed copies are unaffected.
+4. **Misfiled seasons:** `S01`-style files found in `movies/` move into `tv/`, reported as cross-library moves.
+5. **Server refresh:** manual rescan after each batch; no Jellyfin or Plex tokens in `env.j2`.
