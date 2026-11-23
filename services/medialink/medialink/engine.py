@@ -14,6 +14,7 @@ from medialink.archives import has_archives
 from medialink.archives import is_archive_part
 from medialink.classify import MOVIES
 from medialink.classify import classify
+from medialink.index import build_index
 from medialink.linker import EXTRACT_FAILED
 from medialink.linker import EXTRACTED
 from medialink.linker import FAILED
@@ -26,6 +27,7 @@ from medialink.linker import map_download_dir
 if TYPE_CHECKING:
     from medialink.archives import Extractor
     from medialink.config import Config
+    from medialink.index import Index
     from medialink.linker import LinkResult
     from medialink.notify import Notifier
     from medialink.state import State
@@ -97,6 +99,7 @@ def _handle_torrent(
     dry_run: bool,
     state: State | None,
     extractor: Extractor | None,
+    index: Index | None = None,
 ) -> None:
     """
     Reconcile one finished torrent, recording results and problems on the report
@@ -107,6 +110,7 @@ def _handle_torrent(
     :param dry_run: do not touch the filesystem
     :param state: store of completed extractions
     :param extractor: RAR extraction tool, or None when unavailable or disabled
+    :param index: library inode index, so files moved within the library are recognised
     """
     category = classify(torrent.name, torrent.download_dir, torrent.labels)
     if category is None:
@@ -134,7 +138,7 @@ def _handle_torrent(
         return
 
     dest_root = config.movies_root if category == MOVIES else config.tv_root
-    results   = link_torrent(torrent, source_dir, dest_root, dry_run=dry_run, skip=is_archive_part)
+    results   = link_torrent(torrent, source_dir, dest_root, dry_run=dry_run, skip=is_archive_part, index=index)
     if has_archives(torrent):
         results += extract_torrent(torrent, source_dir, dest_root, extractor, state, dry_run=dry_run)
     report.results.extend(results)
@@ -197,11 +201,12 @@ def reconcile(
     :return: the aggregate report
     """
     report = Report()
+    index  = build_index(config.movies_root, config.tv_root)
     for torrent in torrents:
         if not torrent.finished:
             report.pending += 1
             continue
-        _handle_torrent(torrent, config, report, dry_run=dry_run, state=state, extractor=extractor)
+        _handle_torrent(torrent, config, report, dry_run=dry_run, state=state, extractor=extractor, index=index)
 
     if dry_run or (state is None):
         return report
