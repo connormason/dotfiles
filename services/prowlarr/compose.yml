@@ -7,6 +7,8 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      # Served under /prowlarr (Tailscale route); set here so a wiped config comes back with it
+      - PROWLARR__SERVER__URLBASE=/prowlarr
     volumes:
       - /storage/media/config/prowlarr:/config
     ports:
