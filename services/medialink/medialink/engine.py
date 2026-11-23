@@ -13,8 +13,15 @@ from medialink.archives import extract_torrent
 from medialink.archives import has_archives
 from medialink.archives import is_archive_part
 from medialink.classify import MOVIES
+from medialink.classify import TV
 from medialink.classify import classify
+from medialink.config import JELLYFIN
+from medialink.config import ConfigError
 from medialink.index import build_index
+from medialink.layout import JUNK
+from medialink.layout import kind
+from medialink.layout import load_overrides
+from medialink.layout import place
 from medialink.linker import EXTRACT_FAILED
 from medialink.linker import EXTRACTED
 from medialink.linker import FAILED
@@ -25,15 +32,20 @@ from medialink.linker import link_torrent
 from medialink.linker import map_download_dir
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
     from medialink.archives import Extractor
     from medialink.config import Config
     from medialink.index import Index
+    from medialink.layout import Override
     from medialink.linker import LinkResult
     from medialink.notify import Notifier
     from medialink.state import State
     from medialink.transmission import Torrent
 
 __all__ = [
+    'LayoutContext',
     'Problem',
     'Report',
     'reconcile',
@@ -45,7 +57,7 @@ logger = logging.getLogger(__name__)
 PROBLEM_STATUSES = frozenset({FAILED, SOURCE_MISSING, UNSAFE, EXTRACT_FAILED})
 
 # Key prefixes this module owns in the notified-problem state (the CLI owns 'rpc-outage')
-PROBLEM_PREFIXES = ('unclassified:', 'outside:', 'link:')
+PROBLEM_PREFIXES = ('unclassified:', 'outside:', 'link:', 'overrides')
 
 
 @dataclass(frozen=True)
@@ -76,6 +88,78 @@ class Report:
         return not self.problems
 
 
+@dataclass
+class LayoutContext:
+    """
+    What the Jellyfin layout needs for one pass: the overrides, and the show directories (grown as shows are placed)
+    """
+    overrides: list[Override]
+    shows:     set[str]
+
+
+def _skip_archives_and_junk(name: str) -> bool:
+    """
+    Whether the Jellyfin layout leaves a torrent file out: RAR volumes (extracted instead) and scene leftovers
+
+    :param name: torrent-relative file name
+    :return: True to skip
+    """
+    return is_archive_part(name) or kind(name) == JUNK
+
+
+def _placer(category: str, torrent: Torrent, config: Config, layout: LayoutContext) -> Callable[[str], Path | None]:
+    """
+    Build the function that maps one torrent file to its path in the Jellyfin layout
+
+    :param category: library the torrent was classified into
+    :param torrent: the torrent
+    :param config: runtime configuration
+    :param layout: overrides and known show directories
+    :return: a function returning the destination, or None when the file cannot be placed (it is mirrored instead)
+    """
+    def place_file(name: str) -> Path | None:
+        """
+        Destination of one file
+
+        :param name: torrent-relative file name
+        :return: absolute destination, or None
+        """
+        placement = place(category, torrent.name, name, layout.overrides, layout.shows)
+        if placement is None:
+            return None
+        if placement.category == TV:
+            layout.shows.add(placement.directory.split('/', 1)[0])
+        return (config.tv_root if placement.category == TV else config.movies_root) / placement.path
+
+    return place_file
+
+
+def _layout_context(config: Config, report: Report) -> LayoutContext | None:
+    """
+    Prepare the Jellyfin layout for a pass
+
+    A damaged overrides file is reported as a problem and treated as empty, so the pass still links everything.
+
+    :param config: runtime configuration
+    :param report: report that receives the overrides problem, if any
+    :return: the context, or None when the layout is ``mirror``
+    """
+    if config.layout != JELLYFIN:
+        return None
+
+    try:
+        overrides = load_overrides(config.overrides_path)
+    except ConfigError as e:
+        report.problems.append(Problem(key='overrides', title='Overrides file unusable', message=str(e)))
+        overrides = []
+
+    try:
+        shows = {p.name for p in config.tv_root.iterdir() if p.is_dir()}
+    except OSError:
+        shows = set()
+    return LayoutContext(overrides, shows)
+
+
 def _summarise(results: list[LinkResult], limit: int = 5) -> str:
     """
     Describe the failing files of one torrent
@@ -100,6 +184,7 @@ def _handle_torrent(
     state: State | None,
     extractor: Extractor | None,
     index: Index | None = None,
+    layout: LayoutContext | None = None,
 ) -> None:
     """
     Reconcile one finished torrent, recording results and problems on the report
@@ -111,6 +196,7 @@ def _handle_torrent(
     :param state: store of completed extractions
     :param extractor: RAR extraction tool, or None when unavailable or disabled
     :param index: library inode index, so files moved within the library are recognised
+    :param layout: Jellyfin-layout context, or None to mirror each torrent's own layout
     """
     category = classify(torrent.name, torrent.download_dir, torrent.labels)
     if category is None:
@@ -138,7 +224,14 @@ def _handle_torrent(
         return
 
     dest_root = config.movies_root if category == MOVIES else config.tv_root
-    results   = link_torrent(torrent, source_dir, dest_root, dry_run=dry_run, skip=is_archive_part, index=index)
+    skip      = is_archive_part
+    placer    = None
+    if layout is not None:
+        placer = _placer(category, torrent, config, layout)
+        skip   = _skip_archives_and_junk
+    results   = link_torrent(
+        torrent, source_dir, dest_root, dry_run=dry_run, skip=skip, index=index, placer=placer,
+    )
     if has_archives(torrent):
         results += extract_torrent(torrent, source_dir, dest_root, extractor, state, dry_run=dry_run)
     report.results.extend(results)
@@ -202,11 +295,14 @@ def reconcile(
     """
     report = Report()
     index  = build_index(config.movies_root, config.tv_root)
+    layout = _layout_context(config, report)
     for torrent in torrents:
         if not torrent.finished:
             report.pending += 1
             continue
-        _handle_torrent(torrent, config, report, dry_run=dry_run, state=state, extractor=extractor, index=index)
+        _handle_torrent(
+            torrent, config, report, dry_run=dry_run, state=state, extractor=extractor, index=index, layout=layout,
+        )
 
     if dry_run or (state is None):
         return report

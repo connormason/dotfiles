@@ -278,11 +278,12 @@ exits with status 2, so `docker ps` and the restart policy show an outage instea
 
 Commands run inside the container (`python -m medialink <command>`):
 
-| Command                      | Effect                                                                                                    |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `run`                        | The service loop (container default)                                                                      |
-| `once [-n]`                  | One pass; `-n/--dry-run` reports what would be linked and changes nothing                                 |
-| `dedupe [--apply] [--quick]` | Cleans up what autoplex left, after verifying each file byte for byte (details below); dry run by default |
+| Command                                                            | Effect                                                                                                          |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `run`                                                              | The service loop (container default)                                                                            |
+| `once [-n]`                                                        | One pass; `-n/--dry-run` reports what would be linked and changes nothing                                       |
+| `dedupe [--apply] [--quick]`                                       | Cleans up what autoplex left, after verifying each file byte for byte (details below); dry run by default       |
+| `reorganize [--apply] [--limit N] [--only REGEX] [--undo JOURNAL]` | Moves library links into the Jellyfin/Plex layout (see [Library layout](#medialink-layout)); dry run by default |
 
 `dedupe` handles two cases. A **mirrored legacy copy** (an independent file at the exact path medialink links to) is
 replaced by a hardlink through a temporary name and an atomic rename. A **flat duplicate** (a video at the library root
@@ -290,6 +291,62 @@ whose name, size and content match a video inside a folder, as left by autoplex)
 stays; flat files with no foldered twin, including everything you reorganised by hand, are never touched. `--quick`
 compares the size plus three 1 MiB samples instead of hashing whole files: far faster on multi-gigabyte video, but not a
 proof of equality. Run `once` first, because a flat file is only removed when its foldered twin exists.
+
+#### Library layout<a name="medialink-layout"></a>
+
+`MEDIALINK_LAYOUT` chooses where new links go:
+
+- `mirror` (the default): each torrent's own layout, `<library>/<release>/…`.
+- `jellyfin`: `movies/Title (Year)/Title (Year).ext` and `tv/Show/Season NN/Show - SNNENN.ext`, which Jellyfin and Plex
+  both read. Subtitles are linked as `<video name>.<lang>.srt`. RAR volumes and scene leftovers (`.nfo`, `.sfv`,
+  artwork, sample clips) are not linked. A name the parser cannot read (no year for a movie, no `SxxExx` marker for an
+  episode) falls back to the mirrored path and is picked up by `reorganize` once an override exists. Files extracted
+  from a RAR set stay in their release folder until `reorganize` moves them.
+
+`reorganize` applies the same layout to what is already in the library. It only touches **files medialink owns**: a
+library file that is still a hardlink at the path medialink linked it to, or a recorded RAR extraction. Anything a
+person placed, copied or renamed is left alone, and so is a file already in the directory the layout asks for. It moves
+links, never data, so Transmission keeps seeding from `downloads/complete`.
+
+- The dry run lists every `conflict` (the target is taken by a different file, such as a second release of the same
+  episode or a copy you made yourself), every `unparsed` file and every `cross-library` move (a season filed under
+  `movies/`); `-v` lists the moves too. Exit status 1 means conflicts or unparsed files exist.
+- A second release of the same movie takes a quality suffix (`Title (Year) - 2160p.mkv`); a second release of the same
+  episode is a conflict and nothing moves.
+- With `--apply`, each move is a `link` followed by an `unlink`, so nothing is ever overwritten, and is appended to
+  `<media root>/config/medialink/reorg-journal.jsonl`. Directories the run emptied are removed. `--undo JOURNAL` replays
+  a journal backwards (also a dry run until `--apply`), skipping any path that is occupied again.
+- `--only REGEX` limits a run to matching torrents or paths, and `--limit N` to the first N torrents in name order, to
+  check a batch in Jellyfin and Plex before continuing.
+- Scene leftovers are dropped from the library (their seed copies remain) when their torrent is being reorganised.
+
+Titles come from the release names alone. Fix a wrong or unreadable one in
+`<media root>/config/medialink/overrides.json` (`MEDIALINK_OVERRIDES_PATH`), a JSON list read on every pass; a malformed
+file is reported rather than ignored:
+
+```json
+[
+  {
+    "pattern": "The\\.Girl\\.on\\.the\\.Train",
+    "title": "The Girl on the Train",
+    "year": 2016
+  },
+  {
+    "pattern": "Criminal\\.Minds\\.Evolution",
+    "title": "Criminal Minds: Evolution",
+    "year": 2022,
+    "category": "tv"
+  }
+]
+```
+
+`pattern` is a case-insensitive regular expression searched in the torrent name; `year` is required for a movie that
+prints none and, for a show, makes the folder `Show (Year)` (otherwise the folder carries no year, and an existing
+`Show (Year)` directory is reused); `category` moves a torrent between libraries.
+
+Run `dedupe --apply` before reorganising: it finds flat duplicates through the mirrored layout. Set
+`MEDIALINK_LAYOUT=jellyfin` **before** the first `reorganize --apply`, otherwise the loop re-links the scene leftovers
+that were dropped.
 
 ```bash
 python3 run.py medialink once --dry-run
@@ -303,23 +360,24 @@ python3 run.py medialink dedupe --apply
 with the `MEDIALINK_*` variables of the calling shell instead of the container's; use it on a host that can reach
 Transmission and the media tree, since neither exists on the Mac.
 
-| Variable                                   | Default                                                                             | Meaning                                               |
-| ------------------------------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `MEDIALINK_MEDIA_ROOT`                     | `/storage/media`                                                                    | Root holding `downloads/`, `movies/`, `tv/`           |
-| `MEDIALINK_TRANSMISSION_URL`               | `http://transmission:9091/transmission/rpc`                                         | RPC endpoint                                          |
-| `MEDIALINK_TRANSMISSION_USER`, `_PASSWORD` | empty                                                                               | Basic-auth credentials, if RPC authentication is on   |
-| `MEDIALINK_TRANSMISSION_DOWNLOADS`         | `/downloads`                                                                        | Download root as Transmission's container sees it     |
-| `MEDIALINK_INTERVAL`                       | `60`                                                                                | Seconds between passes                                |
-| `MEDIALINK_MAX_RPC_FAILURES`               | `5`                                                                                 | Consecutive failed cycles before exiting              |
-| `MEDIALINK_NTFY_URL`, `_TOPIC`, `_TOKEN`   | URL unset in code (compose sets `http://ntfy:80`), `nas-media`, token from `env.j2` | Notifications; a blank URL disables them              |
-| `MEDIALINK_STATE_PATH`                     | `<media root>/config/medialink/state.json`                                          | Remembers announced problems and finished extractions |
-| `MEDIALINK_EXTRACT`                        | `1`                                                                                 | `0`/`false`/`no`/`off` disables RAR extraction        |
-| `MEDIALINK_EXTRACTOR`                      | auto (`7zz`, `7z`, `unrar` on `PATH`)                                               | Extraction tool to use first                          |
+| Variable                                   | Default                                                                             | Meaning                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `MEDIALINK_MEDIA_ROOT`                     | `/storage/media`                                                                    | Root holding `downloads/`, `movies/`, `tv/`                      |
+| `MEDIALINK_TRANSMISSION_URL`               | `http://transmission:9091/transmission/rpc`                                         | RPC endpoint                                                     |
+| `MEDIALINK_TRANSMISSION_USER`, `_PASSWORD` | empty                                                                               | Basic-auth credentials, if RPC authentication is on              |
+| `MEDIALINK_TRANSMISSION_DOWNLOADS`         | `/downloads`                                                                        | Download root as Transmission's container sees it                |
+| `MEDIALINK_INTERVAL`                       | `60`                                                                                | Seconds between passes                                           |
+| `MEDIALINK_MAX_RPC_FAILURES`               | `5`                                                                                 | Consecutive failed cycles before exiting                         |
+| `MEDIALINK_NTFY_URL`, `_TOPIC`, `_TOKEN`   | URL unset in code (compose sets `http://ntfy:80`), `nas-media`, token from `env.j2` | Notifications; a blank URL disables them                         |
+| `MEDIALINK_STATE_PATH`                     | `<media root>/config/medialink/state.json`                                          | Remembers announced problems and finished extractions            |
+| `MEDIALINK_EXTRACT`                        | `1`                                                                                 | `0`/`false`/`no`/`off` disables RAR extraction                   |
+| `MEDIALINK_EXTRACTOR`                      | auto (`7zz`, `7z`, `unrar` on `PATH`)                                               | Extraction tool to use first                                     |
+| `MEDIALINK_LAYOUT`                         | `mirror`                                                                            | `mirror` or `jellyfin` (see [Library layout](#medialink-layout)) |
+| `MEDIALINK_OVERRIDES_PATH`                 | `<media root>/config/medialink/overrides.json`                                      | Title corrections for the `jellyfin` layout and `reorganize`     |
 
 The `run` loop and `once` only ever add links and extracted files; nothing is deleted or renamed unless `dedupe --apply`
-is run. Reorganising them into Jellyfin's `Show/Season NN/` and `Movie (Year)/` naming, and an optional Transmission
-`script-torrent-done` trigger for instant linking, are planned follow-ups
-([plan](../docs/plans/2026-11/2026-11-22-medialink-plan.md)).
+or `reorganize --apply` is run. An optional Transmission `script-torrent-done` trigger for instant linking is a planned
+follow-up ([plan](../docs/plans/2026-11/2026-11-22-medialink-plan.md)).
 
 ### `ntfy`<a name="ntfy"></a>
 

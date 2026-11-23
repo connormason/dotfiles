@@ -830,13 +830,15 @@ command is left out of the generated `Makefile`, because a make target cannot ta
 python3 run.py medialink once --dry-run           # report what a pass would link; change nothing
 python3 run.py medialink dedupe                   # dry run: what dedupe would reclaim
 python3 run.py medialink dedupe --apply --quick   # replace/remove duplicates, comparing sampled blocks
+python3 run.py medialink reorganize               # dry run: what would move into the Jellyfin/Plex layout
+python3 run.py medialink reorganize --apply --limit 3   # move three torrents' links, journalled for --undo
 python3 run.py medialink once --help              # medialink's own help
 python3 run.py medialink -- --verbose once        # `--` lets an option precede the medialink command
 ```
 
-| Argument | Effect                                                                                               |
-| -------- | ---------------------------------------------------------------------------------------------------- |
-| `ARGS`   | everything after `medialink`, forwarded unchanged (`run`, `once [-n]`, `dedupe [--apply] [--quick]`) |
+| Argument | Effect                                                                                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ARGS`   | everything after `medialink`, forwarded unchanged (`run`, `once [-n]`, `dedupe [--apply] [--quick]`, `reorganize [--apply] [--limit N] [--only REGEX] [--undo JOURNAL]`) |
 
 A `--help` directly after `medialink` is answered by `run.py`; put it after a medialink command to reach medialink's.
 Stdin and stdout must both be terminals for a pseudo-terminal to be requested (so Ctrl-C stops a long `dedupe` inside

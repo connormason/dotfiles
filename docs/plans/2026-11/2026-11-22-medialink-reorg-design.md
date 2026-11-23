@@ -4,6 +4,11 @@ Status: **approved 2026-11-22** with every recommendation in [Decisions](#decisi
 [`2026-11-22-medialink-reorg-plan.md`](2026-11-22-medialink-reorg-plan.md). Parent: [`2026-11-22-medialink-design.md`](2026-11-22-medialink-design.md) (follow-up 1) and
 [`2026-11-22-medialink-plan.md`](2026-11-22-medialink-plan.md) (Task 6).
 
+> Implementation changed three details; the plan's "Deviations from the design" section records them: ownership means
+> "still at the mirror path" rather than "anywhere in the library", `MEDIALINK_LAYOUT=jellyfin` must be on before the
+> first apply (or the loop re-links dropped scene leftovers), and moves are `link` plus `unlink` rather than `rename`
+> so nothing can be overwritten.
+
 ## Problem
 
 `medialink` mirrors each torrent's own layout into `movies/` and `tv/`, so the library carries scene release names.

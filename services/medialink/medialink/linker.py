@@ -159,6 +159,7 @@ def link_torrent(
     dry_run: bool = False,
     skip: Callable[[str], bool] | None = None,
     index: Index | None = None,
+    placer: Callable[[str], Path | None] | None = None,
 ) -> list[LinkResult]:
     """
     Hardlink every complete file of a torrent into a library directory, mirroring the torrent's own layout
@@ -172,13 +173,15 @@ def link_torrent(
     :param dry_run: report only; create nothing
     :param skip: predicate on a file name; matching files are reported as ``skipped`` and never linked
     :param index: library inode index, so a file moved elsewhere in the library is not linked again
+    :param placer: maps a file name to its destination under a library layout; None, or a None answer for a file,
+                   means the mirrored ``dest_root / file.name``
     :return: one result per file in the torrent
     """
     results: list[LinkResult] = []
 
     for file in torrent.files:
         source = safe_join(source_dir, file.name)
-        dest   = safe_join(dest_root, file.name)
+        dest   = (placer(file.name) if placer is not None else None) or safe_join(dest_root, file.name)
 
         if (source is None) or (dest is None):
             results.append(LinkResult(torrent.name, None, None, UNSAFE, file.name))

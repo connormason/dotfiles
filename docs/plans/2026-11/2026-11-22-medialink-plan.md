@@ -76,8 +76,8 @@ Design: [`2026-11-22-medialink-reorg-design.md`](2026-11-22-medialink-reorg-desi
 
 - [x] Decide the target naming (`Show/Season NN/`, `Movie (Year)/`) and a title parser or an external matcher (offline
       stdlib parser plus an overrides file)
-- [ ] Move library links, not files, so the seed copies stay linked
-- [ ] Dry-run report, then apply in batches with a rescan check in Jellyfin and Plex
+- [x] Move library links, not files, so the seed copies stay linked (`medialink reorganize`; implemented, rollout pending)
+- [ ] Dry-run report, then apply in batches with a rescan check in Jellyfin and Plex (owner; reorg plan Task 4)
 
 ### Task 7: Follow-up, optional done-script trigger
 

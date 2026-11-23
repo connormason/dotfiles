@@ -8,6 +8,8 @@ import functools
 import logging
 import sys
 import time
+from collections import Counter
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from medialink.archives import Extractor
@@ -16,7 +18,17 @@ from medialink.config import ConfigError
 from medialink.dedupe import dedupe
 from medialink.dedupe import flat_duplicates
 from medialink.engine import reconcile
+from medialink.layout import load_overrides
 from medialink.notify import Notifier
+from medialink.reorganize import CONFLICT
+from medialink.reorganize import CROSS
+from medialink.reorganize import PROBLEMS
+from medialink.reorganize import UNPARSED
+from medialink.reorganize import apply_plan
+from medialink.reorganize import discover
+from medialink.reorganize import make_plan
+from medialink.reorganize import select
+from medialink.reorganize import undo
 from medialink.state import State
 from medialink.transmission import TransmissionClient
 from medialink.transmission import TransmissionError
@@ -26,6 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from medialink.engine import Report
+    from medialink.transmission import Torrent
 
 __all__ = [
     'EXIT_CONFIG',
@@ -54,8 +67,11 @@ class Args(argparse.Namespace):
     command: str        # command
     verbose: bool       # --verbose
     dry_run: bool       # --dry-run         "once" command only
-    apply:   bool       # --apply           "dedupe" command only
+    apply:   bool       # --apply           "dedupe" and "reorganize" commands
     quick:   bool       # --quick           "dedupe" command only
+    limit:   int | None # --limit           "reorganize" command only
+    only:    str        # --only            "reorganize" command only
+    undo:    str | None # --undo            "reorganize" command only
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -136,6 +152,37 @@ def _build_parser() -> argparse.ArgumentParser:
         help='Compare size plus sampled blocks instead of hashing whole files (much faster)',
     )
     add_common_opts(dedupe_cmd)
+
+    reorganize_cmd = commands.add_parser(
+        'reorganize',
+        formatter_class=formatter,
+        add_help=False,
+        help='Move library links into Movie (Year)/ and Show/Season NN/ folders',
+    )
+    reorganize_opts = reorganize_cmd.add_argument_group('Reorganize options')
+    reorganize_opts.add_argument(
+        '--apply',
+        action='store_true',
+        help='Move the links (default is a dry run that only reports)',
+    )
+    reorganize_opts.add_argument(
+        '--limit',
+        type=int,
+        metavar='N',
+        help='Apply at most N torrents, in name order, to check a batch before continuing',
+    )
+    reorganize_opts.add_argument(
+        '--only',
+        default='',
+        metavar='REGEX',
+        help='Only entries whose torrent name or path matches this case-insensitive pattern',
+    )
+    reorganize_opts.add_argument(
+        '--undo',
+        metavar='JOURNAL',
+        help='Restore the moves recorded in a journal (a dry run unless --apply is given)',
+    )
+    add_common_opts(reorganize_cmd)
 
     other_opts = parser.add_argument_group('Other options')
     other_opts.add_argument(
@@ -240,6 +287,76 @@ def run_loop(
     return EXIT_OK
 
 
+def _shown(path: Path | None, config: Config) -> str:
+    """
+    Format a library path relative to the media root
+
+    :param path: absolute path, or None
+    :param config: runtime configuration
+    :return: the relative path, or an empty string
+    """
+    if path is None:
+        return ''
+    try:
+        return path.relative_to(config.media_root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _run_reorganize(args: Args, config: Config, torrents: list[Torrent], state: State) -> int:
+    """
+    Plan, and with ``--apply`` carry out, the move into the Jellyfin layout
+
+    :param args: parsed command line
+    :param config: runtime configuration
+    :param torrents: torrents from Transmission
+    :param state: store of finished extractions
+    :return: ``EXIT_OK``, or ``EXIT_PROBLEMS`` when files are in conflict or could not be placed
+    """
+    try:
+        overrides = load_overrides(config.overrides_path)
+    except ConfigError as e:
+        logger.error('configuration error: %s', e)
+        return EXIT_CONFIG
+
+    entries  = make_plan(discover(torrents, config, state), config, overrides)
+    selected = select(entries, only=args.only, limit=args.limit)
+    counts   = Counter(e.action for e in selected)
+
+    for entry in selected:
+        if (entry.action in PROBLEMS) or args.verbose or (entry.action == CROSS):
+            detail = f'  ({entry.detail})' if entry.detail else ''
+            print(f'{entry.action:14} {_shown(entry.current, config)} -> {_shown(entry.target, config)}{detail}')
+
+    print(', '.join(f'{action}: {n}' for action, n in sorted(counts.items())) or 'nothing owned by medialink found')
+    if not args.apply:
+        print('dry run: nothing was moved (use --apply)')
+        return EXIT_PROBLEMS if (counts[CONFLICT] or counts[UNPARSED]) else EXIT_OK
+
+    result = apply_plan(selected, config)
+    print(f'applied: {result.done}   journal: {config.journal_path}')
+    for error in result.errors:
+        print(f'ERROR    {error}')
+    return EXIT_PROBLEMS if (result.errors or counts[CONFLICT] or counts[UNPARSED]) else EXIT_OK
+
+
+def _run_undo(args: Args, config: Config) -> int:
+    """
+    Restore moves recorded in a journal
+
+    :param args: parsed command line (``undo`` holds the journal path)
+    :param config: runtime configuration
+    :return: ``EXIT_OK``, or ``EXIT_PROBLEMS`` when some records could not be restored
+    """
+    result = undo(config, Path(args.undo or ''), apply=args.apply)
+    for error in result.errors:
+        print(f'SKIPPED  {error}')
+    print(f'{"restored" if args.apply else "would restore"}: {result.done}')
+    if not args.apply:
+        print('dry run: nothing was moved (use --apply)')
+    return EXIT_PROBLEMS if result.errors else EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """
     Run the command line
@@ -277,11 +394,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return run_loop(config, client, notifier, state, extractor=extractor)
 
+    if (args.command == 'reorganize') and args.undo:
+        return _run_undo(args, config)
+
     try:
         torrents = client.get_torrents()
     except TransmissionError as e:
         logger.error('%s', e)
         return EXIT_RPC
+
+    if args.command == 'reorganize':
+        return _run_reorganize(args, config, torrents, state)
 
     if args.command == 'once':
         report = reconcile(torrents, config, dry_run=args.dry_run, state=state, notifier=notifier, extractor=extractor)

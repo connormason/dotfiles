@@ -18,6 +18,7 @@ from medialink.config import ConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Collection
+    from collections.abc import Iterable
     from collections.abc import Sequence
     from pathlib import Path
 
@@ -300,6 +301,24 @@ def _key(name: str) -> str:
     return re.sub(r'[^a-z0-9]', '', re.sub(r'\s*\((?:19|20)\d{2}\)\s*$', '', name).lower())
 
 
+def _best_case(title: str, others: Iterable[str]) -> str:
+    """
+    Prefer a properly cased spelling of the same title over an all-lower or all-upper one
+
+    Release folders are usually cased well while the files inside them are often not (or the reverse).
+
+    :param title: the title read from the most specific name
+    :param others: titles read from the other candidate names
+    :return: ``title`` when it is mixed-case already, otherwise a mixed-case spelling that matches it
+    """
+    if title not in {title.lower(), title.upper()}:
+        return title
+    for other in others:
+        if other and (other not in {other.lower(), other.upper()}) and (_key(other) == _key(title)):
+            return other
+    return title
+
+
 def _show_folder(title: str, year: int | None, forced: bool, shows: Collection[str]) -> str:
     """
     Pick the directory name for a show, reusing one that already exists
@@ -423,6 +442,8 @@ def _place_episode(
                 break
     if not title:
         return None
+    if not override:
+        title = _best_case(title, [_show_name(n)[0] for n in names])
 
     forced    = bool(override and override.year)
     folder    = _show_folder(_tidy(title), year, forced, shows)
@@ -460,7 +481,9 @@ def _place_movie(
         return None
 
     title, year = parsed
-    name        = f'{title} ({year})'
+    if not override:
+        title = _best_case(title, [m[0] for n in names if (m := _movie_name(n))])
+    name = f'{title} ({year})'
 
     # The quality label comes from the name the title was read from, falling back to the others (a subtitle file
     # called "English.srt" says nothing about the movie's quality)
