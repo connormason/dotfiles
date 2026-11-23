@@ -47,11 +47,12 @@ from arr_setup import read_api_key
 from arr_setup import set_fields
 from arr_setup import validation_message
 
-# ==================================================================================================
-# Helpers
-# ==================================================================================================
-
 SECRET_COOKIE = 'uid=424242; pass=hunter2-secret'  # pragma: allowlist secret (dummy value for leak tests)
+
+
+# ==================================================================================================
+# Mock classes
+# ==================================================================================================
 
 
 class FakeClient:
@@ -66,11 +67,12 @@ class FakeClient:
         singletons: dict[str, Any] | None = None,
         errors: list[Exception] | None = None,
     ) -> None:
-        self.app = app
-        self.dry_run = False
+        self.app         = app
+        self.dry_run     = False
         self.collections = collections or {}
-        self.singletons = singletons or {}
-        self.errors = list(errors or [])
+        self.singletons  = singletons or {}
+        self.errors      = list(errors or [])
+
         self.writes: list[tuple[str, str, dict[str, Any]]] = []
 
     def get(self, path: str) -> Any:
@@ -85,17 +87,55 @@ class FakeClient:
         return {**body, 'id': body.get('id', 7)}
 
 
+class _Handler(BaseHTTPRequestHandler):
+    """
+    Stub Servarr endpoint recording requests; /api/v3/missing answers 400 with a validation body
+    """
+    seen: ClassVar[list[dict[str, Any]]] = []
+
+    def _respond(self) -> None:
+        length = int(self.headers.get('Content-Length') or 0)
+        body   = self.rfile.read(length).decode() if length else ''
+
+        type(self).seen.append({
+            'method': self.command,
+            'path':   self.path,
+            'key':    self.headers.get('X-Api-Key'),
+            'body':   body,
+        })
+        if self.path.endswith('/missing'):
+            payload, status = b'[{"errorMessage": "nope"}]', 400
+        else:
+            payload, status = b'{"ok": true}', 200
+
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    do_GET = do_POST = do_PUT = _respond
+
+    def log_message(self, format: str, *args: Any) -> None:
+        pass
+
+
+# ==================================================================================================
+# Helpers
+# ==================================================================================================
+
+
 def _fail_nth_write(client: FakeClient, *, index: int, errors: list[Exception]) -> Any:
     """
     Wrap ``client.write`` so the ``index``-th call (1-based) raises the queued errors in turn, and others succeed
     """
     original = client.write
-    queued = list(errors)
-    calls = {'n': 0}
+    queued   = list(errors)
+    calls    = {'n': 0}
 
     def write(method: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
         calls['n'] += 1
-        if calls['n'] >= index and queued:
+        if (calls['n'] >= index) and queued:
             client.writes.append((method, path, copy.deepcopy(body)))
             raise queued.pop(0)
         return original(method, path, body)
@@ -111,12 +151,12 @@ def transmission_schema() -> dict[str, Any]:
         'configContract': 'TransmissionSettings',
         'enable':         True,
         'fields': [
-            {'name': 'host',        'value': 'localhost'},
-            {'name': 'port',        'value': 9091},
-            {'name': 'useSsl',      'value': False},
-            {'name': 'urlBase',     'value': '/transmission/'},
-            {'name': 'tvCategory',  'value': 'tv-sonarr'},
-            {'name': 'password',    'value': None, 'privacy': 'password'},
+            {'name': 'host',       'value': 'localhost'},
+            {'name': 'port',       'value': 9091},
+            {'name': 'useSsl',     'value': False},
+            {'name': 'urlBase',    'value': '/transmission/'},
+            {'name': 'tvCategory', 'value': 'tv-sonarr'},
+            {'name': 'password',   'value': None, 'privacy': 'password'},
         ],
     }
 
@@ -137,6 +177,33 @@ def indexer_schema() -> dict[str, Any]:
     }
 
 
+# ==================================================================================================
+# Fixtures
+# ==================================================================================================
+
+
+@pytest.fixture
+def stub_port() -> Iterator[int]:
+    """
+    Run a stub HTTP server on an ephemeral port for the duration of one test
+    """
+    _Handler.seen = []
+
+    server = HTTPServer(('127.0.0.1', 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_address[1]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+# ==================================================================================================
+# Unit tests
+# ==================================================================================================
+
+
 class TestSetFields:
     """
     Tests for set_fields
@@ -145,8 +212,7 @@ class TestSetFields:
         """
         Test that fields already holding the desired value are not reported as changed
         """
-        fields = [{'name': 'host', 'value': 'a'}, {'name': 'port', 'value': 1}]
-
+        fields  = [{'name': 'host', 'value': 'a'}, {'name': 'port', 'value': 1}]
         changed = set_fields(fields, {'host': 'a', 'port': 2})
 
         assert changed == ['port']
@@ -157,7 +223,6 @@ class TestSetFields:
         Test that only_if_different=False reports every field, as needed for masked secrets
         """
         fields = [{'name': 'cookie', 'value': '********'}]
-
         assert set_fields(fields, {'cookie': 'x'}, only_if_different=False) == ['cookie']
 
     def test_unknown_field_raises_with_choices(self) -> None:
@@ -200,8 +265,8 @@ class TestValidationMessage:
         ('body', 'expected'),
         [
             ('[{"errorMessage": "bad cookie"}, {"errorMessage": "bad url"}]', 'bad cookie; bad url'),
-            ('{"message": "boom"}',                                          'boom'),
-            ('plain text\n',                                                 'plain text'),
+            ('{"message": "boom"}',                                           'boom'),
+            ('plain text\n',                                                  'plain text'),
         ],
     )
     def test_formats_known_shapes(self, body: str, expected: str) -> None:
@@ -226,7 +291,6 @@ class TestReadApiKey:
         Test that the ApiKey element is returned
         """
         (tmp_path / 'config.xml').write_text('<Config><ApiKey> abc123 </ApiKey></Config>')
-
         assert read_api_key(tmp_path) == 'abc123'
 
     def test_missing_file_raises(self, tmp_path: Path) -> None:
@@ -257,36 +321,43 @@ class TestEnsureProvider:
         client = FakeClient(collections={'downloadclient/schema': [transmission_schema()]})
 
         outcome = ensure_provider(
-            client, 'downloadclient', 'Transmission', 'Transmission',
+            client=client,
+            path='downloadclient',
+            name='Transmission',
+            implementation='Transmission',
             values={'host': 'transmission', 'tvCategory': 'tv'},
-            secrets={'password': 'pw'},  # pragma: allowlist secret
+            secrets={'password': 'pw'},                                 # pragma: allowlist secret
             top={'enable': True},
             defaults={'priority': 3},
         )
-
         assert outcome.status == 'created'
+
         method, path, body = client.writes[0]
-        assert (method, path) == ('POST', 'downloadclient')
-        assert body['name'] == 'Transmission'
+        assert (method, path)   == ('POST', 'downloadclient')
+        assert body['name']     == 'Transmission'
         assert body['priority'] == 3
+
         fields = {f['name']: f['value'] for f in body['fields']}
-        assert fields['host'] == 'transmission'
+        assert fields['host']       == 'transmission'
         assert fields['tvCategory'] == 'tv'
-        assert fields['port'] == 9091
-        assert fields['password'] == 'pw'  # pragma: allowlist secret
+        assert fields['port']       == 9091
+        assert fields['password']   == 'pw'                             # pragma: allowlist secret
 
     def test_unchanged_when_everything_matches(self) -> None:
         """
         Test that an identical existing provider causes no write
         """
         existing = transmission_schema() | {'id': 3, 'name': 'Transmission'}
-        client = FakeClient(collections={'downloadclient': [existing]})
+        client   = FakeClient(collections={'downloadclient': [existing]})
 
         outcome = ensure_provider(
-            client, 'downloadclient', 'Transmission', 'Transmission',
-            values={'host': 'localhost'}, top={'enable': True},
+            client=client,
+            path='downloadclient',
+            name='Transmission',
+            implementation='Transmission',
+            values={'host': 'localhost'},
+            top={'enable': True},
         )
-
         assert outcome.status == 'unchanged'
         assert client.writes == []
 
@@ -295,12 +366,15 @@ class TestEnsureProvider:
         Test that a drifted field is corrected by a PUT to the provider's id
         """
         existing = transmission_schema() | {'id': 3, 'name': 'Transmission'}
-        client = FakeClient(collections={'downloadclient': [existing]})
+        client   = FakeClient(collections={'downloadclient': [existing]})
 
         outcome = ensure_provider(
-            client, 'downloadclient', 'Transmission', 'Transmission', values={'host': 'transmission'},
+            client=client,
+            path='downloadclient',
+            name='Transmission',
+            implementation='Transmission',
+            values={'host': 'transmission'},
         )
-
         assert outcome.status == 'updated'
         assert client.writes[0][:2] == ('PUT', 'downloadclient/3')
 
@@ -309,12 +383,25 @@ class TestEnsureProvider:
         Test that masked secrets of an existing provider are left alone unless refresh_secrets is set
         """
         existing = transmission_schema() | {'id': 3, 'name': 'Transmission'}
-        client = FakeClient(collections={'downloadclient': [existing]})
+        client   = FakeClient(collections={'downloadclient': [existing]})
+
         kwargs: dict[str, Any] = {'values': {}, 'secrets': {'password': 'new'}}
 
-        assert ensure_provider(client, 'downloadclient', 'Transmission', 'Transmission', **kwargs).status == 'unchanged'
         assert ensure_provider(
-            client, 'downloadclient', 'Transmission', 'Transmission', refresh_secrets=True, **kwargs,
+            client=client,
+            path='downloadclient',
+            name='Transmission',
+            implementation='Transmission',
+            **kwargs,
+        ).status == 'unchanged'
+
+        assert ensure_provider(
+            client=client,
+            path='downloadclient',
+            name='Transmission',
+            implementation='Transmission',
+            refresh_secrets=True,
+            **kwargs,
         ).status == 'updated'
 
     def test_unknown_implementation_raises(self) -> None:
@@ -337,13 +424,19 @@ class TestEnsureProvider:
         )
 
         outcome = ensure_provider(
-            client, 'indexer', 'IPTorrents', 'IPTorrents',
-            values={}, secrets={'cookie': SECRET_COOKIE}, top={'enable': True}, disable_on_test_failure=True,
+            client=client,
+            path='indexer',
+            name='IPTorrents',
+            implementation='IPTorrents',
+            values={},
+            secrets={'cookie': SECRET_COOKIE},
+            top={'enable': True},
+            disable_on_test_failure=True,
         )
 
         assert outcome.status == 'warning'
         assert 'credentials invalid' in outcome.detail
-        assert SECRET_COOKIE not in outcome.detail
+        assert SECRET_COOKIE     not in outcome.detail
         assert [w[2]['enable'] for w in client.writes] == [True, False]
 
     def test_other_errors_propagate(self) -> None:
@@ -351,15 +444,24 @@ class TestEnsureProvider:
         Test that a non-400 failure, or a 400 without the fallback enabled, is raised
         """
         schema = {'indexer/schema': [indexer_schema()]}
+
         with pytest.raises(ApiError):
             ensure_provider(
-                FakeClient(collections=schema, errors=[ApiError(500, 'x')]),
-                'indexer', 'IPTorrents', 'IPTorrents', values={}, disable_on_test_failure=True,
+                client=FakeClient(collections=schema, errors=[ApiError(500, 'x')]),
+                path='indexer',
+                name='IPTorrents',
+                implementation='IPTorrents',
+                values={},
+                disable_on_test_failure=True,
             )
+
         with pytest.raises(ApiError):
             ensure_provider(
-                FakeClient(collections=schema, errors=[ApiError(400, 'x')]),
-                'indexer', 'IPTorrents', 'IPTorrents', values={},
+                client=FakeClient(collections=schema, errors=[ApiError(400, 'x')]),
+                path='indexer',
+                name='IPTorrents',
+                implementation='IPTorrents',
+                values={},
             )
 
 
@@ -411,7 +513,11 @@ class TestConfigureArr:
         ],
     )
     def test_wires_root_client_mapping_and_settings(
-        self, app: Any, root: str, category_field: str, category: str,
+        self,
+        app: Any,
+        root: str,
+        category_field: str,
+        category: str,
     ) -> None:
         """
         Test that each arr gets its root folder, Transmission client, path mapping and config objects
@@ -419,6 +525,7 @@ class TestConfigureArr:
         schema = transmission_schema()
         schema['fields'] = [f for f in schema['fields'] if f['name'] != 'tvCategory']
         schema['fields'].append({'name': category_field, 'value': 'default'})
+
         client = FakeClient(
             app=app,
             collections={'downloadclient/schema': [schema]},
@@ -434,6 +541,7 @@ class TestConfigureArr:
 
         writes = {(m, p): b for m, p, b in client.writes}
         assert writes[('POST', 'rootfolder')] == {'path': root}
+
         fields = {f['name']: f['value'] for f in writes[('POST', 'downloadclient')]['fields']}
         assert fields['host'] == 'transmission'
         assert fields[category_field] == category
@@ -502,14 +610,18 @@ class TestConfigureProwlarr:
         Test the full Prowlarr wiring: tagged proxy, container-name application URLs with UrlBase, tagged indexer
         """
         client = self.make_client()
-        run = Run()
+        run    = Run()
 
         configure_prowlarr(
-            client, run,
-            arr_keys={'sonarr': 'sk', 'radarr': 'rk'}, cookie=SECRET_COOKIE, user_agent='UA/1', refresh_secrets=False,
+            client=client,
+            run=run,
+            arr_keys={'sonarr': 'sk', 'radarr': 'rk'},
+            cookie=SECRET_COOKIE,
+            user_agent='UA/1',
+            refresh_secrets=False,
         )
 
-        posts = {b['name']: b for m, p, b in client.writes if m == 'POST' and p != 'tag'}
+        posts      = {b['name']: b for m, p, b in client.writes if m == 'POST' and p != 'tag'}
         proxy_host = next(f['value'] for f in posts['FlareSolverr']['fields'] if f['name'] == 'host')
         assert proxy_host == 'http://flaresolverr:8191/'
         assert posts['FlareSolverr']['tags'] == [7]
@@ -517,7 +629,7 @@ class TestConfigureProwlarr:
         sonarr = {f['name']: f['value'] for f in posts['Sonarr']['fields']}
         assert sonarr['prowlarrUrl'] == 'http://prowlarr:9696/prowlarr'
         assert sonarr['baseUrl'] == 'http://sonarr:8989/sonarr'
-        assert sonarr['apiKey'] == 'sk'  # pragma: allowlist secret
+        assert sonarr['apiKey'] == 'sk'                                                 # pragma: allowlist secret
         assert posts['Sonarr']['syncLevel'] == 'fullSync'
         assert {f['name']: f['value'] for f in posts['Radarr']['fields']}['baseUrl'] == 'http://radarr:7878/radarr'
 
@@ -530,18 +642,25 @@ class TestConfigureProwlarr:
 
     @pytest.mark.parametrize('errors', [[], [ApiError(400, 'invalid credentials')]], ids=['saved', 'rejected'])
     def test_cookie_and_api_keys_never_printed(
-        self, capsys: pytest.CaptureFixture[str], errors: list[Exception],
+        self,
+        capsys: pytest.CaptureFixture[str],
+        errors: list[Exception],
     ) -> None:
         """
         Test that neither a saved nor a rejected indexer leaks the cookie or the app API keys to stdout or stderr
         """
         client = self.make_client()
+
         # Writes run tag, proxy, Sonarr, Radarr, indexer: the indexer is the fifth
         client.write = _fail_nth_write(client, index=5, errors=errors)  # type: ignore[method-assign]
 
         configure_prowlarr(
-            client, Run(), arr_keys={'sonarr': 'SONARR-KEY-123', 'radarr': 'RADARR-KEY-456'},
-            cookie=SECRET_COOKIE, user_agent='UA', refresh_secrets=False,
+            client=client,
+            run=Run(),
+            arr_keys={'sonarr': 'SONARR-KEY-123', 'radarr': 'RADARR-KEY-456'},
+            cookie=SECRET_COOKIE,
+            user_agent='UA',
+            refresh_secrets=False,
         )
 
         output = ''.join(capsys.readouterr())
@@ -553,10 +672,15 @@ class TestConfigureProwlarr:
         Test that without a cookie a not-yet-existing indexer is skipped and flagged, not failed
         """
         client = self.make_client()
-        run = Run()
+        run    = Run()
 
         configure_prowlarr(
-            client, run, arr_keys={'sonarr': 'sk', 'radarr': 'rk'}, cookie='', user_agent='', refresh_secrets=False,
+            client=client,
+            run=run,
+            arr_keys={'sonarr': 'sk', 'radarr': 'rk'},
+            cookie='',
+            user_agent='',
+            refresh_secrets=False,
         )
 
         assert run.warnings == 1
@@ -569,10 +693,14 @@ class TestConfigureProwlarr:
         Test that an indexer left disabled by a failed test is re-saved with the new cookie and enabled
         """
         existing = indexer_schema() | {'id': 9, 'name': 'IPTorrents', 'enable': False}
-        client = self.make_client(indexer=[existing])
+        client   = self.make_client(indexer=[existing])
 
         configure_prowlarr(
-            client, Run(), arr_keys={'sonarr': 'sk', 'radarr': 'rk'}, cookie=SECRET_COOKIE, user_agent='',
+            client=client,
+            run=Run(),
+            arr_keys={'sonarr': 'sk', 'radarr': 'rk'},
+            cookie=SECRET_COOKIE,
+            user_agent='',
             refresh_secrets=False,
         )
 
@@ -580,50 +708,6 @@ class TestConfigureProwlarr:
         assert puts[0][0] == 'indexer/9'
         assert puts[0][1]['enable'] is True
         assert {f['name']: f['value'] for f in puts[0][1]['fields']}['cookie'] == SECRET_COOKIE
-
-
-class _Handler(BaseHTTPRequestHandler):
-    """
-    Stub Servarr endpoint recording requests; /api/v3/missing answers 400 with a validation body
-    """
-    seen: ClassVar[list[dict[str, Any]]] = []
-
-    def _respond(self) -> None:
-        length = int(self.headers.get('Content-Length') or 0)
-        body = self.rfile.read(length).decode() if length else ''
-        type(self).seen.append({
-            'method': self.command, 'path': self.path, 'key': self.headers.get('X-Api-Key'), 'body': body,
-        })
-        if self.path.endswith('/missing'):
-            payload, status = b'[{"errorMessage": "nope"}]', 400
-        else:
-            payload, status = b'{"ok": true}', 200
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
-
-    do_GET = do_POST = do_PUT = _respond
-
-    def log_message(self, format: str, *args: Any) -> None:
-        pass
-
-
-@pytest.fixture
-def stub_port() -> Iterator[int]:
-    """
-    Run a stub HTTP server on an ephemeral port for the duration of one test
-    """
-    _Handler.seen = []
-    server = HTTPServer(('127.0.0.1', 0), _Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield server.server_address[1]
-    finally:
-        server.shutdown()
-        server.server_close()
 
 
 class TestArrClient:
@@ -644,7 +728,7 @@ class TestArrClient:
 
         seen = _Handler.seen[0]
         assert seen['path'] == '/sonarr/api/v3/system/status'
-        assert seen['key'] == 'KEY'
+        assert seen['key']  == 'KEY'
 
     def test_write_posts_json_body(self, stub_port: int) -> None:
         """
@@ -668,7 +752,7 @@ class TestArrClient:
         with pytest.raises(ApiError) as exc_info:
             self.make(stub_port).get('missing')
 
-        assert exc_info.value.status == 400
+        assert exc_info.value.status  == 400
         assert exc_info.value.message == 'nope'
 
     def test_unreachable_app_raises_setup_error(self) -> None:
@@ -684,7 +768,9 @@ class TestMain:
     Tests for main
     """
     def test_rejects_malformed_cookie(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that a cookie without name=value pairs is refused before any network access
@@ -695,7 +781,10 @@ class TestMain:
         assert 'cookie string' in capsys.readouterr().out
 
     def test_missing_config_xml_fails_cleanly(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """
         Test that an app that never started produces an error and exit code 1

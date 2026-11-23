@@ -34,22 +34,43 @@ from dataclasses import field
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
+from typing import Literal
+from typing import Protocol
+from typing import TypeVar
 from typing import Union
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Sequence
 
+
 # ==================================================================================================
-# Types and constants
+# Generic types
 # ==================================================================================================
+
 
 PathLike   = Union[Path, str]
 StyleColor = Union[int, tuple[int, int, int], str]
+T_contra   = TypeVar('T_contra', contravariant=True)
 
 # The apps' JSON payloads are schemaless from this script's point of view: field lists differ per implementation and
 # per app version, so they are handled as plain dicts
 JsonDict = dict[str, Any]
+
+
+class SupportsWrite(Protocol[T_contra]):
+    """
+    Protocol for types that support being written to and flushed (what ``print(..., flush=True)`` requires)
+    """
+    def write(self, s: T_contra, /) -> object: ...
+
+    def flush(self) -> object: ...
+
+
+# ==================================================================================================
+# Constants
+# ==================================================================================================
+
 
 VERBOSE: bool = False
 
@@ -61,11 +82,11 @@ MASKED = '********'
 
 DEFAULT_CONFIG_ROOT = '/storage/media/config'
 
-TRANSMISSION_HOST = 'transmission'
-TRANSMISSION_PORT = 9091
+TRANSMISSION_HOST     = 'transmission'
+TRANSMISSION_PORT     = 9091
 TRANSMISSION_URL_BASE = '/transmission/'
-FLARESOLVERR_URL  = 'http://flaresolverr:8191/'
-FLARESOLVERR_TAG  = 'flaresolverr'
+FLARESOLVERR_URL      = 'http://flaresolverr:8191/'
+FLARESOLVERR_TAG      = 'flaresolverr'
 
 # Transmission reports the paths it downloads to as /downloads/...; the arrs mount the same files under /data
 REMOTE_DOWNLOADS = '/downloads/'
@@ -74,11 +95,19 @@ LOCAL_DOWNLOADS  = '/data/downloads/'
 # Imports hardlink (Transmission keeps seeding from downloads/complete), subtitles travel with the video, and the
 # arrs hand finished downloads over themselves
 MEDIA_MANAGEMENT: JsonDict = {
-    'copyUsingHardlinks': True,
-    'importExtraFiles':   True,
+    'copyUsingHardlinks':  True,
+    'importExtraFiles':    True,
     'extraFileExtensions': 'srt',
 }
 DOWNLOAD_HANDLING: JsonDict = {'enableCompletedDownloadHandling': True}
+
+
+# ==================================================================================================
+# Apps
+# ==================================================================================================
+
+
+AppKind = Literal['arr', 'indexer-manager']
 
 
 @dataclass(frozen=True)
@@ -86,16 +115,16 @@ class App:
     """
     Static description of one app: where it listens and how it is configured
     """
-    name:      str
-    title:     str
-    port:      int
-    api:       str
-    url_base:  str
-    kind:      str                                  # 'arr' (Sonarr/Radarr) or 'indexer-manager' (Prowlarr)
-    root_folder:    str = ''
-    category_field: str = ''
-    category:       str = ''
-    naming:    JsonDict = field(default_factory=dict)
+    name:           str
+    title:          str
+    port:           int
+    api:            str
+    url_base:       str
+    kind:           AppKind                                  # 'arr' (Sonarr/Radarr) or 'indexer-manager' (Prowlarr)
+    root_folder:    str      = ''
+    category_field: str      = ''
+    category:       str      = ''
+    naming:         JsonDict = field(default_factory=dict)
 
     @property
     def internal_url(self) -> str:
@@ -106,8 +135,15 @@ class App:
 
 
 SONARR = App(
-    name='sonarr', title='Sonarr', port=8989, api='v3', url_base='/sonarr', kind='arr',
-    root_folder='/data/tv', category_field='tvCategory', category='tv',
+    name='sonarr',
+    title='Sonarr',
+    port=8989,
+    api='v3',
+    url_base='/sonarr',
+    kind='arr',
+    root_folder='/data/tv',
+    category_field='tvCategory',
+    category='tv',
     naming={
         'renameEpisodes':           True,
         'replaceIllegalCharacters': True,
@@ -118,9 +154,17 @@ SONARR = App(
         'seasonFolderFormat':       'Season {season:00}',
     },
 )
+
 RADARR = App(
-    name='radarr', title='Radarr', port=7878, api='v3', url_base='/radarr', kind='arr',
-    root_folder='/data/movies', category_field='movieCategory', category='movies',
+    name='radarr',
+    title='Radarr',
+    port=7878,
+    api='v3',
+    url_base='/radarr',
+    kind='arr',
+    root_folder='/data/movies',
+    category_field='movieCategory',
+    category='movies',
     naming={
         'renameMovies':             True,
         'replaceIllegalCharacters': True,
@@ -128,7 +172,16 @@ RADARR = App(
         'movieFolderFormat':        '{Movie CleanTitle} ({Release Year})',
     },
 )
-PROWLARR = App(name='prowlarr', title='Prowlarr', port=9696, api='v1', url_base='/prowlarr', kind='indexer-manager')
+
+PROWLARR = App(
+    name='prowlarr',
+    title='Prowlarr',
+    port=9696,
+    api='v1',
+    url_base='/prowlarr',
+    kind='indexer-manager',
+)
+
 
 # ==================================================================================================
 # Formatting / logging
@@ -284,30 +337,41 @@ def printf(
     """
     if verbose and not VERBOSE:
         return
-    file = None
+
+    file: SupportsWrite[str] | None = None
     if verbose:
         fg   = fg  if fg  is not None else 'bright_white'
         dim  = dim if dim is not None else True
         file = sys.stderr
 
-    print(style(textwrap.indent(text, ' ' * indent), fg=fg, bold=bold, dim=dim), file=file, flush=True)
+    print(
+        style(
+            textwrap.indent(text, ' ' * indent),
+            fg=fg,
+            bold=bold,
+            dim=dim,
+        ),
+        file=file,
+        flush=True,
+    )
 
 
 # ==================================================================================================
 # Command-line arguments
 # ==================================================================================================
 
+
 class Args(argparse.Namespace):
     """
     :class:`argparse.Namespace` annotated with the args supported by this script
     """
-    host:            str
-    config_root:     str
-    port_offset:     int
-    timeout:         float
-    dry_run:         bool
-    refresh_secrets: bool
-    verbose:         bool
+    host:            str        # --host
+    config_root:     str        # --config-root
+    port_offset:     int        # --port-offset
+    timeout:         float      # --timeout
+    dry_run:         bool       # --dry-run
+    refresh_secrets: bool       # --refresh-secrets
+    verbose:         bool       # --verbose
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Args:
@@ -318,6 +382,7 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
     :return: parsed :class:`Args`
     """
     global VERBOSE
+
     parser = argparse.ArgumentParser(
         description=(__doc__ or '').split('\n\n')[0],
         epilog='\n'.join([
@@ -325,7 +390,10 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
             f'  {style(COOKIE_ENV, fg="yellow")}      full cookie string of a logged-in iptorrents.com session',
             f'  {style(USER_AGENT_ENV, fg="yellow")}  user agent of that same browser (the cookie is tied to it)',
         ]),
-        formatter_class=functools.partial(argparse.RawTextHelpFormatter, max_help_position=50),
+        formatter_class=functools.partial(
+            argparse.RawTextHelpFormatter,
+            max_help_position=50,
+        ),
         add_help=False,
     )
 
@@ -361,27 +429,40 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
     def add_behavior_opts() -> None:
         opts = parser.add_argument_group('Behavior options')
         opts.add_argument(
-            '-n', '--dry-run',
+            '-n',
+            '--dry-run',
             action='store_true',
             help='Show what would change without writing anything',
         )
         opts.add_argument(
             '--refresh-secrets',
             action='store_true',
-            help="Rewrite stored secrets (the IPTorrents cookie, the apps' API keys in Prowlarr) even when the\n"
-                 'provider already exists; the API masks them, so they cannot be compared',
+            help=(
+                "Rewrite stored secrets (the IPTorrents cookie, the apps' API keys in Prowlarr) even when the\n"
+                'provider already exists; the API masks them, so they cannot be compared'
+            ),
         )
     add_behavior_opts()
 
     def add_output_opts() -> None:
         opts = parser.add_argument_group('Output options')
-        opts.add_argument('-v', '--verbose', action='store_true', help='Print each HTTP call (never bodies) to stderr')
+        opts.add_argument(
+            '-v',
+            '--verbose',
+            action='store_true',
+            help='Print each HTTP call (never bodies) to stderr',
+        )
     add_output_opts()
 
     def add_other_opts() -> None:
         opts = parser.add_argument_group('Other options')
-        opts.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
-                          help='Show this help message and exit')
+        opts.add_argument(
+            '-h',
+            '--help',
+            action='help',
+            default=argparse.SUPPRESS,
+            help='Show this help message and exit',
+        )
     add_other_opts()
 
     args = parser.parse_args(argv, namespace=Args())
@@ -393,10 +474,12 @@ def parse_args(argv: Sequence[str] | None = None) -> Args:
 # API client
 # ==================================================================================================
 
+
 class SetupError(RuntimeError):
     """
     A step cannot be completed (missing field, missing config file, app unreachable)
     """
+    pass
 
 
 class ApiError(SetupError):
@@ -405,7 +488,7 @@ class ApiError(SetupError):
     """
     def __init__(self, status: int, message: str) -> None:
         super().__init__(f'HTTP {status}: {message}')
-        self.status = status
+        self.status  = status
         self.message = message
 
 
@@ -420,10 +503,16 @@ def validation_message(body: str) -> str:
         data = json.loads(body)
     except ValueError:
         return body.strip()[:300]
-    if isinstance(data, dict):
-        data = [data]
-    parts = [str(item.get('errorMessage') or item.get('message') or item) for item in data if isinstance(item, dict)]
-    return '; '.join(parts)[:300] or body.strip()[:300]
+    else:
+        if isinstance(data, dict):
+            data = [data]
+
+        parts: list[str] = [
+            str(item.get('errorMessage') or item.get('message') or item)
+            for item in data
+            if isinstance(item, dict)
+        ]
+        return '; '.join(parts)[:300] or body.strip()[:300]
 
 
 def read_api_key(config_dir: Path) -> str:
@@ -436,9 +525,10 @@ def read_api_key(config_dir: Path) -> str:
     """
     path = config_dir / 'config.xml'
     try:
-        root = ET.parse(path).getroot()  # noqa: S314 (the app's own config file on the local disk, not untrusted input)
+        root = ET.parse(path).getroot()         # noqa: S314
     except (OSError, ET.ParseError) as e:
         raise SetupError(f'cannot read {folduser(path)}: {e.__class__.__name__} (has the app started once?)') from e
+
     key = (root.findtext('ApiKey') or '').strip()
     if not key:
         raise SetupError(f'no <ApiKey> in {folduser(path)}')
@@ -450,10 +540,10 @@ class ArrClient:
     Minimal JSON client for one Servarr app. Writes are skipped in dry-run mode.
     """
     def __init__(self, app: App, host: str, api_key: str, *, port_offset: int = 0, dry_run: bool = False) -> None:
-        self.app = app
-        self.dry_run = dry_run
+        self.app      = app
+        self.dry_run  = dry_run
         self._api_key = api_key
-        self._base = f'http://{host}:{app.port + port_offset}{app.url_base}/api/{app.api}'
+        self._base    = f'http://{host}:{app.port + port_offset}{app.url_base}/api/{app.api}'
 
     def request(self, method: str, path: str, body: JsonDict | None = None) -> Any:
         """
@@ -468,19 +558,27 @@ class ArrClient:
         """
         url = f'{self._base}/{path}'
         printf(f'{method} {url}', verbose=True)
-        data = json.dumps(body).encode() if body is not None else None
-        # The URL is always built as http://<host>:<port>/... in __init__, so S310's file:/custom-scheme concern is moot
-        req = urllib.request.Request(url, data=data, method=method, headers={  # noqa: S310
-            'X-Api-Key': self._api_key, 'Content-Type': 'application/json', 'Accept': 'application/json',
-        })
+
+        req  = urllib.request.Request(                                      # noqa: S310
+            url,
+            data=json.dumps(body).encode() if body is not None else None,
+            method=method,
+            headers={
+                'X-Api-Key':     self._api_key,
+                'Content-Type': 'application/json',
+                'Accept':       'application/json',
+            }
+        )
+
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=60) as resp:           # noqa: S310
                 raw = resp.read()
         except urllib.error.HTTPError as e:
             raise ApiError(e.code, validation_message(e.read().decode(errors='replace'))) from e
         except (urllib.error.URLError, OSError) as e:
             raise SetupError(f'{self.app.title} unreachable at {self._base}: {e}') from e
-        return json.loads(raw) if raw else None
+        else:
+            return json.loads(raw) if raw else None
 
     def get(self, path: str) -> Any:
         """
@@ -516,7 +614,7 @@ class ArrClient:
             try:
                 self.get('system/status')
             except SetupError as e:
-                if isinstance(e, ApiError) and e.status in (401, 403):
+                if isinstance(e, ApiError) and (e.status in (401, 403)):
                     raise SetupError(f'{self.app.title} rejected the API key from config.xml') from e
                 if time.monotonic() >= deadline:
                     raise SetupError(f'{self.app.title} did not become ready within {timeout:.0f}s: {e}') from e
@@ -529,12 +627,15 @@ class ArrClient:
 # Provisioning primitives
 # ==================================================================================================
 
+Status = Literal['created', 'updated', 'unchanged', 'warning']
+
+
 @dataclass
 class Outcome:
     """
     Result of one provisioning step
     """
-    status: str       # 'created' | 'updated' | 'unchanged' | 'warning'
+    status: Status
     detail: str = ''
 
 
@@ -549,14 +650,17 @@ def set_fields(fields: list[JsonDict], values: JsonDict, *, only_if_different: b
     :return: names of the fields that were changed
     """
     by_name = {f['name']: f for f in fields}
+
     changed: list[str] = []
     for name, want in values.items():
         if name not in by_name:
             raise SetupError(f'provider has no field {name!r} (available: {", ".join(sorted(by_name))})')
-        if only_if_different and by_name[name].get('value') == want:
+        if only_if_different and (by_name[name].get('value') == want):
             continue
+
         by_name[name]['value'] = want
         changed.append(name)
+
     return changed
 
 
@@ -611,30 +715,40 @@ def ensure_provider(
     :raises SetupError: if the schema has no such implementation or a field is unknown
     :return: what happened
     """
-    secrets = secrets or {}
+    secrets  = secrets or {}
     existing = next((p for p in client.get(path) if p.get('name') == name), None)
+
+    method: Literal['PUT', 'POST']
+    status: Status
 
     if existing is None:
         schema = client.get(f'{path}/schema')
         template = next(
-            (s for s in schema if implementation in (s.get('implementation'), s.get('definitionName'))), None,
+            (s for s in schema if implementation in (s.get('implementation'), s.get('definitionName'))),
+            None,
         )
         if template is None:
             raise SetupError(f'{client.app.title} has no {path} implementation {implementation!r}')
+
         item = copy.deepcopy(template)
         item['name'] = name
-        set_fields(item['fields'], values, only_if_different=False)
+
+        set_fields(item['fields'], values,  only_if_different=False)
         set_fields(item['fields'], secrets, only_if_different=False)
+
         apply_top_level(item, {**(defaults or {}), **(top or {})})
         method, target, status = 'POST', path, 'created'
+
     else:
-        item = existing
+        item    = existing
         changed = set_fields(item['fields'], values)
         if refresh_secrets:
             changed += set_fields(item['fields'], secrets, only_if_different=False)
+
         changed += apply_top_level(item, top or {})
         if not changed:
             return Outcome('unchanged')
+
         method, target, status = 'PUT', f'{path}/{item["id"]}', 'updated'
 
     try:
@@ -642,11 +756,13 @@ def ensure_provider(
     except ApiError as e:
         if not (disable_on_test_failure and e.status == 400):
             raise
+
         # Only enabled providers are tested on save (and ``forceSave`` skips warnings, not errors), so keep the
         # configuration by saving it disabled
         item['enable'] = False
         client.write(method, target, item)
         return Outcome('warning', f'{status} but left disabled, its connection test failed: {e.message}')
+
     return Outcome(status)
 
 
@@ -662,6 +778,7 @@ def ensure_singleton(client: ArrClient, path: str, values: JsonDict) -> Outcome:
     current = client.get(path)
     if not apply_top_level(current, values):
         return Outcome('unchanged')
+
     client.write('PUT', f'{path}/{current["id"]}', current)
     return Outcome('updated')
 
@@ -678,6 +795,7 @@ def ensure_entry(client: ArrClient, path: str, match: JsonDict, body: JsonDict) 
     """
     if any(all(item.get(k) == v for k, v in match.items()) for item in client.get(path)):
         return Outcome('unchanged')
+
     client.write('POST', path, body)
     return Outcome('created')
 
@@ -700,14 +818,15 @@ def ensure_tag(client: ArrClient, label: str) -> int:
 # Per-app configuration
 # ==================================================================================================
 
+
 @dataclass
 class Run:
     """
     Accumulates results and prints them as they happen
     """
-    dry_run:  bool = False
-    failures: int = 0
-    warnings: int = 0
+    dry_run:  bool                  = False
+    failures: int                   = 0
+    warnings: int                   = 0
     log:      list[tuple[str, str]] = field(default_factory=list)
 
     def step(self, label: str, action: Callable[[], Outcome]) -> None:
@@ -733,6 +852,7 @@ class Run:
             printf(f'🟡 {label}: {outcome.detail}', fg='bright_yellow', indent=3)
         else:
             printf(f'✅ {label} {verb}', fg='bright_green', indent=3)
+
         self.log.append((label, outcome.status))
 
 
@@ -745,27 +865,34 @@ def configure_arr(client: ArrClient, app: App, run: Run) -> None:
     :param run: result accumulator
     """
     run.step('Root folder', lambda: ensure_entry(
-        client, 'rootfolder', {'path': app.root_folder}, {'path': app.root_folder},
+        client=client,
+        path='rootfolder',
+        match={'path': app.root_folder},
+        body={'path': app.root_folder},
     ))
     run.step('Transmission client', lambda: ensure_provider(
-        client, 'downloadclient', 'Transmission', 'Transmission',
+        client=client,
+        path='downloadclient',
+        name='Transmission',
+        implementation='Transmission',
         values={
-            'host':     TRANSMISSION_HOST,
-            'port':     TRANSMISSION_PORT,
-            'useSsl':   False,
-            'urlBase':  TRANSMISSION_URL_BASE,
+            'host':             TRANSMISSION_HOST,
+            'port':             TRANSMISSION_PORT,
+            'useSsl':           False,
+            'urlBase':          TRANSMISSION_URL_BASE,
             app.category_field: app.category,
         },
         top={'enable': True},
     ))
     run.step('Remote path mapping', lambda: ensure_entry(
-        client, 'remotepathmapping',
-        {'host': TRANSMISSION_HOST, 'remotePath': REMOTE_DOWNLOADS},
-        {'host': TRANSMISSION_HOST, 'remotePath': REMOTE_DOWNLOADS, 'localPath': LOCAL_DOWNLOADS},
+        client=client,
+        path='remotepathmapping',
+        match={'host': TRANSMISSION_HOST, 'remotePath': REMOTE_DOWNLOADS},
+        body={'host': TRANSMISSION_HOST, 'remotePath': REMOTE_DOWNLOADS, 'localPath': LOCAL_DOWNLOADS},
     ))
-    run.step('Naming', lambda: ensure_singleton(client, 'config/naming', app.naming))
-    run.step('Media management', lambda: ensure_singleton(client, 'config/mediamanagement', MEDIA_MANAGEMENT))
-    run.step('Download handling', lambda: ensure_singleton(client, 'config/downloadclient', DOWNLOAD_HANDLING))
+    run.step('Naming',            lambda: ensure_singleton(client, 'config/naming',          app.naming))
+    run.step('Media management',  lambda: ensure_singleton(client, 'config/mediamanagement', MEDIA_MANAGEMENT))
+    run.step('Download handling', lambda: ensure_singleton(client, 'config/downloadclient',  DOWNLOAD_HANDLING))
 
 
 def configure_prowlarr(
@@ -795,14 +922,21 @@ def configure_prowlarr(
         printf(f'❌ Tag {FLARESOLVERR_TAG}: {e}', fg='bright_red', indent=3)
 
     run.step('FlareSolverr proxy', lambda: ensure_provider(
-        client, 'indexerproxy', 'FlareSolverr', 'FlareSolverr',
+        client=client,
+        path='indexerproxy',
+        name='FlareSolverr',
+        implementation='FlareSolverr',
         values={'host': FLARESOLVERR_URL, 'requestTimeout': 60},
         top={'tags': [tag_id]},
     ))
 
     for arr in (SONARR, RADARR):
         run.step(f'{arr.title} application', functools.partial(
-            ensure_provider, client, 'applications', arr.title, arr.title,
+            ensure_provider,
+            client=client,
+            path='applications',
+            name=arr.title,
+            implementation=arr.title,
             values={'prowlarrUrl': PROWLARR.internal_url, 'baseUrl': arr.internal_url},
             secrets={'apiKey': arr_keys[arr.name]},
             top={'syncLevel': 'fullSync'},
@@ -811,15 +945,21 @@ def configure_prowlarr(
 
     def indexer() -> Outcome:
         existing = next((i for i in client.get('indexer') if i.get('name') == 'IPTorrents'), None)
-        if not cookie and existing is None:
+        if (not cookie) and (existing is None):
             return Outcome('warning', f'skipped: set {COOKIE_ENV} (and {USER_AGENT_ENV}) and re-run')
+
         profiles: list[JsonDict] = client.get('appprofile')
         profile = profiles[0]['id'] if profiles else 1
+
         values: JsonDict = {'userAgent': user_agent} if user_agent else {}
+
         # An indexer left disabled by an earlier failed test gets the new cookie without needing --refresh-secrets
         stale = existing is not None and not existing.get('enable')
         return ensure_provider(
-            client, 'indexer', 'IPTorrents', 'IPTorrents',
+            client=client,
+            path='indexer',
+            name='IPTorrents',
+            implementation='IPTorrents',
             values=values,
             secrets={'cookie': cookie} if cookie else {},
             top={'tags': [tag_id], 'enable': True},
@@ -827,6 +967,7 @@ def configure_prowlarr(
             refresh_secrets=bool(cookie) and (refresh_secrets or stale),
             disable_on_test_failure=True,
         )
+
     run.step('IPTorrents indexer', indexer)
 
 
@@ -844,14 +985,17 @@ def report_health(client: ArrClient, run: Run) -> None:
         run.failures += 1
         printf(f'❌ health: {e}', fg='bright_red', indent=3)
         return
+
     if not checks:
         printf('🟢 health: no issues', indent=3)
+
     for check in checks:
-        kind = check.get('type', 'warning')
+        kind    = check.get('type', 'warning')
         message = f'{check.get("source")}: {check.get("message")}'
+
         run.warnings += 1
         if kind == 'error':
-            printf(f'🔴 {message}', fg='bright_red', indent=3)
+            printf(f'🔴 {message}', fg='bright_red',    indent=3)
         else:
             printf(f'🟡 {message}', fg='bright_yellow', indent=3)
 
@@ -859,6 +1003,7 @@ def report_health(client: ArrClient, run: Run) -> None:
 # ==================================================================================================
 # Core script
 # ==================================================================================================
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     """
@@ -868,23 +1013,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     :return: 0 on success, non-zero when any step or health check failed
     """
     args = parse_args(argv)
-    cookie = os.environ.get(COOKIE_ENV, '').strip()
+
+    cookie     = os.environ.get(COOKIE_ENV, '').strip()
     user_agent = os.environ.get(USER_AGENT_ENV, '').strip()
-    if cookie and '=' not in cookie:
+    if cookie and ('=' not in cookie):
         printf(f'❌ {COOKIE_ENV} must be a cookie string such as "uid=...; pass=..."', fg='bright_red')
         return 2
 
     config_root = Path(args.config_root)
-    run = Run(dry_run=args.dry_run)
+    run         = Run(dry_run=args.dry_run)
+
     clients: dict[str, ArrClient] = {}
-    keys: dict[str, str] = {}
+    keys:    dict[str, str]       = {}
 
     printf(f'🔎 Connecting to {SONARR.title}, {RADARR.title} and {PROWLARR.title} on {args.host}', fg='bright_cyan')
     try:
         for app in (SONARR, RADARR, PROWLARR):
-            keys[app.name] = read_api_key(config_root / app.name)
+            keys[app.name]    = read_api_key(config_root / app.name)
             clients[app.name] = ArrClient(
-                app, args.host, keys[app.name], port_offset=args.port_offset, dry_run=args.dry_run,
+                app=app,
+                host=args.host,
+                api_key=keys[app.name],
+                port_offset=args.port_offset,
+                dry_run=args.dry_run,
             )
             clients[app.name].wait_ready(args.timeout)
     except SetupError as e:
@@ -897,8 +1048,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     printf(f'\n📦 {PROWLARR.title}' + (' (dry run)' if args.dry_run else ''), fg='bright_cyan')
     configure_prowlarr(
-        clients['prowlarr'], run,
-        arr_keys=keys, cookie=cookie, user_agent=user_agent, refresh_secrets=args.refresh_secrets,
+        client=clients['prowlarr'],
+        run=run,
+        arr_keys=keys,
+        cookie=cookie,
+        user_agent=user_agent,
+        refresh_secrets=args.refresh_secrets,
     )
 
     for app in (SONARR, RADARR, PROWLARR):
@@ -913,6 +1068,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         printf(f'🟡 Done with {run.warnings} warning(s)', fg='bright_yellow')
     else:
         printf('✅ Done', fg='bright_green')
+
     printf(
         '   Next: use Library Import on /data/tv (Sonarr) and /data/movies (Radarr) to re-add existing titles.',
         dim=True,
