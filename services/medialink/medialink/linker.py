@@ -10,9 +10,12 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
+from medialink.index import inode_key
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from medialink.index import Index
     from medialink.transmission import Torrent
 
 __all__ = [
@@ -103,7 +106,14 @@ def _is_same_file(a: Path, b: Path) -> bool:
         return False
 
 
-def _link_one(torrent: str, source: Path, dest: Path, *, dry_run: bool) -> LinkResult:
+def _link_one(
+    torrent: str,
+    source: Path,
+    dest: Path,
+    *,
+    dry_run: bool,
+    index: Index | None = None,
+) -> LinkResult:
     """
     Reconcile a single file
 
@@ -111,6 +121,8 @@ def _link_one(torrent: str, source: Path, dest: Path, *, dry_run: bool) -> LinkR
     :param source: file in the download tree
     :param dest: target path in the library
     :param dry_run: report what would happen without touching the filesystem
+    :param index: library inode index; a source already linked somewhere else in the library (moved by a
+                  reorganisation) is ``exists`` rather than linked a second time
     :return: the result for this file
     """
     if not source.is_file():
@@ -118,6 +130,8 @@ def _link_one(torrent: str, source: Path, dest: Path, *, dry_run: bool) -> LinkR
     if os.path.lexists(dest):
         status = EXISTS if _is_same_file(source, dest) else LEGACY_COPY
         return LinkResult(torrent, source, dest, status)
+    if index and ((key := inode_key(source)) in index):
+        return LinkResult(torrent, source, index[key], EXISTS, 'placed elsewhere')
     if dry_run:
         return LinkResult(torrent, source, dest, LINKED, 'dry-run')
 
@@ -144,6 +158,8 @@ def link_torrent(
     *,
     dry_run: bool = False,
     skip: Callable[[str], bool] | None = None,
+    index: Index | None = None,
+    placer: Callable[[str], Path | None] | None = None,
 ) -> list[LinkResult]:
     """
     Hardlink every complete file of a torrent into a library directory, mirroring the torrent's own layout
@@ -156,13 +172,16 @@ def link_torrent(
     :param dest_root: library root (``.../movies`` or ``.../tv``)
     :param dry_run: report only; create nothing
     :param skip: predicate on a file name; matching files are reported as ``skipped`` and never linked
+    :param index: library inode index, so a file moved elsewhere in the library is not linked again
+    :param placer: maps a file name to its destination under a library layout; None, or a None answer for a file,
+                   means the mirrored ``dest_root / file.name``
     :return: one result per file in the torrent
     """
     results: list[LinkResult] = []
 
     for file in torrent.files:
         source = safe_join(source_dir, file.name)
-        dest   = safe_join(dest_root, file.name)
+        dest   = (placer(file.name) if placer is not None else None) or safe_join(dest_root, file.name)
 
         if (source is None) or (dest is None):
             results.append(LinkResult(torrent.name, None, None, UNSAFE, file.name))
@@ -171,6 +190,6 @@ def link_torrent(
         elif not file.complete:
             results.append(LinkResult(torrent.name, source, dest, INCOMPLETE))
         else:
-            results.append(_link_one(torrent.name, source, dest, dry_run=dry_run))
+            results.append(_link_one(torrent.name, source, dest, dry_run=dry_run, index=index))
 
     return results

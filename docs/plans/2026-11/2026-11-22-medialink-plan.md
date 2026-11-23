@@ -56,8 +56,9 @@ against the library every 60 seconds, deployed through the existing `services/<n
 
 ### Task 4: Verify and merge
 
-- [ ] Full `uv run pytest`, `ruff check`, `mypy`, prek hooks
-- [ ] Open a PR; CI deploys `medialink` on the merge to `main`
+- [x] Full `uv run pytest`, `ruff check`, `mypy`, prek hooks
+- [x] Open a PR; CI deploys `medialink` on the merge to `main` (#71; later #74 added the `medialink` console script and
+      `run.py medialink` passthrough, #75 quieted steady-state logging)
 
 ### Task 5: Rollout (owner, on the NAS)
 
@@ -70,9 +71,13 @@ against the library every 60 seconds, deployed through the existing `services/<n
 
 ### Task 6: Follow-up, Jellyfin-style reorganisation
 
-- [ ] Decide the target naming (`Show/Season NN/`, `Movie (Year)/`) and a title parser or an external matcher
-- [ ] Move library links, not files, so the seed copies stay linked
-- [ ] Dry-run report, then apply in batches with a rescan check in Jellyfin and Plex
+Design: [`2026-11-22-medialink-reorg-design.md`](2026-11-22-medialink-reorg-design.md); implementation plan:
+[`2026-11-22-medialink-reorg-plan.md`](2026-11-22-medialink-reorg-plan.md).
+
+- [x] Decide the target naming (`Show/Season NN/`, `Movie (Year)/`) and a title parser or an external matcher (offline
+      stdlib parser plus an overrides file)
+- [x] Move library links, not files, so the seed copies stay linked (`medialink reorganize`; implemented, rollout pending)
+- [ ] Dry-run report, then apply in batches with a rescan check in Jellyfin and Plex (owner; reorg plan Task 4)
 
 ### Task 7: Follow-up, optional done-script trigger
 

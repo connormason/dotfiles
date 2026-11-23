@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 __all__ = [
+    'JELLYFIN',
+    'LAYOUTS',
+    'MIRROR',
     'Config',
     'ConfigError',
 ]
@@ -19,6 +22,10 @@ DEFAULT_INTERVAL     = 60
 DEFAULT_MAX_FAILURES = 5
 DEFAULT_NTFY_TOPIC   = 'nas-media'
 FALSE_VALUES         = frozenset({'0', 'false', 'no', 'off'})
+MIRROR               = 'mirror'                     # library mirrors each torrent's own layout
+JELLYFIN             = 'jellyfin'                   # Movie (Year)/ and Show/Season NN/, scene leftovers not linked
+LAYOUTS              = (MIRROR, JELLYFIN)
+DEFAULT_LAYOUT       = MIRROR
 
 
 class ConfigError(ValueError):
@@ -74,6 +81,9 @@ class Config:
     state_path:             Path
     extract:                bool
     extractor:              str
+    layout:                 str
+    overrides_path:         Path
+    journal_path:           Path
 
     @property
     def downloads_root(self) -> Path:
@@ -108,6 +118,10 @@ class Config:
         env        = dict(os.environ) if env is None else env
         media_root = Path(env.get('MEDIALINK_MEDIA_ROOT') or DEFAULT_MEDIA_ROOT)
         state      = env.get('MEDIALINK_STATE_PATH') or str(media_root / 'config' / 'medialink' / 'state.json')
+        overrides  = env.get('MEDIALINK_OVERRIDES_PATH') or str(media_root / 'config' / 'medialink' / 'overrides.json')
+        layout     = (env.get('MEDIALINK_LAYOUT') or DEFAULT_LAYOUT).strip().lower()
+        if layout not in LAYOUTS:
+            raise ConfigError(f'MEDIALINK_LAYOUT must be one of {", ".join(LAYOUTS)}, got {layout!r}')
 
         return cls(
             media_root=media_root,
@@ -123,4 +137,7 @@ class Config:
             state_path=Path(state),
             extract=env.get('MEDIALINK_EXTRACT', '1').strip().lower() not in FALSE_VALUES,
             extractor=env.get('MEDIALINK_EXTRACTOR', '').strip(),
+            layout=layout,
+            overrides_path=Path(overrides),
+            journal_path=Path(state).with_name('reorg-journal.jsonl'),
         )

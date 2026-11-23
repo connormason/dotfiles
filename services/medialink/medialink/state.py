@@ -27,10 +27,12 @@ class State:
         """
         self.path = path
 
-        self._keys: set[str] = set()
-        with contextlib.suppress(OSError, ValueError):
+        self._keys:    set[str]            = set()
+        self._outputs: dict[str, list[str]] = {}
+        with contextlib.suppress(OSError, ValueError, AttributeError, TypeError):
             data = json.loads(path.read_text(encoding='utf-8'))
             self._keys = {str(key) for key in data.get('notified', [])}
+            self._outputs = {str(key): [str(p) for p in paths] for key, paths in data.get('extracted', {}).items()}
 
     def __contains__(self, key: str) -> bool:
         """
@@ -48,6 +50,23 @@ class State:
         :param key: problem key
         """
         self._keys.add(key)
+
+    @property
+    def outputs(self) -> dict[str, list[str]]:
+        """
+        Library files each finished extraction produced, as paths relative to the media root (a copy)
+        """
+        return {key: list(paths) for key, paths in self._outputs.items()}
+
+    def record_outputs(self, key: str, paths: list[str]) -> None:
+        """
+        Remember where an extraction's files went, so a later reorganisation can find files that have no download-tree
+        inode to match
+
+        :param key: extraction key (the one also passed to :meth:`add`)
+        :param paths: published files, relative to the media root
+        """
+        self._outputs[key] = sorted(paths)
 
     def discard(self, key: str) -> None:
         """
@@ -73,5 +92,6 @@ class State:
         tmp = self.path.with_name(self.path.name + '.tmp')
         with contextlib.suppress(OSError):
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp.write_text(json.dumps({'notified': sorted(self._keys)}), encoding='utf-8')
+            payload = {'notified': sorted(self._keys), 'extracted': self._outputs}
+            tmp.write_text(json.dumps(payload), encoding='utf-8')
             tmp.replace(self.path)
