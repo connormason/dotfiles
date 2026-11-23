@@ -89,6 +89,7 @@ HA_SYNC_PATHS: tuple[str, ...] = (
     'blueprints',
     'themes',
     'packages',
+    'dashboards',
 )
 
 # File and directory names skipped anywhere in a synced tree

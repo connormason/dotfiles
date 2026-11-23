@@ -17,6 +17,7 @@ retired container definition, described in [`services/README.md`](../README.md#h
 | `configuration.yaml`                              | Top-level configuration and `!include`s        |
 | `automations.yaml`, `scripts.yaml`, `scenes.yaml` | Files the UI editors read and rewrite          |
 | `blueprints/`, `themes/`, `packages/`             | Directories of the same names, when they exist |
+| `dashboards/`                                     | YAML dashboards, see [Dashboards](#dashboards) |
 
 Everything else stays on the VM and is covered by Home Assistant's own
 [backups](../../vms/haos/README.md#fresh-install):
@@ -89,6 +90,24 @@ printed, written locally, or committed. For example, `nas_docker_url` is built f
   the VM had none).
 - A missing variable, inventory or vault password aborts the push before anything on the VM changes. Without a template,
   `ha-push` leaves the VM's `secrets.yaml` alone.
+
+## Dashboards<a name="dashboards"></a>
+
+Dashboards built in the UI live in the VM's `.storage/`, which is not tracked. A dashboard that should be in version
+control is a **YAML-mode dashboard**: its file sits in [`config/dashboards/`](config/dashboards/) and
+`configuration.yaml` registers it under `lovelace: dashboards:` (the key becomes the URL path and needs a hyphen).
+`ha-push` uploads the files, and `--restart` is needed the first time, when the registration is added.
+
+- A YAML dashboard is **read-only in the UI**. Edit the file and push; the browser only needs a refresh afterwards.
+- Dashboards are not validated by `ha core check`. A mistake shows up as an error card in the browser, not as a failed
+  push.
+- [`dashboards/main.yaml`](config/dashboards/main.yaml) is the Main dashboard (lights by floor), migrated from the
+  UI-built `.storage/lovelace.dashboard_main`. Its custom cards load from `.storage/lovelace_resources`, which HACS
+  manages and which stays untracked. The built-in `map` dashboard and the auto-generated Overview have no stored cards,
+  so they stay as they are.
+- [`dashboards/nas_containers.yaml`](config/dashboards/nas_containers.yaml) is the NAS container overview: a table of
+  every `sensor.nas_*_state` with the container's uptime, and a banner that appears while any container is stopped. It
+  reads the [Monitor Docker](#monitor-docker) sensors.
 
 ## Monitor Docker<a name="monitor-docker"></a>
 

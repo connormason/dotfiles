@@ -6,6 +6,23 @@ default_config:
 frontend:
   themes: !include_dir_merge_named themes
 
+# Dashboards kept as YAML in dashboards/ (tracked and pushed with the rest of the config). A dashboard listed here is
+# read-only in the UI: edit its file and `run.py ha-push`. The key becomes the URL path and must contain a hyphen.
+lovelace:
+  dashboards:
+    dashboard-main:
+      mode: yaml
+      title: Main
+      icon: mdi:liquid-spot
+      show_in_sidebar: true
+      filename: dashboards/main.yaml
+    nas-containers:
+      mode: yaml
+      title: NAS
+      icon: mdi:docker
+      show_in_sidebar: true
+      filename: dashboards/nas_containers.yaml
+
 # Monitor Docker (HACS custom integration, https://github.com/ualex73/monitor_docker). Reads the NAS Docker daemon
 # through the read-only `docker-proxy` container (services/docker-proxy/). Switches and buttons stay off: the proxy
 # rejects writes, so they could never work. `containers` mirrors what Glance lists for the NAS stack.
