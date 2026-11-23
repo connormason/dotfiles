@@ -448,10 +448,18 @@ def _place_episode(
     if override:
         title, year = override.title, override.year
     else:
+        # A purely numeric title is usually an absolute episode number ("378 S30E01 (...)"), not the show, so it only
+        # counts when no other name offers a title (a show really called "1883")
+        numeric: tuple[str, int | None] | None = None
         for candidate in names:
             title, year = _show_name(candidate)
+            if title.isdigit():
+                numeric = numeric or (title, year)
+                title   = ''
             if title:
                 break
+        else:
+            title, year = numeric or ('', None)
     if not title:
         return None
     if not override:

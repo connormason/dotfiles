@@ -96,5 +96,16 @@
    "expect": "tv/Criminal Minds Evolution (2022)/Season 01/Criminal Minds Evolution - S01E01.mkv"},
   {"id": "override-moves-category", "category": "movies", "torrent": "Odd.Mini.Series.2020.720p", "file": "Odd.Mini.Series.2020.720p/Odd.Mini.Series.S01E01.720p.mkv",
    "overrides": [{"pattern": "Odd\\.Mini", "title": "Odd Mini Series", "category": "tv"}],
-   "expect": "tv/Odd Mini Series/Season 01/Odd Mini Series - S01E01.mkv"}
+   "expect": "tv/Odd Mini Series/Season 01/Odd Mini Series - S01E01.mkv"},
+
+  {"id": "tv-absolute-episode-prefix", "category": "tv", "shows": ["How Its Made"],
+   "torrent": "How It's Made S01-S32 480p DVDRip 1080p WEBRip AAC 2.0 x264-MIXED",
+   "file": "How It's Made S01-S32 480p DVDRip 1080p WEBRip AAC 2.0 x264-MIXED/How.Its.Made.S30.1080p.WEB-DL.DD2.0.H.264-AR/378 S30E01 (Leather Basketballs; Flood Gates; Wood Panel Canvases; Shoelaces).mkv",
+   "expect": "tv/How Its Made/Season 30/How Its Made - S30E01.mkv"},
+  {"id": "tv-numeric-show-title",   "category": "tv", "torrent": "1883.S01.1080p.WEB-DL",
+   "file": "1883.S01.1080p.WEB-DL/1883.S01E01.1080p.WEB-DL.mkv",
+   "expect": "tv/1883/Season 01/1883 - S01E01.mkv"},
+  {"id": "tv-numeric-only-everywhere", "category": "tv", "torrent": "378 S30E01 (Leather Basketballs).mkv",
+   "file": "378 S30E01 (Leather Basketballs).mkv",
+   "expect": "tv/378/Season 30/378 - S30E01.mkv"}
 ]
