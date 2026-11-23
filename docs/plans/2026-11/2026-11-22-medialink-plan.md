@@ -56,8 +56,9 @@ against the library every 60 seconds, deployed through the existing `services/<n
 
 ### Task 4: Verify and merge
 
-- [ ] Full `uv run pytest`, `ruff check`, `mypy`, prek hooks
-- [ ] Open a PR; CI deploys `medialink` on the merge to `main`
+- [x] Full `uv run pytest`, `ruff check`, `mypy`, prek hooks
+- [x] Open a PR; CI deploys `medialink` on the merge to `main` (#71; later #74 added the `medialink` console script and
+      `run.py medialink` passthrough, #75 quieted steady-state logging)
 
 ### Task 5: Rollout (owner, on the NAS)
 
