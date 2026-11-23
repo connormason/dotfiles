@@ -1,0 +1,212 @@
+---
+# Main dashboard, migrated from the UI-built `.storage/lovelace.dashboard_main`. Read-only in the UI now: edit here and
+# `run.py ha-push`. Custom cards (mushroom) come from the resources HACS registers in `.storage/lovelace_resources`.
+views:
+  - type: sections
+    title: Downstairs
+    icon: mdi:home-floor-1
+    cards: []
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Kitchen Lights
+            heading_style: title
+            icon: mdi:faucet-variant
+          - type: custom:mushroom-light-card
+            entity: light.kitchen_kitchen_can_lights
+            icon: mdi:light-recessed
+            grid_options:
+              columns: full
+            name: Can Lights
+          - type: tile
+            grid_options:
+              columns: full
+            entity: light.kitchen_kitchen_island_pendants
+            name: Island Pendants
+            icon: mdi:globe-light
+            vertical: false
+            features_position: bottom
+          - type: custom:mushroom-light-card
+            entity: light.island_under_counter
+            icon: mdi:countertop
+            layout: horizontal
+            fill_container: false
+            use_light_color: true
+            show_brightness_control: true
+            collapsible_controls: false
+            show_color_temp_control: true
+            show_color_control: true
+            name: Island Under-Counter
+          - type: custom:mushroom-light-card
+            entity: light.kitchen_up_lighting
+            layout: horizontal
+            icon: mdi:alarm-light
+            fill_container: false
+            use_light_color: true
+            show_brightness_control: true
+            show_color_control: true
+            show_color_temp_control: true
+            collapsible_controls: false
+            name: Up-Lighting
+      - type: grid
+        cards:
+          - type: heading
+            heading: Living Room Lights
+            heading_style: title
+            icon: mdi:sofa
+          - type: custom:mushroom-light-card
+            entity: light.living_room_living_room_can_lights
+            name: Can Lights
+            layout: horizontal
+            icon: mdi:light-recessed
+            use_light_color: false
+            show_brightness_control: true
+          - type: custom:mushroom-light-card
+            entity: light.corner_strip_light
+            icon: mdi:wall-sconce-flat
+            layout: horizontal
+            use_light_color: true
+            show_brightness_control: true
+            show_color_temp_control: true
+            show_color_control: true
+          - type: custom:mushroom-light-card
+            entity: light.couch_lights
+            name: Couch Lights
+            icon: mdi:sofa
+            layout: horizontal
+            use_light_color: true
+            show_brightness_control: true
+            show_color_control: true
+            show_color_temp_control: true
+          - type: custom:mushroom-light-card
+            entity: light.living_room_light_bars
+            layout: horizontal
+            icon: mdi:television-ambient-light
+            use_light_color: true
+            show_brightness_control: true
+            show_color_temp_control: true
+            show_color_control: true
+            name: TV Light Bars
+          - type: custom:mushroom-light-card
+            entity: light.living_room_living_room_ceiling_fan
+            icon: mdi:ceiling-fan-light
+            layout: horizontal
+          - type: tile
+            grid_options:
+              rows: 2
+              columns: 12
+            entity: fan.living_room_living_room_ceiling_fan
+            name: Ceiling Fan
+            icon: mdi:ceiling-fan
+            vertical: false
+            features:
+              - type: fan-speed
+            features_position: bottom
+      - type: grid
+        cards:
+          - type: heading
+            heading: Other Downstairs Lights
+            heading_style: title
+            icon: mdi:ceiling-light-multiple
+          - type: custom:mushroom-light-card
+            entity: light.dining_room_dining_room_can_lights
+            icon: mdi:light-recessed
+            show_brightness_control: true
+            grid_options:
+              columns: full
+            layout: horizontal
+          - type: custom:mushroom-light-card
+            entity: light.front_foyer_front_foyer_can_light
+            icon: mdi:light-recessed
+            layout: horizontal
+            show_brightness_control: true
+          - type: custom:mushroom-light-card
+            entity: light.garage_entry_garage_entry_can_light
+            icon: mdi:light-recessed
+            show_brightness_control: true
+            layout: horizontal
+          - type: custom:mushroom-light-card
+            entity: light.garage_garage_main_lights
+            icon: mdi:lightbulb-cfl
+            layout: horizontal
+          - type: custom:mushroom-light-card
+            entity: light.patio_exterior_patio_lights
+            icon: mdi:light-recessed
+            layout: horizontal
+
+  - type: sections
+    title: Upstairs
+    path: upstairs
+    icon: mdi:home-floor-2
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: New section
+
+  - type: sections
+    title: Exterior
+    path: exterior
+    icon: mdi:palm-tree
+    sections:
+      - type: grid
+        cards:
+          - type: tile
+            entity: light.outdoor_spots_left
+            features:
+              - type: toggle
+          - type: tile
+            entity: light.outdoor_spots_right
+            features:
+              - type: toggle
+          - type: tile
+            entity: light.pathway_lights_2
+            features:
+              - type: light-brightness
+          - type: tile
+            entity: switch.exterior_exterior_patio_lights
+            features:
+              - type: toggle
+      - type: grid
+        cards:
+          - type: tile
+            entity: light.string_lights_left
+            features:
+              - type: light-brightness
+          - type: tile
+            entity: light.string_lights_left
+            features:
+              - type: light-effect
+          - type: tile
+            entity: light.string_lights_right
+            features:
+              - type: light-brightness
+          - type: tile
+            entity: light.string_lights_right
+            features:
+              - type: light-effect
+          - type: tile
+            entity: light.net_lights_top
+            features:
+              - type: light-brightness
+          - type: tile
+            entity: light.net_lights_top
+            features:
+              - type: light-effect
+          - type: tile
+            entity: light.net_lights_bottom
+            features:
+              - type: light-brightness
+          - type: tile
+            entity: light.net_lights_bottom
+            features:
+              - type: light-effect
+          - type: tile
+            entity: light.laser_wave_projector
+            features:
+              - type: toggle
+          - type: tile
+            entity: light.decoration_projector
+            features:
+              - type: toggle

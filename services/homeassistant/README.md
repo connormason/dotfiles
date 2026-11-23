@@ -101,6 +101,10 @@ control is a **YAML-mode dashboard**: its file sits in [`config/dashboards/`](co
 - A YAML dashboard is **read-only in the UI**. Edit the file and push; the browser only needs a refresh afterwards.
 - Dashboards are not validated by `ha core check`. A mistake shows up as an error card in the browser, not as a failed
   push.
+- [`dashboards/main.yaml`](config/dashboards/main.yaml) is the Main dashboard (lights by floor), migrated from the
+  UI-built `.storage/lovelace.dashboard_main`. Its custom cards load from `.storage/lovelace_resources`, which HACS
+  manages and which stays untracked. The built-in `map` dashboard and the auto-generated Overview have no stored cards,
+  so they stay as they are.
 - [`dashboards/nas_containers.yaml`](config/dashboards/nas_containers.yaml) is the NAS container overview: a table of
   every `sensor.nas_*_state` with the container's uptime, and a banner that appears while any container is stopped. It
   reads the [Monitor Docker](#monitor-docker) sensors.

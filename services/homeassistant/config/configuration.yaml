@@ -10,6 +10,12 @@ frontend:
 # read-only in the UI: edit its file and `run.py ha-push`. The key becomes the URL path and must contain a hyphen.
 lovelace:
   dashboards:
+    dashboard-main:
+      mode: yaml
+      title: Main
+      icon: mdi:liquid-spot
+      show_in_sidebar: true
+      filename: dashboards/main.yaml
     nas-containers:
       mode: yaml
       title: NAS
