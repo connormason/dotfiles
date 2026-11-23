@@ -1381,7 +1381,6 @@ class TestQuietLogs:
     """
     Tests that steady-state conditions are not repeated in the log every cycle
     """
-
     def test_a_known_problem_is_logged_at_error_only_on_the_announcing_pass(
         self,
         config: Config,
@@ -1392,7 +1391,7 @@ class TestQuietLogs:
         Test that a stuck torrent's error detail is logged once at ERROR, then only at DEBUG
         """
         torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})  # never written to disk: source-missing
-        state = State(tmp_path / 'state.json')
+        state   = State(tmp_path / 'state.json')
 
         with caplog.at_level(logging.DEBUG, logger='medialink.engine'):
             reconcile([torrent], config, state=state, notifier=RecordingNotifier())
@@ -1414,7 +1413,7 @@ class TestQuietLogs:
         Test that a manual dry run still shows a problem the loop has already announced
         """
         torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})
-        state = State(tmp_path / 'state.json')
+        state   = State(tmp_path / 'state.json')
         state.add(f'link:{torrent.hash}')
 
         with caplog.at_level(logging.DEBUG, logger='medialink.engine'):
@@ -1432,7 +1431,7 @@ class TestQuietLogs:
         Test that a steady known problem produces one INFO heartbeat, not one per cycle
         """
         torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})
-        client = StubClient([torrent], [torrent], [torrent])
+        client  = StubClient([torrent], [torrent], [torrent])
 
         with caplog.at_level(logging.DEBUG, logger='medialink.cli'):
             run_loop(
@@ -1456,10 +1455,12 @@ class TestQuietLogs:
         """
         Test that a pass that extracted a set is INFO and the unchanged pass after it is DEBUG
         """
+
         # Archive volumes only (no loose .nfo): the extraction is the sole change on the first cycle
         torrent = make_torrent('Rel', {'Rel/rel.rar': 10, 'Rel/rel.r00': 10})
         write_source(config, torrent)
-        client = StubClient([torrent], [torrent])
+
+        client    = StubClient([torrent], [torrent])
         extractor = Extractor('/usr/bin/7z', FakeRunner({'Rel.mkv': b'video'}))
 
         with caplog.at_level(logging.DEBUG, logger='medialink.cli'):
@@ -1497,6 +1498,7 @@ class TestQuietLogs:
             state = State(config.state_path)
             state.add(f'extracted:{torrent.hash}:Rel/rel.rar')
             state.save()
+
         monkeypatch.setenv('MEDIALINK_MEDIA_ROOT', str(config.media_root))
         monkeypatch.setattr(TransmissionClient, 'get_torrents', lambda _self: [torrent])
 
