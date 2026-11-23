@@ -18,17 +18,25 @@ from cli.infra.config import NAS_DEPLOY_SCRIPT
 from cli.infra.config import ExitCode
 from cli.utils.ansible import build_nas_provision_command
 from cli.utils.formatting import folduser
+from cli.utils.homeassistant import HA_SECRETS_FILE
 from cli.utils.homeassistant import HASyncError
+from cli.utils.homeassistant import TreeDiff
 from cli.utils.homeassistant import apply_ha_changes
 from cli.utils.homeassistant import apply_tree_diff
+from cli.utils.homeassistant import delete_ha_files
+from cli.utils.homeassistant import diff_ha_secrets
 from cli.utils.homeassistant import diff_trees
 from cli.utils.homeassistant import fetch_ha_config
+from cli.utils.homeassistant import fetch_ha_secrets
 from cli.utils.homeassistant import ha_cli
 from cli.utils.homeassistant import ha_config_has_local_changes
+from cli.utils.homeassistant import ha_secrets_template
 from cli.utils.homeassistant import ha_ssh_command
 from cli.utils.homeassistant import list_ha_tree
 from cli.utils.homeassistant import print_tree_diff
+from cli.utils.homeassistant import render_ha_secrets
 from cli.utils.homeassistant import require_ha_reachable
+from cli.utils.homeassistant import write_ha_secrets
 from cli.utils.nas import list_services
 from cli.utils.nas import resolve_reachable_nas
 from cli.utils.nas import warn_on_dirty_services
@@ -355,17 +363,38 @@ class HaPushCommand(Command):
             sys.exit(ExitCode.COMMAND_FAILED)
 
         require_ha_reachable()
+
+        # secrets.yaml is rendered from the vault; without a template in the repo the VM's file is left alone
+        new_secrets: str | None = None
+        if (secrets_template := ha_secrets_template()) is not None:
+            try:
+                new_secrets = render_ha_secrets(secrets_template)
+            except HASyncError as e:
+                printf(f'❌ {e}', fg='red', bold=True)
+                sys.exit(ExitCode.COMMAND_FAILED)
+
         with tempfile.TemporaryDirectory() as tmp:
             snapshot = Path(tmp)
+            old_secrets: str | None = None
             try:
                 fetch_ha_config(snapshot)
                 diff = diff_trees(snapshot, HA_CONFIG_DIR)
-                if not diff.changed:
+
+                secrets_diff = TreeDiff([], [], [])
+                if new_secrets is not None:
+                    old_secrets  = fetch_ha_secrets()
+                    secrets_diff = diff_ha_secrets(old_secrets, new_secrets)
+
+                if not (diff.changed or secrets_diff.changed):
                     printf('✅ The VM already matches services/homeassistant/config/', fg='bright_green')
                     return
 
-                printf('🔎 Changes the push would make on the VM:', fg='bright_cyan')
-                print_tree_diff(diff, verbs=('new', 'changed', 'deleted'))
+                if diff.changed:
+                    printf('🔎 Changes the push would make on the VM:', fg='bright_cyan')
+                    print_tree_diff(diff, verbs=('new', 'changed', 'deleted'))
+                if secrets_diff.changed:
+                    printf(f'🔎 Changes to {HA_SECRETS_FILE} (key names only):', fg='bright_cyan')
+                    print_tree_diff(secrets_diff, verbs=('new', 'changed', 'removed'))
                 if args.dry_run:
                     return
                 if not (args.yes or confirm('Apply these changes to the VM?', default=False)):
@@ -373,18 +402,21 @@ class HaPushCommand(Command):
                     sys.exit(ExitCode.USER_CANCELLED)
 
                 try:
+                    # Secrets go first: the config being uploaded may already reference a new key
+                    if secrets_diff.changed and new_secrets is not None:
+                        write_ha_secrets(new_secrets)
                     apply_ha_changes(HA_CONFIG_DIR, diff)
 
                 # A failure mid-push can leave some files written; the rollback is idempotent, so it is safe then
                 except HASyncError as e:
                     printf(f'❌ {e}', fg='red', bold=True)
-                    self._roll_back(snapshot)
+                    self._roll_back(snapshot, old_secrets, restore_secrets=secrets_diff.changed)
                     printf('The VM was restored to its previous state', fg='yellow', indent=3)
                     sys.exit(ExitCode.COMMAND_FAILED)
 
                 check = shell_command(ha_ssh_command(ha_cli('core check')), capture_output=True, check=False)
                 if check.returncode != 0:
-                    self._roll_back(snapshot)
+                    self._roll_back(snapshot, old_secrets, restore_secrets=secrets_diff.changed)
                     printf(
                         '❌ `ha core check` rejected the config; the VM was restored to its previous state',
                         fg='red',
@@ -413,14 +445,21 @@ class HaPushCommand(Command):
             )
 
     @staticmethod
-    def _roll_back(snapshot: Path) -> None:
+    def _roll_back(snapshot: Path, old_secrets: str | None, *, restore_secrets: bool) -> None:
         """
-        Restore the VM's tracked files from the pre-push snapshot
+        Restore the VM's tracked files, and its ``secrets.yaml`` when the push rewrote it, to their pre-push state
 
         :param snapshot: directory holding the VM's config as fetched before the push
+        :param old_secrets: the VM's ``secrets.yaml`` before the push, or None when it had none
+        :param restore_secrets: whether the push touched ``secrets.yaml``
         :raises HASyncError: if the restore itself fails
         """
         try:
             apply_ha_changes(snapshot, diff_trees(HA_CONFIG_DIR, snapshot))
+            if restore_secrets:
+                if old_secrets is None:
+                    delete_ha_files([HA_SECRETS_FILE])
+                else:
+                    write_ha_secrets(old_secrets)
         except HASyncError as e:
             raise HASyncError(f'Rollback failed, so the VM may hold a partial push: {e}') from e

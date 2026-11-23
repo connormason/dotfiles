@@ -1,0 +1,21 @@
+---
+services:
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: docker-proxy
+    restart: unless-stopped
+    environment:
+      # Read-only slice of the Docker API for the Home Assistant Monitor Docker integration. Everything not listed
+      # stays denied by the proxy; POST=0 (the default) blocks every write, so containers cannot be started or stopped.
+      - CONTAINERS=1
+      - IMAGES=1
+      - INFO=1
+      - EVENTS=1
+      - VERSION=1
+      - PING=1
+      - POST=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      # LAN-reachable on purpose: Home Assistant runs in the HAOS VM, a separate host with its own address
+      - "2375:2375"
