@@ -1,0 +1,32 @@
+---
+# NAS container status, fed by the Monitor Docker sensors (`sensor.nas_<container>_<metric>`, see configuration.yaml).
+# The table discovers every `sensor.nas_*_state`, so a container added to `monitor_docker.containers` shows up here
+# without an edit.
+title: NAS
+views:
+  - title: Containers
+    path: containers
+    icon: mdi:docker
+    cards:
+      # Only rendered while at least one container is not running
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.nas_containers_stopped
+            above: 0
+        card:
+          type: markdown
+          content: "🔴 {{ states('sensor.nas_containers_stopped') }} container(s) not running"
+
+      # A literal block (`|`), not a folded one: every table row has to stay on its own line
+      - type: markdown
+        title: Containers
+        content: |
+          | Container | State | Up for |
+          |---|---|---|
+          {% for s in states.sensor | selectattr('entity_id', 'match', 'sensor\.nas_.*_state$') | sort(attribute='entity_id') -%}
+          {% set base = s.entity_id[:-6] -%}
+          {% set up = states(base ~ '_uptime') -%}
+          {% set age = relative_time(up | as_datetime) if s.state == 'running' and up not in ['unknown', 'unavailable'] else '—' -%}
+          | {{ base[11:] | replace('_', ' ') | title }} | {{ '🟢' if s.state == 'running' else '🔴' }} {{ s.state }} | {{ age }} |
+          {% endfor %}
