@@ -151,7 +151,16 @@ def _handle_torrent(
                 result.detail,
             )
         elif result.status in PROBLEM_STATUSES:
-            logger.error('%s: %s (%s)', result.status, result.dest or result.source, result.detail)
+            # A problem already announced on an earlier pass would otherwise repeat every cycle for as long as it
+            # lasts; keep its detail at DEBUG then. Manual dry runs stay fully verbose.
+            known = (not dry_run) and state is not None and f'link:{torrent.hash}' in state
+            logger.log(
+                logging.DEBUG if known else logging.ERROR,
+                '%s: %s (%s)',
+                result.status,
+                result.dest or result.source,
+                result.detail,
+            )
 
     if any(r.status in PROBLEM_STATUSES for r in results):
         report.problems.append(

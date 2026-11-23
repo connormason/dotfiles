@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import errno
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -1369,3 +1370,139 @@ class TestConfigExtraction:
         Test that MEDIALINK_EXTRACTOR is carried through, trimmed
         """
         assert Config.from_env({'MEDIALINK_EXTRACTOR': ' /opt/unrar '}).extractor == '/opt/unrar'
+
+
+# ==================================================================================================
+# Log noise
+# ==================================================================================================
+
+
+class TestQuietLogs:
+    """
+    Tests that steady-state conditions are not repeated in the log every cycle
+    """
+    def test_a_known_problem_is_logged_at_error_only_on_the_announcing_pass(
+        self,
+        config: Config,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """
+        Test that a stuck torrent's error detail is logged once at ERROR, then only at DEBUG
+        """
+        torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})  # never written to disk: source-missing
+        state   = State(tmp_path / 'state.json')
+
+        with caplog.at_level(logging.DEBUG, logger='medialink.engine'):
+            reconcile([torrent], config, state=state, notifier=RecordingNotifier())
+            first = [r.levelno for r in caplog.records]
+            caplog.clear()
+            reconcile([torrent], config, state=state, notifier=RecordingNotifier())
+            second = [r.levelno for r in caplog.records]
+
+        assert first == [logging.ERROR]
+        assert second == [logging.DEBUG]
+
+    def test_a_dry_run_stays_verbose_about_known_problems(
+        self,
+        config: Config,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """
+        Test that a manual dry run still shows a problem the loop has already announced
+        """
+        torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})
+        state   = State(tmp_path / 'state.json')
+        state.add(f'link:{torrent.hash}')
+
+        with caplog.at_level(logging.DEBUG, logger='medialink.engine'):
+            reconcile([torrent], config, dry_run=True, state=state)
+
+        assert [r.levelno for r in caplog.records] == [logging.ERROR]
+
+    def test_heartbeat_is_info_only_when_the_problem_count_changes(
+        self,
+        config: Config,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """
+        Test that a steady known problem produces one INFO heartbeat, not one per cycle
+        """
+        torrent = make_torrent('Film.2020.mkv', {'Film.2020.mkv': 10})
+        client  = StubClient([torrent], [torrent], [torrent])
+
+        with caplog.at_level(logging.DEBUG, logger='medialink.cli'):
+            run_loop(
+                config,
+                client,  # type: ignore[arg-type]
+                RecordingNotifier(),
+                State(tmp_path / 'state.json'),
+                sleep=lambda _s: None,
+                max_cycles=3,
+            )
+
+        beats = [r.levelno for r in caplog.records if r.getMessage().startswith('cycle ok')]
+        assert beats == [logging.INFO, logging.DEBUG, logging.DEBUG]
+
+    def test_heartbeat_reports_an_extraction_then_goes_quiet(
+        self,
+        config: Config,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """
+        Test that a pass that extracted a set is INFO and the unchanged pass after it is DEBUG
+        """
+
+        # Archive volumes only (no loose .nfo): the extraction is the sole change on the first cycle
+        torrent = make_torrent('Rel', {'Rel/rel.rar': 10, 'Rel/rel.r00': 10})
+        write_source(config, torrent)
+
+        client    = StubClient([torrent], [torrent])
+        extractor = Extractor('/usr/bin/7z', FakeRunner({'Rel.mkv': b'video'}))
+
+        with caplog.at_level(logging.DEBUG, logger='medialink.cli'):
+            run_loop(
+                config,
+                client,  # type: ignore[arg-type]
+                RecordingNotifier(),
+                State(tmp_path / 'state.json'),
+                extractor=extractor,
+                sleep=lambda _s: None,
+                max_cycles=2,
+            )
+
+        beats = [r.levelno for r in caplog.records if r.getMessage().startswith('cycle ok')]
+        assert beats == [logging.INFO, logging.DEBUG]
+
+    @pytest.mark.parametrize(
+        ('marker_present', 'expect_pending'),
+        [(True, False), (False, True)],
+    )
+    def test_dedupe_recognises_finished_extractions(
+        self,
+        config: Config,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        marker_present: bool,
+        expect_pending: bool,
+    ) -> None:
+        """
+        Test that dedupe's inspection pass reads the extraction markers instead of listing every set as pending
+        """
+        torrent = archive_torrent()
+        write_source(config, torrent)
+        if marker_present:
+            state = State(config.state_path)
+            state.add(f'extracted:{torrent.hash}:Rel/rel.rar')
+            state.save()
+
+        monkeypatch.setenv('MEDIALINK_MEDIA_ROOT', str(config.media_root))
+        monkeypatch.setattr(TransmissionClient, 'get_torrents', lambda _self: [torrent])
+
+        with caplog.at_level(logging.INFO):
+            assert main(['dedupe']) == EXIT_OK
+
+        assert ('would extract' in caplog.text) is expect_pending
