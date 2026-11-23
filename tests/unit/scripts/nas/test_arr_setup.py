@@ -546,7 +546,9 @@ class TestConfigureArr:
         assert fields['host'] == 'transmission'
         assert fields[category_field] == category
         assert writes[('POST', 'remotepathmapping')] == {
-            'host': 'transmission', 'remotePath': '/downloads/', 'localPath': '/data/downloads/',
+            'host':       'transmission',
+            'remotePath': '/downloads/',
+            'localPath':  '/data/downloads/',
         }
         assert writes[('PUT', 'config/mediamanagement/1')]['copyUsingHardlinks'] is True
         assert ('PUT', 'config/naming/1') in writes
