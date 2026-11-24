@@ -2,11 +2,14 @@
 extends: default
 
 ignore:
+  # keep-sorted start
   - .ansible-lint.yaml
   - .venv
   - archive/
-  - vault.yml
+  - services/homeassistant/config/automations.yaml
   - vault.yaml
+  - vault.yml
+  # keep-sorted end
 
 rules:
   anchors: enable

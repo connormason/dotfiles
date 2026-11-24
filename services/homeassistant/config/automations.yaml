@@ -1,42 +1,93 @@
----
 - id: '1795346369331'
   alias: Turn off exterior lights at 1:00am
   description: ''
   triggers:
-    - trigger: time
-      at: 01:00:00
-      weekday:
-        - sun
-        - mon
-        - tue
-        - wed
-        - thu
-        - fri
-        - sat
+  - trigger: time
+    at: 01:00:00
+    weekday:
+    - sun
+    - mon
+    - tue
+    - wed
+    - thu
+    - fri
+    - sat
   conditions: []
   actions:
-    - action: light.turn_off
-      metadata: {}
-      target:
-        area_id: exterior
-      data: {}
+  - action: light.turn_off
+    metadata: {}
+    target:
+      area_id: exterior
+    data: {}
   mode: single
 - id: '1795346468594'
   alias: Turn on exterior lights at sunset
   description: ''
   triggers:
-    - trigger: sun.sunset
-      options:
-        offset:
-          days: 0
-          hours: 0
-          minutes: 0
-          seconds: 0
+  - trigger: sun.sunset
+    options:
+      offset:
+        days: 0
+        hours: 0
+        minutes: 0
+        seconds: 0
   conditions: []
   actions:
-    - action: light.turn_on
-      metadata: {}
-      target:
-        area_id: exterior
-      data: {}
+  - action: light.turn_on
+    metadata: {}
+    target:
+      area_id: exterior
+    data: {}
+  mode: single
+- id: '1795511101022'
+  alias: Turn off exterior projector/spot/net lights at midnight
+  description: ''
+  triggers:
+  - trigger: time
+    at: 00:00:00
+    weekday:
+    - sun
+    - mon
+    - tue
+    - wed
+    - thu
+    - fri
+    - sat
+  conditions: []
+  actions:
+  - action: light.turn_off
+    metadata: {}
+    target:
+      device_id: ba4a9949952321464bfd82624f8e0297
+    data: {}
+  - action: light.turn_off
+    metadata: {}
+    target:
+      device_id: d0f5e98f7ff645538b6df1758097a665
+    data: {}
+  - action: light.turn_off
+    metadata: {}
+    target:
+      device_id: b14723762194c8fddae530d67276708a
+    data: {}
+  - action: light.turn_off
+    metadata: {}
+    target:
+      device_id: e57d40e855716f0be7c769ba847753d8
+    data: {}
+  - action: light.turn_off
+    metadata: {}
+    target:
+      device_id: 0c85ec759cc8e09b6474163702433d4a
+    data: {}
+  - action: light.turn_off
+    metadata: {}
+    target:
+      device_id: 2ebaa3853f46b79251f03b72a8b5284f
+    data: {}
+  - action: light.turn_off
+    metadata: {}
+    target:
+      device_id: 598456e6254a6f05c2544e6e53812a1a
+    data: {}
   mode: single
