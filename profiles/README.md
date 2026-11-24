@@ -8,5 +8,5 @@ overlays registry.
 
 | Profile                                  | Purpose                                                              |
 | ---------------------------------------- | -------------------------------------------------------------------- |
-| [`personal-mac`](personal-mac/README.md) | Applications installed only on the personal MacBook                  |
+| [`personal-mac`](personal-mac/README.md) | Applications and the NAS music auto-mount for the personal MacBook   |
 | [`nas`](nas/README.md)                   | Overlay for the home NAS (registered by the `dotfiles` Ansible role) |
