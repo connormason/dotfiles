@@ -1,6 +1,10 @@
 -- remove animation
 hs.window.animationDuration = 0
 
+-- ==================================================================================================
+-- Window management
+-- ==================================================================================================
+
 -- runs fn with the focused window; does nothing when no window has focus
 local function withFocusedWindow(fn)
     local win = hs.window.focusedWindow()
@@ -9,13 +13,20 @@ local function withFocusedWindow(fn)
     end
 end
 
+-- returns a handler that fits the focused window to a unit rect (percentages of its screen)
+local function moveToRegion(unitRect)
+    return function()
+        withFocusedWindow(function(win) win:moveToUnit(unitRect) end)
+    end
+end
+
 -- minimizes focused window
-function minimizeFocused()
+local function minimizeFocused()
     withFocusedWindow(function(win) win:minimize() end)
 end
 
 -- moves focused window one monitor to the left (no-op when there is no monitor to the left)
-function moveFocusedLeftMonitor()
+local function moveFocusedLeftMonitor()
     withFocusedWindow(function(win)
         local leftScreen = win:screen():toWest()
         if leftScreen then
@@ -25,7 +36,7 @@ function moveFocusedLeftMonitor()
 end
 
 -- moves focused window one monitor to the right (no-op when there is no monitor to the right)
-function moveFocusedRightMonitor()
+local function moveFocusedRightMonitor()
     withFocusedWindow(function(win)
         local rightScreen = win:screen():toEast()
         if rightScreen then
@@ -35,128 +46,142 @@ function moveFocusedRightMonitor()
 end
 
 -- moves focused window to 'next' monitor
-function moveFocusedNextMonitor()
+local function moveFocusedNextMonitor()
     withFocusedWindow(function(win) win:moveToScreen(win:screen():next()) end)
 end
 
--- window management region definitions
-leftHalf = '[0,0,50,100]'
-rightHalf = '[50,0,100,100]'
-topHalf = '[0,0,100,50]'
-bottomHalf = '[0,50,100,100]'
+local leftHalf = moveToRegion('[0,0,50,100]')
+local rightHalf = moveToRegion('[50,0,100,100]')
+local topHalf = moveToRegion('[0,0,100,50]')
+local bottomHalf = moveToRegion('[0,50,100,100]')
 
-topLeftQuarter = '[0,0,50,50]'
-topRightQuarter = '[50,0,100,50]'
-bottomLeftQuarter = '[0,50,50,100]'
-bottomRightQuarter = '[50,50,100,100]'
+local topLeftQuarter = moveToRegion('[0,0,50,50]')
+local topRightQuarter = moveToRegion('[50,0,100,50]')
+local bottomLeftQuarter = moveToRegion('[0,50,50,100]')
+local bottomRightQuarter = moveToRegion('[50,50,100,100]')
 
-fullscreen = '[0,0,100,100]'
+local fullscreen = moveToRegion('[0,0,100,100]')
 
--- window management key/hyper mappings
-windowManagementHyperMapping = {
-    halfScreen = {'ctrl', 'cmd'},
-    quarterScreen = {'ctrl', 'alt'},
-    fullscreenMonitor = {'ctrl', 'alt', 'cmd'},
-    numpad = {'ctrl', 'cmd'},
+local windowBindings = {
+    {
+        mods = {'ctrl', 'cmd'},
+        keys = {
+            left = leftHalf,
+            right = rightHalf,
+            up = topHalf,
+            down = bottomHalf,
+        },
+    },
+    {
+        mods = {'ctrl', 'alt'},
+        keys = {
+            left = topLeftQuarter,
+            right = bottomRightQuarter,
+            up = topRightQuarter,
+            down = bottomLeftQuarter,
+        },
+    },
+    {
+        mods = {'ctrl', 'alt', 'cmd'},
+        keys = {
+            left = moveFocusedLeftMonitor,
+            right = moveFocusedRightMonitor,
+            up = fullscreen,
+            down = minimizeFocused,
+        },
+    },
+    {
+        mods = {'ctrl', 'cmd'},
+        keys = {
+            pad4 = leftHalf,
+            pad6 = rightHalf,
+            pad8 = topHalf,
+            pad2 = bottomHalf,
+            pad7 = topLeftQuarter,
+            pad9 = topRightQuarter,
+            pad1 = bottomLeftQuarter,
+            pad3 = bottomRightQuarter,
+            pad5 = fullscreen,
+            pad0 = moveFocusedNextMonitor,
+        },
+    },
 }
 
-windowManagementKeyMapping = {
-    halfScreen = {
-        left = leftHalf,
-        right = rightHalf,
-        up = topHalf,
-        down = bottomHalf,
-    },
-    quarterScreen = {
-        left = topLeftQuarter,
-        right = bottomRightQuarter,
-        up = topRightQuarter,
-        down = bottomLeftQuarter,
-    },
-    fullscreenMonitor = {
-        left = moveFocusedLeftMonitor,
-        right = moveFocusedRightMonitor,
-        up = fullscreen,
-        down = minimizeFocused,
-    },
-    numpad = {
-        pad4 = leftHalf,
-        pad6 = rightHalf,
-        pad8 = topHalf,
-        pad2 = bottomHalf,
-        pad7 = topLeftQuarter,
-        pad9 = topRightQuarter,
-        pad1 = bottomLeftQuarter,
-        pad3 = bottomRightQuarter,
-        pad5 = fullscreen,
-        pad0 = moveFocusedNextMonitor,
-    },
-}
-
--- bind hotkeys based on windowManagementHyperMapping and windowManagementKeyMapping
-for region_type, mapping in pairs(windowManagementKeyMapping) do
-    local hyper = windowManagementHyperMapping[region_type]
-    for key, layoutOrFunc in pairs(mapping) do
-        if type(layoutOrFunc) == 'string' then
-            hs.hotkey.bind(hyper, key, function()
-                withFocusedWindow(function(win) win:moveToUnit(layoutOrFunc) end)
-            end)
-        else
-            hs.hotkey.bind(hyper, key, layoutOrFunc)
-        end
+for _, group in ipairs(windowBindings) do
+    for key, action in pairs(group.keys) do
+        hs.hotkey.bind(group.mods, key, action)
     end
 end
 
--- application shortcuts
-appShortcutHyper = {'ctrl', 'shift'}
-letterToWindowFilterMapping = {
+-- ==================================================================================================
+-- Application shortcuts
+-- ==================================================================================================
+
+local appShortcutHyper = {'ctrl', 'shift'}
+
+-- letter -> app to launch or focus. An app is a bundle ID, a list of bundle IDs for apps whose ID differs between
+-- editions (the first one that is installed wins), or { name = 'App Name' } when no stable bundle ID exists.
+local appShortcuts = {
     -- keep-sorted start
-    b = hs.window.filter.new('Numbers'),
-    c = hs.window.filter.new('Calendar'),
-    d = hs.window.filter.new('Remote Desktop'),
-    e = hs.window.filter.new('Mail'),
-    f = hs.window.filter.new('Finder'),
-    g = hs.window.filter.new('Google Chrome'),
-    k = hs.window.filter.new('Keynote'),
-    l = hs.window.filter.new('Slack'),
-    m = hs.window.filter.new('Messages'),
-    n = hs.window.filter.new('Notes'),
-    o = hs.window.filter.new('OmniGraffle'),
-    p = hs.window.filter.new('PyCharm'),
-    s = hs.window.filter.new('Safari'),
-    t = hs.window.filter.new('Todoist'),
-    u = hs.window.filter.new('Sublime Text'),
-    v = hs.window.filter.new('Code'),
-    x = hs.window.filter.new('Microsoft Excel'),
-    z = hs.window.filter.new('Zed')
+    b = 'com.apple.Numbers',
+    c = 'com.apple.iCal',
+    d = 'com.apple.RemoteDesktop',
+    e = 'com.apple.mail',
+    f = 'com.apple.finder',
+    g = 'com.google.Chrome',
+    k = 'com.apple.Keynote',
+    l = 'com.tinyspeck.slackmacgap',
+    m = 'com.apple.MobileSMS',
+    n = 'com.apple.Notes',
+    o = { name = 'OmniGraffle' },
+    p = {'com.jetbrains.pycharm', 'com.jetbrains.pycharm.ce'},
+    s = 'com.apple.Safari',
+    t = 'com.todoist.mac.Todoist',
+    u = 'com.sublimetext.4',
+    v = 'com.microsoft.VSCode',
+    x = 'com.microsoft.Excel',
+    z = 'dev.zed.Zed',
     -- keep-sorted end
 }
 
--- Optional overlay hotkeys: ~/.hammerspoon/overlay.lua returns { [letter] = mapping }
+-- Optional overlay shortcuts: ~/.hammerspoon/overlay.lua returns { [letter] = app }, merged over the table above
 if package.searchpath("overlay", package.path) then
-    local loaded, overlayMappings = pcall(require, "overlay")
-    if loaded and type(overlayMappings) == "table" then
-        for letter, mapping in pairs(overlayMappings) do
-            letterToWindowFilterMapping[letter] = mapping
+    local loaded, overlayShortcuts = pcall(require, "overlay")
+    if loaded and type(overlayShortcuts) == "table" then
+        for letter, app in pairs(overlayShortcuts) do
+            appShortcuts[letter] = app
         end
     else
-        print("overlay.lua ignored: " .. tostring(overlayMappings))
+        print("overlay.lua ignored: " .. tostring(overlayShortcuts))
     end
 end
 
--- launches last focused window of app given its window filter
-goToApp = function(filter)
-    local windows = filter:getWindows()
-    if windows[1] then
-        windows[1]:focus()
+-- launches the app, or brings it forward when it is already running (including when it has no open windows)
+local function launchOrFocus(app)
+    if type(app) == 'string' then
+        app = {app}
     end
+
+    if app.name then
+        hs.application.launchOrFocus(app.name)
+        return
+    end
+
+    for _, bundleID in ipairs(app) do
+        if hs.application.launchOrFocusByBundleID(bundleID) then
+            return
+        end
+    end
+    hs.alert.show("No installed app for " .. table.concat(app, ", "))
 end
 
-for letter, filter in pairs(letterToWindowFilterMapping) do
-    filter:keepActive()
-    filter:setSortOrder(hs.window.filter.sortByFocusedLast)
-    hs.hotkey.bind(appShortcutHyper, letter, function() goToApp(filter) end)
+for letter, app in pairs(appShortcuts) do
+    hs.hotkey.bind(appShortcutHyper, letter, function() launchOrFocus(app) end)
 end
+
+-- ==================================================================================================
+-- Spoons and reload
+-- ==================================================================================================
 
 -- notify when WiFi network changes
 hs.loadSpoon("WifiNotifier")
