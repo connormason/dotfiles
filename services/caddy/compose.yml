@@ -8,6 +8,7 @@ services:
       - "80:80"
       - "443:443"
       - "32443:32443"
+      - "8920:8920"
     volumes:
       - /etc/tailscale/certs:/certs:ro
       - /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro

@@ -72,6 +72,7 @@ tailscale_services:
   - {name: pihole, port: 80, path: pihole}   # skipped by the Caddyfile template (see Service Routing)
   - {name: glance, port: 8080, path: glance, strip_prefix: true}
   - {name: plex, port: 32400, dedicated_port: 32443}
+  - {name: jellyfin, port: 8096, dedicated_port: 8920}
 ```
 
 ## Service Routing<a name="service-routing"></a>
@@ -91,6 +92,7 @@ Services are accessible via `https://nas.<tailnet>.ts.net/<path>`:
 | PiHole       | `/pihole`                 | Rewrites to `/admin`; not deployed by this repository while PiHole is disabled (see below) |
 | Glance       | `/glance`                 | Caddy strips the prefix before proxying (`strip_prefix: true`)                             |
 | Plex         | `:32443` (dedicated port) | Access via `https://nas.<tailnet>.ts.net:32443`                                            |
+| Jellyfin     | `:8920` (dedicated port)  | Access via `https://nas.<tailnet>.ts.net:8920`; no `BaseUrl` needed                        |
 
 The Caddyfile template skips any `pihole` entry of `tailscale_services` in its loop and always emits its own `/pihole`
 route (prefix stripped, rewritten to `/admin`, proxied to `pihole:80`). The `pihole` entry above therefore has no

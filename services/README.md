@@ -71,7 +71,7 @@ All host ports below are bound on the NAS itself. Services without a host port a
 
 | Container        | Image                                 | Host Port(s)                                    | Purpose                                                         |
 | ---------------- | ------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
-| `caddy`          | `caddy:2-alpine`                      | `80/tcp`, `443/tcp`, `32443/tcp`                | Reverse proxy: Tailscale HTTPS and .local hostnames (see below) |
+| `caddy`          | `caddy:2-alpine`                      | `80/tcp`, `443/tcp`, `32443/tcp`, `8920/tcp`    | Reverse proxy: Tailscale HTTPS and .local hostnames (see below) |
 | `glance`         | `glanceapp/glance`                    | `8080/tcp`                                      | Dashboard / homepage                                            |
 | `home-assistant` | `homeassistant/home-assistant`        | host networking (`8123/tcp`, not declared here) | Home automation hub (**disabled**)                              |
 | `pihole`         | `pihole/pihole:latest`                | `53/tcp`, `53/udp`, `67/udp`, `8053/tcp` → 80   | DNS, ad-blocking, DHCP (**disabled**)                           |
@@ -112,6 +112,7 @@ variable, set in the NAS host variables of the inventory. In the URLs below, `<t
 | PiHole       | `https://nas.<tailnet>.ts.net/pihole`       | Caddy rewrites `/pihole` → `/admin`; not deployed by this repository while PiHole is disabled (see below) |
 | Glance       | `https://nas.<tailnet>.ts.net/glance`       | Prefix stripped before proxying                                                                           |
 | Plex         | `https://nas.<tailnet>.ts.net:32443`        | Dedicated port; `ADVERTISE_IP` must match                                                                 |
+| Jellyfin     | `https://nas.<tailnet>.ts.net:8920`         | Dedicated port, so no `BaseUrl` is needed; see [Jellyfin](#jellyfin) for sharing                          |
 
 The template skips the `pihole` entry of `tailscale_services` in its loop and emits a hard-coded `/pihole` route to
 `pihole:80` instead. The route is therefore always in the Caddyfile, even while PiHole is disabled and nothing in this
@@ -157,10 +158,10 @@ The Caddyfile is a single-file bind mount, so a change that edits only the Caddy
 
 ### `caddy`<a name="caddy"></a>
 
-Reverse proxy that serves the stack over HTTPS under the NAS's Tailscale hostname. Publishes `80`, `443` and `32443`
-(port 80 serves the plain-HTTP `.local` sites, see [Local hostnames](#local-hostnames)), reads its `Caddyfile` from
-`/etc/caddy/` and TLS material from `/etc/tailscale/certs/` on the host (both mounted read-only and populated by the
-`tailscale` role), and keeps its own state in the `caddy_data` named volume.
+Reverse proxy that serves the stack over HTTPS under the NAS's Tailscale hostname. Publishes `80`, `443`, `32443` and
+`8920` (port 80 serves the plain-HTTP `.local` sites, see [Local hostnames](#local-hostnames)), reads its `Caddyfile`
+from `/etc/caddy/` and TLS material from `/etc/tailscale/certs/` on the host (both mounted read-only and populated by
+the `tailscale` role), and keeps its own state in the `caddy_data` named volume.
 
 ### `glance`<a name="glance"></a>
 
@@ -213,6 +214,21 @@ literally in [`roles/docker/templates/env.j2`](../roles/docker/templates/env.j2)
 Media server running alongside Plex. Uses the LinuxServer.io image with `PUID=1000/PGID=1000` and mounts the same
 `/storage/media/{tv,movies,music}` libraries as Plex. Publishes HTTP on `8096` and client auto-discovery on `7359/udp`.
 Config persists at `/storage/media/config/jellyfin`.
+
+**Sharing with family on another tailnet.** Relatives reach Jellyfin through Tailscale node sharing: only the NAS is
+shared, so the rest of the tailnet stays unreachable. Caddy serves Jellyfin over HTTPS on `:8920` once the NAS host
+variables include `{name: jellyfin, port: 8096, dedicated_port: 8920}` in `tailscale_services` (the inventory is a
+separate repository) and `python3 run.py nas-deploy caddy` has published the port.
+
+1. In the Tailscale admin console, share the NAS machine and send each relative the invite link.
+2. The relative installs Tailscale on their Apple TV, signs in to their own tailnet, and accepts the share.
+3. They install Swiftfin or Infuse and use `https://nas.<tailnet>.ts.net:8920` as the server address, where `<tailnet>`
+   is the label of the **NAS's** tailnet, not theirs.
+4. In Jellyfin, create one non-admin user per person with access limited to the libraries they should see, and set a
+   remote bitrate limit that fits the home upload speed.
+
+Check the connection with `tailscale ping <relative-node>` on the NAS: `direct` means peer-to-peer; `via DERP` means
+relayed and likely too slow for high-bitrate streams.
 
 ### `prowlarr`, `radarr`, `sonarr`, `transmission`<a name="prowlarr-radarr-sonarr-transmission"></a>
 
