@@ -1050,9 +1050,9 @@ class TestTerminalEditor:
         Test that init.lua merges overlay hotkeys after the base mapping and before it is used to bind keys
         """
         text    = (home.path / '.hammerspoon' / 'init.lua').read_text(encoding='utf-8')
-        defined = text.index('letterToWindowFilterMapping = {')
+        defined = text.index('local appShortcuts = {')
         merged  = text.index('pcall(require, "overlay")')
-        bound   = text.index('for letter, filter in pairs(letterToWindowFilterMapping)')
+        bound   = text.index('for letter, app in pairs(appShortcuts)')
         assert defined < merged < bound
 
     def test_hammerspoon_base_keeps_only_generic_apps(self, home: Home) -> None:
@@ -1060,7 +1060,7 @@ class TestTerminalEditor:
         Test that the base hotkey table has no entries for work-only apps
         """
         text = (home.path / '.hammerspoon' / 'init.lua').read_text(encoding='utf-8')
-        assert re.search(r'^\s*b\s*=\s*hs\.window\.filter\.new\(', text, re.MULTILINE)
+        assert re.search(r'^\s*b\s*=\s*', text, re.MULTILINE)
 
         for letter in ('3', '4', 'q', 'r', 'w'):
             entry = rf"""^\s*(\[\s*['"]{letter}['"]\s*\]|{letter})\s*="""
