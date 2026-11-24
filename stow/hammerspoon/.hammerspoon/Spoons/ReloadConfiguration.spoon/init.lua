@@ -39,9 +39,30 @@ end
 --- Parameters:
 ---  * None
 function obj:start()
+    -- Reload only when a Lua file changed, so .DS_Store and editor swap files do not trigger a reload
+    local function reloadIfLuaChanged(paths)
+        for _, path in ipairs(paths) do
+            if path:sub(-4) == ".lua" then
+                hs.reload()
+                return
+            end
+        end
+    end
+
+    -- Stowed files are symlinks into the repository, and a watcher on hs.configdir never sees edits made
+    -- through the link target, so also watch the directory init.lua resolves to.
+    local dirs = {}
+    for _, dir in pairs(self.watch_paths) do
+        dirs[dir] = true
+    end
+    local initPath = hs.fs.pathToAbsolute(hs.configdir .. "/init.lua")
+    if initPath then
+        dirs[initPath:match("^(.*)/[^/]+$")] = true
+    end
+
     self.watchers = {}
-    for _,dir in pairs(self.watch_paths) do
-        self.watchers[dir] = hs.pathwatcher.new(dir, hs.reload):start()
+    for dir in pairs(dirs) do
+        self.watchers[dir] = hs.pathwatcher.new(dir, reloadIfLuaChanged):start()
     end
     return self
 end

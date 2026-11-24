@@ -1,65 +1,42 @@
 -- remove animation
 hs.window.animationDuration = 0
 
--- check if string start with a given string
-function string.starts(String,Start)
-   return string.sub(String,1,string.len(Start))==Start
-end
-
--- gets the length of a table
-getTableLength = function(t)
-    len = 0
-    for _, _ in pairs(t) do
-        len = len + 1
+-- runs fn with the focused window; does nothing when no window has focus
+local function withFocusedWindow(fn)
+    local win = hs.window.focusedWindow()
+    if win then
+        fn(win)
     end
-    return len
-end
-
--- function for performing keystrokes from code
-doKeyStroke = function(modifiers, character)
-    local event = require('hs.eventtap').event
-    event.newKeyEvent(modifiers, string.lower(character), true):post()
-    event.newKeyEvent(modifiers, string.lower(character), false):post()
 end
 
 -- minimizes focused window
 function minimizeFocused()
-    hs.window.focusedWindow():minimize()
+    withFocusedWindow(function(win) win:minimize() end)
 end
 
--- moves focused window one monitor to the left
+-- moves focused window one monitor to the left (no-op when there is no monitor to the left)
 function moveFocusedLeftMonitor()
-    local win = hs.window.focusedWindow()
-    local leftScreen = win:screen():toWest()
-    win:moveToScreen(leftScreen)
+    withFocusedWindow(function(win)
+        local leftScreen = win:screen():toWest()
+        if leftScreen then
+            win:moveToScreen(leftScreen)
+        end
+    end)
 end
 
--- moves focused window one monitor to the right
+-- moves focused window one monitor to the right (no-op when there is no monitor to the right)
 function moveFocusedRightMonitor()
-    local win = hs.window.focusedWindow()
-    local rightScreen = win:screen():toEast()
-    win:moveToScreen(rightScreen)
+    withFocusedWindow(function(win)
+        local rightScreen = win:screen():toEast()
+        if rightScreen then
+            win:moveToScreen(rightScreen)
+        end
+    end)
 end
 
 -- moves focused window to 'next' monitor
 function moveFocusedNextMonitor()
-    local win = hs.window.focusedWindow()
-    win:moveToScreen(win:screen():next())
-end
-
--- moves left a space
-function moveLeftSpace()
-    doKeyStroke({'ctrl'}, 'left')
-end
-
--- moves right a space
-function moveRightSpace()
-    doKeyStroke({'ctrl'}, 'right')
-end
-
--- shows Mission Control
-function showMissionControl()
-    doKeyStroke({'ctrl'}, 'up')
+    withFocusedWindow(function(win) win:moveToScreen(win:screen():next()) end)
 end
 
 -- window management region definitions
@@ -81,7 +58,6 @@ windowManagementHyperMapping = {
     quarterScreen = {'ctrl', 'alt'},
     fullscreenMonitor = {'ctrl', 'alt', 'cmd'},
     numpad = {'ctrl', 'cmd'},
-    spaceMovement = {'ctrl'},
 }
 
 windowManagementKeyMapping = {
@@ -121,19 +97,12 @@ windowManagementKeyMapping = {
 for region_type, mapping in pairs(windowManagementKeyMapping) do
     local hyper = windowManagementHyperMapping[region_type]
     for key, layoutOrFunc in pairs(mapping) do
-        local bindingFunc
-        if string.find(key, 'scroll') then
-            bindingFunc = bindScrollEvent
-        else
-            bindingFunc = hs.hotkey.bind
-        end
-
         if type(layoutOrFunc) == 'string' then
-            bindingFunc(hyper, key, function()
-                hs.window.focusedWindow():moveToUnit(layoutOrFunc)
+            hs.hotkey.bind(hyper, key, function()
+                withFocusedWindow(function(win) win:moveToUnit(layoutOrFunc) end)
             end)
         else
-            bindingFunc(hyper, key, layoutOrFunc)
+            hs.hotkey.bind(hyper, key, layoutOrFunc)
         end
     end
 end
