@@ -123,6 +123,7 @@ local appShortcutHyper = {'ctrl', 'shift'}
 -- editions (the first one that is installed wins), or { name = 'App Name' } when no stable bundle ID exists.
 local appShortcuts = {
     -- keep-sorted start
+    ['1'] = {'com.1password.1password', 'com.agilebits.onepassword7'},
     b = 'com.apple.Numbers',
     c = 'com.apple.iCal',
     d = 'com.apple.RemoteDesktop',

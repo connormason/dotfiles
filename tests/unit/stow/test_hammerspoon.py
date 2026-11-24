@@ -152,6 +152,17 @@ class TestInitAppShortcuts:
         """)
         assert calls == ['bundle:com.jetbrains.pycharm', 'bundle:com.jetbrains.pycharm.ce']
 
+    def test_one_password_prefers_version_8_and_falls_back_to_7(self) -> None:
+        """
+        Test that the 1Password shortcut uses 1Password 7 when 8 is not installed
+        """
+        calls, _, _ = run_lua(f"""
+            state.installed['com.agilebits.onepassword7'] = true
+            dofile([[{INIT}]])
+            press('ctrl+shift', '1')
+        """)
+        assert calls == ['bundle:com.1password.1password', 'bundle:com.agilebits.onepassword7']
+
     def test_name_entry_launches_by_app_name(self) -> None:
         """
         Test that a { name = ... } entry uses launchOrFocus instead of a bundle ID
@@ -189,7 +200,7 @@ class TestInitAppShortcuts:
             end
             calls[#calls + 1] = 'count:' .. count
         """)
-        assert calls[-1] == 'count:18'
+        assert calls[-1] == 'count:19'
 
     def test_overlay_entries_override_and_extend_the_base_table(self, tmp_path: Path) -> None:
         """
