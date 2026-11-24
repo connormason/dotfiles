@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+#
+# nas-music-mount: keep the NAS media share mounted at /Volumes/<share> (the path Serato records for every track).
+#
+# Run by the com.connormason.nas-music-mount LaunchAgent at login and every few minutes, so it must be idempotent and
+# quiet: it exits 0 without output when the share is already mounted or the NAS is unreachable (away from home), and
+# logs only when it acts or when something needs attention. Settings come from ~/.config/nas-music/mount.conf, written
+# by the 98-nas-music bootstrap stage:
+#
+#   NAS_MUSIC_HOST   NAS hostname (default nas.local)
+#   NAS_MUSIC_SHARE  SMB share name (default media)
+#   NAS_MUSIC_USER   SMB user (required)
+#
+# The password is read from the login Keychain (an `smb ` internet password for NAS_MUSIC_HOST). Without that entry the
+# script never calls `mount volume`, which would otherwise raise a credentials dialog every run.
+#
+# Usage: nas-music-mount [--status | --unmount | -h]
+#   (no flag)   mount the share if it is not mounted
+#   --status    print whether the share is mounted; exit 0 if mounted, 1 if not
+#   --unmount   unmount the share (the LaunchAgent remounts it within minutes unless it is booted out first)
+set -euo pipefail
+
+# launchd starts agents with a minimal PATH; everything used here lives in the system directories
+PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
+
+CONF="${NAS_MUSIC_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/nas-music/mount.conf}"
+
+log() { printf '%s nas-music-mount: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
+
+usage() { sed -n '/^# Usage:/,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
+
+NAS_MUSIC_HOST="nas.local"
+NAS_MUSIC_SHARE="media"
+NAS_MUSIC_USER=""
+if [ -f "$CONF" ]; then
+    # shellcheck source=/dev/null
+    source "$CONF"
+fi
+
+MODE=mount
+case "${1:-}" in
+"") ;;
+--status) MODE=status ;;
+--unmount) MODE=unmount ;;
+-h | --help)
+    usage
+    exit 0
+    ;;
+*)
+    usage >&2
+    exit 2
+    ;;
+esac
+
+if [ -z "$NAS_MUSIC_USER" ]; then
+    log "NAS_MUSIC_USER is not set (expected in $CONF); run bootstrap/bootstrap.sh --only 98-nas-music" >&2
+    exit 1
+fi
+
+MOUNT_POINT="/Volumes/$NAS_MUSIC_SHARE"
+
+# is_mounted -> success when an smbfs volume is mounted at MOUNT_POINT
+is_mounted() { mount | grep -qF " on $MOUNT_POINT (smbfs"; }
+
+case "$MODE" in
+status)
+    if is_mounted; then
+        printf 'mounted: %s\n' "$MOUNT_POINT"
+    else
+        printf 'not mounted: %s\n' "$MOUNT_POINT"
+        exit 1
+    fi
+    exit 0
+    ;;
+unmount)
+    if ! is_mounted; then
+        printf 'not mounted: %s\n' "$MOUNT_POINT"
+        exit 0
+    fi
+    diskutil unmount "$MOUNT_POINT"
+    exit 0
+    ;;
+esac
+
+if is_mounted; then
+    exit 0
+fi
+
+# 445 is SMB. Unreachable is the normal state away from home, so stay silent.
+if ! nc -z -G 3 -w 3 "$NAS_MUSIC_HOST" 445 >/dev/null 2>&1; then
+    exit 0
+fi
+
+if ! security find-internet-password -s "$NAS_MUSIC_HOST" -a "$NAS_MUSIC_USER" -r 'smb ' >/dev/null 2>&1; then
+    log "no Keychain password for $NAS_MUSIC_USER@$NAS_MUSIC_HOST; run bootstrap/bootstrap.sh --only 98-nas-music" >&2
+    exit 1
+fi
+
+# The URL goes in as an argument, never spliced into the AppleScript source. The password is not part of it: the SMB
+# client looks it up in the Keychain.
+url="smb://$NAS_MUSIC_USER@$NAS_MUSIC_HOST/$NAS_MUSIC_SHARE"
+if osascript -e 'on run argv' -e 'mount volume (item 1 of argv)' -e 'end run' "$url" >/dev/null; then
+    log "mounted $MOUNT_POINT"
+else
+    log "failed to mount $url" >&2
+    exit 1
+fi
