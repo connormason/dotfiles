@@ -39,6 +39,11 @@ _SCRUBBED_VARS: tuple[str, ...] = (
 MOUNTED_LINE = '//connor@nas._smb._tcp.local/media on /Volumes/media (smbfs, nodev, nosuid, mounted by connor)\n'
 
 
+# ==================================================================================================
+# Helpers
+# ==================================================================================================
+
+
 def _stub(bin_dir: Path, name: str, body: str = '') -> None:
     """
     Write an executable stub that logs ``<name> <args>`` to ``$CALLS`` and then runs ``body``
@@ -60,6 +65,47 @@ def _calls(env: dict[str, str]) -> list[str]:
     return log.read_text(encoding='utf-8').splitlines() if log.exists() else []
 
 
+def _mount(shell: str, env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
+    """
+    Run nas-music-mount under the bash interpreter being tested
+    """
+    return subprocess.run([shell, str(SCRIPT), *args], capture_output=True, text=True, check=False, env=env)
+
+
+def _stage(shell: str, env: dict[str, str], **extra: str) -> subprocess.CompletedProcess[str]:
+    """
+    Run the 98-nas-music stage as macOS, under the bash interpreter being tested
+    """
+    return subprocess.run(
+        [shell, str(STAGE)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **env,
+            'DOTFILES_REPO': str(REPO_ROOT),
+            'DOTFILES_OS':   'darwin',
+            **extra,
+        },
+        stdin=subprocess.DEVNULL,
+    )
+
+
+def _link_package(home: Path) -> None:
+    """
+    Stand in for 95-dotfiles: put the script and plist where stow would link them
+    """
+    (home / '.local' / 'bin').mkdir(parents=True)
+    (home / 'Library' / 'LaunchAgents').mkdir(parents=True)
+    shutil.copy(SCRIPT, home / '.local' / 'bin' / SCRIPT.name)
+    shutil.copy(PLIST,  home / 'Library' / 'LaunchAgents' / PLIST.name)
+
+
+# ==================================================================================================
+# Fixtures
+# ==================================================================================================
+
+
 @pytest.fixture
 def home(tmp_path: Path) -> Path:
     """
@@ -77,6 +123,7 @@ def env(tmp_path: Path, home: Path) -> dict[str, str]:
     """
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir()
+
     _stub(bin_dir, 'mount')
     _stub(bin_dir, 'nc')
     _stub(bin_dir, 'security')
@@ -104,15 +151,8 @@ def conf(home: Path) -> Path:
     return path
 
 
-def _mount(shell: str, env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
-    """
-    Run nas-music-mount under the bash interpreter being tested
-    """
-    return subprocess.run([shell, str(SCRIPT), *args], capture_output=True, text=True, check=False, env=env)
-
-
 # ==================================================================================================
-# nas-music-mount
+# Unit tests
 # ==================================================================================================
 
 
@@ -126,9 +166,9 @@ class TestNasMusicMount:
         Test that an unmounted share on a reachable NAS with a Keychain entry is mounted with the share URL
         """
         result = _mount(shell, env)
-
         assert result.returncode == 0, result.stderr
         assert 'mounted /Volumes/media' in result.stdout
+
         osascript = [call for call in _calls(env) if call.startswith('osascript')]
         assert len(osascript) == 1
         assert osascript[0].endswith('smb://connor@nas.local/media')
@@ -142,7 +182,7 @@ class TestNasMusicMount:
         result = _mount(shell, env)
 
         assert result.returncode == 0
-        assert result.stdout == ''
+        assert result.stdout     == ''
         assert not any(call.startswith('osascript') for call in _calls(env))
 
     def test_silent_noop_when_nas_unreachable(self, shell: str, env: dict[str, str], tmp_path: Path) -> None:
@@ -154,8 +194,8 @@ class TestNasMusicMount:
         result = _mount(shell, env)
 
         assert result.returncode == 0
-        assert result.stdout == ''
-        assert result.stderr == ''
+        assert result.stdout     == ''
+        assert result.stderr     == ''
         assert not any(call.startswith('osascript') for call in _calls(env))
 
     def test_missing_keychain_entry_never_mounts(self, shell: str, env: dict[str, str], tmp_path: Path) -> None:
@@ -226,36 +266,6 @@ class TestNasMusicMount:
         assert 'Usage: nas-music-mount' in result.stderr
 
 
-# ==================================================================================================
-# 98-nas-music stage
-# ==================================================================================================
-
-
-def _stage(shell: str, env: dict[str, str], **extra: str) -> subprocess.CompletedProcess[str]:
-    """
-    Run the 98-nas-music stage as macOS, under the bash interpreter being tested
-    """
-    stage_env = {**env, 'DOTFILES_REPO': str(REPO_ROOT), 'DOTFILES_OS': 'darwin', **extra}
-    return subprocess.run(
-        [shell, str(STAGE)],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=stage_env,
-        stdin=subprocess.DEVNULL,
-    )
-
-
-def _link_package(home: Path) -> None:
-    """
-    Stand in for 95-dotfiles: put the script and plist where stow would link them
-    """
-    (home / '.local' / 'bin').mkdir(parents=True)
-    (home / 'Library' / 'LaunchAgents').mkdir(parents=True)
-    shutil.copy(SCRIPT, home / '.local' / 'bin' / SCRIPT.name)
-    shutil.copy(PLIST,  home / 'Library' / 'LaunchAgents' / PLIST.name)
-
-
 class TestStage:
     """
     Tests for bootstrap stage 98-nas-music
@@ -299,8 +309,9 @@ class TestStage:
         result = _stage(shell, env, BOOTSTRAP_DRY_RUN='1', NAS_MUSIC_USER='connor')
 
         assert result.returncode == 0, result.stderr
-        assert 'user=connor' in result.stdout
+        assert 'user=connor'         in result.stdout
         assert 'launchctl bootstrap' in result.stdout
+
         assert not (home / '.config' / 'nas-music').exists()
         assert _calls(env) == [call for call in _calls(env) if call.startswith('security')]
 
@@ -311,15 +322,19 @@ class TestStage:
         _link_package(home)
 
         result = _stage(
-            shell, env, BOOTSTRAP_DRY_RUN='0', BOOTSTRAP_NONINTERACTIVE='1',
-            NAS_MUSIC_USER='connor', NAS_MUSIC_HOST='nas.example',
+            shell,
+            env,
+            BOOTSTRAP_DRY_RUN='0',
+            BOOTSTRAP_NONINTERACTIVE='1',
+            NAS_MUSIC_USER='connor',
+            NAS_MUSIC_HOST='nas.example',
         )
-
         assert result.returncode == 0, result.stderr
+
         conf = (home / '.config' / 'nas-music' / 'mount.conf').read_text(encoding='utf-8')
         assert 'NAS_MUSIC_HOST=nas.example' in conf
-        assert 'NAS_MUSIC_SHARE=media' in conf
-        assert 'NAS_MUSIC_USER=connor' in conf
+        assert 'NAS_MUSIC_SHARE=media'      in conf
+        assert 'NAS_MUSIC_USER=connor'      in conf
 
         launchctl = [call for call in _calls(env) if call.startswith('launchctl')]
         label     = 'com.connormason.nas-music-mount'
@@ -331,7 +346,6 @@ class TestStage:
         Test that a stored Keychain password is kept: the stage only looks it up
         """
         _link_package(home)
-
         _stage(shell, env, BOOTSTRAP_DRY_RUN='0', BOOTSTRAP_NONINTERACTIVE='1', NAS_MUSIC_USER='connor')
 
         assert not any(call.startswith('security add-internet-password') for call in _calls(env))
@@ -346,11 +360,6 @@ class TestStage:
         assert 'run bootstrap/bootstrap.sh --only 95-dotfiles first' in result.stderr
 
 
-# ==================================================================================================
-# Package contents
-# ==================================================================================================
-
-
 class TestPackage:
     """
     Tests for the nas-music stow package files
@@ -360,7 +369,8 @@ class TestPackage:
         Test that the package's .dotfiles-os lists darwin and nothing else
         """
         lines = [
-            line.strip() for line in (PACKAGE / '.dotfiles-os').read_text(encoding='utf-8').splitlines()
+            line.strip()
+            for line in (PACKAGE / '.dotfiles-os').read_text(encoding='utf-8').splitlines()
             if line.strip() and not line.lstrip().startswith('#')
         ]
         assert lines == ['darwin']
@@ -389,5 +399,4 @@ class TestPackage:
         Test that the script and the stage pass shellcheck
         """
         result = subprocess.run(['shellcheck', str(SCRIPT), str(STAGE)], capture_output=True, text=True, check=False)
-
         assert result.returncode == 0, result.stdout
