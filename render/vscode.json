@@ -141,8 +141,11 @@
   "markdown.preview.fontSize": 12,
   "material-icon-theme.activeIconPack": "none",
   "path-intellisense.autoSlashAfterDirectory": true,
-  "problems.visibility": false,
   "python.analysis.autoImportCompletions": true,
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportIncompatibleMethodOverride": "warning",
+    "reportIncompatibleVariableOverride": "warning"
+  },
   "python.analysis.inlayHints.functionReturnTypes": true,
   "python.analysis.inlayHints.variableTypes": false,
   "python.analysis.typeCheckingMode": "standard",
