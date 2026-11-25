@@ -595,3 +595,57 @@ class TestReadOnlyProbesRunUnderCheck:
             env=_stub_tool(tmp_path, 'tailscale', '{"BackendState": "Running"}'),
         )
         assert code == 0, output
+
+
+try:
+    import grp
+    RENDER_GID: int | None = grp.getgrnam('render').gr_gid
+except (ImportError, KeyError):
+    RENDER_GID = None
+
+
+@needs_ansible
+@pytest.mark.skipif(RENDER_GID is None, reason='no render group on this host')
+class TestRenderGroupCheck:
+    """
+    Real-run tests of the guard that keeps Jellyfin's group_add in step with the host's render group
+    """
+    def _run(self, tmp_path: Path, group_add: list[str]) -> tuple[int, str]:
+        """
+        Run the two guard tasks against a throwaway services tree whose Jellyfin compose file sets group_add
+        """
+        source = tmp_path / 'services'
+        _write(
+            source / 'jellyfin' / 'compose.yml',
+            yaml.safe_dump({'services': {'jellyfin': {'group_add': group_add}}}),
+        )
+        play = _task_play(
+            'services',
+            'Look up the host render group',
+            "Assert Jellyfin's group_add matches the host render GID",
+        )
+        return _run_play(tmp_path, play, '-e', f'services_source_dir={source}')
+
+    def test_matching_gid_passes(self, tmp_path: Path) -> None:
+        """
+        Test that a group_add naming the host's render GID passes
+        """
+        code, output = self._run(tmp_path, [str(RENDER_GID)])
+        assert code == 0, output
+
+    def test_stale_gid_fails_with_both_values(self, tmp_path: Path) -> None:
+        """
+        Test that a group_add that lacks the host's render GID fails and names both GIDs
+        """
+        assert RENDER_GID is not None
+        code, output = self._run(tmp_path, [str(RENDER_GID + 1)])
+        assert code != 0
+        assert f'host render group is GID {RENDER_GID}' in output
+        assert str(RENDER_GID + 1) in output
+
+    def test_real_compose_file_declares_group_add(self) -> None:
+        """
+        Test that the repository's Jellyfin compose file still carries a numeric group_add entry
+        """
+        compose = yaml.safe_load((SERVICES_DIR / 'jellyfin' / 'compose.yml').read_text(encoding='utf-8'))
+        assert all(str(gid).isdigit() for gid in compose['services']['jellyfin']['group_add'])
