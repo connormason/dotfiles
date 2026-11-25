@@ -104,6 +104,7 @@ class TestServicesRole:
 
         assert '--exclude=*.j2' in args['rsync_opts']
         assert '--exclude=.env' in args['rsync_opts']
+
         assert not args.get('delete')
         assert args['dest'].startswith('{{ services_target_dir }}')
 
@@ -141,8 +142,10 @@ class TestServicesRole:
 
         assert first['name']   == 'Install rsync'
         assert first['become'] is True
+
         assert first['ansible.builtin.apt']['name']  == 'rsync'
         assert first['ansible.builtin.apt']['state'] == 'present'
+
         assert 'secrets' not in first.get('tags', [])
 
     def test_only_the_secret_tasks_carry_the_secrets_tag(self) -> None:
@@ -185,6 +188,7 @@ class TestServicesRole:
 
         assert "lookup('ansible.builtin.fileglob'" not in text
         assert task['ansible.builtin.find']['patterns'] == 'env.j2'
+
         assert task['delegate_to'] == 'localhost'
         assert task['connection']  == 'local'
         assert task['check_mode']  is False
@@ -291,7 +295,9 @@ class TestDockerRole:
         Test that a container re-chmodding the bind mount does not make later runs report changed or reset the mode
         """
         play = _task_play(
-            'docker', 'Check for the PiHole config directory', 'Create the PiHole config directory',
+            'docker',
+            'Check for the PiHole config directory',
+            'Create the PiHole config directory',
         )
         docker_dir = tmp_path / 'docker'
         pihole     = docker_dir / 'pihole-data' / 'etc-pihole'
@@ -375,6 +381,7 @@ def _run_play(tmp_path: Path, play: str, *args: str, env: dict[str, str] | None 
         env={**os.environ, 'ANSIBLE_VAULT_PASSWORD_FILE': str(vault), 'ANSIBLE_NOCOLOR': '1', **(env or {})},
         timeout=300,
     )
+
     output = result.stdout + result.stderr
     if "couldn't resolve module/action 'ansible.posix" in output:
         pytest.skip('ansible.posix is not installed: ansible-galaxy collection install -r roles/requirements.yml')
@@ -399,6 +406,7 @@ def _render_secrets(tmp_path: Path, source: Path, *extra_vars: str) -> tuple[int
     ]
     for var in extra_vars:
         args += ['-e', var]
+
     code, output = _run_play(tmp_path, _include_play('services'), *args)
     return code, output, target
 
@@ -433,6 +441,7 @@ class TestTagSelection:
         """
         docker_dir = tmp_path / 'docker'
         docker_dir.mkdir()
+
         code, output = _run_play(
             tmp_path,
             _include_play('docker'),
@@ -476,6 +485,7 @@ class TestSecretsRender:
         env_file = target / 'on' / '.env'
         assert env_file.read_text(encoding='utf-8').strip() == 'FTLCONF_webserver_api_password=hunter2-test-value'
         assert env_file.stat().st_mode & 0o777 == 0o600
+
         assert 'hunter2-test-value' not in output
         assert 'Sync compose files' not in output
 
@@ -485,7 +495,7 @@ class TestSecretsRender:
         """
         source = tmp_path / 'services'
         _write(source / 'off' / 'compose.yml.disabled', 'services: {}\n')
-        _write(source / 'off' / 'env.j2', 'TOKEN={{ off_token }}\n')  # off_token is deliberately undefined
+        _write(source / 'off' / 'env.j2', 'TOKEN={{ off_token }}\n')            # off_token is deliberately undefined
 
         code, output, target = _render_secrets(tmp_path, source)
         assert code == 0, output
@@ -498,7 +508,9 @@ class TestSecretsRender:
         The expectation is computed, not hard-coded, so re-enabling PiHole later does not break this test
         """
         enabled = {
-            path.parent.name for path in SERVICES_DIR.glob('*/env.j2') if (path.parent / 'compose.yml').is_file()
+            path.parent.name
+            for path in SERVICES_DIR.glob('*/env.j2')
+            if (path.parent / 'compose.yml').is_file()
         }
 
         code, output, target = _render_secrets(tmp_path, SERVICES_DIR, 'pihole_web_password=hunter2-test-value')
@@ -570,7 +582,6 @@ class TestReadOnlyProbesRunUnderCheck:
             '--check',
             env=_stub_tool(tmp_path, 'smbd', 'Version 4.17.12-Debian'),
         )
-
         assert code == 0, output
 
     def test_tailscale_status_probe_feeds_the_backend_state_parse(self, tmp_path: Path) -> None:
@@ -619,6 +630,7 @@ class TestRenderGroupCheck:
             source / 'jellyfin' / 'compose.yml',
             yaml.safe_dump({'services': {'jellyfin': {'group_add': group_add}}}),
         )
+
         play = _task_play(
             'services',
             'Look up the host render group',
@@ -638,6 +650,7 @@ class TestRenderGroupCheck:
         Test that a group_add that lacks the host's render GID fails and names both GIDs
         """
         assert RENDER_GID is not None
+
         code, output = self._run(tmp_path, [str(RENDER_GID + 1)])
         assert code != 0
         assert f'host render group is GID {RENDER_GID}' in output
