@@ -7,6 +7,12 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+    # Ryzen 5 5600G iGPU, used for VA-API hardware transcoding (Dashboard > Playback > Transcoding)
+    devices:
+      - /dev/dri:/dev/dri
+    # GID of the host's `render` group (getent group render), which owns /dev/dri/renderD128
+    group_add:
+      - "105"
     ports:
       - "8096:8096"
       - "7359:7359/udp"

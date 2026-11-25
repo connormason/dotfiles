@@ -71,6 +71,27 @@
   tags:
     - secrets
 
+# Jellyfin reaches the iGPU through /dev/dri by joining the host's render group, which compose names by numeric GID
+# (group_add). Debian assigns that GID at install time, so a rebuilt host can differ and silently fall back to CPU
+# transcoding; failing here is cheaper than noticing at 90% CPU. The compose file is read on the controller, the same
+# checkout the sync above pushed.
+- name: Look up the host render group
+  ansible.builtin.getent:
+    database: group
+    key: render
+
+- name: Assert Jellyfin's group_add matches the host render GID
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['getent_group']['render'][1] in jellyfin_group_add
+    fail_msg: >-
+      services/jellyfin/compose.yml group_add is {{ jellyfin_group_add }}, but the host render group is GID
+      {{ ansible_facts['getent_group']['render'][1] }}; update group_add and redeploy
+    quiet: true
+  vars:
+    jellyfin_group_add: >-
+      {{ (lookup('ansible.builtin.file', services_source_dir ~ '/jellyfin/compose.yml') | from_yaml)['services']['jellyfin']['group_add'] | map('string') | list }}
+
 # compose prints its progress on stderr, and reports "Running" for containers it leaves alone. become as the same user
 # starts a fresh login, so the docker group added by the docker role applies on the very first run. A fresh host pulls
 # images, so this runs async: a dropped SSH session would otherwise kill the deploy mid-pull.

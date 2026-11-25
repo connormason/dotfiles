@@ -215,6 +215,12 @@ Media server running alongside Plex. Uses the LinuxServer.io image with `PUID=10
 `/storage/media/{tv,movies,music}` libraries as Plex. Publishes HTTP on `8096` and client auto-discovery on `7359/udp`.
 Config persists at `/storage/media/config/jellyfin`.
 
+**Hardware transcoding.** The container receives `/dev/dri` (the Ryzen 5 5600G's Vega iGPU) and joins the host's
+`render` group via `group_add` (GID `105`; confirm with `getent group render` on a rebuilt host). Enable it in Jellyfin
+under Dashboard > Playback > Transcoding: acceleration `Video Acceleration API (VAAPI)`, device `/dev/dri/renderD128`,
+and hardware decoding for H.264, HEVC, VP9 (the Vega iGPU cannot decode AV1). Tone mapping needs OpenCL, which Vega
+lacks, so HDR sources transcoded to SDR fall back to the CPU.
+
 **Sharing with family on another tailnet.** Relatives reach Jellyfin through Tailscale node sharing: only the NAS is
 shared, so the rest of the tailnet stays unreachable. Caddy serves Jellyfin over HTTPS on `:8920` once the NAS host
 variables include `{name: jellyfin, port: 8096, dedicated_port: 8920}` in `tailscale_services` (the inventory is a

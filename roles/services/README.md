@@ -17,6 +17,8 @@ All of `tasks/main.yml`, in order.
 | Find per-service secret templates     | `find` for `env.j2` (`depth: 2`) in the checkout's `services/`, on the machine running Ansible (`delegate_to: localhost`, `connection: local`); `check_mode: false`, so it also runs under `--check` (tag `secrets`) |
 | Create per-service secret directories | Ensures `~/docker/<svc>/` exists for every template found, but only for a service that has a `compose.yml` (tag `secrets`)                                                                                           |
 | Render per-service secret files       | Renders each such `env.j2` to `~/docker/<svc>/.env`, mode `0600`, no diff output; same `compose.yml` condition (tag `secrets`)                                                                                       |
+| Look up the host render group         | `getent group render`; feeds the next task                                                                                                                                                                           |
+| Assert Jellyfin's group_add matches…  | Fails the run when the checkout's `services/jellyfin/compose.yml` `group_add` lacks the host's `render` GID, which would silently drop Jellyfin back to CPU transcoding                                              |
 | Deploy all services                   | Runs `~/docker/deploy.sh all` as the SSH user, async (3600 s, polled every 15 s); changed only when containers start, recreate, create, or pull; skipped under `--check`                                             |
 
 ## Variables
